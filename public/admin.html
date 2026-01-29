@@ -40,6 +40,7 @@
 
   <div class="card">
     <h2>Google Sheets Settings</h2>
+    <div id="credStatus" style="margin-bottom:12px"></div>
     <form id="settingsForm" class="inline-form">
       <label style="flex-direction:row;align-items:center;gap:6px">
         <input type="checkbox" name="googleSheetEnabled" id="sheetEnabled"> Sync enabled
@@ -49,6 +50,13 @@
     </form>
     <div id="settingsResult"></div>
     <p style="font-size:0.85em;color:#666">Sheet ID is the long string in the Google Sheets URL between /d/ and /edit</p>
+
+    <h3 style="margin-top:20px">Service Account Credentials</h3>
+    <form id="credForm">
+      <textarea id="credJson" placeholder="Paste service account JSON here..." style="width:100%;height:100px;font-family:monospace;font-size:12px"></textarea>
+      <button type="submit" style="margin-top:8px">Save Credentials</button>
+    </form>
+    <div id="credResult"></div>
   </div>
 
   <p><a href="/">Back</a> | <a href="/logout">Logout</a></p>
@@ -199,9 +207,39 @@
       msg('settingsResult', j.ok ? 'Settings saved' : (j.error || 'Error'), !j.ok);
     };
 
+    async function loadCredStatus() {
+      try {
+        const status = await (await fetch('/api/admin/google-credentials/status')).json();
+        const el = document.getElementById('credStatus');
+        if (status.configured) {
+          el.innerHTML = '<span style="color:green">✓ Credentials configured</span><br><small>Service account: ' + esc(status.email) + '</small>';
+        } else {
+          el.innerHTML = '<span style="color:orange">⚠ No credentials configured</span>';
+        }
+      } catch (e) { console.error('Error loading cred status', e); }
+    }
+
+    document.getElementById('credForm').onsubmit = async e => {
+      e.preventDefault();
+      const res = await fetch('/api/admin/google-credentials', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ credentials: document.getElementById('credJson').value })
+      });
+      const j = await res.json();
+      if (j.ok) {
+        msg('credResult', 'Credentials saved! Share sheet with: ' + j.email, false);
+        document.getElementById('credJson').value = '';
+        loadCredStatus();
+      } else {
+        msg('credResult', j.error || 'Error', true);
+      }
+    };
+
     loadUsers();
     loadMotives();
     loadSettings();
+    loadCredStatus();
   </script>
 </body>
 </html>

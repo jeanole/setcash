@@ -12,17 +12,25 @@ const path = require('path');
 const { google } = require('googleapis');
 
 // Google Sheets setup
-const CREDENTIALS_PATH = path.join(__dirname, 'google-credentials.json');
 let sheets = null;
+
+function getCredentialsPath() {
+  const dataPath = path.join(__dirname, 'data', 'google-credentials.json');
+  const rootPath = path.join(__dirname, 'google-credentials.json');
+  if (fs.existsSync(dataPath)) return dataPath;
+  if (fs.existsSync(rootPath)) return rootPath;
+  return null;
+}
 
 async function initGoogleSheets() {
   try {
-    if (!fs.existsSync(CREDENTIALS_PATH)) {
+    const credPath = getCredentialsPath();
+    if (!credPath) {
       console.log('Google credentials not found, Sheets sync disabled');
       return;
     }
     const auth = new google.auth.GoogleAuth({
-      keyFile: CREDENTIALS_PATH,
+      keyFile: credPath,
       scopes: ['https://www.googleapis.com/auth/spreadsheets']
     });
     sheets = google.sheets({ version: 'v4', auth });
@@ -523,6 +531,34 @@ app.put('/api/admin/settings', ensureAdmin, (req, res) => {
   if (googleSheetEnabled !== undefined) settings.googleSheetEnabled = googleSheetEnabled === true;
   saveJSON(SETTINGS_FILE, settings);
   res.json({ ok: true });
+});
+
+app.post('/api/admin/google-credentials', ensureAdmin, async (req, res) => {
+  const { credentials } = req.body;
+  if (!credentials) return res.status(400).json({ error: 'Credentials required' });
+  try {
+    const parsed = JSON.parse(credentials);
+    if (parsed.type !== 'service_account') {
+      return res.status(400).json({ error: 'Must be a service account JSON' });
+    }
+    const credPath = path.join(DATA_DIR, 'google-credentials.json');
+    saveJSON(credPath, parsed);
+    await initGoogleSheets();
+    res.json({ ok: true, email: parsed.client_email });
+  } catch (e) {
+    res.status(400).json({ error: 'Invalid JSON: ' + e.message });
+  }
+});
+
+app.get('/api/admin/google-credentials/status', ensureAdmin, (req, res) => {
+  const credPath = getCredentialsPath();
+  if (!credPath) return res.json({ configured: false });
+  try {
+    const creds = JSON.parse(fs.readFileSync(credPath, 'utf8'));
+    res.json({ configured: true, email: creds.client_email });
+  } catch (e) {
+    res.json({ configured: false });
+  }
 });
 
 // Admin page

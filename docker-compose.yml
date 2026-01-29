@@ -8,7 +8,6 @@ services:
       - "5000:3000"
     volumes:
       - /dockerfiles/vbudget:/app/data
-      - /dockerfiles/vbudget/google-credentials.json:/app/google-credentials.json:ro
     environment:
       - NODE_ENV=production
     networks:
