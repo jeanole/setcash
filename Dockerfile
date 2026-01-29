@@ -1,5 +1,8 @@
 FROM node:20-alpine
 
+# Create non-root user
+RUN addgroup -g 1001 -S appgroup && adduser -u 1001 -S appuser -G appgroup
+
 WORKDIR /app
 
 COPY package*.json ./
@@ -8,7 +11,11 @@ RUN npm ci --only=production
 COPY server.js ./
 COPY public ./public
 
-RUN mkdir -p /app/data
+# Create data directory with restricted permissions
+RUN mkdir -p /app/data && chown -R appuser:appgroup /app/data && chmod 700 /app/data
+
+# Switch to non-root user
+USER appuser
 
 EXPOSE 3000
 

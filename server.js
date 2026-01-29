@@ -5,11 +5,38 @@ const bodyParser = require('body-parser');
 const cookieParser = require('cookie-parser');
 const multer = require('multer');
 const bcrypt = require('bcrypt');
+const rateLimit = require('express-rate-limit');
 const fs = require('fs');
 const path = require('path');
 
 const app = express();
 const upload = multer();
+
+// Security: Block access to data directory
+app.use('/data', (req, res) => res.status(403).send('Forbidden'));
+app.use((req, res, next) => {
+  if (req.path.includes('users.json') || req.path.includes('data/')) {
+    return res.status(403).send('Forbidden');
+  }
+  next();
+});
+
+// Security headers
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  next();
+});
+
+// Rate limiting for login
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // 5 attempts per window
+  message: 'Too many login attempts. Try again in 15 minutes.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 const PORT = process.env.PORT || 3000;
 const DEV_MODE = process.env.DEV_MODE === 'true';
@@ -113,7 +140,7 @@ app.get('/login', (req, res) => {
 </form></div></body></html>`);
 });
 
-app.post('/login', async (req, res) => {
+app.post('/login', loginLimiter, async (req, res) => {
   const { email, password } = req.body;
   const user = findUser(email);
   if (!user || !bcrypt.compareSync(password, user.hash)) {
@@ -122,6 +149,15 @@ app.post('/login', async (req, res) => {
   req.session.user = { email: user.email, admin: user.admin };
   res.redirect('/');
 });
+
+// Password validation
+function validatePassword(password) {
+  if (!password || password.length < 8) return 'Password must be at least 8 characters';
+  if (!/[A-Z]/.test(password)) return 'Password must contain uppercase letter';
+  if (!/[a-z]/.test(password)) return 'Password must contain lowercase letter';
+  if (!/[0-9]/.test(password)) return 'Password must contain a number';
+  return null;
+}
 
 app.get('/logout', (req, res) => {
   req.session.destroy();
@@ -264,8 +300,10 @@ app.get('/api/admin/users', ensureAdmin, (req, res) => {
 app.post('/api/admin/users', ensureAdmin, async (req, res) => {
   const { email, password, admin } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+  const pwError = validatePassword(password);
+  if (pwError) return res.status(400).json({ error: pwError });
   if (findUser(email)) return res.status(400).json({ error: 'User already exists' });
-  const hash = await bcrypt.hash(password, 10);
+  const hash = await bcrypt.hash(password, 12);
   users.push({ email, hash, admin: admin === true });
   saveJSON(USERS_FILE, users);
   res.json({ ok: true });
@@ -275,7 +313,11 @@ app.put('/api/admin/users/:email', ensureAdmin, async (req, res) => {
   const user = findUser(req.params.email);
   if (!user) return res.status(404).json({ error: 'User not found' });
   const { password, admin } = req.body;
-  if (password) user.hash = await bcrypt.hash(password, 10);
+  if (password) {
+    const pwError = validatePassword(password);
+    if (pwError) return res.status(400).json({ error: pwError });
+    user.hash = await bcrypt.hash(password, 12);
+  }
   if (admin !== undefined) user.admin = admin === true;
   saveJSON(USERS_FILE, users);
   res.json({ ok: true });
@@ -296,9 +338,11 @@ app.delete('/api/admin/users/:email', ensureAdmin, (req, res) => {
 app.post('/api/user/password', ensureAuth, async (req, res) => {
   const { currentPassword, newPassword } = req.body;
   if (!currentPassword || !newPassword) return res.status(400).json({ error: 'Both passwords required' });
+  const pwError = validatePassword(newPassword);
+  if (pwError) return res.status(400).json({ error: pwError });
   const user = findUser(req.user.email);
   if (!bcrypt.compareSync(currentPassword, user.hash)) return res.status(400).json({ error: 'Current password incorrect' });
-  user.hash = await bcrypt.hash(newPassword, 10);
+  user.hash = await bcrypt.hash(newPassword, 12);
   saveJSON(USERS_FILE, users);
   res.json({ ok: true });
 });
