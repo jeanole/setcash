@@ -9,6 +9,64 @@ const bcrypt = require('bcryptjs');
 const rateLimit = require('express-rate-limit');
 const fs = require('fs');
 const path = require('path');
+const { google } = require('googleapis');
+
+// Google Sheets setup
+const SHEET_ID = process.env.TARGET_SHEET_ID || '1-cWxjP16kyAPpkNqn27bU1-k3zfyMwQvh-daBugUSqg';
+const CREDENTIALS_PATH = path.join(__dirname, 'google-credentials.json');
+let sheets = null;
+
+async function initGoogleSheets() {
+  try {
+    if (!fs.existsSync(CREDENTIALS_PATH)) {
+      console.log('Google credentials not found, Sheets sync disabled');
+      return;
+    }
+    const auth = new google.auth.GoogleAuth({
+      keyFile: CREDENTIALS_PATH,
+      scopes: ['https://www.googleapis.com/auth/spreadsheets']
+    });
+    sheets = google.sheets({ version: 'v4', auth });
+    console.log('Google Sheets connected');
+  } catch (e) {
+    console.error('Google Sheets init error:', e.message);
+  }
+}
+
+async function appendBillToSheet(bill) {
+  if (!sheets) return;
+  try {
+    const typeMap = { 'Kauf': 'K', 'Leih': 'L', 'Verbrauch': 'V' };
+    const row = [
+      bill.comment || '',           // Notiz
+      bill.item || '',              // WAS
+      bill.motive || '',            // Für
+      bill.vendor || '',            // WOHER
+      '',                           // Kalkulation (brutto)
+      '',                           // Angebot (brutto) €
+      bill.brutto19 || 0,           // brutto 19%
+      bill.brutto7 || 0,            // brutto 7%
+      bill.brutto0 || 0,            // brutto 0%
+      new Date(bill.date).toLocaleDateString('de-DE'), // Datum
+      bill.email || '',             // Wer
+      typeMap[bill.type] || 'K',    // K/L/V
+      bill.billNumber || '',        // Beleg Nr
+      '',                           // V-Geld Abrechnungs Blatt
+      ''                            // Kommentar
+    ];
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SHEET_ID,
+      range: 'A:O',
+      valueInputOption: 'USER_ENTERED',
+      requestBody: { values: [row] }
+    });
+    console.log('Bill synced to Google Sheet');
+  } catch (e) {
+    console.error('Sheet append error:', e.message);
+  }
+}
+
+initGoogleSheets();
 
 const app = express();
 const upload = multer();
@@ -257,6 +315,7 @@ app.post('/upload', ensureAuth, upload.single('photo'), (req, res) => {
   }
   bills.push(bill);
   saveJSON(BILLS_FILE, bills);
+  appendBillToSheet(bill);
   res.json({ ok: true });
 });
 
