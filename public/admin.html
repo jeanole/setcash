@@ -1,0 +1,171 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>vBudget - Admin</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <h1>Admin Panel</h1>
+
+  <div class="card">
+    <h2>Users</h2>
+    <form id="userForm" class="inline-form">
+      <input type="email" name="email" placeholder="Email" required>
+      <input type="password" name="password" placeholder="Password" required>
+      <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" name="admin"> Admin</label>
+      <button type="submit">Add User</button>
+    </form>
+    <div id="userResult"></div>
+    <table class="data-table">
+      <thead><tr><th>Email</th><th>Role</th><th>Actions</th></tr></thead>
+      <tbody id="userBody"></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Motives & Budgets</h2>
+    <form id="motiveForm" class="inline-form">
+      <input type="text" name="motive" placeholder="Motive name" required>
+      <input type="number" name="budget" placeholder="Budget" step="0.01" min="0" style="max-width:120px">
+      <button type="submit">Add</button>
+    </form>
+    <div id="motiveResult"></div>
+    <table class="data-table">
+      <thead><tr><th>Motive</th><th>Budget (EUR)</th><th>Actions</th></tr></thead>
+      <tbody id="motiveBody"></tbody>
+    </table>
+  </div>
+
+  <p><a href="/">Back</a> | <a href="/logout">Logout</a></p>
+
+  <script>
+    const esc = t => { const d = document.createElement('div'); d.textContent = t || ''; return d.innerHTML; };
+    const fmt = n => new Intl.NumberFormat('de-DE', {style:'currency',currency:'EUR'}).format(n||0);
+    const msg = (id, t, err) => { const e = document.getElementById(id); e.textContent = t; e.className = 'message ' + (err ? 'error' : 'success'); setTimeout(() => e.textContent = '', 3000); };
+
+    async function loadUsers() {
+      const tbody = document.getElementById('userBody');
+      try {
+        const users = await (await fetch('/api/admin/users')).json();
+        tbody.innerHTML = users.map(u => `<tr>
+          <td>${esc(u.email)}</td>
+          <td>${u.admin ? 'Admin' : 'User'}</td>
+          <td>
+            <button class="small secondary" onclick="resetPassword('${esc(u.email)}')">Reset PW</button>
+            <button class="small ${u.admin ? '' : 'secondary'}" onclick="toggleAdmin('${esc(u.email)}', ${!u.admin})">${u.admin ? 'Demote' : 'Promote'}</button>
+            <button class="small danger" onclick="deleteUser('${esc(u.email)}')">Delete</button>
+          </td>
+        </tr>`).join('');
+      } catch (e) { tbody.innerHTML = '<tr><td colspan="3">Error</td></tr>'; }
+    }
+
+    async function loadMotives() {
+      const tbody = document.getElementById('motiveBody');
+      try {
+        const motives = await (await fetch('/api/motives')).json();
+        tbody.innerHTML = motives.map((m, i) => `<tr data-i="${i}">
+          <td data-f="name">${esc(m.name)}</td>
+          <td data-f="budget">${fmt(m.budget)}</td>
+          <td>
+            <button class="small secondary" onclick="editMotive(${i})">Edit</button>
+            <button class="small danger" onclick="deleteMotive(${i})">Delete</button>
+          </td>
+        </tr>`).join('');
+      } catch (e) { tbody.innerHTML = '<tr><td colspan="3">Error</td></tr>'; }
+    }
+
+    document.getElementById('userForm').onsubmit = async e => {
+      e.preventDefault();
+      const f = e.target;
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ email: f.email.value, password: f.password.value, admin: f.admin.checked })
+      });
+      const j = await res.json();
+      if (j.ok) { msg('userResult', 'User added', false); f.reset(); loadUsers(); }
+      else msg('userResult', j.error || 'Error', true);
+    };
+
+    document.getElementById('motiveForm').onsubmit = async e => {
+      e.preventDefault();
+      const f = e.target;
+      const res = await fetch('/api/admin/motive', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ motive: f.motive.value, budget: f.budget.value || 0 })
+      });
+      const j = await res.json();
+      if (j.ok) { msg('motiveResult', 'Added', false); f.reset(); loadMotives(); }
+      else msg('motiveResult', j.error || 'Error', true);
+    };
+
+    async function resetPassword(email) {
+      const pw = prompt('New password for ' + email + ':');
+      if (!pw) return;
+      const res = await fetch('/api/admin/users/' + encodeURIComponent(email), {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ password: pw })
+      });
+      const j = await res.json();
+      msg('userResult', j.ok ? 'Password reset' : (j.error || 'Error'), !j.ok);
+    }
+
+    async function toggleAdmin(email, makeAdmin) {
+      const res = await fetch('/api/admin/users/' + encodeURIComponent(email), {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ admin: makeAdmin })
+      });
+      const j = await res.json();
+      if (j.ok) loadUsers();
+      else msg('userResult', j.error || 'Error', true);
+    }
+
+    async function deleteUser(email) {
+      if (!confirm('Delete ' + email + '?')) return;
+      const res = await fetch('/api/admin/users/' + encodeURIComponent(email), { method: 'DELETE' });
+      const j = await res.json();
+      if (j.ok) { msg('userResult', 'Deleted', false); loadUsers(); }
+      else msg('userResult', j.error || 'Error', true);
+    }
+
+    function editMotive(i) {
+      const row = document.querySelector(`tr[data-i="${i}"]`);
+      const name = row.querySelector('[data-f="name"]').textContent;
+      const budget = parseFloat(row.querySelector('[data-f="budget"]').textContent.replace(/[^\d,.-]/g,'').replace(',','.')) || 0;
+      row.querySelector('[data-f="name"]').innerHTML = `<input class="edit-input" value="${esc(name)}" data-f="name">`;
+      row.querySelector('[data-f="budget"]').innerHTML = `<input type="number" class="edit-input" value="${budget.toFixed(2)}" step="0.01" data-f="budget">`;
+      row.querySelector('td:last-child').innerHTML = `<button class="small" onclick="saveMotive(${i})">Save</button> <button class="small secondary" onclick="loadMotives()">Cancel</button>`;
+    }
+
+    async function saveMotive(i) {
+      const row = document.querySelector(`tr[data-i="${i}"]`);
+      const motive = row.querySelector('[data-f="name"]').value;
+      const budget = row.querySelector('[data-f="budget"]').value;
+      const res = await fetch('/api/admin/motive/' + i, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ motive, budget })
+      });
+      const j = await res.json();
+      if (j.ok) { msg('motiveResult', 'Saved', false); loadMotives(); }
+      else msg('motiveResult', j.error || 'Error', true);
+    }
+
+    async function deleteMotive(i) {
+      if (!confirm('Delete this motive?')) return;
+      const res = await fetch('/api/admin/motive/' + i, { method: 'DELETE' });
+      const j = await res.json();
+      if (j.ok) { msg('motiveResult', 'Deleted', false); loadMotives(); }
+      else msg('motiveResult', j.error || 'Error', true);
+    }
+
+    loadUsers();
+    loadMotives();
+  </script>
+</body>
+</html>

@@ -1,0 +1,451 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>vBudget</title>
+    <link rel="stylesheet" href="/style.css">
+  </head>
+  <body>
+    <h1>vBudget</h1>
+    <div id="app">
+      <div id="not-signed-in" class="card" style="display:none">
+        <p>Please log in to continue.</p>
+        <a href="/login"><button type="button">Login</button></a>
+      </div>
+      <div id="signed-in" style="display:none">
+        <p id="user"></p>
+
+        <div class="tabs">
+          <button class="tab active" data-tab="upload">Upload</button>
+          <button class="tab" data-tab="bills">Bills</button>
+          <button class="tab" data-tab="spending">Spending</button>
+        </div>
+
+        <div id="tab-upload" class="tab-content active">
+          <div class="card">
+            <h2>Upload Bill</h2>
+            <form id="uploadForm">
+              <label>Photo <input type="file" name="photo" accept="image/*" required></label>
+              <label>Amount <input type="number" name="amount" step="0.01" min="0" required></label>
+              <label>GST <select name="gst"><option>19%</option><option>7%</option><option>0%</option></select></label>
+              <label>Vendor <input name="vendor"></label>
+              <label>Item <input name="item"></label>
+              <label>Comment <input name="comment"></label>
+              <label>Motive <select name="motive" id="motiveSelect"></select></label>
+              <button type="submit">Upload</button>
+            </form>
+            <div id="uploadResult"></div>
+          </div>
+        </div>
+
+        <div id="tab-bills" class="tab-content">
+          <div class="card">
+            <h2>All Bills</h2>
+            <div id="billsResult"></div>
+            <table id="billsTable" class="data-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Uploaded By</th>
+                  <th>Vendor</th>
+                  <th>Item</th>
+                  <th>Amount</th>
+                  <th>Motive</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="billsBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div id="tab-spending" class="tab-content">
+          <div class="card">
+            <h2>Spending by Motive</h2>
+            <table id="spendingTable" class="data-table">
+              <thead>
+                <tr>
+                  <th>Motive</th>
+                  <th>Budget</th>
+                  <th>Spent</th>
+                  <th>Remaining</th>
+                  <th>Used</th>
+                </tr>
+              </thead>
+              <tbody id="spendingBody"></tbody>
+              <tfoot>
+                <tr>
+                  <th>Grand Total</th>
+                  <th id="grandTotalBudget"></th>
+                  <th id="grandTotalSpent"></th>
+                  <th id="grandTotalRemaining"></th>
+                  <th id="grandTotalPercent"></th>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+
+        <p><a href="/admin">Admin panel</a> (admins only) | <a href="/logout">Logout</a></p>
+      </div>
+    </div>
+
+    <!-- Bill Detail Modal -->
+    <div id="billModal" class="modal" style="display:none">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Bill Details</h2>
+          <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="bill-image-section">
+            <h3>Bill Image</h3>
+            <div id="billImageContainer">
+              <p id="noImageText">No image available</p>
+              <img id="billImage" style="display:none" />
+            </div>
+            <div class="bill-image-actions">
+              <a id="downloadLink" style="display:none"><button type="button" class="small">Download</button></a>
+              <form id="replaceImageForm" class="inline-form">
+                <input type="file" name="photo" accept="image/*" id="replaceImageInput">
+                <button type="submit" class="small secondary">Replace Image</button>
+              </form>
+            </div>
+            <div id="imageResult"></div>
+          </div>
+
+          <div class="bill-details-section">
+            <h3>Details</h3>
+            <form id="billDetailForm">
+              <div class="form-row">
+                <label>Date <input type="text" id="detailDate" readonly></label>
+                <label>Uploaded By <input type="text" id="detailEmail" readonly></label>
+              </div>
+              <div class="form-row">
+                <label>Vendor <input type="text" id="detailVendor" name="vendor"></label>
+                <label>Item <input type="text" id="detailItem" name="item"></label>
+              </div>
+              <div class="form-row">
+                <label>Amount <input type="number" id="detailAmount" name="amount" step="0.01"></label>
+                <label>GST <select id="detailGst" name="gst">
+                  <option>19%</option><option>7%</option><option>0%</option>
+                </select></label>
+              </div>
+              <div class="form-row">
+                <label>Motive <select id="detailMotive" name="motive"></select></label>
+                <label>Comment <input type="text" id="detailComment" name="comment"></label>
+              </div>
+              <button type="submit">Save Changes</button>
+            </form>
+            <div id="detailResult"></div>
+          </div>
+
+          <div class="bill-log-section">
+            <h3>Edit History</h3>
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>When</th>
+                  <th>Who</th>
+                  <th>Changes</th>
+                </tr>
+              </thead>
+              <tbody id="billLogBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let motives = [];
+      let allBills = [];
+      let allLogs = [];
+      let currentBillIndex = null;
+
+      function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text || '';
+        return div.innerHTML;
+      }
+
+      function formatDate(dateStr) {
+        if (!dateStr) return '';
+        const d = new Date(dateStr);
+        return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+      }
+
+      function formatCurrency(amount) {
+        return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(amount || 0);
+      }
+
+      function showMessage(elementId, text, isError) {
+        const el = document.getElementById(elementId);
+        el.textContent = text;
+        el.className = 'message ' + (isError ? 'error' : 'success');
+        setTimeout(() => { el.textContent = ''; el.className = ''; }, 3000);
+      }
+
+      // Tab switching
+      document.querySelectorAll('.tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+          document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+          document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+          tab.classList.add('active');
+          document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+
+          if (tab.dataset.tab === 'bills') loadBills();
+          if (tab.dataset.tab === 'spending') loadSpending();
+        });
+      });
+
+      async function loadBills() {
+        const tbody = document.getElementById('billsBody');
+        tbody.innerHTML = '<tr><td colspan="7">Loading...</td></tr>';
+        try {
+          const [billsRes, logsRes] = await Promise.all([
+            fetch('/api/bills'),
+            fetch('/api/bills/log')
+          ]);
+          allBills = await billsRes.json();
+          allLogs = await logsRes.json();
+
+          if (allBills.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7">No bills yet.</td></tr>';
+            return;
+          }
+          tbody.innerHTML = allBills.map((bill, index) => `
+            <tr data-index="${index}" class="clickable-row" onclick="openBillDetail(${index})">
+              <td>${escapeHtml(formatDate(bill.date))}</td>
+              <td>${escapeHtml(bill.email)}</td>
+              <td>${escapeHtml(bill.vendor)}</td>
+              <td>${escapeHtml(bill.item)}</td>
+              <td>${formatCurrency(bill.amount)}</td>
+              <td>${escapeHtml(bill.motive)}</td>
+              <td><button class="small" onclick="event.stopPropagation(); openBillDetail(${index})">View</button></td>
+            </tr>
+          `).join('');
+        } catch (e) {
+          tbody.innerHTML = '<tr><td colspan="7">Error loading bills.</td></tr>';
+        }
+      }
+
+      async function loadSpending() {
+        const tbody = document.getElementById('spendingBody');
+        tbody.innerHTML = '<tr><td colspan="5">Loading...</td></tr>';
+        try {
+          const res = await fetch('/api/bills/by-motive');
+          const data = await res.json();
+          if (data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5">No spending data.</td></tr>';
+            document.getElementById('grandTotalBudget').textContent = formatCurrency(0);
+            document.getElementById('grandTotalSpent').textContent = formatCurrency(0);
+            document.getElementById('grandTotalRemaining').textContent = formatCurrency(0);
+            document.getElementById('grandTotalPercent').textContent = '0.00%';
+            return;
+          }
+          let totalBudget = 0, totalSpent = 0;
+          tbody.innerHTML = data.map(item => {
+            totalBudget += item.budget;
+            totalSpent += item.spent;
+            const percentClass = item.percent > 100 ? 'over-budget' : (item.percent > 80 ? 'warning' : '');
+            return `<tr class="${percentClass}">
+              <td>${escapeHtml(item.motive)}</td>
+              <td>${formatCurrency(item.budget)}</td>
+              <td>${formatCurrency(item.spent)}</td>
+              <td class="${item.remaining < 0 ? 'negative' : ''}">${formatCurrency(item.remaining)}</td>
+              <td>
+                <div class="progress-bar">
+                  <div class="progress-fill ${percentClass}" style="width: ${Math.min(item.percent, 100)}%"></div>
+                </div>
+                <span>${item.percent.toFixed(2)}%</span>
+              </td>
+            </tr>`;
+          }).join('');
+          const totalRemaining = totalBudget - totalSpent;
+          const totalPercent = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
+          document.getElementById('grandTotalBudget').textContent = formatCurrency(totalBudget);
+          document.getElementById('grandTotalSpent').textContent = formatCurrency(totalSpent);
+          document.getElementById('grandTotalRemaining').textContent = formatCurrency(totalRemaining);
+          document.getElementById('grandTotalPercent').textContent = totalPercent.toFixed(2) + '%';
+        } catch (e) {
+          tbody.innerHTML = '<tr><td colspan="5">Error loading data.</td></tr>';
+        }
+      }
+
+      function openBillDetail(index) {
+        currentBillIndex = index;
+        const bill = allBills[index];
+
+        // Populate form fields
+        document.getElementById('detailDate').value = formatDate(bill.date);
+        document.getElementById('detailEmail').value = bill.email || '';
+        document.getElementById('detailVendor').value = bill.vendor || '';
+        document.getElementById('detailItem').value = bill.item || '';
+        document.getElementById('detailAmount').value = bill.amount || 0;
+        document.getElementById('detailGst').value = bill.gst || '19%';
+        document.getElementById('detailComment').value = bill.comment || '';
+
+        // Populate motive dropdown
+        const motiveSelect = document.getElementById('detailMotive');
+        motiveSelect.innerHTML = motives.map(m =>
+          `<option ${m === bill.motive ? 'selected' : ''}>${escapeHtml(m)}</option>`
+        ).join('');
+
+        // Handle image
+        const img = document.getElementById('billImage');
+        const noImageText = document.getElementById('noImageText');
+        const downloadLink = document.getElementById('downloadLink');
+
+        if (bill.file) {
+          img.src = '/uploads/' + bill.file;
+          img.style.display = 'block';
+          noImageText.style.display = 'none';
+          downloadLink.href = '/uploads/' + bill.file;
+          downloadLink.download = bill.filename || 'bill';
+          downloadLink.style.display = 'inline-block';
+        } else {
+          img.style.display = 'none';
+          noImageText.style.display = 'block';
+          noImageText.textContent = 'No image uploaded';
+          downloadLink.style.display = 'none';
+        }
+
+        // Load edit history for this bill
+        const billLogs = allLogs.filter(log => log.billIndex === index);
+        const logBody = document.getElementById('billLogBody');
+        if (billLogs.length === 0) {
+          logBody.innerHTML = '<tr><td colspan="3">No edits yet.</td></tr>';
+        } else {
+          logBody.innerHTML = billLogs.map(entry => `
+            <tr>
+              <td>${escapeHtml(formatDate(entry.timestamp))}</td>
+              <td>${escapeHtml(entry.user)}</td>
+              <td>${formatChanges(entry.changes)}</td>
+            </tr>
+          `).join('');
+        }
+
+        // Show modal
+        document.getElementById('billModal').style.display = 'flex';
+      }
+
+      function formatChanges(changes) {
+        if (!changes) return '';
+        return Object.entries(changes).map(([key, value]) =>
+          `<span class="change-item">${escapeHtml(key)}: ${escapeHtml(String(value))}</span>`
+        ).join(', ');
+      }
+
+      function closeModal() {
+        document.getElementById('billModal').style.display = 'none';
+        currentBillIndex = null;
+        document.getElementById('replaceImageInput').value = '';
+      }
+
+      // Close modal when clicking outside
+      document.getElementById('billModal').addEventListener('click', (e) => {
+        if (e.target.id === 'billModal') closeModal();
+      });
+
+      // Save bill changes
+      document.getElementById('billDetailForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (currentBillIndex === null) return;
+
+        const data = {
+          vendor: document.getElementById('detailVendor').value,
+          item: document.getElementById('detailItem').value,
+          amount: document.getElementById('detailAmount').value,
+          gst: document.getElementById('detailGst').value,
+          motive: document.getElementById('detailMotive').value,
+          comment: document.getElementById('detailComment').value
+        };
+
+        try {
+          const res = await fetch('/api/bills/' + currentBillIndex, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+          });
+          const j = await res.json();
+          if (j.ok) {
+            showMessage('detailResult', 'Bill updated!', false);
+            // Reload bills and reopen modal
+            await loadBills();
+            openBillDetail(currentBillIndex);
+          } else {
+            showMessage('detailResult', 'Error: ' + (j.error || 'unknown'), true);
+          }
+        } catch (err) {
+          showMessage('detailResult', 'Error: ' + err.message, true);
+        }
+      });
+
+      // Replace image
+      document.getElementById('replaceImageForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (currentBillIndex === null) return;
+
+        const fileInput = document.getElementById('replaceImageInput');
+        if (!fileInput.files[0]) {
+          showMessage('imageResult', 'Please select a file', true);
+          return;
+        }
+
+        const formData = new FormData();
+        formData.append('photo', fileInput.files[0]);
+
+        try {
+          const res = await fetch('/api/bills/' + currentBillIndex + '/image', {
+            method: 'POST',
+            body: formData
+          });
+          const j = await res.json();
+          if (j.ok) {
+            showMessage('imageResult', 'Image replaced!', false);
+            fileInput.value = '';
+            await loadBills();
+            openBillDetail(currentBillIndex);
+          } else {
+            showMessage('imageResult', 'Error: ' + (j.error || 'unknown'), true);
+          }
+        } catch (err) {
+          showMessage('imageResult', 'Error: ' + err.message, true);
+        }
+      });
+
+      async function init() {
+        const res = await fetch('/api/user');
+        const user = await res.json();
+        if (!user) { window.location.href = '/login'; return; }
+        document.getElementById('signed-in').style.display='block';
+        document.getElementById('user').textContent = user.email + (user.admin ? ' [admin]' : '');
+
+        const motivesData = await (await fetch('/api/motives')).json();
+        motives = motivesData.map(m => m.name);
+        const sel = document.getElementById('motiveSelect');
+        sel.innerHTML = motives.map(m => '<option>'+escapeHtml(m)+'</option>').join('');
+
+        document.getElementById('uploadForm').addEventListener('submit', async (e)=>{
+          e.preventDefault();
+          const form = e.target;
+          const data = new FormData(form);
+          const resp = await fetch('/upload', {method:'POST', body: data});
+          const json = await resp.json();
+          const result = document.getElementById('uploadResult');
+          if (json.ok) {
+            result.className = 'message success';
+            result.textContent = 'Bill uploaded successfully!';
+            form.reset();
+          } else {
+            result.className = 'message error';
+            result.textContent = 'Error: ' + (json.error || 'unknown');
+          }
+        });
+      }
+      init().catch(e=>console.error(e));
+    </script>
+  </body>
+</html>
