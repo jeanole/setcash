@@ -12,7 +12,6 @@ const path = require('path');
 const { google } = require('googleapis');
 
 // Google Sheets setup
-const SHEET_ID = process.env.TARGET_SHEET_ID || '1-cWxjP16kyAPpkNqn27bU1-k3zfyMwQvh-daBugUSqg';
 const CREDENTIALS_PATH = path.join(__dirname, 'google-credentials.json');
 let sheets = null;
 
@@ -34,7 +33,7 @@ async function initGoogleSheets() {
 }
 
 async function appendBillToSheet(bill) {
-  if (!sheets) return;
+  if (!sheets || !settings.googleSheetEnabled || !settings.googleSheetId) return;
   try {
     const typeMap = { 'Kauf': 'K', 'Leih': 'L', 'Verbrauch': 'V' };
     const row = [
@@ -55,7 +54,7 @@ async function appendBillToSheet(bill) {
       ''                            // Kommentar
     ];
     await sheets.spreadsheets.values.append({
-      spreadsheetId: SHEET_ID,
+      spreadsheetId: settings.googleSheetId,
       range: 'A:O',
       valueInputOption: 'USER_ENTERED',
       requestBody: { values: [row] }
@@ -105,6 +104,7 @@ const MOTIVES_FILE = path.join(DATA_DIR, 'motives.json');
 const BILLS_FILE = path.join(DATA_DIR, 'bills.json');
 const LOG_FILE = path.join(DATA_DIR, 'editlog.json');
 const VGELD_FILE = path.join(DATA_DIR, 'vgeld.json');
+const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 
 // Ensure data directory exists
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR);
@@ -145,12 +145,17 @@ let motives = loadJSON(MOTIVES_FILE, [
 let bills = loadJSON(BILLS_FILE, []);
 let editLog = loadJSON(LOG_FILE, []);
 let vgeld = loadJSON(VGELD_FILE, []);
+let settings = loadJSON(SETTINGS_FILE, {
+  googleSheetId: '1-cWxjP16kyAPpkNqn27bU1-k3zfyMwQvh-daBugUSqg',
+  googleSheetEnabled: true
+});
 
 // Save initial data if files don't exist
 if (!fs.existsSync(MOTIVES_FILE)) saveJSON(MOTIVES_FILE, motives);
 if (!fs.existsSync(BILLS_FILE)) saveJSON(BILLS_FILE, bills);
 if (!fs.existsSync(LOG_FILE)) saveJSON(LOG_FILE, editLog);
 if (!fs.existsSync(VGELD_FILE)) saveJSON(VGELD_FILE, vgeld);
+if (!fs.existsSync(SETTINGS_FILE)) saveJSON(SETTINGS_FILE, settings);
 
 // Middleware
 app.use(cookieParser());
@@ -505,6 +510,19 @@ app.get('/api/vgeld/analysis', ensureAuth, (req, res) => {
   }));
 
   res.json(result);
+});
+
+// Settings API
+app.get('/api/admin/settings', ensureAdmin, (req, res) => {
+  res.json(settings);
+});
+
+app.put('/api/admin/settings', ensureAdmin, (req, res) => {
+  const { googleSheetId, googleSheetEnabled } = req.body;
+  if (googleSheetId !== undefined) settings.googleSheetId = googleSheetId;
+  if (googleSheetEnabled !== undefined) settings.googleSheetEnabled = googleSheetEnabled === true;
+  saveJSON(SETTINGS_FILE, settings);
+  res.json({ ok: true });
 });
 
 // Admin page

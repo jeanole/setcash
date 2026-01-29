@@ -38,6 +38,19 @@
     </table>
   </div>
 
+  <div class="card">
+    <h2>Google Sheets Settings</h2>
+    <form id="settingsForm" class="inline-form">
+      <label style="flex-direction:row;align-items:center;gap:6px">
+        <input type="checkbox" name="googleSheetEnabled" id="sheetEnabled"> Sync enabled
+      </label>
+      <input type="text" name="googleSheetId" id="sheetId" placeholder="Google Sheet ID" style="flex:1">
+      <button type="submit">Save</button>
+    </form>
+    <div id="settingsResult"></div>
+    <p style="font-size:0.85em;color:#666">Sheet ID is the long string in the Google Sheets URL between /d/ and /edit</p>
+  </div>
+
   <p><a href="/">Back</a> | <a href="/logout">Logout</a></p>
 
   <script>
@@ -164,8 +177,31 @@
       else msg('motiveResult', j.error || 'Error', true);
     }
 
+    async function loadSettings() {
+      try {
+        const settings = await (await fetch('/api/admin/settings')).json();
+        document.getElementById('sheetEnabled').checked = settings.googleSheetEnabled;
+        document.getElementById('sheetId').value = settings.googleSheetId || '';
+      } catch (e) { console.error('Error loading settings', e); }
+    }
+
+    document.getElementById('settingsForm').onsubmit = async e => {
+      e.preventDefault();
+      const res = await fetch('/api/admin/settings', {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          googleSheetEnabled: document.getElementById('sheetEnabled').checked,
+          googleSheetId: document.getElementById('sheetId').value
+        })
+      });
+      const j = await res.json();
+      msg('settingsResult', j.ok ? 'Settings saved' : (j.error || 'Error'), !j.ok);
+    };
+
     loadUsers();
     loadMotives();
+    loadSettings();
   </script>
 </body>
 </html>
