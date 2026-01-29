@@ -538,3 +538,43 @@ tr.over-budget {
     align-items: stretch;
   }
 }
+
+/* Full size image modal */
+.image-modal-content {
+  position: relative;
+  max-width: 95vw;
+  max-height: 95vh;
+}
+
+.image-modal-content img {
+  max-width: 95vw;
+  max-height: 90vh;
+  display: block;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+}
+
+.image-modal-content .modal-close {
+  position: absolute;
+  top: -40px;
+  right: 0;
+  color: #fff;
+  background: rgba(0,0,0,0.5);
+  border-radius: 50%;
+}
+
+.image-modal-content .modal-close:hover {
+  background: rgba(0,0,0,0.7);
+  color: #fff;
+}
+
+#billImage:hover {
+  opacity: 0.9;
+}
+
+/* Form actions */
+.form-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+}

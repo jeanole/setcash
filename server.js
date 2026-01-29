@@ -211,15 +211,32 @@ app.get('/api/bills', ensureAuth, (req, res) => {
   res.json(bills);
 });
 
+// Calculate bill number for a user (1.01-1.20, 2.01-2.20, etc.)
+function calculateBillNumber(userEmail) {
+  const userBills = bills.filter(b => b.email.toLowerCase() === userEmail.toLowerCase());
+  const count = userBills.length;
+  const group = Math.floor(count / 20) + 1;
+  const position = (count % 20) + 1;
+  return `${group}.${position.toString().padStart(2, '0')}`;
+}
+
 app.post('/upload', ensureAuth, upload.single('photo'), (req, res) => {
-  const { gst, vendor, comment, item, motive, amount } = req.body;
+  const { type, vendor, comment, item, motive, brutto19, brutto7, brutto0 } = req.body;
+  const b19 = parseFloat(brutto19) || 0;
+  const b7 = parseFloat(brutto7) || 0;
+  const b0 = parseFloat(brutto0) || 0;
+  const billNumber = calculateBillNumber(req.user.email);
   const bill = {
     date: new Date().toISOString(),
     email: req.user.email,
+    billNumber: billNumber,
+    type: type || 'Kauf',
     vendor: vendor || '',
     item: item || '',
-    amount: parseFloat(amount) || 0,
-    gst: gst || '19%',
+    brutto19: b19,
+    brutto7: b7,
+    brutto0: b0,
+    amount: b19 + b7 + b0,
     comment: comment || '',
     motive: motive || '',
     filename: req.file ? req.file.originalname : ''
@@ -241,19 +258,32 @@ app.put('/api/bills/:index', ensureAuth, (req, res) => {
   const index = parseInt(req.params.index);
   if (index < 0 || index >= bills.length) return res.status(404).json({ error: 'Not found' });
   const bill = bills[index];
-  const { vendor, item, gst, comment, motive, amount } = req.body;
+  const { email, type, vendor, item, comment, motive, brutto19, brutto7, brutto0 } = req.body;
   const changes = {};
+  if (email !== undefined && email !== bill.email) { changes.email = email; bill.email = email; }
+  if (type !== undefined && type !== bill.type) { changes.type = type; bill.type = type; }
   if (vendor !== undefined && vendor !== bill.vendor) { changes.vendor = vendor; bill.vendor = vendor; }
   if (item !== undefined && item !== bill.item) { changes.item = item; bill.item = item; }
-  if (gst !== undefined && gst !== bill.gst) { changes.gst = gst; bill.gst = gst; }
   if (comment !== undefined && comment !== bill.comment) { changes.comment = comment; bill.comment = comment; }
   if (motive !== undefined && motive !== bill.motive) { changes.motive = motive; bill.motive = motive; }
-  if (amount !== undefined && parseFloat(amount) !== bill.amount) { changes.amount = parseFloat(amount); bill.amount = parseFloat(amount); }
+  if (brutto19 !== undefined && parseFloat(brutto19) !== bill.brutto19) { changes.brutto19 = parseFloat(brutto19); bill.brutto19 = parseFloat(brutto19); }
+  if (brutto7 !== undefined && parseFloat(brutto7) !== bill.brutto7) { changes.brutto7 = parseFloat(brutto7); bill.brutto7 = parseFloat(brutto7); }
+  if (brutto0 !== undefined && parseFloat(brutto0) !== bill.brutto0) { changes.brutto0 = parseFloat(brutto0); bill.brutto0 = parseFloat(brutto0); }
+  // Recalculate total amount
+  bill.amount = (bill.brutto19 || 0) + (bill.brutto7 || 0) + (bill.brutto0 || 0);
   if (Object.keys(changes).length > 0) {
     editLog.push({ timestamp: new Date().toISOString(), user: req.user.email, billIndex: index, changes });
     saveJSON(BILLS_FILE, bills);
     saveJSON(LOG_FILE, editLog);
   }
+  res.json({ ok: true });
+});
+
+app.delete('/api/bills/:index', ensureAdmin, (req, res) => {
+  const index = parseInt(req.params.index);
+  if (index < 0 || index >= bills.length) return res.status(404).json({ error: 'Not found' });
+  bills.splice(index, 1);
+  saveJSON(BILLS_FILE, bills);
   res.json({ ok: true });
 });
 
@@ -293,6 +323,11 @@ app.get('/uploads/:filename', ensureAuth, (req, res) => {
   const file = path.join(DATA_DIR, 'uploads', req.params.filename);
   if (fs.existsSync(file)) return res.sendFile(file);
   res.status(404).send('Not found');
+});
+
+// API: Users list (for dropdowns)
+app.get('/api/users', ensureAuth, (req, res) => {
+  res.json(users.map(u => ({ email: u.email })));
 });
 
 // API: Users (admin only)
@@ -396,8 +431,8 @@ app.get('/api/vgeld/analysis', ensureAuth, (req, res) => {
   });
 
   // Calculate remaining and percentage
-  const result = Object.entries(analysis).map(([email, data]) => ({
-    email,
+  const result = Object.entries(analysis).map(([user, data]) => ({
+    user,
     received: data.received,
     spent: data.spent,
     remaining: data.received - data.spent,

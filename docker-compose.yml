@@ -1,0 +1,14 @@
+services:
+  vbudget:
+    image: ${DOCKER_IMAGE:-vbudget}
+    container_name: vbudget
+    restart: unless-stopped
+    ports:
+      - "5000:3000"
+    volumes:
+      - /dockerfiles/vbudget:/app/data
+    environment:
+      - NODE_ENV=production
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+
