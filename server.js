@@ -41,7 +41,11 @@ async function initGoogleSheets() {
 }
 
 async function appendBillToSheet(bill) {
-  if (!sheets || !settings.googleSheetEnabled || !settings.googleSheetId) return;
+  console.log('appendBillToSheet called, sheets:', !!sheets, 'enabled:', settings?.googleSheetEnabled, 'sheetId:', settings?.googleSheetId);
+  if (!sheets || !settings.googleSheetEnabled || !settings.googleSheetId) {
+    console.log('Skipping sheet sync - not configured');
+    return;
+  }
   try {
     const typeMap = { 'Kauf': 'K', 'Leih': 'L', 'Verbrauch': 'V' };
     const row = [
@@ -72,8 +76,6 @@ async function appendBillToSheet(bill) {
     console.error('Sheet append error:', e.message);
   }
 }
-
-initGoogleSheets();
 
 const app = express();
 const upload = multer();
@@ -164,6 +166,9 @@ if (!fs.existsSync(BILLS_FILE)) saveJSON(BILLS_FILE, bills);
 if (!fs.existsSync(LOG_FILE)) saveJSON(LOG_FILE, editLog);
 if (!fs.existsSync(VGELD_FILE)) saveJSON(VGELD_FILE, vgeld);
 if (!fs.existsSync(SETTINGS_FILE)) saveJSON(SETTINGS_FILE, settings);
+
+// Initialize Google Sheets after settings are loaded
+initGoogleSheets();
 
 // Middleware
 app.use(cookieParser());
