@@ -45,6 +45,7 @@ const USERS_FILE = path.join(DATA_DIR, 'users.json');
 const MOTIVES_FILE = path.join(DATA_DIR, 'motives.json');
 const BILLS_FILE = path.join(DATA_DIR, 'bills.json');
 const LOG_FILE = path.join(DATA_DIR, 'editlog.json');
+const VGELD_FILE = path.join(DATA_DIR, 'vgeld.json');
 
 // Ensure data directory exists
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR);
@@ -84,11 +85,13 @@ let motives = loadJSON(MOTIVES_FILE, [
 ]);
 let bills = loadJSON(BILLS_FILE, []);
 let editLog = loadJSON(LOG_FILE, []);
+let vgeld = loadJSON(VGELD_FILE, []);
 
 // Save initial data if files don't exist
 if (!fs.existsSync(MOTIVES_FILE)) saveJSON(MOTIVES_FILE, motives);
 if (!fs.existsSync(BILLS_FILE)) saveJSON(BILLS_FILE, bills);
 if (!fs.existsSync(LOG_FILE)) saveJSON(LOG_FILE, editLog);
+if (!fs.existsSync(VGELD_FILE)) saveJSON(VGELD_FILE, vgeld);
 
 // Middleware
 app.use(cookieParser());
@@ -345,6 +348,63 @@ app.post('/api/user/password', ensureAuth, async (req, res) => {
   user.hash = await bcrypt.hash(newPassword, 12);
   saveJSON(USERS_FILE, users);
   res.json({ ok: true });
+});
+
+// V-Geld endpoints
+app.get('/api/vgeld', ensureAuth, (req, res) => {
+  res.json(vgeld);
+});
+
+app.post('/api/vgeld', ensureAdmin, (req, res) => {
+  const { amount, from, to } = req.body;
+  if (!amount || !to) return res.status(400).json({ error: 'Amount and recipient required' });
+  if (!findUser(to)) return res.status(400).json({ error: 'Recipient must be a registered user' });
+  const entry = {
+    date: new Date().toISOString(),
+    amount: parseFloat(amount) || 0,
+    from: from || 'External',
+    to: to,
+    createdBy: req.user.email
+  };
+  vgeld.push(entry);
+  saveJSON(VGELD_FILE, vgeld);
+  res.json({ ok: true });
+});
+
+app.delete('/api/vgeld/:index', ensureAdmin, (req, res) => {
+  const index = parseInt(req.params.index);
+  if (index < 0 || index >= vgeld.length) return res.status(404).json({ error: 'Not found' });
+  vgeld.splice(index, 1);
+  saveJSON(VGELD_FILE, vgeld);
+  res.json({ ok: true });
+});
+
+// V-Geld analysis per user
+app.get('/api/vgeld/analysis', ensureAuth, (req, res) => {
+  const analysis = {};
+
+  // Sum v-geld received per user
+  vgeld.forEach(v => {
+    if (!analysis[v.to]) analysis[v.to] = { received: 0, spent: 0 };
+    analysis[v.to].received += v.amount || 0;
+  });
+
+  // Sum spending per user
+  bills.forEach(b => {
+    if (!analysis[b.email]) analysis[b.email] = { received: 0, spent: 0 };
+    analysis[b.email].spent += b.amount || 0;
+  });
+
+  // Calculate remaining and percentage
+  const result = Object.entries(analysis).map(([email, data]) => ({
+    email,
+    received: data.received,
+    spent: data.spent,
+    remaining: data.received - data.spent,
+    percentUsed: data.received > 0 ? (data.spent / data.received) * 100 : 0
+  }));
+
+  res.json(result);
 });
 
 // Admin page
