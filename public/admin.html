@@ -144,8 +144,8 @@
 
     async function saveMotive(i) {
       const row = document.querySelector(`tr[data-i="${i}"]`);
-      const motive = row.querySelector('[data-f="name"]').value;
-      const budget = row.querySelector('[data-f="budget"]').value;
+      const motive = row.querySelector('input[data-f="name"]').value;
+      const budget = row.querySelector('input[data-f="budget"]').value;
       const res = await fetch('/api/admin/motive/' + i, {
         method: 'PUT',
         headers: {'Content-Type': 'application/json'},
