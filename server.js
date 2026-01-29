@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const session = require('express-session');
+const FileStore = require('session-file-store')(session);
 const bodyParser = require('body-parser');
 const cookieParser = require('cookie-parser');
 const multer = require('multer');
@@ -98,6 +99,11 @@ app.use(cookieParser());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 app.use(session({
+  store: new FileStore({
+    path: path.join(DATA_DIR, 'sessions'),
+    ttl: 86400,
+    retries: 0
+  }),
   secret: process.env.SESSION_SECRET || 'change-this-in-production',
   resave: false,
   saveUninitialized: false,
