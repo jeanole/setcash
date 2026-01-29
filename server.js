@@ -869,31 +869,111 @@ app.get('/api/report/:email', ensureAuth, async (req, res) => {
   doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke();
   doc.moveDown(1);
 
+  // Bills table
+  if (userBills.length > 0) {
+    doc.fontSize(12).font('Helvetica-Bold').text('Belegübersicht');
+    doc.moveDown(0.5);
+
+    const tableTop = doc.y;
+    const colX = [50, 80, 140, 220, 295, 355, 415, 475];
+
+    // Table header
+    doc.font('Helvetica-Bold').fontSize(7);
+    doc.text('Nr.', colX[0], tableTop);
+    doc.text('Datum', colX[1], tableTop);
+    doc.text('Händler', colX[2], tableTop);
+    doc.text('Artikel', colX[3], tableTop);
+    doc.text('19%', colX[4], tableTop);
+    doc.text('7%', colX[5], tableTop);
+    doc.text('0%', colX[6], tableTop);
+    doc.text('Summe', colX[7], tableTop);
+
+    // Header underline
+    doc.moveTo(50, tableTop + 10).lineTo(545, tableTop + 10).stroke();
+
+    // Table rows
+    doc.font('Helvetica').fontSize(7);
+    let rowY = tableTop + 14;
+    for (let i = 0; i < userBills.length; i++) {
+      const bill = userBills[i];
+      if (rowY > 750) {
+        doc.addPage();
+        rowY = 50;
+      }
+      doc.text(bill.billNumber || String(i + 1), colX[0], rowY, { width: 28 });
+      doc.text(new Date(bill.date).toLocaleDateString('de-DE'), colX[1], rowY, { width: 58 });
+      doc.text((bill.vendor || '-').substring(0, 14), colX[2], rowY, { width: 78 });
+      doc.text((bill.item || '-').substring(0, 12), colX[3], rowY, { width: 73 });
+      doc.text((bill.brutto19 || 0).toFixed(2), colX[4], rowY, { width: 58 });
+      doc.text((bill.brutto7 || 0).toFixed(2), colX[5], rowY, { width: 58 });
+      doc.text((bill.brutto0 || 0).toFixed(2), colX[6], rowY, { width: 58 });
+      doc.text((bill.amount || 0).toFixed(2), colX[7], rowY, { width: 65 });
+      rowY += 12;
+    }
+    doc.y = rowY;
+    doc.moveDown(1);
+  }
+
+  // Line separator
+  doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke();
+  doc.moveDown(1);
+
   // Bills Summary
   const totalAmount = userBills.reduce((sum, b) => sum + (b.amount || 0), 0);
   const total19 = userBills.reduce((sum, b) => sum + (b.brutto19 || 0), 0);
   const total7 = userBills.reduce((sum, b) => sum + (b.brutto7 || 0), 0);
   const total0 = userBills.reduce((sum, b) => sum + (b.brutto0 || 0), 0);
 
-  doc.fontSize(12).font('Helvetica-Bold').text('Ausgaben Zusammenfassung');
-  doc.fontSize(10).font('Helvetica');
-  doc.text(`Anzahl Belege: ${userBills.length}`);
-  doc.text(`Gesamt 19%: ${total19.toFixed(2)} €`);
-  doc.text(`Gesamt 7%: ${total7.toFixed(2)} €`);
-  doc.text(`Gesamt 0%: ${total0.toFixed(2)} €`);
-  doc.font('Helvetica-Bold').text(`Ausgaben Gesamt: ${totalAmount.toFixed(2)} €`);
+  const summaryX = 50;
+  doc.fontSize(12).font('Helvetica-Bold').text('Ausgaben Zusammenfassung', summaryX);
   doc.moveDown(0.5);
+  const valueX = 180;
+  let summaryY = doc.y;
+
+  doc.fontSize(10).font('Helvetica');
+  doc.text('Anzahl Belege:', summaryX, summaryY);
+  doc.text(String(userBills.length), valueX, summaryY);
+  summaryY += 14;
+
+  doc.text('Gesamt 19%:', summaryX, summaryY);
+  doc.text(`${total19.toFixed(2)} €`, valueX, summaryY);
+  summaryY += 14;
+
+  doc.text('Gesamt 7%:', summaryX, summaryY);
+  doc.text(`${total7.toFixed(2)} €`, valueX, summaryY);
+  summaryY += 14;
+
+  doc.text('Gesamt 0%:', summaryX, summaryY);
+  doc.text(`${total0.toFixed(2)} €`, valueX, summaryY);
+  summaryY += 14;
+
+  doc.moveTo(summaryX, summaryY).lineTo(250, summaryY).stroke();
+  summaryY += 6;
+
+  doc.font('Helvetica-Bold');
+  doc.text('Ausgaben Gesamt:', summaryX, summaryY);
+  doc.text(`${totalAmount.toFixed(2)} €`, valueX, summaryY);
+  summaryY += 14;
+
+  doc.text('V-Geld Gesamt:', summaryX, summaryY);
+  doc.text(`${totalVGeld.toFixed(2)} €`, valueX, summaryY);
+  summaryY += 14;
 
   // Balance
   const balance = totalVGeld - totalAmount;
   doc.fillColor(balance >= 0 ? 'green' : 'red');
-  doc.text(`Saldo: ${balance.toFixed(2)} €`);
+  doc.text('Saldo:', summaryX, summaryY);
+  doc.text(`${balance.toFixed(2)} €`, valueX, summaryY);
   doc.fillColor('black');
-  doc.moveDown(1);
 
-  // Line separator
-  doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke();
-  doc.moveDown(1);
+  doc.y = summaryY + 20;
+
+  // New page for bills
+  if (userBills.length > 0) {
+    doc.addPage();
+    doc.fontSize(14).font('Helvetica-Bold').text('Belege', 50);
+    doc.moveDown(1);
+  }
 
   // Each bill
   for (let i = 0; i < userBills.length; i++) {
