@@ -329,6 +329,10 @@
         } catch (e) {
           tbody.innerHTML = '<tr><td colspan="12">Error loading bills.</td></tr>';
         }
+        // Reset selection state
+        const selectAll = document.getElementById('selectAllBills');
+        if (selectAll) selectAll.checked = false;
+        updateSelectedCount();
       }
 
       async function loadSpending() {
