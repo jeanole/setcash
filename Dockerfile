@@ -6,9 +6,7 @@ RUN addgroup -g 1001 -S appgroup && adduser -u 1001 -S appuser -G appgroup
 WORKDIR /app
 
 COPY package*.json ./
-RUN apk add --no-cache python3 make g++ && \
-    npm ci --omit=dev && \
-    apk del python3 make g++
+RUN npm ci --omit=dev
 
 COPY server.js ./
 COPY public ./public
