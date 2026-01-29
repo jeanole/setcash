@@ -39,8 +39,10 @@
   </div>
 
   <div class="card">
-    <h2>Google Sheets Settings</h2>
+    <h2>Google Integration</h2>
     <div id="credStatus" style="margin-bottom:12px"></div>
+
+    <h3>Google Sheets</h3>
     <form id="settingsForm" class="inline-form">
       <label style="flex-direction:row;align-items:center;gap:6px">
         <input type="checkbox" name="googleSheetEnabled" id="sheetEnabled"> Sync enabled
@@ -49,7 +51,7 @@
       <button type="submit">Save</button>
     </form>
     <div id="settingsResult"></div>
-    <p style="font-size:0.85em;color:#666">Sheet ID is the long string in the Google Sheets URL between /d/ and /edit</p>
+    <p style="font-size:0.85em;color:#666">Sheet ID is the long string in the URL between /d/ and /edit</p>
 
     <h3 style="margin-top:20px">Service Account Credentials</h3>
     <form id="credForm">

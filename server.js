@@ -22,13 +22,13 @@ function getCredentialsPath() {
   return null;
 }
 
-async function initGoogleSheets() {
-  console.log('=== initGoogleSheets called ===');
+async function initGoogleServices() {
+  console.log('=== initGoogleServices called ===');
   try {
     const credPath = getCredentialsPath();
     console.log('Credentials path:', credPath);
     if (!credPath) {
-      console.log('Google credentials not found, Sheets sync disabled');
+      console.log('Google credentials not found, Google services disabled');
       return false;
     }
     const auth = new google.auth.GoogleAuth({
@@ -39,7 +39,7 @@ async function initGoogleSheets() {
     console.log('Google Sheets connected successfully');
     return true;
   } catch (e) {
-    console.error('Google Sheets init error:', e.message);
+    console.error('Google services init error:', e.message);
     return false;
   }
 }
@@ -170,11 +170,11 @@ if (!fs.existsSync(LOG_FILE)) saveJSON(LOG_FILE, editLog);
 if (!fs.existsSync(VGELD_FILE)) saveJSON(VGELD_FILE, vgeld);
 if (!fs.existsSync(SETTINGS_FILE)) saveJSON(SETTINGS_FILE, settings);
 
-// Initialize Google Sheets after settings are loaded
+// Initialize Google services after settings are loaded
 console.log('=== Startup ===');
 console.log('DATA_DIR:', DATA_DIR);
 console.log('Settings loaded:', settings);
-initGoogleSheets();
+initGoogleServices();
 
 // Middleware
 app.use(cookieParser());
@@ -331,11 +331,18 @@ app.post('/upload', ensureAuth, upload.single('photo'), (req, res) => {
   };
   // Save file if uploaded
   if (req.file) {
-    const uploadsDir = path.join(DATA_DIR, 'uploads');
+    const userFolder = req.user.email.split('@')[0];
+    const uploadsDir = path.join(DATA_DIR, 'uploads', userFolder);
+    if (!fs.existsSync(path.join(DATA_DIR, 'uploads'))) fs.mkdirSync(path.join(DATA_DIR, 'uploads'));
     if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir);
-    const filename = Date.now() + '-' + req.file.originalname;
-    fs.writeFileSync(path.join(uploadsDir, filename), req.file.buffer);
-    bill.file = filename;
+
+    // Format: user_billNumber_date.ext (e.g., paula_1.01_2024-01-29.jpg)
+    const dateStr = new Date().toISOString().split('T')[0];
+    const ext = path.extname(req.file.originalname) || '.jpg';
+    const filename = `${userFolder}_${billNumber}_${dateStr}${ext}`;
+    const filePath = path.join(uploadsDir, filename);
+    fs.writeFileSync(filePath, req.file.buffer);
+    bill.file = `${userFolder}/${filename}`;
   }
   bills.push(bill);
   saveJSON(BILLS_FILE, bills);
@@ -403,16 +410,26 @@ app.post('/api/bills/:index/image', ensureAuth, upload.single('photo'), (req, re
   const index = parseInt(req.params.index);
   if (index < 0 || index >= bills.length) return res.status(404).json({ error: 'Not found' });
   if (!req.file) return res.status(400).json({ error: 'No file' });
-  const uploadsDir = path.join(DATA_DIR, 'uploads');
+
+  const bill = bills[index];
+  const userFolder = bill.email.split('@')[0];
+  const uploadsDir = path.join(DATA_DIR, 'uploads', userFolder);
+  if (!fs.existsSync(path.join(DATA_DIR, 'uploads'))) fs.mkdirSync(path.join(DATA_DIR, 'uploads'));
   if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir);
-  const filename = Date.now() + '-' + req.file.originalname;
-  fs.writeFileSync(path.join(uploadsDir, filename), req.file.buffer);
-  bills[index].file = filename;
+
+  // Format: user_billNumber_date.ext (e.g., paula_1.01_2024-01-29.jpg)
+  const dateStr = new Date().toISOString().split('T')[0];
+  const ext = path.extname(req.file.originalname) || '.jpg';
+  const filename = `${userFolder}_${bill.billNumber || index}_${dateStr}${ext}`;
+  const filePath = path.join(uploadsDir, filename);
+  fs.writeFileSync(filePath, req.file.buffer);
+  bills[index].file = `${userFolder}/${filename}`;
   bills[index].filename = req.file.originalname;
+
   editLog.push({ timestamp: new Date().toISOString(), user: req.user.email, billIndex: index, changes: { image: 'replaced' } });
   saveJSON(BILLS_FILE, bills);
   saveJSON(LOG_FILE, editLog);
-  res.json({ ok: true, file: filename });
+  res.json({ ok: true, file: `${userFolder}/${filename}` });
 });
 
 app.get('/api/bills/log', ensureAuth, (req, res) => {
@@ -585,7 +602,7 @@ app.post('/api/admin/google-credentials', ensureAdmin, async (req, res) => {
     const credPath = path.join(DATA_DIR, 'google-credentials.json');
     console.log('Saving credentials to:', credPath);
     saveJSON(credPath, parsed);
-    const initResult = await initGoogleSheets();
+    const initResult = await initGoogleServices();
     console.log('Init result:', initResult);
     res.json({ ok: true, email: parsed.client_email });
   } catch (e) {
