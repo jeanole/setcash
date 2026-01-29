@@ -21,6 +21,7 @@
           <button class="tab" data-tab="bills">Bills</button>
           <button class="tab" data-tab="spending">Spending</button>
           <button class="tab" data-tab="vgeld">V-Geld</button>
+          <button class="tab" data-tab="reports">Reports</button>
         </div>
 
         <div id="tab-upload" class="tab-content active">
@@ -100,6 +101,30 @@
               </tfoot>
             </table>
           </div>
+          <div class="card">
+            <h2>V-Geld Analysis by User</h2>
+            <table id="vgeldAnalysisTable" class="data-table">
+              <thead>
+                <tr>
+                  <th>User</th>
+                  <th>V-Geld Received</th>
+                  <th>Spent</th>
+                  <th>Remaining</th>
+                  <th>Used</th>
+                </tr>
+              </thead>
+              <tbody id="vgeldAnalysisBody"></tbody>
+              <tfoot>
+                <tr>
+                  <th>Total</th>
+                  <th id="vgeldTotalReceived"></th>
+                  <th id="vgeldTotalSpent"></th>
+                  <th id="vgeldTotalRemaining"></th>
+                  <th id="vgeldTotalPercent"></th>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
         </div>
 
         <div id="tab-vgeld" class="tab-content">
@@ -130,29 +155,20 @@
               <tbody id="vgeldBody"></tbody>
             </table>
           </div>
+        </div>
+
+        <div id="tab-reports" class="tab-content">
           <div class="card">
-            <h2>V-Geld Analysis by User</h2>
-            <table id="vgeldAnalysisTable" class="data-table">
-              <thead>
-                <tr>
-                  <th>User</th>
-                  <th>V-Geld Received</th>
-                  <th>Spent</th>
-                  <th>Remaining</th>
-                  <th>Used</th>
-                </tr>
-              </thead>
-              <tbody id="vgeldAnalysisBody"></tbody>
-              <tfoot>
-                <tr>
-                  <th>Total</th>
-                  <th id="vgeldTotalReceived"></th>
-                  <th id="vgeldTotalSpent"></th>
-                  <th id="vgeldTotalRemaining"></th>
-                  <th id="vgeldTotalPercent"></th>
-                </tr>
-              </tfoot>
-            </table>
+            <h2>PDF Reports</h2>
+            <p>Download a PDF report with all bills and images for a user.</p>
+            <div style="margin: 20px 0;">
+              <label style="display: flex; flex-direction: column; gap: 8px; max-width: 400px;">
+                <span>Select User:</span>
+                <select id="reportUserSelect" style="padding: 8px; font-size: 14px;"></select>
+              </label>
+            </div>
+            <button onclick="downloadReport()" style="padding: 10px 20px;">Download PDF Report</button>
+            <div id="reportResult" style="margin-top: 12px;"></div>
           </div>
         </div>
 
@@ -283,8 +299,9 @@
           document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
 
           if (tab.dataset.tab === 'bills') loadBills();
-          if (tab.dataset.tab === 'spending') loadSpending();
+          if (tab.dataset.tab === 'spending') { loadSpending(); loadVGeldAnalysis(); }
           if (tab.dataset.tab === 'vgeld') loadVGeld();
+          if (tab.dataset.tab === 'reports') loadReportUsers();
         });
       });
 
@@ -383,19 +400,12 @@
 
       async function loadVGeld() {
         const tbody = document.getElementById('vgeldBody');
-        const analysisBody = document.getElementById('vgeldAnalysisBody');
         tbody.innerHTML = '<tr><td colspan="6">Loading...</td></tr>';
-        analysisBody.innerHTML = '<tr><td colspan="5">Loading...</td></tr>';
 
         try {
-          const [vgeldRes, analysisRes] = await Promise.all([
-            fetch('/api/vgeld'),
-            fetch('/api/vgeld/analysis')
-          ]);
-          allVGeld = await vgeldRes.json();
-          const analysis = await analysisRes.json();
+          const res = await fetch('/api/vgeld');
+          allVGeld = await res.json();
 
-          // V-Geld transaction history
           if (allVGeld.length === 0) {
             tbody.innerHTML = '<tr><td colspan="6">No transfers yet.</td></tr>';
           } else {
@@ -413,8 +423,19 @@
               </tr>
             `).join('');
           }
+        } catch (e) {
+          tbody.innerHTML = '<tr><td colspan="6">Error loading data.</td></tr>';
+        }
+      }
 
-          // V-Geld analysis per user
+      async function loadVGeldAnalysis() {
+        const analysisBody = document.getElementById('vgeldAnalysisBody');
+        analysisBody.innerHTML = '<tr><td colspan="5">Loading...</td></tr>';
+
+        try {
+          const res = await fetch('/api/vgeld/analysis');
+          const analysis = await res.json();
+
           if (analysis.length === 0) {
             analysisBody.innerHTML = '<tr><td colspan="5">No data.</td></tr>';
             document.getElementById('vgeldTotalReceived').textContent = formatCurrency(0);
@@ -448,7 +469,6 @@
             document.getElementById('vgeldTotalPercent').textContent = totalPercent.toFixed(2) + '%';
           }
         } catch (e) {
-          tbody.innerHTML = '<tr><td colspan="6">Error loading data.</td></tr>';
           analysisBody.innerHTML = '<tr><td colspan="5">Error loading data.</td></tr>';
         }
       }
@@ -726,6 +746,26 @@
           resultEl.className = 'message error';
         }
         setTimeout(() => { resultEl.textContent = ''; resultEl.className = ''; }, 5000);
+      }
+
+      async function loadReportUsers() {
+        try {
+          const res = await fetch('/api/report-users');
+          const users = await res.json();
+          const sel = document.getElementById('reportUserSelect');
+          sel.innerHTML = users.map(u => `<option value="${escapeHtml(u.email)}">${escapeHtml(u.email)}</option>`).join('');
+        } catch (e) {
+          console.error('Could not load report users:', e);
+        }
+      }
+
+      function downloadReport() {
+        const email = document.getElementById('reportUserSelect').value;
+        if (!email) {
+          alert('Please select a user');
+          return;
+        }
+        window.open('/api/report/' + encodeURIComponent(email), '_blank');
       }
 
       async function syncFromSheet() {

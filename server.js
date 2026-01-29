@@ -10,6 +10,7 @@ const rateLimit = require('express-rate-limit');
 const fs = require('fs');
 const path = require('path');
 const { google } = require('googleapis');
+const PDFDocument = require('pdfkit');
 
 // Google Sheets setup
 let sheets = null;
@@ -813,6 +814,176 @@ function parseSheetNumber(val) {
   console.log('parseSheetNumber:', val, '->', num);
   return isNaN(num) ? 0 : num;
 }
+
+// PDF Report per user
+app.get('/api/report/:email', ensureAuth, async (req, res) => {
+  const targetEmail = decodeURIComponent(req.params.email);
+
+  // Only admins can view other users' reports
+  if (!req.user.admin && req.user.email.toLowerCase() !== targetEmail.toLowerCase()) {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+
+  const userBills = bills.filter(b => b.email.toLowerCase() === targetEmail.toLowerCase());
+  const userVGeld = vgeld.filter(v => v.to.toLowerCase() === targetEmail.toLowerCase());
+
+  if (userBills.length === 0 && userVGeld.length === 0) {
+    return res.status(404).json({ error: 'No data found for this user' });
+  }
+
+  // Sort by date
+  userBills.sort((a, b) => new Date(a.date) - new Date(b.date));
+  userVGeld.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  const doc = new PDFDocument({ margin: 50, size: 'A4' });
+
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="report_${targetEmail.split('@')[0]}_${new Date().toISOString().split('T')[0]}.pdf"`);
+
+  doc.pipe(res);
+
+  // Title
+  doc.fontSize(20).font('Helvetica-Bold').text('vBudget - Belegübersicht', { align: 'center' });
+  doc.moveDown(0.5);
+  doc.fontSize(14).font('Helvetica').text(`Benutzer: ${targetEmail}`, { align: 'center' });
+  doc.fontSize(10).text(`Erstellt: ${new Date().toLocaleDateString('de-DE')}`, { align: 'center' });
+  doc.moveDown(1);
+
+  // V-Geld section
+  const totalVGeld = userVGeld.reduce((sum, v) => sum + (v.amount || 0), 0);
+  doc.fontSize(12).font('Helvetica-Bold').text('V-Geld Zahlungen');
+  doc.fontSize(10).font('Helvetica');
+
+  if (userVGeld.length === 0) {
+    doc.text('Keine V-Geld Zahlungen vorhanden.');
+  } else {
+    for (const v of userVGeld) {
+      doc.text(`${new Date(v.date).toLocaleDateString('de-DE')} - ${(v.amount || 0).toFixed(2)} € von ${v.from || 'Extern'}`);
+    }
+    doc.moveDown(0.3);
+    doc.font('Helvetica-Bold').text(`V-Geld Gesamt: ${totalVGeld.toFixed(2)} €`);
+  }
+  doc.moveDown(1);
+
+  // Line separator
+  doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke();
+  doc.moveDown(1);
+
+  // Bills Summary
+  const totalAmount = userBills.reduce((sum, b) => sum + (b.amount || 0), 0);
+  const total19 = userBills.reduce((sum, b) => sum + (b.brutto19 || 0), 0);
+  const total7 = userBills.reduce((sum, b) => sum + (b.brutto7 || 0), 0);
+  const total0 = userBills.reduce((sum, b) => sum + (b.brutto0 || 0), 0);
+
+  doc.fontSize(12).font('Helvetica-Bold').text('Ausgaben Zusammenfassung');
+  doc.fontSize(10).font('Helvetica');
+  doc.text(`Anzahl Belege: ${userBills.length}`);
+  doc.text(`Gesamt 19%: ${total19.toFixed(2)} €`);
+  doc.text(`Gesamt 7%: ${total7.toFixed(2)} €`);
+  doc.text(`Gesamt 0%: ${total0.toFixed(2)} €`);
+  doc.font('Helvetica-Bold').text(`Ausgaben Gesamt: ${totalAmount.toFixed(2)} €`);
+  doc.moveDown(0.5);
+
+  // Balance
+  const balance = totalVGeld - totalAmount;
+  doc.fillColor(balance >= 0 ? 'green' : 'red');
+  doc.text(`Saldo: ${balance.toFixed(2)} €`);
+  doc.fillColor('black');
+  doc.moveDown(1);
+
+  // Line separator
+  doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke();
+  doc.moveDown(1);
+
+  // Each bill
+  for (let i = 0; i < userBills.length; i++) {
+    const bill = userBills[i];
+
+    // Check if we need a new page (leave room for image)
+    if (doc.y > 600) {
+      doc.addPage();
+    }
+
+    // Bill header
+    doc.fontSize(12).font('Helvetica-Bold');
+    doc.text(`Beleg ${bill.billNumber || (i + 1)}`, { continued: true });
+    doc.font('Helvetica').text(` - ${new Date(bill.date).toLocaleDateString('de-DE')}`);
+
+    doc.fontSize(10).font('Helvetica');
+    doc.text(`Typ: ${bill.type || 'Kauf'} | Motiv: ${bill.motive || '-'}`);
+    doc.text(`Händler: ${bill.vendor || '-'} | Artikel: ${bill.item || '-'}`);
+
+    // Amounts
+    const amounts = [];
+    if (bill.brutto19) amounts.push(`19%: ${bill.brutto19.toFixed(2)}€`);
+    if (bill.brutto7) amounts.push(`7%: ${bill.brutto7.toFixed(2)}€`);
+    if (bill.brutto0) amounts.push(`0%: ${bill.brutto0.toFixed(2)}€`);
+    doc.text(`Beträge: ${amounts.join(' | ') || '-'} | Gesamt: ${(bill.amount || 0).toFixed(2)}€`);
+
+    if (bill.comment) {
+      doc.text(`Notiz: ${bill.comment}`);
+    }
+    doc.moveDown(0.5);
+
+    // Image if exists
+    if (bill.file) {
+      const imagePath = path.join(DATA_DIR, 'uploads', bill.file);
+      if (fs.existsSync(imagePath)) {
+        try {
+          const ext = path.extname(imagePath).toLowerCase();
+          if (['.jpg', '.jpeg', '.png'].includes(ext)) {
+            // Check if we need a new page for the image
+            if (doc.y > 450) {
+              doc.addPage();
+            }
+
+            // Fit image to page width while maintaining aspect ratio
+            const maxWidth = 400;
+            const maxHeight = 300;
+            doc.image(imagePath, {
+              fit: [maxWidth, maxHeight],
+              align: 'center'
+            });
+            doc.moveDown(0.5);
+          } else {
+            doc.fontSize(9).fillColor('gray').text(`[Bild: ${bill.file} - Format nicht unterstützt]`);
+            doc.fillColor('black');
+          }
+        } catch (imgErr) {
+          console.error('PDF image error:', imgErr.message);
+          doc.fontSize(9).fillColor('gray').text(`[Bild konnte nicht geladen werden: ${bill.file}]`);
+          doc.fillColor('black');
+        }
+      } else {
+        doc.fontSize(9).fillColor('gray').text(`[Bild nicht gefunden: ${bill.file}]`);
+        doc.fillColor('black');
+      }
+    }
+
+    doc.moveDown(0.5);
+
+    // Separator between bills
+    if (i < userBills.length - 1) {
+      doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor('#cccccc').stroke();
+      doc.strokeColor('black');
+      doc.moveDown(1);
+    }
+  }
+
+  doc.end();
+});
+
+// List users for report dropdown (admins see all, users see only themselves)
+app.get('/api/report-users', ensureAuth, (req, res) => {
+  if (req.user.admin) {
+    // Admins see all users who have bills
+    const usersWithBills = [...new Set(bills.map(b => b.email))];
+    res.json(usersWithBills.map(email => ({ email })));
+  } else {
+    // Regular users only see themselves
+    res.json([{ email: req.user.email }]);
+  }
+});
 
 // Admin page
 app.get('/admin', ensureAdmin, (req, res) => {
