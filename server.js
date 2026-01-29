@@ -627,9 +627,9 @@ function sheetRowKey(row) {
   // Fallback: date + email + total
   const dateStr = row[9] || '';
   const date = parseGermanDate(dateStr)?.split('T')[0] || '';
-  const b19 = parseFloat(String(row[6] || 0).replace(',', '.')) || 0;
-  const b7 = parseFloat(String(row[7] || 0).replace(',', '.')) || 0;
-  const b0 = parseFloat(String(row[8] || 0).replace(',', '.')) || 0;
+  const b19 = parseSheetNumber(row[6]);
+  const b7 = parseSheetNumber(row[7]);
+  const b0 = parseSheetNumber(row[8]);
   const total = Math.round((b19 + b7 + b0) * 100);
   return `${date}|${email}|${total}`;
 }
@@ -725,14 +725,16 @@ app.post('/api/sync/from-sheet', ensureAdmin, async (req, res) => {
       // Skip empty rows (check WAS and brutto columns)
       if (!row[1] && !row[6] && !row[7] && !row[8]) continue;
 
+      console.log('Sheet row raw values - col6:', row[6], 'col7:', row[7], 'col8:', row[8]);
+
       const bill = {
         comment: row[0] || '',           // A: Notiz
         item: row[1] || '',              // B: WAS
         motive: row[2] || '',            // C: Für
         vendor: row[3] || '',            // D: WOHER
-        brutto19: parseFloat(String(row[6]).replace(',', '.')) || 0,  // G: brutto 19%
-        brutto7: parseFloat(String(row[7]).replace(',', '.')) || 0,   // H: brutto 7%
-        brutto0: parseFloat(String(row[8]).replace(',', '.')) || 0,   // I: brutto 0%
+        brutto19: parseSheetNumber(row[6]),  // G: brutto 19%
+        brutto7: parseSheetNumber(row[7]),   // H: brutto 7%
+        brutto0: parseSheetNumber(row[8]),   // I: brutto 0%
         date: parseGermanDate(row[9]) || new Date().toISOString(),    // J: Datum
         email: row[10] || 'imported@sheet',                           // K: Wer
         type: typeMap[row[11]] || 'Kauf',                             // L: K/L/V
@@ -740,6 +742,7 @@ app.post('/api/sync/from-sheet', ensureAdmin, async (req, res) => {
         amount: 0
       };
       bill.amount = bill.brutto19 + bill.brutto7 + bill.brutto0;
+      console.log('Parsed bill brutto values:', bill.brutto19, bill.brutto7, bill.brutto0);
 
       // Check duplicate using bill key
       const key = billKey(bill);
@@ -769,6 +772,29 @@ function parseGermanDate(dateStr) {
     return new Date(parts[2], parts[1] - 1, parts[0]).toISOString();
   }
   return new Date(dateStr).toISOString();
+}
+
+// Parse number from sheet (handles €, comma decimals, etc.)
+function parseSheetNumber(val) {
+  if (val === null || val === undefined || val === '') return 0;
+  // Convert to string and clean up
+  let str = String(val)
+    .replace(/[€$£]/g, '')      // Remove currency symbols
+    .replace(/\s/g, '')          // Remove whitespace
+    .trim();
+
+  // Handle German format: 1.234,56 -> 1234.56
+  if (str.includes(',') && str.includes('.')) {
+    // Has both - assume German format (. is thousand sep, , is decimal)
+    str = str.replace(/\./g, '').replace(',', '.');
+  } else if (str.includes(',')) {
+    // Only comma - assume decimal separator
+    str = str.replace(',', '.');
+  }
+
+  const num = parseFloat(str);
+  console.log('parseSheetNumber:', val, '->', num);
+  return isNaN(num) ? 0 : num;
 }
 
 // Admin page
