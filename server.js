@@ -23,20 +23,24 @@ function getCredentialsPath() {
 }
 
 async function initGoogleSheets() {
+  console.log('=== initGoogleSheets called ===');
   try {
     const credPath = getCredentialsPath();
+    console.log('Credentials path:', credPath);
     if (!credPath) {
       console.log('Google credentials not found, Sheets sync disabled');
-      return;
+      return false;
     }
     const auth = new google.auth.GoogleAuth({
       keyFile: credPath,
       scopes: ['https://www.googleapis.com/auth/spreadsheets']
     });
     sheets = google.sheets({ version: 'v4', auth });
-    console.log('Google Sheets connected');
+    console.log('Google Sheets connected successfully');
+    return true;
   } catch (e) {
     console.error('Google Sheets init error:', e.message);
+    return false;
   }
 }
 
@@ -49,25 +53,24 @@ async function appendBillToSheet(bill) {
   try {
     const typeMap = { 'Kauf': 'K', 'Leih': 'L', 'Verbrauch': 'V' };
     const row = [
-      bill.comment || '',           // Notiz
-      bill.item || '',              // WAS
-      bill.motive || '',            // Für
-      bill.vendor || '',            // WOHER
-      '',                           // Kalkulation (brutto)
-      '',                           // Angebot (brutto) €
-      bill.brutto19 || 0,           // brutto 19%
-      bill.brutto7 || 0,            // brutto 7%
-      bill.brutto0 || 0,            // brutto 0%
-      new Date(bill.date).toLocaleDateString('de-DE'), // Datum
-      bill.email || '',             // Wer
-      typeMap[bill.type] || 'K',    // K/L/V
-      bill.billNumber || '',        // Beleg Nr
-      '',                           // V-Geld Abrechnungs Blatt
-      ''                            // Kommentar
+      bill.comment || '',           // A: Notiz
+      bill.item || '',              // B: WAS
+      bill.motive || '',            // C: Für
+      bill.vendor || '',            // D: WOHER
+      '',                           // E: Kalkulation (brutto)
+      '',                           // F: Angebot (brutto) €
+      bill.brutto19 || 0,           // G: brutto 19%
+      bill.brutto7 || 0,            // H: brutto 7%
+      bill.brutto0 || 0,            // I: brutto 0%
+      new Date(bill.date).toLocaleDateString('de-DE'), // J: Datum
+      bill.email || '',             // K: Wer
+      typeMap[bill.type] || 'K',    // L: K/L/V
+      bill.billNumber || '',        // M: Beleg Nr
+      ''                            // N: V-Geld Abrechnungs Blatt
     ];
     await sheets.spreadsheets.values.append({
       spreadsheetId: settings.googleSheetId,
-      range: 'A:O',
+      range: 'A5:N',
       valueInputOption: 'USER_ENTERED',
       requestBody: { values: [row] }
     });
@@ -168,6 +171,9 @@ if (!fs.existsSync(VGELD_FILE)) saveJSON(VGELD_FILE, vgeld);
 if (!fs.existsSync(SETTINGS_FILE)) saveJSON(SETTINGS_FILE, settings);
 
 // Initialize Google Sheets after settings are loaded
+console.log('=== Startup ===');
+console.log('DATA_DIR:', DATA_DIR);
+console.log('Settings loaded:', settings);
 initGoogleSheets();
 
 // Middleware
@@ -370,6 +376,29 @@ app.delete('/api/bills/:index', ensureAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
+// Bulk delete bills
+app.post('/api/bills/bulk-delete', ensureAdmin, (req, res) => {
+  const { indices } = req.body;
+  if (!Array.isArray(indices) || indices.length === 0) {
+    return res.status(400).json({ error: 'No indices provided' });
+  }
+
+  // Sort descending to delete from end first (prevents index shifting issues)
+  const sortedIndices = [...indices].sort((a, b) => b - a);
+  let deleted = 0;
+
+  for (const index of sortedIndices) {
+    if (index >= 0 && index < bills.length) {
+      bills.splice(index, 1);
+      deleted++;
+    }
+  }
+
+  saveJSON(BILLS_FILE, bills);
+  console.log('Bulk deleted', deleted, 'bills');
+  res.json({ ok: true, deleted });
+});
+
 app.post('/api/bills/:index/image', ensureAuth, upload.single('photo'), (req, res) => {
   const index = parseInt(req.params.index);
   if (index < 0 || index >= bills.length) return res.status(404).json({ error: 'Not found' });
@@ -531,26 +560,36 @@ app.get('/api/admin/settings', ensureAdmin, (req, res) => {
 });
 
 app.put('/api/admin/settings', ensureAdmin, (req, res) => {
+  console.log('=== Settings update ===');
+  console.log('Request body:', req.body);
   const { googleSheetId, googleSheetEnabled } = req.body;
   if (googleSheetId !== undefined) settings.googleSheetId = googleSheetId;
   if (googleSheetEnabled !== undefined) settings.googleSheetEnabled = googleSheetEnabled === true;
+  console.log('New settings:', settings);
   saveJSON(SETTINGS_FILE, settings);
+  console.log('Settings saved to:', SETTINGS_FILE);
   res.json({ ok: true });
 });
 
 app.post('/api/admin/google-credentials', ensureAdmin, async (req, res) => {
+  console.log('=== Credentials upload ===');
   const { credentials } = req.body;
   if (!credentials) return res.status(400).json({ error: 'Credentials required' });
   try {
     const parsed = JSON.parse(credentials);
+    console.log('Parsed credentials type:', parsed.type);
+    console.log('Service account email:', parsed.client_email);
     if (parsed.type !== 'service_account') {
       return res.status(400).json({ error: 'Must be a service account JSON' });
     }
     const credPath = path.join(DATA_DIR, 'google-credentials.json');
+    console.log('Saving credentials to:', credPath);
     saveJSON(credPath, parsed);
-    await initGoogleSheets();
+    const initResult = await initGoogleSheets();
+    console.log('Init result:', initResult);
     res.json({ ok: true, email: parsed.client_email });
   } catch (e) {
+    console.error('Credentials error:', e);
     res.status(400).json({ error: 'Invalid JSON: ' + e.message });
   }
 });
@@ -565,6 +604,172 @@ app.get('/api/admin/google-credentials/status', ensureAdmin, (req, res) => {
     res.json({ configured: false });
   }
 });
+
+// Create unique key for duplicate detection
+function billKey(bill) {
+  // Primary: billNumber + email (should be unique per user)
+  if (bill.billNumber && bill.email) {
+    return `${bill.billNumber.trim()}|${bill.email.trim().toLowerCase()}`;
+  }
+  // Fallback: date + email + total amount (rounded to avoid float issues)
+  const date = bill.date ? new Date(bill.date).toISOString().split('T')[0] : '';
+  const total = Math.round(((bill.brutto19 || 0) + (bill.brutto7 || 0) + (bill.brutto0 || 0)) * 100);
+  return `${date}|${(bill.email || '').trim().toLowerCase()}|${total}`;
+}
+
+function sheetRowKey(row) {
+  const billNumber = (row[12] || '').trim();
+  const email = (row[10] || '').trim().toLowerCase();
+  // Primary: billNumber + email
+  if (billNumber && email) {
+    return `${billNumber}|${email}`;
+  }
+  // Fallback: date + email + total
+  const dateStr = row[9] || '';
+  const date = parseGermanDate(dateStr)?.split('T')[0] || '';
+  const b19 = parseFloat(String(row[6] || 0).replace(',', '.')) || 0;
+  const b7 = parseFloat(String(row[7] || 0).replace(',', '.')) || 0;
+  const b0 = parseFloat(String(row[8] || 0).replace(',', '.')) || 0;
+  const total = Math.round((b19 + b7 + b0) * 100);
+  return `${date}|${email}|${total}`;
+}
+
+// Sync all bills to Google Sheet (append only, no duplicates)
+app.post('/api/sync/to-sheet', ensureAdmin, async (req, res) => {
+  console.log('=== Sync to Sheet ===');
+  if (!sheets || !settings.googleSheetEnabled || !settings.googleSheetId) {
+    return res.status(400).json({ error: 'Google Sheets not configured' });
+  }
+  try {
+    // First, read existing data from sheet to check for duplicates
+    const existing = await sheets.spreadsheets.values.get({
+      spreadsheetId: settings.googleSheetId,
+      range: 'A5:N1000'
+    });
+    const existingRows = existing.data.values || [];
+
+    // Build set of existing keys from sheet
+    const existingKeys = new Set();
+    for (const row of existingRows) {
+      if (!row[1] && !row[6] && !row[7] && !row[8]) continue;
+      existingKeys.add(sheetRowKey(row));
+    }
+    console.log('Existing entries in sheet:', existingKeys.size);
+
+    const typeMap = { 'Kauf': 'K', 'Leih': 'L', 'Verbrauch': 'V' };
+    const newRows = [];
+
+    for (const bill of bills) {
+      const key = billKey(bill);
+      if (existingKeys.has(key)) continue; // Skip duplicates
+
+      newRows.push([
+        bill.comment || '',           // A: Notiz
+        bill.item || '',              // B: WAS
+        bill.motive || '',            // C: Für
+        bill.vendor || '',            // D: WOHER
+        '',                           // E: Kalkulation (brutto)
+        '',                           // F: Angebot (brutto) €
+        bill.brutto19 || 0,           // G: brutto 19%
+        bill.brutto7 || 0,            // H: brutto 7%
+        bill.brutto0 || 0,            // I: brutto 0%
+        new Date(bill.date).toLocaleDateString('de-DE'), // J: Datum
+        bill.email || '',             // K: Wer
+        typeMap[bill.type] || 'K',    // L: K/L/V
+        bill.billNumber || '',        // M: Beleg Nr
+        ''                            // N: V-Geld Abrechnungs Blatt
+      ]);
+    }
+
+    // Append only new bills
+    if (newRows.length > 0) {
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: settings.googleSheetId,
+        range: 'A5:N',
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values: newRows }
+      });
+    }
+    console.log('Added', newRows.length, 'new bills to sheet (skipped', bills.length - newRows.length, 'duplicates)');
+    res.json({ ok: true, added: newRows.length, skipped: bills.length - newRows.length });
+  } catch (e) {
+    console.error('Sync to sheet error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Sync from Google Sheet to local (append only, no duplicates)
+app.post('/api/sync/from-sheet', ensureAdmin, async (req, res) => {
+  console.log('=== Sync from Sheet ===');
+  if (!sheets || !settings.googleSheetEnabled || !settings.googleSheetId) {
+    return res.status(400).json({ error: 'Google Sheets not configured' });
+  }
+  try {
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: settings.googleSheetId,
+      range: 'A5:N1000'
+    });
+
+    const rows = response.data.values || [];
+    console.log('Read', rows.length, 'rows from sheet');
+
+    // Build set of existing local bill keys
+    const existingKeys = new Set(bills.map(b => billKey(b)));
+    console.log('Existing local bills:', existingKeys.size);
+
+    const typeMap = { 'K': 'Kauf', 'L': 'Leih', 'V': 'Verbrauch' };
+    let added = 0;
+    let skipped = 0;
+
+    for (const row of rows) {
+      // Skip empty rows (check WAS and brutto columns)
+      if (!row[1] && !row[6] && !row[7] && !row[8]) continue;
+
+      const bill = {
+        comment: row[0] || '',           // A: Notiz
+        item: row[1] || '',              // B: WAS
+        motive: row[2] || '',            // C: Für
+        vendor: row[3] || '',            // D: WOHER
+        brutto19: parseFloat(String(row[6]).replace(',', '.')) || 0,  // G: brutto 19%
+        brutto7: parseFloat(String(row[7]).replace(',', '.')) || 0,   // H: brutto 7%
+        brutto0: parseFloat(String(row[8]).replace(',', '.')) || 0,   // I: brutto 0%
+        date: parseGermanDate(row[9]) || new Date().toISOString(),    // J: Datum
+        email: row[10] || 'imported@sheet',                           // K: Wer
+        type: typeMap[row[11]] || 'Kauf',                             // L: K/L/V
+        billNumber: row[12] || '',                                    // M: Beleg Nr
+        amount: 0
+      };
+      bill.amount = bill.brutto19 + bill.brutto7 + bill.brutto0;
+
+      // Check duplicate using bill key
+      const key = billKey(bill);
+      if (existingKeys.has(key)) {
+        skipped++;
+        continue;
+      }
+
+      existingKeys.add(key);
+      bills.push(bill);
+      added++;
+    }
+
+    saveJSON(BILLS_FILE, bills);
+    console.log('Added', added, 'bills from sheet (skipped', skipped, 'duplicates)');
+    res.json({ ok: true, added, skipped });
+  } catch (e) {
+    console.error('Sync from sheet error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+function parseGermanDate(dateStr) {
+  if (!dateStr) return null;
+  const parts = dateStr.split('.');
+  if (parts.length === 3) {
+    return new Date(parts[2], parts[1] - 1, parts[0]).toISOString();
+  }
+  return new Date(dateStr).toISOString();
+}
 
 // Admin page
 app.get('/admin', ensureAdmin, (req, res) => {

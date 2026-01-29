@@ -45,10 +45,17 @@
         <div id="tab-bills" class="tab-content">
           <div class="card">
             <h2>All Bills</h2>
+            <div class="sync-buttons admin-only" style="display:none; margin-bottom: 12px;">
+              <button onclick="syncToSheet()" class="small secondary">↑ Push to Sheet</button>
+              <button onclick="syncFromSheet()" class="small secondary">↓ Pull from Sheet</button>
+              <button onclick="deleteSelected()" class="small danger" id="deleteSelectedBtn" style="display:none">Delete Selected (<span id="selectedCount">0</span>)</button>
+              <span id="syncResult" style="margin-left: 10px;"></span>
+            </div>
             <div id="billsResult"></div>
             <table id="billsTable" class="data-table">
               <thead>
                 <tr>
+                  <th class="admin-only" style="display:none"><input type="checkbox" id="selectAllBills" onchange="toggleSelectAll(this)"></th>
                   <th>Nr.</th>
                   <th>Date</th>
                   <th>Uploaded By</th>
@@ -296,6 +303,7 @@
             tbody.innerHTML = '<tr><td colspan="12">No bills yet.</td></tr>';
             return;
           }
+          const isAdmin = currentUser && currentUser.admin;
           tbody.innerHTML = allBills.map((bill, index) => {
             const b19 = bill.brutto19 || 0;
             const b7 = bill.brutto7 || 0;
@@ -303,6 +311,7 @@
             const total = b19 + b7 + b0 || bill.amount || 0;
             return `
             <tr data-index="${index}" class="clickable-row" onclick="openBillDetail(${index})">
+              <td class="admin-only" style="${isAdmin ? '' : 'display:none'}" onclick="event.stopPropagation()"><input type="checkbox" class="bill-checkbox" data-index="${index}" onchange="updateSelectedCount()"></td>
               <td><strong>${escapeHtml(bill.billNumber || '-')}</strong></td>
               <td>${escapeHtml(formatDate(bill.date))}</td>
               <td>${escapeHtml(bill.email)}</td>
@@ -649,6 +658,94 @@
           showMessage('imageResult', 'Error: ' + err.message, true);
         }
       });
+
+      function toggleSelectAll(checkbox) {
+        document.querySelectorAll('.bill-checkbox').forEach(cb => cb.checked = checkbox.checked);
+        updateSelectedCount();
+      }
+
+      function updateSelectedCount() {
+        const checked = document.querySelectorAll('.bill-checkbox:checked').length;
+        document.getElementById('selectedCount').textContent = checked;
+        document.getElementById('deleteSelectedBtn').style.display = checked > 0 ? 'inline-block' : 'none';
+      }
+
+      async function deleteSelected() {
+        const checkboxes = document.querySelectorAll('.bill-checkbox:checked');
+        const indices = Array.from(checkboxes).map(cb => parseInt(cb.dataset.index)).sort((a, b) => b - a);
+
+        if (indices.length === 0) return;
+        if (!confirm(`Delete ${indices.length} selected bill(s)? This cannot be undone.`)) return;
+
+        const resultEl = document.getElementById('syncResult');
+        resultEl.textContent = 'Deleting...';
+
+        try {
+          const res = await fetch('/api/bills/bulk-delete', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ indices })
+          });
+          const j = await res.json();
+          if (j.ok) {
+            resultEl.textContent = '✓ Deleted ' + j.deleted + ' bills';
+            resultEl.className = 'message success';
+            document.getElementById('selectAllBills').checked = false;
+            loadBills();
+          } else {
+            resultEl.textContent = '✗ ' + (j.error || 'Error');
+            resultEl.className = 'message error';
+          }
+        } catch (e) {
+          resultEl.textContent = '✗ ' + e.message;
+          resultEl.className = 'message error';
+        }
+        setTimeout(() => { resultEl.textContent = ''; resultEl.className = ''; }, 5000);
+      }
+
+      async function syncToSheet() {
+        const resultEl = document.getElementById('syncResult');
+        resultEl.textContent = 'Syncing...';
+        resultEl.className = '';
+        try {
+          const res = await fetch('/api/sync/to-sheet', { method: 'POST' });
+          const j = await res.json();
+          if (j.ok) {
+            resultEl.textContent = '✓ Added ' + j.added + ' to sheet (' + j.skipped + ' duplicates skipped)';
+            resultEl.className = 'message success';
+          } else {
+            resultEl.textContent = '✗ ' + (j.error || 'Error');
+            resultEl.className = 'message error';
+          }
+        } catch (e) {
+          resultEl.textContent = '✗ ' + e.message;
+          resultEl.className = 'message error';
+        }
+        setTimeout(() => { resultEl.textContent = ''; resultEl.className = ''; }, 5000);
+      }
+
+      async function syncFromSheet() {
+        if (!confirm('This will import new bills from the Google Sheet (duplicates will be skipped). Continue?')) return;
+        const resultEl = document.getElementById('syncResult');
+        resultEl.textContent = 'Syncing...';
+        resultEl.className = '';
+        try {
+          const res = await fetch('/api/sync/from-sheet', { method: 'POST' });
+          const j = await res.json();
+          if (j.ok) {
+            resultEl.textContent = '✓ Added ' + j.added + ' bills (' + j.skipped + ' duplicates skipped)';
+            resultEl.className = 'message success';
+            loadBills();
+          } else {
+            resultEl.textContent = '✗ ' + (j.error || 'Error');
+            resultEl.className = 'message error';
+          }
+        } catch (e) {
+          resultEl.textContent = '✗ ' + e.message;
+          resultEl.className = 'message error';
+        }
+        setTimeout(() => { resultEl.textContent = ''; resultEl.className = ''; }, 5000);
+      }
 
       async function init() {
         const res = await fetch('/api/user');
