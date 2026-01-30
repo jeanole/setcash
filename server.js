@@ -11,6 +11,7 @@ const fs = require('fs');
 const path = require('path');
 const { google } = require('googleapis');
 const PDFDocument = require('pdfkit');
+const Database = require('better-sqlite3');
 
 // Google Sheets setup
 let sheets = null;
@@ -42,42 +43,6 @@ async function initGoogleServices() {
   } catch (e) {
     console.error('Google services init error:', e.message);
     return false;
-  }
-}
-
-async function appendBillToSheet(bill) {
-  console.log('appendBillToSheet called, sheets:', !!sheets, 'enabled:', settings?.googleSheetEnabled, 'sheetId:', settings?.googleSheetId);
-  if (!sheets || !settings.googleSheetEnabled || !settings.googleSheetId) {
-    console.log('Skipping sheet sync - not configured');
-    return;
-  }
-  try {
-    const typeMap = { 'Kauf': 'K', 'Leih': 'L', 'Verbrauch': 'V' };
-    const row = [
-      bill.comment || '',           // A: Notiz
-      bill.item || '',              // B: WAS
-      bill.motive || '',            // C: Für
-      bill.vendor || '',            // D: WOHER
-      '',                           // E: Kalkulation (brutto)
-      '',                           // F: Angebot (brutto) €
-      bill.brutto19 || 0,           // G: brutto 19%
-      bill.brutto7 || 0,            // H: brutto 7%
-      bill.brutto0 || 0,            // I: brutto 0%
-      new Date(bill.date).toLocaleDateString('de-DE'), // J: Datum
-      bill.email || '',             // K: Wer
-      typeMap[bill.type] || 'K',    // L: K/L/V
-      bill.billNumber || '',        // M: Beleg Nr
-      ''                            // N: V-Geld Abrechnungs Blatt
-    ];
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: settings.googleSheetId,
-      range: 'A5:N',
-      valueInputOption: 'USER_ENTERED',
-      requestBody: { values: [row] }
-    });
-    console.log('Bill synced to Google Sheet');
-  } catch (e) {
-    console.error('Sheet append error:', e.message);
   }
 }
 
@@ -113,6 +78,9 @@ const loginLimiter = rateLimit({
 const PORT = process.env.PORT || 3000;
 const DEV_MODE = process.env.DEV_MODE === 'true';
 const DATA_DIR = path.join(__dirname, 'data');
+const DB_PATH = path.join(DATA_DIR, 'vbudget.db');
+
+// Legacy JSON file paths (for migration)
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 const MOTIVES_FILE = path.join(DATA_DIR, 'motives.json');
 const BILLS_FILE = path.join(DATA_DIR, 'bills.json');
@@ -123,7 +91,67 @@ const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 // Ensure data directory exists
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR);
 
-// Data helpers
+// Initialize SQLite database
+const db = new Database(DB_PATH);
+db.pragma('journal_mode = WAL');
+
+// Create tables
+db.exec(`
+  CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT UNIQUE NOT NULL,
+    hash TEXT NOT NULL,
+    admin INTEGER DEFAULT 0
+  );
+
+  CREATE TABLE IF NOT EXISTS motives (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    budget REAL DEFAULT 0
+  );
+
+  CREATE TABLE IF NOT EXISTS bills (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL,
+    email TEXT NOT NULL,
+    bill_number TEXT,
+    type TEXT,
+    vendor TEXT,
+    item TEXT,
+    comment TEXT,
+    motive TEXT,
+    brutto19 REAL DEFAULT 0,
+    brutto7 REAL DEFAULT 0,
+    brutto0 REAL DEFAULT 0,
+    amount REAL DEFAULT 0,
+    filename TEXT,
+    file TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS vgeld (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL,
+    amount REAL DEFAULT 0,
+    from_user TEXT,
+    to_user TEXT NOT NULL,
+    created_by TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS editlog (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp TEXT NOT NULL,
+    user TEXT NOT NULL,
+    bill_id INTEGER,
+    changes TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT
+  );
+`);
+
+// Legacy JSON helpers (for migration only)
 function loadJSON(file, defaultValue = []) {
   try {
     if (fs.existsSync(file)) return JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -131,51 +159,200 @@ function loadJSON(file, defaultValue = []) {
   return defaultValue;
 }
 
-function saveJSON(file, data) {
-  fs.writeFileSync(file, JSON.stringify(data, null, 2));
+// Migration: Import existing JSON data if tables are empty
+function migrateData() {
+  console.log('=== Checking for data migration ===');
+
+  // Migrate users
+  const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get().count;
+  if (userCount === 0 && fs.existsSync(USERS_FILE)) {
+    const users = loadJSON(USERS_FILE, []);
+    if (users.length > 0) {
+      const insert = db.prepare('INSERT INTO users (email, hash, admin) VALUES (?, ?, ?)');
+      for (const u of users) {
+        insert.run(u.email, u.hash, u.admin ? 1 : 0);
+      }
+      console.log(`Migrated ${users.length} users`);
+    }
+  }
+
+  // Migrate motives
+  const motiveCount = db.prepare('SELECT COUNT(*) as count FROM motives').get().count;
+  if (motiveCount === 0 && fs.existsSync(MOTIVES_FILE)) {
+    const motives = loadJSON(MOTIVES_FILE, []);
+    if (motives.length > 0) {
+      const insert = db.prepare('INSERT INTO motives (name, budget) VALUES (?, ?)');
+      for (const m of motives) {
+        insert.run(m.name, m.budget || 0);
+      }
+      console.log(`Migrated ${motives.length} motives`);
+    }
+  }
+
+  // Migrate bills
+  const billCount = db.prepare('SELECT COUNT(*) as count FROM bills').get().count;
+  if (billCount === 0 && fs.existsSync(BILLS_FILE)) {
+    const bills = loadJSON(BILLS_FILE, []);
+    if (bills.length > 0) {
+      const insert = db.prepare(`INSERT INTO bills
+        (date, email, bill_number, type, vendor, item, comment, motive, brutto19, brutto7, brutto0, amount, filename, file)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+      for (const b of bills) {
+        insert.run(
+          b.date, b.email, b.billNumber || null, b.type || 'Kauf',
+          b.vendor || '', b.item || '', b.comment || '', b.motive || '',
+          b.brutto19 || 0, b.brutto7 || 0, b.brutto0 || 0, b.amount || 0,
+          b.filename || '', b.file || ''
+        );
+      }
+      console.log(`Migrated ${bills.length} bills`);
+    }
+  }
+
+  // Migrate vgeld
+  const vgeldCount = db.prepare('SELECT COUNT(*) as count FROM vgeld').get().count;
+  if (vgeldCount === 0 && fs.existsSync(VGELD_FILE)) {
+    const vgeld = loadJSON(VGELD_FILE, []);
+    if (vgeld.length > 0) {
+      const insert = db.prepare('INSERT INTO vgeld (date, amount, from_user, to_user, created_by) VALUES (?, ?, ?, ?, ?)');
+      for (const v of vgeld) {
+        insert.run(v.date, v.amount || 0, v.from || 'External', v.to, v.createdBy || '');
+      }
+      console.log(`Migrated ${vgeld.length} vgeld entries`);
+    }
+  }
+
+  // Migrate editlog
+  const logCount = db.prepare('SELECT COUNT(*) as count FROM editlog').get().count;
+  if (logCount === 0 && fs.existsSync(LOG_FILE)) {
+    const logs = loadJSON(LOG_FILE, []);
+    if (logs.length > 0) {
+      const insert = db.prepare('INSERT INTO editlog (timestamp, user, bill_id, changes) VALUES (?, ?, ?, ?)');
+      for (const l of logs) {
+        // Note: billIndex from old logs won't map correctly to new IDs, but we preserve the data
+        insert.run(l.timestamp, l.user, l.billIndex !== undefined ? l.billIndex + 1 : null, JSON.stringify(l.changes));
+      }
+      console.log(`Migrated ${logs.length} editlog entries`);
+    }
+  }
+
+  // Migrate settings
+  const settingCount = db.prepare('SELECT COUNT(*) as count FROM settings').get().count;
+  if (settingCount === 0 && fs.existsSync(SETTINGS_FILE)) {
+    const settings = loadJSON(SETTINGS_FILE, {});
+    const insert = db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
+    for (const [key, value] of Object.entries(settings)) {
+      insert.run(key, JSON.stringify(value));
+    }
+    console.log(`Migrated settings`);
+  }
 }
 
 // Initialize default admin if no users exist
 function initUsers() {
-  let users = loadJSON(USERS_FILE, []);
-  if (users.length === 0) {
+  const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get().count;
+  if (userCount === 0) {
     const defaultPassword = 'admin123';
     const hash = bcrypt.hashSync(defaultPassword, 10);
-    users = [{ email: 'admin@example.com', hash, admin: true }];
-    saveJSON(USERS_FILE, users);
+    db.prepare('INSERT INTO users (email, hash, admin) VALUES (?, ?, ?)').run('admin@example.com', hash, 1);
     console.log('Created default admin: admin@example.com / admin123');
     console.log('CHANGE THIS PASSWORD IMMEDIATELY!');
   }
-  return users;
 }
 
-let users = initUsers();
-let motives = loadJSON(MOTIVES_FILE, [
-  { name: 'Office Supplies', budget: 500 },
-  { name: 'Travel', budget: 2000 },
-  { name: 'Software', budget: 1000 },
-  { name: 'Hardware', budget: 1500 }
-]);
-let bills = loadJSON(BILLS_FILE, []);
-let editLog = loadJSON(LOG_FILE, []);
-let vgeld = loadJSON(VGELD_FILE, []);
-let settings = loadJSON(SETTINGS_FILE, {
-  googleSheetId: '1-cWxjP16kyAPpkNqn27bU1-k3zfyMwQvh-daBugUSqg',
-  googleSheetEnabled: true
-});
+// Initialize default motives if none exist
+function initMotives() {
+  const motiveCount = db.prepare('SELECT COUNT(*) as count FROM motives').get().count;
+  if (motiveCount === 0) {
+    const defaultMotives = [
+      { name: 'Office Supplies', budget: 500 },
+      { name: 'Travel', budget: 2000 },
+      { name: 'Software', budget: 1000 },
+      { name: 'Hardware', budget: 1500 }
+    ];
+    const insert = db.prepare('INSERT INTO motives (name, budget) VALUES (?, ?)');
+    for (const m of defaultMotives) {
+      insert.run(m.name, m.budget);
+    }
+    console.log('Created default motives');
+  }
+}
 
-// Save initial data if files don't exist
-if (!fs.existsSync(MOTIVES_FILE)) saveJSON(MOTIVES_FILE, motives);
-if (!fs.existsSync(BILLS_FILE)) saveJSON(BILLS_FILE, bills);
-if (!fs.existsSync(LOG_FILE)) saveJSON(LOG_FILE, editLog);
-if (!fs.existsSync(VGELD_FILE)) saveJSON(VGELD_FILE, vgeld);
-if (!fs.existsSync(SETTINGS_FILE)) saveJSON(SETTINGS_FILE, settings);
+// Initialize default settings if none exist
+function initSettings() {
+  const settingCount = db.prepare('SELECT COUNT(*) as count FROM settings').get().count;
+  if (settingCount === 0) {
+    const insert = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)');
+    insert.run('googleSheetId', JSON.stringify('1-cWxjP16kyAPpkNqn27bU1-k3zfyMwQvh-daBugUSqg'));
+    insert.run('googleSheetEnabled', JSON.stringify(true));
+    console.log('Created default settings');
+  }
+}
+
+// Run migrations and initialization
+migrateData();
+initUsers();
+initMotives();
+initSettings();
+
+// Helper to get all settings as object
+function getSettings() {
+  const rows = db.prepare('SELECT key, value FROM settings').all();
+  const settings = {};
+  for (const row of rows) {
+    try {
+      settings[row.key] = JSON.parse(row.value);
+    } catch (e) {
+      settings[row.key] = row.value;
+    }
+  }
+  return settings;
+}
 
 // Initialize Google services after settings are loaded
 console.log('=== Startup ===');
 console.log('DATA_DIR:', DATA_DIR);
+console.log('Database:', DB_PATH);
+const settings = getSettings();
 console.log('Settings loaded:', settings);
 initGoogleServices();
+
+async function appendBillToSheet(bill) {
+  const settings = getSettings();
+  console.log('appendBillToSheet called, sheets:', !!sheets, 'enabled:', settings?.googleSheetEnabled, 'sheetId:', settings?.googleSheetId);
+  if (!sheets || !settings.googleSheetEnabled || !settings.googleSheetId) {
+    console.log('Skipping sheet sync - not configured');
+    return;
+  }
+  try {
+    const typeMap = { 'Kauf': 'K', 'Leih': 'L', 'Verbrauch': 'V' };
+    const row = [
+      bill.comment || '',           // A: Notiz
+      bill.item || '',              // B: WAS
+      bill.motive || '',            // C: Fur
+      bill.vendor || '',            // D: WOHER
+      '',                           // E: Kalkulation (brutto)
+      '',                           // F: Angebot (brutto)
+      bill.brutto19 || 0,           // G: brutto 19%
+      bill.brutto7 || 0,            // H: brutto 7%
+      bill.brutto0 || 0,            // I: brutto 0%
+      new Date(bill.date).toLocaleDateString('de-DE'), // J: Datum
+      bill.email || '',             // K: Wer
+      typeMap[bill.type] || 'K',    // L: K/L/V
+      bill.bill_number || '',       // M: Beleg Nr
+      ''                            // N: V-Geld Abrechnungs Blatt
+    ];
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: settings.googleSheetId,
+      range: 'A5:N',
+      valueInputOption: 'USER_ENTERED',
+      requestBody: { values: [row] }
+    });
+    console.log('Bill synced to Google Sheet');
+  } catch (e) {
+    console.error('Sheet append error:', e.message);
+  }
+}
 
 // Middleware
 app.use(cookieParser());
@@ -195,7 +372,7 @@ app.use(session({
 
 // Auth helpers
 function findUser(email) {
-  return users.find(u => u.email.toLowerCase() === email.toLowerCase());
+  return db.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?)').get(email);
 }
 
 function ensureAuth(req, res, next) {
@@ -238,7 +415,7 @@ app.post('/login', loginLimiter, async (req, res) => {
   if (!user || !bcrypt.compareSync(password, user.hash)) {
     return res.redirect('/login?error=1');
   }
-  req.session.user = { email: user.email, admin: user.admin };
+  req.session.user = { email: user.email, admin: user.admin === 1 };
   res.redirect('/');
 });
 
@@ -266,44 +443,67 @@ app.get('/api/user', (req, res) => {
 
 // API: Motives
 app.get('/api/motives', ensureAuth, (req, res) => {
+  const motives = db.prepare('SELECT * FROM motives ORDER BY id').all();
   res.json(motives);
 });
 
 app.post('/api/admin/motive', ensureAdmin, (req, res) => {
   const { motive, budget } = req.body;
   if (!motive) return res.status(400).json({ error: 'Motive name required' });
-  motives.push({ name: motive, budget: parseFloat(budget) || 0 });
-  saveJSON(MOTIVES_FILE, motives);
-  res.json({ ok: true });
+  const result = db.prepare('INSERT INTO motives (name, budget) VALUES (?, ?)').run(motive, parseFloat(budget) || 0);
+  res.json({ ok: true, id: result.lastInsertRowid });
 });
 
-app.put('/api/admin/motive/:index', ensureAdmin, (req, res) => {
-  const index = parseInt(req.params.index);
-  if (index < 0 || index >= motives.length) return res.status(404).json({ error: 'Not found' });
+app.put('/api/admin/motive/:id', ensureAdmin, (req, res) => {
+  const id = parseInt(req.params.id);
+  const existing = db.prepare('SELECT * FROM motives WHERE id = ?').get(id);
+  if (!existing) return res.status(404).json({ error: 'Not found' });
   const { motive, budget } = req.body;
-  if (motive !== undefined) motives[index].name = motive;
-  if (budget !== undefined) motives[index].budget = parseFloat(budget) || 0;
-  saveJSON(MOTIVES_FILE, motives);
+  const updates = [];
+  const params = [];
+  if (motive !== undefined) { updates.push('name = ?'); params.push(motive); }
+  if (budget !== undefined) { updates.push('budget = ?'); params.push(parseFloat(budget) || 0); }
+  if (updates.length > 0) {
+    params.push(id);
+    db.prepare(`UPDATE motives SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+  }
   res.json({ ok: true });
 });
 
-app.delete('/api/admin/motive/:index', ensureAdmin, (req, res) => {
-  const index = parseInt(req.params.index);
-  if (index < 0 || index >= motives.length) return res.status(404).json({ error: 'Not found' });
-  motives.splice(index, 1);
-  saveJSON(MOTIVES_FILE, motives);
+app.delete('/api/admin/motive/:id', ensureAdmin, (req, res) => {
+  const id = parseInt(req.params.id);
+  const result = db.prepare('DELETE FROM motives WHERE id = ?').run(id);
+  if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
   res.json({ ok: true });
 });
 
 // API: Bills
 app.get('/api/bills', ensureAuth, (req, res) => {
-  res.json(bills);
+  const bills = db.prepare('SELECT * FROM bills ORDER BY id').all();
+  // Map to frontend-expected format
+  const mapped = bills.map(b => ({
+    id: b.id,
+    date: b.date,
+    email: b.email,
+    billNumber: b.bill_number,
+    type: b.type,
+    vendor: b.vendor,
+    item: b.item,
+    comment: b.comment,
+    motive: b.motive,
+    brutto19: b.brutto19,
+    brutto7: b.brutto7,
+    brutto0: b.brutto0,
+    amount: b.amount,
+    filename: b.filename,
+    file: b.file
+  }));
+  res.json(mapped);
 });
 
 // Calculate bill number for a user (1.01-1.20, 2.01-2.20, etc.)
 function calculateBillNumber(userEmail) {
-  const userBills = bills.filter(b => b.email.toLowerCase() === userEmail.toLowerCase());
-  const count = userBills.length;
+  const count = db.prepare('SELECT COUNT(*) as count FROM bills WHERE LOWER(email) = LOWER(?)').get(userEmail).count;
   const group = Math.floor(count / 20) + 1;
   const position = (count % 20) + 1;
   return `${group}.${position.toString().padStart(2, '0')}`;
@@ -315,21 +515,10 @@ app.post('/upload', ensureAuth, upload.single('photo'), (req, res) => {
   const b7 = parseFloat(brutto7) || 0;
   const b0 = parseFloat(brutto0) || 0;
   const billNumber = calculateBillNumber(req.user.email);
-  const bill = {
-    date: new Date().toISOString(),
-    email: req.user.email,
-    billNumber: billNumber,
-    type: type || 'Kauf',
-    vendor: vendor || '',
-    item: item || '',
-    brutto19: b19,
-    brutto7: b7,
-    brutto0: b0,
-    amount: b19 + b7 + b0,
-    comment: comment || '',
-    motive: motive || '',
-    filename: req.file ? req.file.originalname : ''
-  };
+
+  let filePath = '';
+  let filename = '';
+
   // Save file if uploaded
   if (req.file) {
     const userFolder = req.user.email.split('@')[0];
@@ -340,79 +529,140 @@ app.post('/upload', ensureAuth, upload.single('photo'), (req, res) => {
     // Format: user_billNumber_date.ext (e.g., paula_1.01_2024-01-29.jpg)
     const dateStr = new Date().toISOString().split('T')[0];
     const ext = path.extname(req.file.originalname) || '.jpg';
-    const filename = `${userFolder}_${billNumber}_${dateStr}${ext}`;
-    const filePath = path.join(uploadsDir, filename);
-    fs.writeFileSync(filePath, req.file.buffer);
-    bill.file = `${userFolder}/${filename}`;
+    const savedFilename = `${userFolder}_${billNumber}_${dateStr}${ext}`;
+    const savedFilePath = path.join(uploadsDir, savedFilename);
+    fs.writeFileSync(savedFilePath, req.file.buffer);
+    filePath = `${userFolder}/${savedFilename}`;
+    filename = req.file.originalname;
   }
-  bills.push(bill);
-  saveJSON(BILLS_FILE, bills);
+
+  const result = db.prepare(`INSERT INTO bills
+    (date, email, bill_number, type, vendor, item, comment, motive, brutto19, brutto7, brutto0, amount, filename, file)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+    new Date().toISOString(),
+    req.user.email,
+    billNumber,
+    type || 'Kauf',
+    vendor || '',
+    item || '',
+    comment || '',
+    motive || '',
+    b19,
+    b7,
+    b0,
+    b19 + b7 + b0,
+    filename,
+    filePath
+  );
+
+  // Get the inserted bill for Google Sheets sync
+  const bill = db.prepare('SELECT * FROM bills WHERE id = ?').get(result.lastInsertRowid);
   appendBillToSheet(bill);
-  res.json({ ok: true });
+
+  res.json({ ok: true, id: result.lastInsertRowid });
 });
 
-app.put('/api/bills/:index', ensureAuth, (req, res) => {
-  const index = parseInt(req.params.index);
-  if (index < 0 || index >= bills.length) return res.status(404).json({ error: 'Not found' });
-  const bill = bills[index];
+app.put('/api/bills/:id', ensureAuth, (req, res) => {
+  const id = parseInt(req.params.id);
+  const bill = db.prepare('SELECT * FROM bills WHERE id = ?').get(id);
+  if (!bill) return res.status(404).json({ error: 'Not found' });
+
   const { email, type, vendor, item, comment, motive, brutto19, brutto7, brutto0 } = req.body;
   const changes = {};
-  if (email !== undefined && email !== bill.email) { changes.email = email; bill.email = email; }
-  if (type !== undefined && type !== bill.type) { changes.type = type; bill.type = type; }
-  if (vendor !== undefined && vendor !== bill.vendor) { changes.vendor = vendor; bill.vendor = vendor; }
-  if (item !== undefined && item !== bill.item) { changes.item = item; bill.item = item; }
-  if (comment !== undefined && comment !== bill.comment) { changes.comment = comment; bill.comment = comment; }
-  if (motive !== undefined && motive !== bill.motive) { changes.motive = motive; bill.motive = motive; }
-  if (brutto19 !== undefined && parseFloat(brutto19) !== bill.brutto19) { changes.brutto19 = parseFloat(brutto19); bill.brutto19 = parseFloat(brutto19); }
-  if (brutto7 !== undefined && parseFloat(brutto7) !== bill.brutto7) { changes.brutto7 = parseFloat(brutto7); bill.brutto7 = parseFloat(brutto7); }
-  if (brutto0 !== undefined && parseFloat(brutto0) !== bill.brutto0) { changes.brutto0 = parseFloat(brutto0); bill.brutto0 = parseFloat(brutto0); }
-  // Recalculate total amount
-  bill.amount = (bill.brutto19 || 0) + (bill.brutto7 || 0) + (bill.brutto0 || 0);
+  const updates = [];
+  const params = [];
+
+  if (email !== undefined && email !== bill.email) {
+    changes.email = email;
+    updates.push('email = ?');
+    params.push(email);
+  }
+  if (type !== undefined && type !== bill.type) {
+    changes.type = type;
+    updates.push('type = ?');
+    params.push(type);
+  }
+  if (vendor !== undefined && vendor !== bill.vendor) {
+    changes.vendor = vendor;
+    updates.push('vendor = ?');
+    params.push(vendor);
+  }
+  if (item !== undefined && item !== bill.item) {
+    changes.item = item;
+    updates.push('item = ?');
+    params.push(item);
+  }
+  if (comment !== undefined && comment !== bill.comment) {
+    changes.comment = comment;
+    updates.push('comment = ?');
+    params.push(comment);
+  }
+  if (motive !== undefined && motive !== bill.motive) {
+    changes.motive = motive;
+    updates.push('motive = ?');
+    params.push(motive);
+  }
+  if (brutto19 !== undefined && parseFloat(brutto19) !== bill.brutto19) {
+    changes.brutto19 = parseFloat(brutto19);
+    updates.push('brutto19 = ?');
+    params.push(parseFloat(brutto19));
+  }
+  if (brutto7 !== undefined && parseFloat(brutto7) !== bill.brutto7) {
+    changes.brutto7 = parseFloat(brutto7);
+    updates.push('brutto7 = ?');
+    params.push(parseFloat(brutto7));
+  }
+  if (brutto0 !== undefined && parseFloat(brutto0) !== bill.brutto0) {
+    changes.brutto0 = parseFloat(brutto0);
+    updates.push('brutto0 = ?');
+    params.push(parseFloat(brutto0));
+  }
+
   if (Object.keys(changes).length > 0) {
-    editLog.push({ timestamp: new Date().toISOString(), user: req.user.email, billIndex: index, changes });
-    saveJSON(BILLS_FILE, bills);
-    saveJSON(LOG_FILE, editLog);
+    // Recalculate total amount
+    const newB19 = changes.brutto19 !== undefined ? changes.brutto19 : bill.brutto19;
+    const newB7 = changes.brutto7 !== undefined ? changes.brutto7 : bill.brutto7;
+    const newB0 = changes.brutto0 !== undefined ? changes.brutto0 : bill.brutto0;
+    updates.push('amount = ?');
+    params.push((newB19 || 0) + (newB7 || 0) + (newB0 || 0));
+
+    params.push(id);
+    db.prepare(`UPDATE bills SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+
+    // Log the edit
+    db.prepare('INSERT INTO editlog (timestamp, user, bill_id, changes) VALUES (?, ?, ?, ?)')
+      .run(new Date().toISOString(), req.user.email, id, JSON.stringify(changes));
   }
   res.json({ ok: true });
 });
 
-app.delete('/api/bills/:index', ensureAdmin, (req, res) => {
-  const index = parseInt(req.params.index);
-  if (index < 0 || index >= bills.length) return res.status(404).json({ error: 'Not found' });
-  bills.splice(index, 1);
-  saveJSON(BILLS_FILE, bills);
+app.delete('/api/bills/:id', ensureAdmin, (req, res) => {
+  const id = parseInt(req.params.id);
+  const result = db.prepare('DELETE FROM bills WHERE id = ?').run(id);
+  if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
   res.json({ ok: true });
 });
 
 // Bulk delete bills
 app.post('/api/bills/bulk-delete', ensureAdmin, (req, res) => {
-  const { indices } = req.body;
-  if (!Array.isArray(indices) || indices.length === 0) {
-    return res.status(400).json({ error: 'No indices provided' });
+  const { ids } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ error: 'No ids provided' });
   }
 
-  // Sort descending to delete from end first (prevents index shifting issues)
-  const sortedIndices = [...indices].sort((a, b) => b - a);
-  let deleted = 0;
+  const placeholders = ids.map(() => '?').join(',');
+  const result = db.prepare(`DELETE FROM bills WHERE id IN (${placeholders})`).run(...ids);
 
-  for (const index of sortedIndices) {
-    if (index >= 0 && index < bills.length) {
-      bills.splice(index, 1);
-      deleted++;
-    }
-  }
-
-  saveJSON(BILLS_FILE, bills);
-  console.log('Bulk deleted', deleted, 'bills');
-  res.json({ ok: true, deleted });
+  console.log('Bulk deleted', result.changes, 'bills');
+  res.json({ ok: true, deleted: result.changes });
 });
 
-app.post('/api/bills/:index/image', ensureAuth, upload.single('photo'), (req, res) => {
-  const index = parseInt(req.params.index);
-  if (index < 0 || index >= bills.length) return res.status(404).json({ error: 'Not found' });
+app.post('/api/bills/:id/image', ensureAuth, upload.single('photo'), (req, res) => {
+  const id = parseInt(req.params.id);
+  const bill = db.prepare('SELECT * FROM bills WHERE id = ?').get(id);
+  if (!bill) return res.status(404).json({ error: 'Not found' });
   if (!req.file) return res.status(400).json({ error: 'No file' });
 
-  const bill = bills[index];
   const userFolder = bill.email.split('@')[0];
   const uploadsDir = path.join(DATA_DIR, 'uploads', userFolder);
   if (!fs.existsSync(path.join(DATA_DIR, 'uploads'))) fs.mkdirSync(path.join(DATA_DIR, 'uploads'));
@@ -421,48 +671,74 @@ app.post('/api/bills/:index/image', ensureAuth, upload.single('photo'), (req, re
   // Format: user_billNumber_date.ext (e.g., paula_1.01_2024-01-29.jpg)
   const dateStr = new Date().toISOString().split('T')[0];
   const ext = path.extname(req.file.originalname) || '.jpg';
-  const filename = `${userFolder}_${bill.billNumber || index}_${dateStr}${ext}`;
+  const filename = `${userFolder}_${bill.bill_number || id}_${dateStr}${ext}`;
   const filePath = path.join(uploadsDir, filename);
   fs.writeFileSync(filePath, req.file.buffer);
-  bills[index].file = `${userFolder}/${filename}`;
-  bills[index].filename = req.file.originalname;
 
-  editLog.push({ timestamp: new Date().toISOString(), user: req.user.email, billIndex: index, changes: { image: 'replaced' } });
-  saveJSON(BILLS_FILE, bills);
-  saveJSON(LOG_FILE, editLog);
-  res.json({ ok: true, file: `${userFolder}/${filename}` });
+  const file = `${userFolder}/${filename}`;
+  db.prepare('UPDATE bills SET file = ?, filename = ? WHERE id = ?').run(file, req.file.originalname, id);
+
+  db.prepare('INSERT INTO editlog (timestamp, user, bill_id, changes) VALUES (?, ?, ?, ?)')
+    .run(new Date().toISOString(), req.user.email, id, JSON.stringify({ image: 'replaced' }));
+
+  res.json({ ok: true, file });
 });
 
 app.get('/api/bills/log', ensureAuth, (req, res) => {
-  res.json(editLog);
+  const logs = db.prepare('SELECT * FROM editlog ORDER BY id').all();
+  // Map to frontend-expected format
+  const mapped = logs.map(l => ({
+    id: l.id,
+    timestamp: l.timestamp,
+    user: l.user,
+    billId: l.bill_id,
+    changes: JSON.parse(l.changes || '{}')
+  }));
+  res.json(mapped);
 });
 
 app.get('/api/bills/by-motive', ensureAuth, (req, res) => {
+  const bills = db.prepare('SELECT motive, SUM(amount) as spent FROM bills GROUP BY motive').all();
+  const motives = db.prepare('SELECT * FROM motives ORDER BY id').all();
+
   const spending = {};
-  bills.forEach(b => { spending[b.motive || 'Uncategorized'] = (spending[b.motive || 'Uncategorized'] || 0) + (b.amount || 0); });
+  bills.forEach(b => { spending[b.motive || 'Uncategorized'] = b.spent || 0; });
+
   const result = motives.map(m => {
     const spent = spending[m.name] || 0;
-    return { motive: m.name, budget: m.budget, spent, remaining: m.budget - spent, percent: m.budget > 0 ? (spent / m.budget) * 100 : 0 };
+    return {
+      motive: m.name,
+      budget: m.budget,
+      spent,
+      remaining: m.budget - spent,
+      percent: m.budget > 0 ? (spent / m.budget) * 100 : 0
+    };
   });
-  if (spending['Uncategorized']) result.push({ motive: 'Uncategorized', budget: 0, spent: spending['Uncategorized'], remaining: 0, percent: 0 });
+  if (spending['Uncategorized']) {
+    result.push({ motive: 'Uncategorized', budget: 0, spent: spending['Uncategorized'], remaining: 0, percent: 0 });
+  }
   res.json(result);
 });
 
-// Serve uploaded files
-app.get('/uploads/:filename', ensureAuth, (req, res) => {
-  const file = path.join(DATA_DIR, 'uploads', req.params.filename);
+// Serve uploaded files (supports subdirectories like /uploads/user/file.jpg)
+app.get('/uploads/*', ensureAuth, (req, res) => {
+  // Get the full path after /uploads/
+  const filePath = req.params[0];
+  const file = path.join(DATA_DIR, 'uploads', filePath);
   if (fs.existsSync(file)) return res.sendFile(file);
   res.status(404).send('Not found');
 });
 
 // API: Users list (for dropdowns)
 app.get('/api/users', ensureAuth, (req, res) => {
-  res.json(users.map(u => ({ email: u.email })));
+  const users = db.prepare('SELECT email FROM users ORDER BY email').all();
+  res.json(users);
 });
 
 // API: Users (admin only)
 app.get('/api/admin/users', ensureAdmin, (req, res) => {
-  res.json(users.map(u => ({ email: u.email, admin: u.admin })));
+  const users = db.prepare('SELECT id, email, admin FROM users ORDER BY email').all();
+  res.json(users.map(u => ({ id: u.id, email: u.email, admin: u.admin === 1 })));
 });
 
 app.post('/api/admin/users', ensureAdmin, async (req, res) => {
@@ -472,33 +748,41 @@ app.post('/api/admin/users', ensureAdmin, async (req, res) => {
   if (pwError) return res.status(400).json({ error: pwError });
   if (findUser(email)) return res.status(400).json({ error: 'User already exists' });
   const hash = await bcrypt.hash(password, 12);
-  users.push({ email, hash, admin: admin === true });
-  saveJSON(USERS_FILE, users);
-  res.json({ ok: true });
+  const result = db.prepare('INSERT INTO users (email, hash, admin) VALUES (?, ?, ?)').run(email, hash, admin === true ? 1 : 0);
+  res.json({ ok: true, id: result.lastInsertRowid });
 });
 
 app.put('/api/admin/users/:email', ensureAdmin, async (req, res) => {
   const user = findUser(req.params.email);
   if (!user) return res.status(404).json({ error: 'User not found' });
   const { password, admin } = req.body;
+  const updates = [];
+  const params = [];
   if (password) {
     const pwError = validatePassword(password);
     if (pwError) return res.status(400).json({ error: pwError });
-    user.hash = await bcrypt.hash(password, 12);
+    const hash = await bcrypt.hash(password, 12);
+    updates.push('hash = ?');
+    params.push(hash);
   }
-  if (admin !== undefined) user.admin = admin === true;
-  saveJSON(USERS_FILE, users);
+  if (admin !== undefined) {
+    updates.push('admin = ?');
+    params.push(admin === true ? 1 : 0);
+  }
+  if (updates.length > 0) {
+    params.push(user.id);
+    db.prepare(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+  }
   res.json({ ok: true });
 });
 
 app.delete('/api/admin/users/:email', ensureAdmin, (req, res) => {
-  const index = users.findIndex(u => u.email.toLowerCase() === req.params.email.toLowerCase());
-  if (index === -1) return res.status(404).json({ error: 'User not found' });
-  if (users[index].email.toLowerCase() === req.session.user.email.toLowerCase()) {
+  const user = findUser(req.params.email);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  if (user.email.toLowerCase() === req.session.user.email.toLowerCase()) {
     return res.status(400).json({ error: 'Cannot delete yourself' });
   }
-  users.splice(index, 1);
-  saveJSON(USERS_FILE, users);
+  db.prepare('DELETE FROM users WHERE id = ?').run(user.id);
   res.json({ ok: true });
 });
 
@@ -510,57 +794,59 @@ app.post('/api/user/password', ensureAuth, async (req, res) => {
   if (pwError) return res.status(400).json({ error: pwError });
   const user = findUser(req.user.email);
   if (!bcrypt.compareSync(currentPassword, user.hash)) return res.status(400).json({ error: 'Current password incorrect' });
-  user.hash = await bcrypt.hash(newPassword, 12);
-  saveJSON(USERS_FILE, users);
+  const hash = await bcrypt.hash(newPassword, 12);
+  db.prepare('UPDATE users SET hash = ? WHERE id = ?').run(hash, user.id);
   res.json({ ok: true });
 });
 
 // V-Geld endpoints
 app.get('/api/vgeld', ensureAuth, (req, res) => {
-  res.json(vgeld);
+  const vgeld = db.prepare('SELECT * FROM vgeld ORDER BY id').all();
+  // Map to frontend-expected format
+  const mapped = vgeld.map(v => ({
+    id: v.id,
+    date: v.date,
+    amount: v.amount,
+    from: v.from_user,
+    to: v.to_user,
+    createdBy: v.created_by
+  }));
+  res.json(mapped);
 });
 
 app.post('/api/vgeld', ensureAdmin, (req, res) => {
   const { amount, from, to } = req.body;
   if (!amount || !to) return res.status(400).json({ error: 'Amount and recipient required' });
   if (!findUser(to)) return res.status(400).json({ error: 'Recipient must be a registered user' });
-  const entry = {
-    date: new Date().toISOString(),
-    amount: parseFloat(amount) || 0,
-    from: from || 'External',
-    to: to,
-    createdBy: req.user.email
-  };
-  vgeld.push(entry);
-  saveJSON(VGELD_FILE, vgeld);
-  res.json({ ok: true });
+  const result = db.prepare('INSERT INTO vgeld (date, amount, from_user, to_user, created_by) VALUES (?, ?, ?, ?, ?)')
+    .run(new Date().toISOString(), parseFloat(amount) || 0, from || 'External', to, req.user.email);
+  res.json({ ok: true, id: result.lastInsertRowid });
 });
 
-app.delete('/api/vgeld/:index', ensureAdmin, (req, res) => {
-  const index = parseInt(req.params.index);
-  if (index < 0 || index >= vgeld.length) return res.status(404).json({ error: 'Not found' });
-  vgeld.splice(index, 1);
-  saveJSON(VGELD_FILE, vgeld);
+app.delete('/api/vgeld/:id', ensureAdmin, (req, res) => {
+  const id = parseInt(req.params.id);
+  const result = db.prepare('DELETE FROM vgeld WHERE id = ?').run(id);
+  if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
   res.json({ ok: true });
 });
 
 // V-Geld analysis per user
 app.get('/api/vgeld/analysis', ensureAuth, (req, res) => {
-  const analysis = {};
-
   // Sum v-geld received per user
-  vgeld.forEach(v => {
-    if (!analysis[v.to]) analysis[v.to] = { received: 0, spent: 0 };
-    analysis[v.to].received += v.amount || 0;
-  });
-
+  const vgeldSums = db.prepare('SELECT to_user as user, SUM(amount) as received FROM vgeld GROUP BY to_user').all();
   // Sum spending per user
-  bills.forEach(b => {
-    if (!analysis[b.email]) analysis[b.email] = { received: 0, spent: 0 };
-    analysis[b.email].spent += b.amount || 0;
+  const billSums = db.prepare('SELECT email as user, SUM(amount) as spent FROM bills GROUP BY email').all();
+
+  const analysis = {};
+  vgeldSums.forEach(v => {
+    if (!analysis[v.user]) analysis[v.user] = { received: 0, spent: 0 };
+    analysis[v.user].received = v.received || 0;
+  });
+  billSums.forEach(b => {
+    if (!analysis[b.user]) analysis[b.user] = { received: 0, spent: 0 };
+    analysis[b.user].spent = b.spent || 0;
   });
 
-  // Calculate remaining and percentage
   const result = Object.entries(analysis).map(([user, data]) => ({
     user,
     received: data.received,
@@ -574,18 +860,18 @@ app.get('/api/vgeld/analysis', ensureAuth, (req, res) => {
 
 // Settings API
 app.get('/api/admin/settings', ensureAdmin, (req, res) => {
-  res.json(settings);
+  res.json(getSettings());
 });
 
 app.put('/api/admin/settings', ensureAdmin, (req, res) => {
   console.log('=== Settings update ===');
   console.log('Request body:', req.body);
   const { googleSheetId, googleSheetEnabled } = req.body;
-  if (googleSheetId !== undefined) settings.googleSheetId = googleSheetId;
-  if (googleSheetEnabled !== undefined) settings.googleSheetEnabled = googleSheetEnabled === true;
-  console.log('New settings:', settings);
-  saveJSON(SETTINGS_FILE, settings);
-  console.log('Settings saved to:', SETTINGS_FILE);
+  const insert = db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
+  if (googleSheetId !== undefined) insert.run('googleSheetId', JSON.stringify(googleSheetId));
+  if (googleSheetEnabled !== undefined) insert.run('googleSheetEnabled', JSON.stringify(googleSheetEnabled === true));
+  const newSettings = getSettings();
+  console.log('New settings:', newSettings);
   res.json({ ok: true });
 });
 
@@ -602,7 +888,7 @@ app.post('/api/admin/google-credentials', ensureAdmin, async (req, res) => {
     }
     const credPath = path.join(DATA_DIR, 'google-credentials.json');
     console.log('Saving credentials to:', credPath);
-    saveJSON(credPath, parsed);
+    fs.writeFileSync(credPath, JSON.stringify(parsed, null, 2));
     const initResult = await initGoogleServices();
     console.log('Init result:', initResult);
     res.json({ ok: true, email: parsed.client_email });
@@ -626,8 +912,9 @@ app.get('/api/admin/google-credentials/status', ensureAdmin, (req, res) => {
 // Create unique key for duplicate detection
 function billKey(bill) {
   // Primary: billNumber + email (should be unique per user)
-  if (bill.billNumber && bill.email) {
-    return `${bill.billNumber.trim()}|${bill.email.trim().toLowerCase()}`;
+  const billNumber = bill.bill_number || bill.billNumber;
+  if (billNumber && bill.email) {
+    return `${billNumber.trim()}|${bill.email.trim().toLowerCase()}`;
   }
   // Fallback: date + email + total amount (rounded to avoid float issues)
   const date = bill.date ? new Date(bill.date).toISOString().split('T')[0] : '';
@@ -655,6 +942,7 @@ function sheetRowKey(row) {
 // Sync all bills to Google Sheet (append only, no duplicates)
 app.post('/api/sync/to-sheet', ensureAdmin, async (req, res) => {
   console.log('=== Sync to Sheet ===');
+  const settings = getSettings();
   if (!sheets || !settings.googleSheetEnabled || !settings.googleSheetId) {
     return res.status(400).json({ error: 'Google Sheets not configured' });
   }
@@ -674,6 +962,7 @@ app.post('/api/sync/to-sheet', ensureAdmin, async (req, res) => {
     }
     console.log('Existing entries in sheet:', existingKeys.size);
 
+    const bills = db.prepare('SELECT * FROM bills ORDER BY id').all();
     const typeMap = { 'Kauf': 'K', 'Leih': 'L', 'Verbrauch': 'V' };
     const newRows = [];
 
@@ -684,17 +973,17 @@ app.post('/api/sync/to-sheet', ensureAdmin, async (req, res) => {
       newRows.push([
         bill.comment || '',           // A: Notiz
         bill.item || '',              // B: WAS
-        bill.motive || '',            // C: Für
+        bill.motive || '',            // C: Fur
         bill.vendor || '',            // D: WOHER
         '',                           // E: Kalkulation (brutto)
-        '',                           // F: Angebot (brutto) €
+        '',                           // F: Angebot (brutto)
         bill.brutto19 || 0,           // G: brutto 19%
         bill.brutto7 || 0,            // H: brutto 7%
         bill.brutto0 || 0,            // I: brutto 0%
         new Date(bill.date).toLocaleDateString('de-DE'), // J: Datum
         bill.email || '',             // K: Wer
         typeMap[bill.type] || 'K',    // L: K/L/V
-        bill.billNumber || '',        // M: Beleg Nr
+        bill.bill_number || '',       // M: Beleg Nr
         ''                            // N: V-Geld Abrechnungs Blatt
       ]);
     }
@@ -719,6 +1008,7 @@ app.post('/api/sync/to-sheet', ensureAdmin, async (req, res) => {
 // Sync from Google Sheet to local (append only, no duplicates)
 app.post('/api/sync/from-sheet', ensureAdmin, async (req, res) => {
   console.log('=== Sync from Sheet ===');
+  const settings = getSettings();
   if (!sheets || !settings.googleSheetEnabled || !settings.googleSheetId) {
     return res.status(400).json({ error: 'Google Sheets not configured' });
   }
@@ -732,12 +1022,17 @@ app.post('/api/sync/from-sheet', ensureAdmin, async (req, res) => {
     console.log('Read', rows.length, 'rows from sheet');
 
     // Build set of existing local bill keys
+    const bills = db.prepare('SELECT * FROM bills').all();
     const existingKeys = new Set(bills.map(b => billKey(b)));
     console.log('Existing local bills:', existingKeys.size);
 
     const typeMap = { 'K': 'Kauf', 'L': 'Leih', 'V': 'Verbrauch' };
     let added = 0;
     let skipped = 0;
+
+    const insert = db.prepare(`INSERT INTO bills
+      (date, email, bill_number, type, vendor, item, comment, motive, brutto19, brutto7, brutto0, amount, filename, file)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', '')`);
 
     for (const row of rows) {
       // Skip empty rows (check WAS and brutto columns)
@@ -748,7 +1043,7 @@ app.post('/api/sync/from-sheet', ensureAdmin, async (req, res) => {
       const bill = {
         comment: row[0] || '',           // A: Notiz
         item: row[1] || '',              // B: WAS
-        motive: row[2] || '',            // C: Für
+        motive: row[2] || '',            // C: Fur
         vendor: row[3] || '',            // D: WOHER
         brutto19: parseSheetNumber(row[6]),  // G: brutto 19%
         brutto7: parseSheetNumber(row[7]),   // H: brutto 7%
@@ -756,7 +1051,7 @@ app.post('/api/sync/from-sheet', ensureAdmin, async (req, res) => {
         date: parseGermanDate(row[9]) || new Date().toISOString(),    // J: Datum
         email: row[10] || 'imported@sheet',                           // K: Wer
         type: typeMap[row[11]] || 'Kauf',                             // L: K/L/V
-        billNumber: row[12] || '',                                    // M: Beleg Nr
+        bill_number: row[12] || '',                                   // M: Beleg Nr
         amount: 0
       };
       bill.amount = bill.brutto19 + bill.brutto7 + bill.brutto0;
@@ -770,11 +1065,14 @@ app.post('/api/sync/from-sheet', ensureAdmin, async (req, res) => {
       }
 
       existingKeys.add(key);
-      bills.push(bill);
+      insert.run(
+        bill.date, bill.email, bill.bill_number, bill.type,
+        bill.vendor, bill.item, bill.comment, bill.motive,
+        bill.brutto19, bill.brutto7, bill.brutto0, bill.amount
+      );
       added++;
     }
 
-    saveJSON(BILLS_FILE, bills);
     console.log('Added', added, 'bills from sheet (skipped', skipped, 'duplicates)');
     res.json({ ok: true, added, skipped });
   } catch (e) {
@@ -792,13 +1090,12 @@ function parseGermanDate(dateStr) {
   return new Date(dateStr).toISOString();
 }
 
-// Parse number from sheet (handles €, comma decimals, etc.)
+// Parse number from sheet (handles currency symbols, comma decimals, etc.)
 function parseSheetNumber(val) {
   if (val === null || val === undefined || val === '') return 0;
   // Convert to string and clean up
   let str = String(val)
-    .replace(/[€$£]/g, '')      // Remove currency symbols
-    .replace(/\s/g, '')          // Remove whitespace
+    .replace(/[^\d,.\-]/g, '')      // Remove currency symbols and whitespace
     .trim();
 
   // Handle German format: 1.234,56 -> 1234.56
@@ -824,16 +1121,12 @@ app.get('/api/report/:email', ensureAuth, async (req, res) => {
     return res.status(403).json({ error: 'Access denied' });
   }
 
-  const userBills = bills.filter(b => b.email.toLowerCase() === targetEmail.toLowerCase());
-  const userVGeld = vgeld.filter(v => v.to.toLowerCase() === targetEmail.toLowerCase());
+  const userBills = db.prepare('SELECT * FROM bills WHERE LOWER(email) = LOWER(?) ORDER BY date').all(targetEmail);
+  const userVGeld = db.prepare('SELECT * FROM vgeld WHERE LOWER(to_user) = LOWER(?) ORDER BY date').all(targetEmail);
 
   if (userBills.length === 0 && userVGeld.length === 0) {
     return res.status(404).json({ error: 'No data found for this user' });
   }
-
-  // Sort by date
-  userBills.sort((a, b) => new Date(a.date) - new Date(b.date));
-  userVGeld.sort((a, b) => new Date(a.date) - new Date(b.date));
 
   const doc = new PDFDocument({ margin: 50, size: 'A4' });
 
@@ -843,7 +1136,7 @@ app.get('/api/report/:email', ensureAuth, async (req, res) => {
   doc.pipe(res);
 
   // Title
-  doc.fontSize(20).font('Helvetica-Bold').text('vBudget - Belegübersicht', { align: 'center' });
+  doc.fontSize(20).font('Helvetica-Bold').text('vBudget - Belegubersicht', { align: 'center' });
   doc.moveDown(0.5);
   doc.fontSize(14).font('Helvetica').text(`Benutzer: ${targetEmail}`, { align: 'center' });
   doc.fontSize(10).text(`Erstellt: ${new Date().toLocaleDateString('de-DE')}`, { align: 'center' });
@@ -858,10 +1151,10 @@ app.get('/api/report/:email', ensureAuth, async (req, res) => {
     doc.text('Keine V-Geld Zahlungen vorhanden.');
   } else {
     for (const v of userVGeld) {
-      doc.text(`${new Date(v.date).toLocaleDateString('de-DE')} - ${(v.amount || 0).toFixed(2)} € von ${v.from || 'Extern'}`);
+      doc.text(`${new Date(v.date).toLocaleDateString('de-DE')} - ${(v.amount || 0).toFixed(2)} EUR von ${v.from_user || 'Extern'}`);
     }
     doc.moveDown(0.3);
-    doc.font('Helvetica-Bold').text(`V-Geld Gesamt: ${totalVGeld.toFixed(2)} €`);
+    doc.font('Helvetica-Bold').text(`V-Geld Gesamt: ${totalVGeld.toFixed(2)} EUR`);
   }
   doc.moveDown(1);
 
@@ -871,7 +1164,7 @@ app.get('/api/report/:email', ensureAuth, async (req, res) => {
 
   // Bills table
   if (userBills.length > 0) {
-    doc.fontSize(12).font('Helvetica-Bold').text('Belegübersicht');
+    doc.fontSize(12).font('Helvetica-Bold').text('Belegubersicht');
     doc.moveDown(0.5);
 
     const tableTop = doc.y;
@@ -881,7 +1174,7 @@ app.get('/api/report/:email', ensureAuth, async (req, res) => {
     doc.font('Helvetica-Bold').fontSize(7);
     doc.text('Nr.', colX[0], tableTop);
     doc.text('Datum', colX[1], tableTop);
-    doc.text('Händler', colX[2], tableTop);
+    doc.text('Handler', colX[2], tableTop);
     doc.text('Artikel', colX[3], tableTop);
     doc.text('19%', colX[4], tableTop);
     doc.text('7%', colX[5], tableTop);
@@ -900,7 +1193,7 @@ app.get('/api/report/:email', ensureAuth, async (req, res) => {
         doc.addPage();
         rowY = 50;
       }
-      doc.text(bill.billNumber || String(i + 1), colX[0], rowY, { width: 28 });
+      doc.text(bill.bill_number || String(i + 1), colX[0], rowY, { width: 28 });
       doc.text(new Date(bill.date).toLocaleDateString('de-DE'), colX[1], rowY, { width: 58 });
       doc.text((bill.vendor || '-').substring(0, 14), colX[2], rowY, { width: 78 });
       doc.text((bill.item || '-').substring(0, 12), colX[3], rowY, { width: 73 });
@@ -936,15 +1229,15 @@ app.get('/api/report/:email', ensureAuth, async (req, res) => {
   summaryY += 14;
 
   doc.text('Gesamt 19%:', summaryX, summaryY);
-  doc.text(`${total19.toFixed(2)} €`, valueX, summaryY);
+  doc.text(`${total19.toFixed(2)} EUR`, valueX, summaryY);
   summaryY += 14;
 
   doc.text('Gesamt 7%:', summaryX, summaryY);
-  doc.text(`${total7.toFixed(2)} €`, valueX, summaryY);
+  doc.text(`${total7.toFixed(2)} EUR`, valueX, summaryY);
   summaryY += 14;
 
   doc.text('Gesamt 0%:', summaryX, summaryY);
-  doc.text(`${total0.toFixed(2)} €`, valueX, summaryY);
+  doc.text(`${total0.toFixed(2)} EUR`, valueX, summaryY);
   summaryY += 14;
 
   doc.moveTo(summaryX, summaryY).lineTo(250, summaryY).stroke();
@@ -952,18 +1245,18 @@ app.get('/api/report/:email', ensureAuth, async (req, res) => {
 
   doc.font('Helvetica-Bold');
   doc.text('Ausgaben Gesamt:', summaryX, summaryY);
-  doc.text(`${totalAmount.toFixed(2)} €`, valueX, summaryY);
+  doc.text(`${totalAmount.toFixed(2)} EUR`, valueX, summaryY);
   summaryY += 14;
 
   doc.text('V-Geld Gesamt:', summaryX, summaryY);
-  doc.text(`${totalVGeld.toFixed(2)} €`, valueX, summaryY);
+  doc.text(`${totalVGeld.toFixed(2)} EUR`, valueX, summaryY);
   summaryY += 14;
 
   // Balance
   const balance = totalVGeld - totalAmount;
   doc.fillColor(balance >= 0 ? 'green' : 'red');
   doc.text('Saldo:', summaryX, summaryY);
-  doc.text(`${balance.toFixed(2)} €`, valueX, summaryY);
+  doc.text(`${balance.toFixed(2)} EUR`, valueX, summaryY);
   doc.fillColor('black');
 
   doc.y = summaryY + 20;
@@ -986,19 +1279,19 @@ app.get('/api/report/:email', ensureAuth, async (req, res) => {
 
     // Bill header
     doc.fontSize(12).font('Helvetica-Bold');
-    doc.text(`Beleg ${bill.billNumber || (i + 1)}`, { continued: true });
+    doc.text(`Beleg ${bill.bill_number || (i + 1)}`, { continued: true });
     doc.font('Helvetica').text(` - ${new Date(bill.date).toLocaleDateString('de-DE')}`);
 
     doc.fontSize(10).font('Helvetica');
     doc.text(`Typ: ${bill.type || 'Kauf'} | Motiv: ${bill.motive || '-'}`);
-    doc.text(`Händler: ${bill.vendor || '-'} | Artikel: ${bill.item || '-'}`);
+    doc.text(`Handler: ${bill.vendor || '-'} | Artikel: ${bill.item || '-'}`);
 
     // Amounts
     const amounts = [];
-    if (bill.brutto19) amounts.push(`19%: ${bill.brutto19.toFixed(2)}€`);
-    if (bill.brutto7) amounts.push(`7%: ${bill.brutto7.toFixed(2)}€`);
-    if (bill.brutto0) amounts.push(`0%: ${bill.brutto0.toFixed(2)}€`);
-    doc.text(`Beträge: ${amounts.join(' | ') || '-'} | Gesamt: ${(bill.amount || 0).toFixed(2)}€`);
+    if (bill.brutto19) amounts.push(`19%: ${bill.brutto19.toFixed(2)}EUR`);
+    if (bill.brutto7) amounts.push(`7%: ${bill.brutto7.toFixed(2)}EUR`);
+    if (bill.brutto0) amounts.push(`0%: ${bill.brutto0.toFixed(2)}EUR`);
+    doc.text(`Betrage: ${amounts.join(' | ') || '-'} | Gesamt: ${(bill.amount || 0).toFixed(2)}EUR`);
 
     if (bill.comment) {
       doc.text(`Notiz: ${bill.comment}`);
@@ -1026,7 +1319,7 @@ app.get('/api/report/:email', ensureAuth, async (req, res) => {
             });
             doc.moveDown(0.5);
           } else {
-            doc.fontSize(9).fillColor('gray').text(`[Bild: ${bill.file} - Format nicht unterstützt]`);
+            doc.fontSize(9).fillColor('gray').text(`[Bild: ${bill.file} - Format nicht unterstutzt]`);
             doc.fillColor('black');
           }
         } catch (imgErr) {
@@ -1057,8 +1350,8 @@ app.get('/api/report/:email', ensureAuth, async (req, res) => {
 app.get('/api/report-users', ensureAuth, (req, res) => {
   if (req.user.admin) {
     // Admins see all users who have bills
-    const usersWithBills = [...new Set(bills.map(b => b.email))];
-    res.json(usersWithBills.map(email => ({ email })));
+    const usersWithBills = db.prepare('SELECT DISTINCT email FROM bills ORDER BY email').all();
+    res.json(usersWithBills);
   } else {
     // Regular users only see themselves
     res.json([{ email: req.user.email }]);

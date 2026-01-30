@@ -88,12 +88,12 @@
       const tbody = document.getElementById('motiveBody');
       try {
         const motives = await (await fetch('/api/motives')).json();
-        tbody.innerHTML = motives.map((m, i) => `<tr data-i="${i}">
+        tbody.innerHTML = motives.map((m) => `<tr data-id="${m.id}">
           <td data-f="name">${esc(m.name)}</td>
           <td data-f="budget">${fmt(m.budget)}</td>
           <td>
-            <button class="small secondary" onclick="editMotive(${i})">Edit</button>
-            <button class="small danger" onclick="deleteMotive(${i})">Delete</button>
+            <button class="small secondary" onclick="editMotive(${m.id})">Edit</button>
+            <button class="small danger" onclick="deleteMotive(${m.id})">Delete</button>
           </td>
         </tr>`).join('');
       } catch (e) { tbody.innerHTML = '<tr><td colspan="3">Error</td></tr>'; }
@@ -156,20 +156,20 @@
       else msg('userResult', j.error || 'Error', true);
     }
 
-    function editMotive(i) {
-      const row = document.querySelector(`tr[data-i="${i}"]`);
+    function editMotive(id) {
+      const row = document.querySelector(`tr[data-id="${id}"]`);
       const name = row.querySelector('[data-f="name"]').textContent;
       const budget = parseFloat(row.querySelector('[data-f="budget"]').textContent.replace(/[^\d,.-]/g,'').replace(',','.')) || 0;
       row.querySelector('[data-f="name"]').innerHTML = `<input class="edit-input" value="${esc(name)}" data-f="name">`;
       row.querySelector('[data-f="budget"]').innerHTML = `<input type="number" class="edit-input" value="${budget.toFixed(2)}" step="0.01" data-f="budget">`;
-      row.querySelector('td:last-child').innerHTML = `<button class="small" onclick="saveMotive(${i})">Save</button> <button class="small secondary" onclick="loadMotives()">Cancel</button>`;
+      row.querySelector('td:last-child').innerHTML = `<button class="small" onclick="saveMotive(${id})">Save</button> <button class="small secondary" onclick="loadMotives()">Cancel</button>`;
     }
 
-    async function saveMotive(i) {
-      const row = document.querySelector(`tr[data-i="${i}"]`);
+    async function saveMotive(id) {
+      const row = document.querySelector(`tr[data-id="${id}"]`);
       const motive = row.querySelector('input[data-f="name"]').value;
       const budget = row.querySelector('input[data-f="budget"]').value;
-      const res = await fetch('/api/admin/motive/' + i, {
+      const res = await fetch('/api/admin/motive/' + id, {
         method: 'PUT',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ motive, budget })
@@ -179,9 +179,9 @@
       else msg('motiveResult', j.error || 'Error', true);
     }
 
-    async function deleteMotive(i) {
+    async function deleteMotive(id) {
       if (!confirm('Delete this motive?')) return;
-      const res = await fetch('/api/admin/motive/' + i, { method: 'DELETE' });
+      const res = await fetch('/api/admin/motive/' + id, { method: 'DELETE' });
       const j = await res.json();
       if (j.ok) { msg('motiveResult', 'Deleted', false); loadMotives(); }
       else msg('motiveResult', j.error || 'Error', true);
@@ -214,9 +214,9 @@
         const status = await (await fetch('/api/admin/google-credentials/status')).json();
         const el = document.getElementById('credStatus');
         if (status.configured) {
-          el.innerHTML = '<span style="color:green">✓ Credentials configured</span><br><small>Service account: ' + esc(status.email) + '</small>';
+          el.innerHTML = '<span style="color:green">Credentials configured</span><br><small>Service account: ' + esc(status.email) + '</small>';
         } else {
-          el.innerHTML = '<span style="color:orange">⚠ No credentials configured</span>';
+          el.innerHTML = '<span style="color:orange">No credentials configured</span>';
         }
       } catch (e) { console.error('Error loading cred status', e); }
     }
