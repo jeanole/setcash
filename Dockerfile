@@ -1,5 +1,8 @@
 FROM node:20-alpine
 
+# Install build dependencies for better-sqlite3
+RUN apk add --no-cache python3 make g++
+
 # Create non-root user
 RUN addgroup -g 1001 -S appgroup && adduser -u 1001 -S appuser -G appgroup
 
@@ -7,6 +10,9 @@ WORKDIR /app
 
 COPY package*.json ./
 RUN npm ci --omit=dev
+
+# Remove build dependencies to reduce image size
+RUN apk del python3 make g++
 
 COPY server.js ./
 COPY public ./public
