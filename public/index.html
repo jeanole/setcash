@@ -36,7 +36,14 @@
               <label>Vendor <input name="vendor"></label>
               <label>Item <input name="item"></label>
               <label>Comment <input name="comment"></label>
-              <label>Motive <select name="motive" id="motiveSelect"></select></label>
+              <div>
+                <label style="margin-bottom:8px">Motive Allocations</label>
+                <div id="uploadMotiveAlloc" class="allocation-widget"></div>
+              </div>
+              <div>
+                <label style="margin-bottom:8px">Kategorie Allocations</label>
+                <div id="uploadCategoryAlloc" class="allocation-widget"></div>
+              </div>
               <button type="submit">Upload</button>
             </form>
             <div id="uploadResult"></div>
@@ -67,7 +74,7 @@
                   <th>7%</th>
                   <th>0%</th>
                   <th>Total</th>
-                  <th>Motive</th>
+                  <th>Motive / Kategorie</th>
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -102,6 +109,33 @@
             </table>
           </div>
           <div class="card">
+            <h2>Spending by Kategorie</h2>
+            <table id="categorySpendingTable" class="data-table">
+              <thead>
+                <tr>
+                  <th>Kategorie</th>
+                  <th>Budget</th>
+                  <th>Spent</th>
+                  <th>Remaining</th>
+                  <th>Used</th>
+                </tr>
+              </thead>
+              <tbody id="categorySpendingBody"></tbody>
+              <tfoot>
+                <tr>
+                  <th>Grand Total</th>
+                  <th id="catGrandTotalBudget"></th>
+                  <th id="catGrandTotalSpent"></th>
+                  <th id="catGrandTotalRemaining"></th>
+                  <th id="catGrandTotalPercent"></th>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+
+        <div id="tab-vgeld" class="tab-content">
+          <div class="card">
             <h2>V-Geld Analysis by User</h2>
             <table id="vgeldAnalysisTable" class="data-table">
               <thead>
@@ -125,9 +159,6 @@
               </tfoot>
             </table>
           </div>
-        </div>
-
-        <div id="tab-vgeld" class="tab-content">
           <div class="card">
             <h2>V-Geld Transfers</h2>
             <div id="vgeldFormSection" style="display:none">
@@ -215,7 +246,6 @@
                 <label>Type <select id="detailType" name="type">
                   <option>Kauf</option><option>Leih</option><option>Verbrauch</option>
                 </select></label>
-                <label>Motive <select id="detailMotive" name="motive"></select></label>
               </div>
               <div class="form-row">
                 <label>Vendor <input type="text" id="detailVendor" name="vendor"></label>
@@ -228,6 +258,14 @@
               </div>
               <div class="form-row">
                 <label>Comment <input type="text" id="detailComment" name="comment"></label>
+              </div>
+              <div>
+                <label style="margin-bottom:8px">Motive Allocations</label>
+                <div id="detailMotiveAlloc" class="allocation-widget"></div>
+              </div>
+              <div>
+                <label style="margin-bottom:8px">Kategorie Allocations</label>
+                <div id="detailCategoryAlloc" class="allocation-widget"></div>
               </div>
               <div class="form-actions">
                 <button type="submit">Save Changes</button>
@@ -263,7 +301,8 @@
     </div>
 
     <script>
-      let motives = [];
+      let motivesData = [];
+      let categoriesData = [];
       let allBills = [];
       let allLogs = [];
       let currentBillId = null;
@@ -291,7 +330,102 @@
         setTimeout(() => { el.textContent = ''; el.className = ''; }, 3000);
       }
 
-      // Tab switching
+      // ========== Allocation Widget ==========
+      function createAllocationWidget(containerId, type, options, existing) {
+        const container = document.getElementById(containerId);
+        container.innerHTML = '';
+        const idField = type === 'motive' ? 'motiveId' : 'categoryId';
+        const label = type === 'motive' ? 'Motive' : 'Kategorie';
+
+        let rows = [];
+        if (existing && existing.length > 0) {
+          rows = existing.map(e => ({ id: e[idField], percentage: e.percentage }));
+        }
+
+        function render() {
+          container.innerHTML = '';
+          const totalPct = rows.reduce((s, r) => s + (parseFloat(r.percentage) || 0), 0);
+
+          rows.forEach((row, idx) => {
+            const rowDiv = document.createElement('div');
+            rowDiv.className = 'alloc-row';
+
+            const sel = document.createElement('select');
+            sel.innerHTML = '<option value="">-- Select --</option>' +
+              options.map(o => `<option value="${o.id}" ${o.id === row.id ? 'selected' : ''}>${escapeHtml(o.name)}</option>`).join('');
+            sel.addEventListener('change', () => { row.id = parseInt(sel.value) || 0; render(); });
+
+            const pctInput = document.createElement('input');
+            pctInput.type = 'number';
+            pctInput.min = '0';
+            pctInput.max = '100';
+            pctInput.step = '0.01';
+            pctInput.value = row.percentage;
+            pctInput.style.width = '80px';
+            pctInput.addEventListener('change', () => { row.percentage = parseFloat(pctInput.value) || 0; render(); });
+
+            const pctLabel = document.createElement('span');
+            pctLabel.textContent = '%';
+
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'small danger';
+            removeBtn.textContent = 'x';
+            removeBtn.addEventListener('click', () => { rows.splice(idx, 1); render(); });
+
+            rowDiv.appendChild(sel);
+            rowDiv.appendChild(pctInput);
+            rowDiv.appendChild(pctLabel);
+            rowDiv.appendChild(removeBtn);
+            container.appendChild(rowDiv);
+          });
+
+          // Add button
+          const addBtn = document.createElement('button');
+          addBtn.type = 'button';
+          addBtn.className = 'small secondary';
+          addBtn.textContent = '+ Add ' + label;
+          addBtn.addEventListener('click', () => {
+            rows.push({ id: 0, percentage: 0 });
+            render();
+          });
+          container.appendChild(addBtn);
+
+          // Remaining indicator
+          if (rows.length > 0) {
+            const remaining = 100 - totalPct;
+            const indicator = document.createElement('span');
+            indicator.className = 'alloc-remaining';
+            if (Math.abs(remaining) < 0.01) {
+              indicator.style.color = '#27ae60';
+              indicator.textContent = ' 100% allocated';
+            } else if (remaining > 0) {
+              indicator.style.color = '#f39c12';
+              indicator.textContent = ` ${remaining.toFixed(1)}% remaining`;
+            } else {
+              indicator.style.color = '#e74c3c';
+              indicator.textContent = ` ${Math.abs(remaining).toFixed(1)}% over!`;
+            }
+            container.appendChild(indicator);
+          }
+        }
+
+        render();
+
+        // Methods attached to container element
+        container.getAllocations = function() {
+          return rows.filter(r => r.id > 0 && r.percentage > 0).map(r => {
+            const opt = options.find(o => o.id === r.id);
+            return { [idField]: r.id, name: opt ? opt.name : '', percentage: r.percentage };
+          });
+        };
+        container.getTotalPercent = function() {
+          const allocs = container.getAllocations();
+          return allocs.reduce((s, a) => s + a.percentage, 0);
+        };
+      }
+
+      // ========== Tab switching ==========
       document.querySelectorAll('.tab').forEach(tab => {
         tab.addEventListener('click', () => {
           document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -300,11 +434,18 @@
           document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
 
           if (tab.dataset.tab === 'bills') loadBills();
-          if (tab.dataset.tab === 'spending') { loadSpending(); loadVGeldAnalysis(); }
-          if (tab.dataset.tab === 'vgeld') loadVGeld();
+          if (tab.dataset.tab === 'spending') { loadSpending(); loadCategorySpending(); }
+          if (tab.dataset.tab === 'vgeld') { loadVGeld(); loadVGeldAnalysis(); }
           if (tab.dataset.tab === 'reports') loadReportUsers();
         });
       });
+
+      // ========== Format allocation display ==========
+      function formatAllocations(allocs, idField) {
+        if (!allocs || allocs.length === 0) return '';
+        if (allocs.length === 1 && allocs[0].percentage === 100) return escapeHtml(allocs[0].name);
+        return allocs.map(a => `${escapeHtml(a.name)} (${a.percentage}%)`).join(', ');
+      }
 
       async function loadBills() {
         const tbody = document.getElementById('billsBody');
@@ -318,7 +459,7 @@
           allLogs = await logsRes.json();
 
           if (allBills.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="12">No bills yet.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="13">No bills yet.</td></tr>';
             return;
           }
           const isAdmin = currentUser && currentUser.admin;
@@ -327,6 +468,8 @@
             const b7 = bill.brutto7 || 0;
             const b0 = bill.brutto0 || 0;
             const total = b19 + b7 + b0 || bill.amount || 0;
+            const motiveDisplay = formatAllocations(bill.motiveAllocations) || escapeHtml(bill.motive);
+            const categoryDisplay = formatAllocations(bill.categoryAllocations);
             return `
             <tr data-id="${bill.id}" class="clickable-row" onclick="openBillDetail(${bill.id})">
               <td class="admin-only" style="${isAdmin ? '' : 'display:none'}" onclick="event.stopPropagation()"><input type="checkbox" class="bill-checkbox" data-id="${bill.id}" onchange="updateSelectedCount()"></td>
@@ -340,12 +483,12 @@
               <td>${b7 ? formatCurrency(b7) : '-'}</td>
               <td>${b0 ? formatCurrency(b0) : '-'}</td>
               <td><strong>${formatCurrency(total)}</strong></td>
-              <td>${escapeHtml(bill.motive)}</td>
+              <td>${motiveDisplay}${categoryDisplay ? '<br><small>' + categoryDisplay + '</small>' : ''}</td>
               <td><button class="small" onclick="event.stopPropagation(); openBillDetail(${bill.id})">View</button></td>
             </tr>`;
           }).join('');
         } catch (e) {
-          tbody.innerHTML = '<tr><td colspan="12">Error loading bills.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="13">Error loading bills.</td></tr>';
         }
         // Reset selection state
         const selectAll = document.getElementById('selectAllBills');
@@ -391,6 +534,49 @@
           document.getElementById('grandTotalSpent').textContent = formatCurrency(totalSpent);
           document.getElementById('grandTotalRemaining').textContent = formatCurrency(totalRemaining);
           document.getElementById('grandTotalPercent').textContent = totalPercent.toFixed(2) + '%';
+        } catch (e) {
+          tbody.innerHTML = '<tr><td colspan="5">Error loading data.</td></tr>';
+        }
+      }
+
+      async function loadCategorySpending() {
+        const tbody = document.getElementById('categorySpendingBody');
+        tbody.innerHTML = '<tr><td colspan="5">Loading...</td></tr>';
+        try {
+          const res = await fetch('/api/bills/by-category');
+          const data = await res.json();
+          if (data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5">No category spending data.</td></tr>';
+            document.getElementById('catGrandTotalBudget').textContent = formatCurrency(0);
+            document.getElementById('catGrandTotalSpent').textContent = formatCurrency(0);
+            document.getElementById('catGrandTotalRemaining').textContent = formatCurrency(0);
+            document.getElementById('catGrandTotalPercent').textContent = '0.00%';
+            return;
+          }
+          let totalBudget = 0, totalSpent = 0;
+          tbody.innerHTML = data.map(item => {
+            totalBudget += item.budget;
+            totalSpent += item.spent;
+            const percentClass = item.percent > 100 ? 'over-budget' : (item.percent > 80 ? 'warning' : '');
+            return `<tr class="${percentClass}">
+              <td>${escapeHtml(item.category)}</td>
+              <td>${formatCurrency(item.budget)}</td>
+              <td>${formatCurrency(item.spent)}</td>
+              <td class="${item.remaining < 0 ? 'negative' : ''}">${formatCurrency(item.remaining)}</td>
+              <td>
+                <div class="progress-bar">
+                  <div class="progress-fill ${percentClass}" style="width: ${Math.min(item.percent, 100)}%"></div>
+                </div>
+                <span>${item.percent.toFixed(2)}%</span>
+              </td>
+            </tr>`;
+          }).join('');
+          const totalRemaining = totalBudget - totalSpent;
+          const totalPercent = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
+          document.getElementById('catGrandTotalBudget').textContent = formatCurrency(totalBudget);
+          document.getElementById('catGrandTotalSpent').textContent = formatCurrency(totalSpent);
+          document.getElementById('catGrandTotalRemaining').textContent = formatCurrency(totalRemaining);
+          document.getElementById('catGrandTotalPercent').textContent = totalPercent.toFixed(2) + '%';
         } catch (e) {
           tbody.innerHTML = '<tr><td colspan="5">Error loading data.</td></tr>';
         }
@@ -527,11 +713,9 @@
         document.getElementById('detailBrutto0').value = bill.brutto0 || 0;
         document.getElementById('detailComment').value = bill.comment || '';
 
-        // Populate motive dropdown
-        const motiveSelect = document.getElementById('detailMotive');
-        motiveSelect.innerHTML = motives.map(m =>
-          `<option ${m === bill.motive ? 'selected' : ''}>${escapeHtml(m)}</option>`
-        ).join('');
+        // Initialize allocation widgets with existing data
+        createAllocationWidget('detailMotiveAlloc', 'motive', motivesData, bill.motiveAllocations || []);
+        createAllocationWidget('detailCategoryAlloc', 'category', categoriesData, bill.categoryAllocations || []);
 
         // Handle image
         const img = document.getElementById('billImage');
@@ -623,6 +807,27 @@
         e.preventDefault();
         if (currentBillId === null) return;
 
+        const motiveAllocContainer = document.getElementById('detailMotiveAlloc');
+        const categoryAllocContainer = document.getElementById('detailCategoryAlloc');
+        const motiveAllocs = motiveAllocContainer.getAllocations();
+        const categoryAllocs = categoryAllocContainer.getAllocations();
+
+        // Validate allocation totals (only if allocations exist)
+        if (motiveAllocs.length > 0) {
+          const motiveTotal = motiveAllocContainer.getTotalPercent();
+          if (Math.abs(motiveTotal - 100) > 0.01) {
+            showMessage('detailResult', 'Motive allocations must sum to 100% (currently ' + motiveTotal.toFixed(1) + '%)', true);
+            return;
+          }
+        }
+        if (categoryAllocs.length > 0) {
+          const catTotal = categoryAllocContainer.getTotalPercent();
+          if (Math.abs(catTotal - 100) > 0.01) {
+            showMessage('detailResult', 'Kategorie allocations must sum to 100% (currently ' + catTotal.toFixed(1) + '%)', true);
+            return;
+          }
+        }
+
         const data = {
           email: document.getElementById('detailEmail').value,
           type: document.getElementById('detailType').value,
@@ -631,8 +836,9 @@
           brutto19: document.getElementById('detailBrutto19').value,
           brutto7: document.getElementById('detailBrutto7').value,
           brutto0: document.getElementById('detailBrutto0').value,
-          motive: document.getElementById('detailMotive').value,
-          comment: document.getElementById('detailComment').value
+          comment: document.getElementById('detailComment').value,
+          motiveAllocations: motiveAllocs,
+          categoryAllocations: categoryAllocs
         };
 
         try {
@@ -804,10 +1010,17 @@
         document.getElementById('signed-in').style.display='block';
         document.getElementById('user').textContent = user.email + (user.admin ? ' [admin]' : '');
 
-        const motivesData = await (await fetch('/api/motives')).json();
-        motives = motivesData.map(m => m.name);
-        const sel = document.getElementById('motiveSelect');
-        sel.innerHTML = motives.map(m => '<option>'+escapeHtml(m)+'</option>').join('');
+        // Load motives and categories
+        const [motivesRes, categoriesRes] = await Promise.all([
+          fetch('/api/motives'),
+          fetch('/api/categories')
+        ]);
+        motivesData = await motivesRes.json();
+        categoriesData = await categoriesRes.json();
+
+        // Initialize upload allocation widgets (empty)
+        createAllocationWidget('uploadMotiveAlloc', 'motive', motivesData, []);
+        createAllocationWidget('uploadCategoryAlloc', 'category', categoriesData, []);
 
         // Show admin-only V-Geld form
         if (user.admin) {
@@ -819,7 +1032,33 @@
         document.getElementById('uploadForm').addEventListener('submit', async (e)=>{
           e.preventDefault();
           const form = e.target;
+
+          const motiveAllocContainer = document.getElementById('uploadMotiveAlloc');
+          const categoryAllocContainer = document.getElementById('uploadCategoryAlloc');
+          const motiveAllocs = motiveAllocContainer.getAllocations();
+          const categoryAllocs = categoryAllocContainer.getAllocations();
+
+          // Validate allocation totals (only if allocations exist)
+          if (motiveAllocs.length > 0) {
+            const motiveTotal = motiveAllocContainer.getTotalPercent();
+            if (Math.abs(motiveTotal - 100) > 0.01) {
+              showMessage('uploadResult', 'Motive allocations must sum to 100% (currently ' + motiveTotal.toFixed(1) + '%)', true);
+              return;
+            }
+          }
+          if (categoryAllocs.length > 0) {
+            const catTotal = categoryAllocContainer.getTotalPercent();
+            if (Math.abs(catTotal - 100) > 0.01) {
+              showMessage('uploadResult', 'Kategorie allocations must sum to 100% (currently ' + catTotal.toFixed(1) + '%)', true);
+              return;
+            }
+          }
+
           const data = new FormData(form);
+          // Add allocation data as JSON strings
+          data.append('motiveAllocations', JSON.stringify(motiveAllocs));
+          data.append('categoryAllocations', JSON.stringify(categoryAllocs));
+
           const resp = await fetch('/upload', {method:'POST', body: data});
           const json = await resp.json();
           const result = document.getElementById('uploadResult');
@@ -827,6 +1066,9 @@
             result.className = 'message success';
             result.textContent = 'Bill uploaded successfully!';
             form.reset();
+            // Re-initialize allocation widgets
+            createAllocationWidget('uploadMotiveAlloc', 'motive', motivesData, []);
+            createAllocationWidget('uploadCategoryAlloc', 'category', categoriesData, []);
           } else {
             result.className = 'message error';
             result.textContent = 'Error: ' + (json.error || 'unknown');

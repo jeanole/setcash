@@ -94,6 +94,7 @@ if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR);
 // Initialize SQLite database
 const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
+db.pragma('foreign_keys = ON');
 
 // Create tables
 db.exec(`
@@ -148,6 +149,28 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS categories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    budget REAL DEFAULT 0
+  );
+
+  CREATE TABLE IF NOT EXISTS bill_motives (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    bill_id INTEGER NOT NULL,
+    motive_id INTEGER NOT NULL,
+    percentage REAL NOT NULL DEFAULT 100,
+    UNIQUE(bill_id, motive_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS bill_categories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    bill_id INTEGER NOT NULL,
+    category_id INTEGER NOT NULL,
+    percentage REAL NOT NULL DEFAULT 100,
+    UNIQUE(bill_id, category_id)
   );
 `);
 
@@ -278,6 +301,52 @@ function initMotives() {
   }
 }
 
+// Initialize default categories if none exist
+function initCategories() {
+  const catCount = db.prepare('SELECT COUNT(*) as count FROM categories').get().count;
+  if (catCount === 0) {
+    const defaultCategories = [
+      'Charakterprops', 'Fahrendes', 'Handys / Technik', 'Helping Hand',
+      'Print/Grafiks', 'Entsorgung', 'Verbrauch', 'Deko Materialien',
+      'Möbel', 'Kleinteiliges', 'Set Dressen', 'Baubühne',
+      'Farbe', 'Folien', 'Bau Materialien'
+    ];
+    const insert = db.prepare('INSERT INTO categories (name, budget) VALUES (?, 0)');
+    for (const name of defaultCategories) {
+      insert.run(name);
+    }
+    console.log('Created default categories');
+  }
+}
+
+// Migrate existing bills.motive text values into bill_motives junction table
+function migrateMotiveAllocations() {
+  const junctionCount = db.prepare('SELECT COUNT(*) as count FROM bill_motives').get().count;
+  if (junctionCount > 0) return; // Already migrated
+
+  const bills = db.prepare("SELECT id, motive FROM bills WHERE motive IS NOT NULL AND motive != ''").all();
+  if (bills.length === 0) return;
+
+  const motives = db.prepare('SELECT id, name FROM motives').all();
+  const motiveMap = {};
+  for (const m of motives) {
+    motiveMap[m.name] = m.id;
+  }
+
+  const insert = db.prepare('INSERT OR IGNORE INTO bill_motives (bill_id, motive_id, percentage) VALUES (?, ?, 100)');
+  let migrated = 0;
+  for (const bill of bills) {
+    const motiveId = motiveMap[bill.motive];
+    if (motiveId) {
+      insert.run(bill.id, motiveId);
+      migrated++;
+    }
+  }
+  if (migrated > 0) {
+    console.log(`Migrated ${migrated} bill motive allocations`);
+  }
+}
+
 // Initialize default settings if none exist
 function initSettings() {
   const settingCount = db.prepare('SELECT COUNT(*) as count FROM settings').get().count;
@@ -293,6 +362,8 @@ function initSettings() {
 migrateData();
 initUsers();
 initMotives();
+initCategories();
+migrateMotiveAllocations();
 initSettings();
 
 // Helper to get all settings as object
@@ -326,10 +397,11 @@ async function appendBillToSheet(bill) {
   }
   try {
     const typeMap = { 'Kauf': 'K', 'Leih': 'L', 'Verbrauch': 'V' };
+    const motiveCol = bill.motiveDisplay || bill.motive || '';
     const row = [
       bill.comment || '',           // A: Notiz
       bill.item || '',              // B: WAS
-      bill.motive || '',            // C: Fur
+      motiveCol,                    // C: Fur
       bill.vendor || '',            // D: WOHER
       '',                           // E: Kalkulation (brutto)
       '',                           // F: Angebot (brutto)
@@ -474,13 +546,108 @@ app.delete('/api/admin/motive/:id', ensureAdmin, (req, res) => {
   const id = parseInt(req.params.id);
   const result = db.prepare('DELETE FROM motives WHERE id = ?').run(id);
   if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
+  db.prepare('DELETE FROM bill_motives WHERE motive_id = ?').run(id);
   res.json({ ok: true });
 });
+
+// API: Categories
+app.get('/api/categories', ensureAuth, (req, res) => {
+  const categories = db.prepare('SELECT * FROM categories ORDER BY id').all();
+  res.json(categories);
+});
+
+app.post('/api/admin/category', ensureAdmin, (req, res) => {
+  const { category, budget } = req.body;
+  if (!category) return res.status(400).json({ error: 'Category name required' });
+  const result = db.prepare('INSERT INTO categories (name, budget) VALUES (?, ?)').run(category, parseFloat(budget) || 0);
+  res.json({ ok: true, id: result.lastInsertRowid });
+});
+
+app.put('/api/admin/category/:id', ensureAdmin, (req, res) => {
+  const id = parseInt(req.params.id);
+  const existing = db.prepare('SELECT * FROM categories WHERE id = ?').get(id);
+  if (!existing) return res.status(404).json({ error: 'Not found' });
+  const { category, budget } = req.body;
+  const updates = [];
+  const params = [];
+  if (category !== undefined) { updates.push('name = ?'); params.push(category); }
+  if (budget !== undefined) { updates.push('budget = ?'); params.push(parseFloat(budget) || 0); }
+  if (updates.length > 0) {
+    params.push(id);
+    db.prepare(`UPDATE categories SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+  }
+  res.json({ ok: true });
+});
+
+app.delete('/api/admin/category/:id', ensureAdmin, (req, res) => {
+  const id = parseInt(req.params.id);
+  const result = db.prepare('DELETE FROM categories WHERE id = ?').run(id);
+  if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
+  db.prepare('DELETE FROM bill_categories WHERE category_id = ?').run(id);
+  res.json({ ok: true });
+});
+
+// Helper: save allocations for a bill
+function saveAllocations(billId, motiveAllocations, categoryAllocations) {
+  db.prepare('DELETE FROM bill_motives WHERE bill_id = ?').run(billId);
+  db.prepare('DELETE FROM bill_categories WHERE bill_id = ?').run(billId);
+
+  if (Array.isArray(motiveAllocations)) {
+    const insertMotive = db.prepare('INSERT OR IGNORE INTO bill_motives (bill_id, motive_id, percentage) VALUES (?, ?, ?)');
+    for (const a of motiveAllocations) {
+      if (a.motiveId && a.percentage > 0) {
+        insertMotive.run(billId, a.motiveId, a.percentage);
+      }
+    }
+  }
+
+  if (Array.isArray(categoryAllocations)) {
+    const insertCat = db.prepare('INSERT OR IGNORE INTO bill_categories (bill_id, category_id, percentage) VALUES (?, ?, ?)');
+    for (const a of categoryAllocations) {
+      if (a.categoryId && a.percentage > 0) {
+        insertCat.run(billId, a.categoryId, a.percentage);
+      }
+    }
+  }
+}
+
+// Helper: build motive display string from allocations
+function getMotiveDisplayString(billId) {
+  const allocs = db.prepare(`
+    SELECT m.name, bm.percentage FROM bill_motives bm
+    JOIN motives m ON m.id = bm.motive_id
+    WHERE bm.bill_id = ?
+  `).all(billId);
+  if (allocs.length === 0) return '';
+  if (allocs.length === 1 && allocs[0].percentage === 100) return allocs[0].name;
+  return allocs.map(a => `${a.name} (${a.percentage}%)`).join(', ');
+}
 
 // API: Bills
 app.get('/api/bills', ensureAuth, (req, res) => {
   const bills = db.prepare('SELECT * FROM bills ORDER BY id').all();
-  // Map to frontend-expected format
+
+  // Bulk-fetch all allocations
+  const allMotiveAllocs = db.prepare(`
+    SELECT bm.bill_id, bm.motive_id, bm.percentage, m.name
+    FROM bill_motives bm JOIN motives m ON m.id = bm.motive_id
+  `).all();
+  const allCategoryAllocs = db.prepare(`
+    SELECT bc.bill_id, bc.category_id, bc.percentage, c.name
+    FROM bill_categories bc JOIN categories c ON c.id = bc.category_id
+  `).all();
+
+  const motivesByBill = {};
+  for (const a of allMotiveAllocs) {
+    if (!motivesByBill[a.bill_id]) motivesByBill[a.bill_id] = [];
+    motivesByBill[a.bill_id].push({ motiveId: a.motive_id, name: a.name, percentage: a.percentage });
+  }
+  const categoriesByBill = {};
+  for (const a of allCategoryAllocs) {
+    if (!categoriesByBill[a.bill_id]) categoriesByBill[a.bill_id] = [];
+    categoriesByBill[a.bill_id].push({ categoryId: a.category_id, name: a.name, percentage: a.percentage });
+  }
+
   const mapped = bills.map(b => ({
     id: b.id,
     date: b.date,
@@ -496,7 +663,9 @@ app.get('/api/bills', ensureAuth, (req, res) => {
     brutto0: b.brutto0,
     amount: b.amount,
     filename: b.filename,
-    file: b.file
+    file: b.file,
+    motiveAllocations: motivesByBill[b.id] || [],
+    categoryAllocations: categoriesByBill[b.id] || []
   }));
   res.json(mapped);
 });
@@ -515,6 +684,18 @@ app.post('/upload', ensureAuth, upload.single('photo'), (req, res) => {
   const b7 = parseFloat(brutto7) || 0;
   const b0 = parseFloat(brutto0) || 0;
   const billNumber = calculateBillNumber(req.user.email);
+
+  // Parse allocation JSON strings from FormData
+  let motiveAllocations = [];
+  let categoryAllocations = [];
+  try { if (req.body.motiveAllocations) motiveAllocations = JSON.parse(req.body.motiveAllocations); } catch (e) {}
+  try { if (req.body.categoryAllocations) categoryAllocations = JSON.parse(req.body.categoryAllocations); } catch (e) {}
+
+  // Build motive display string for legacy column
+  let motiveDisplay = motive || '';
+  if (motiveAllocations.length > 0) {
+    motiveDisplay = motiveAllocations.map(a => a.name || '').filter(Boolean).join(', ');
+  }
 
   let filePath = '';
   let filename = '';
@@ -546,7 +727,7 @@ app.post('/upload', ensureAuth, upload.single('photo'), (req, res) => {
     vendor || '',
     item || '',
     comment || '',
-    motive || '',
+    motiveDisplay,
     b19,
     b7,
     b0,
@@ -555,8 +736,12 @@ app.post('/upload', ensureAuth, upload.single('photo'), (req, res) => {
     filePath
   );
 
+  // Save allocations to junction tables
+  saveAllocations(result.lastInsertRowid, motiveAllocations, categoryAllocations);
+
   // Get the inserted bill for Google Sheets sync
   const bill = db.prepare('SELECT * FROM bills WHERE id = ?').get(result.lastInsertRowid);
+  bill.motiveDisplay = getMotiveDisplayString(result.lastInsertRowid);
   appendBillToSheet(bill);
 
   res.json({ ok: true, id: result.lastInsertRowid });
@@ -567,7 +752,7 @@ app.put('/api/bills/:id', ensureAuth, (req, res) => {
   const bill = db.prepare('SELECT * FROM bills WHERE id = ?').get(id);
   if (!bill) return res.status(404).json({ error: 'Not found' });
 
-  const { email, type, vendor, item, comment, motive, brutto19, brutto7, brutto0 } = req.body;
+  const { email, type, vendor, item, comment, motive, brutto19, brutto7, brutto0, motiveAllocations, categoryAllocations } = req.body;
   const changes = {};
   const updates = [];
   const params = [];
@@ -618,6 +803,18 @@ app.put('/api/bills/:id', ensureAuth, (req, res) => {
     params.push(parseFloat(brutto0));
   }
 
+  // Save allocations if provided
+  if (motiveAllocations !== undefined || categoryAllocations !== undefined) {
+    saveAllocations(id, motiveAllocations || [], categoryAllocations || []);
+    // Update legacy motive column with display string
+    const motiveStr = getMotiveDisplayString(id);
+    if (motiveStr !== bill.motive) {
+      changes.motive = motiveStr;
+      updates.push('motive = ?');
+      params.push(motiveStr);
+    }
+  }
+
   if (Object.keys(changes).length > 0) {
     // Recalculate total amount
     const newB19 = changes.brutto19 !== undefined ? changes.brutto19 : bill.brutto19;
@@ -632,12 +829,18 @@ app.put('/api/bills/:id', ensureAuth, (req, res) => {
     // Log the edit
     db.prepare('INSERT INTO editlog (timestamp, user, bill_id, changes) VALUES (?, ?, ?, ?)')
       .run(new Date().toISOString(), req.user.email, id, JSON.stringify(changes));
+  } else if (motiveAllocations !== undefined || categoryAllocations !== undefined) {
+    // Log allocation changes even if no other fields changed
+    db.prepare('INSERT INTO editlog (timestamp, user, bill_id, changes) VALUES (?, ?, ?, ?)')
+      .run(new Date().toISOString(), req.user.email, id, JSON.stringify({ allocations: 'updated' }));
   }
   res.json({ ok: true });
 });
 
 app.delete('/api/bills/:id', ensureAdmin, (req, res) => {
   const id = parseInt(req.params.id);
+  db.prepare('DELETE FROM bill_motives WHERE bill_id = ?').run(id);
+  db.prepare('DELETE FROM bill_categories WHERE bill_id = ?').run(id);
   const result = db.prepare('DELETE FROM bills WHERE id = ?').run(id);
   if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
   res.json({ ok: true });
@@ -651,6 +854,8 @@ app.post('/api/bills/bulk-delete', ensureAdmin, (req, res) => {
   }
 
   const placeholders = ids.map(() => '?').join(',');
+  db.prepare(`DELETE FROM bill_motives WHERE bill_id IN (${placeholders})`).run(...ids);
+  db.prepare(`DELETE FROM bill_categories WHERE bill_id IN (${placeholders})`).run(...ids);
   const result = db.prepare(`DELETE FROM bills WHERE id IN (${placeholders})`).run(...ids);
 
   console.log('Bulk deleted', result.changes, 'bills');
@@ -698,11 +903,24 @@ app.get('/api/bills/log', ensureAuth, (req, res) => {
 });
 
 app.get('/api/bills/by-motive', ensureAuth, (req, res) => {
-  const bills = db.prepare('SELECT motive, SUM(amount) as spent FROM bills GROUP BY motive').all();
-  const motives = db.prepare('SELECT * FROM motives ORDER BY id').all();
+  // Use proportional calculation via junction table
+  const allocated = db.prepare(`
+    SELECT bm.motive_id, m.name as motive, SUM(b.amount * bm.percentage / 100) as spent
+    FROM bill_motives bm
+    JOIN bills b ON b.id = bm.bill_id
+    JOIN motives m ON m.id = bm.motive_id
+    GROUP BY bm.motive_id
+  `).all();
 
+  // Also find bills with no motive allocations (uncategorized)
+  const uncatSpent = db.prepare(`
+    SELECT SUM(b.amount) as spent FROM bills b
+    WHERE b.id NOT IN (SELECT DISTINCT bill_id FROM bill_motives)
+  `).get();
+
+  const motives = db.prepare('SELECT * FROM motives ORDER BY id').all();
   const spending = {};
-  bills.forEach(b => { spending[b.motive || 'Uncategorized'] = b.spent || 0; });
+  allocated.forEach(a => { spending[a.motive] = a.spent || 0; });
 
   const result = motives.map(m => {
     const spent = spending[m.name] || 0;
@@ -714,8 +932,44 @@ app.get('/api/bills/by-motive', ensureAuth, (req, res) => {
       percent: m.budget > 0 ? (spent / m.budget) * 100 : 0
     };
   });
-  if (spending['Uncategorized']) {
-    result.push({ motive: 'Uncategorized', budget: 0, spent: spending['Uncategorized'], remaining: 0, percent: 0 });
+
+  if (uncatSpent && uncatSpent.spent > 0) {
+    result.push({ motive: 'Uncategorized', budget: 0, spent: uncatSpent.spent, remaining: 0, percent: 0 });
+  }
+  res.json(result);
+});
+
+app.get('/api/bills/by-category', ensureAuth, (req, res) => {
+  const allocated = db.prepare(`
+    SELECT bc.category_id, c.name as category, SUM(b.amount * bc.percentage / 100) as spent
+    FROM bill_categories bc
+    JOIN bills b ON b.id = bc.bill_id
+    JOIN categories c ON c.id = bc.category_id
+    GROUP BY bc.category_id
+  `).all();
+
+  const uncatSpent = db.prepare(`
+    SELECT SUM(b.amount) as spent FROM bills b
+    WHERE b.id NOT IN (SELECT DISTINCT bill_id FROM bill_categories)
+  `).get();
+
+  const categories = db.prepare('SELECT * FROM categories ORDER BY id').all();
+  const spending = {};
+  allocated.forEach(a => { spending[a.category] = a.spent || 0; });
+
+  const result = categories.map(c => {
+    const spent = spending[c.name] || 0;
+    return {
+      category: c.name,
+      budget: c.budget,
+      spent,
+      remaining: c.budget - spent,
+      percent: c.budget > 0 ? (spent / c.budget) * 100 : 0
+    };
+  });
+
+  if (uncatSpent && uncatSpent.spent > 0) {
+    result.push({ category: 'Uncategorized', budget: 0, spent: uncatSpent.spent, remaining: 0, percent: 0 });
   }
   res.json(result);
 });
@@ -970,10 +1224,11 @@ app.post('/api/sync/to-sheet', ensureAdmin, async (req, res) => {
       const key = billKey(bill);
       if (existingKeys.has(key)) continue; // Skip duplicates
 
+      const motiveCol = getMotiveDisplayString(bill.id) || bill.motive || '';
       newRows.push([
         bill.comment || '',           // A: Notiz
         bill.item || '',              // B: WAS
-        bill.motive || '',            // C: Fur
+        motiveCol,                    // C: Fur
         bill.vendor || '',            // D: WOHER
         '',                           // E: Kalkulation (brutto)
         '',                           // F: Angebot (brutto)
@@ -1268,6 +1523,24 @@ app.get('/api/report/:email', ensureAuth, async (req, res) => {
     doc.moveDown(1);
   }
 
+  // Bulk-fetch allocations for all user bills
+  const billIds = userBills.map(b => b.id);
+  const pdfMotiveAllocs = {};
+  const pdfCategoryAllocs = {};
+  if (billIds.length > 0) {
+    const ph = billIds.map(() => '?').join(',');
+    const ma = db.prepare(`SELECT bm.bill_id, m.name, bm.percentage FROM bill_motives bm JOIN motives m ON m.id = bm.motive_id WHERE bm.bill_id IN (${ph})`).all(...billIds);
+    for (const a of ma) {
+      if (!pdfMotiveAllocs[a.bill_id]) pdfMotiveAllocs[a.bill_id] = [];
+      pdfMotiveAllocs[a.bill_id].push(a);
+    }
+    const ca = db.prepare(`SELECT bc.bill_id, c.name, bc.percentage FROM bill_categories bc JOIN categories c ON c.id = bc.category_id WHERE bc.bill_id IN (${ph})`).all(...billIds);
+    for (const a of ca) {
+      if (!pdfCategoryAllocs[a.bill_id]) pdfCategoryAllocs[a.bill_id] = [];
+      pdfCategoryAllocs[a.bill_id].push(a);
+    }
+  }
+
   // Each bill
   for (let i = 0; i < userBills.length; i++) {
     const bill = userBills[i];
@@ -1282,8 +1555,29 @@ app.get('/api/report/:email', ensureAuth, async (req, res) => {
     doc.text(`Beleg ${bill.bill_number || (i + 1)}`, { continued: true });
     doc.font('Helvetica').text(` - ${new Date(bill.date).toLocaleDateString('de-DE')}`);
 
+    // Motive allocations display
+    const billMotives = pdfMotiveAllocs[bill.id] || [];
+    let motiveStr = bill.motive || '-';
+    if (billMotives.length > 0) {
+      motiveStr = billMotives.length === 1 && billMotives[0].percentage === 100
+        ? billMotives[0].name
+        : billMotives.map(a => `${a.name} (${a.percentage}%)`).join(', ');
+    }
+
+    // Category allocations display
+    const billCategories = pdfCategoryAllocs[bill.id] || [];
+    let categoryStr = '';
+    if (billCategories.length > 0) {
+      categoryStr = billCategories.length === 1 && billCategories[0].percentage === 100
+        ? billCategories[0].name
+        : billCategories.map(a => `${a.name} (${a.percentage}%)`).join(', ');
+    }
+
     doc.fontSize(10).font('Helvetica');
-    doc.text(`Typ: ${bill.type || 'Kauf'} | Motiv: ${bill.motive || '-'}`);
+    doc.text(`Typ: ${bill.type || 'Kauf'} | Motiv: ${motiveStr}`);
+    if (categoryStr) {
+      doc.text(`Kategorie: ${categoryStr}`);
+    }
     doc.text(`Handler: ${bill.vendor || '-'} | Artikel: ${bill.item || '-'}`);
 
     // Amounts
