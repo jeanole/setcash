@@ -610,3 +610,23 @@ tr.over-budget {
   font-size: 13px;
   font-weight: 600;
 }
+
+/* Budget matrix */
+#budgetMatrixTable td,
+#budgetMatrixTable th {
+  white-space: nowrap;
+}
+
+.budget-cell-input {
+  width: 100px !important;
+  max-width: 100px !important;
+  padding: 6px 8px;
+  font-size: 14px;
+  text-align: right;
+}
+
+.budget-cell-input:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 2px rgba(52,152,219,0.2);
+}

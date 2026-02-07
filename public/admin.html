@@ -25,34 +25,6 @@
   </div>
 
   <div class="card">
-    <h2>Motives & Budgets</h2>
-    <form id="motiveForm" class="inline-form">
-      <input type="text" name="motive" placeholder="Motive name" required>
-      <input type="number" name="budget" placeholder="Budget" step="0.01" min="0" style="max-width:120px">
-      <button type="submit">Add</button>
-    </form>
-    <div id="motiveResult"></div>
-    <table class="data-table">
-      <thead><tr><th>Motive</th><th>Budget (EUR)</th><th>Actions</th></tr></thead>
-      <tbody id="motiveBody"></tbody>
-    </table>
-  </div>
-
-  <div class="card">
-    <h2>Ausstattungs-Kategorien & Budgets</h2>
-    <form id="categoryForm" class="inline-form">
-      <input type="text" name="category" placeholder="Category name" required>
-      <input type="number" name="budget" placeholder="Budget" step="0.01" min="0" style="max-width:120px">
-      <button type="submit">Add</button>
-    </form>
-    <div id="categoryResult"></div>
-    <table class="data-table">
-      <thead><tr><th>Kategorie</th><th>Budget (EUR)</th><th>Actions</th></tr></thead>
-      <tbody id="categoryBody"></tbody>
-    </table>
-  </div>
-
-  <div class="card">
     <h2>Google Integration</h2>
     <div id="credStatus" style="margin-bottom:12px"></div>
 
@@ -98,21 +70,6 @@
       } catch (e) { tbody.innerHTML = '<tr><td colspan="3">Error</td></tr>'; }
     }
 
-    async function loadMotives() {
-      const tbody = document.getElementById('motiveBody');
-      try {
-        const motives = await (await fetch('/api/motives')).json();
-        tbody.innerHTML = motives.map((m) => `<tr data-id="${m.id}">
-          <td data-f="name">${esc(m.name)}</td>
-          <td data-f="budget">${fmt(m.budget)}</td>
-          <td>
-            <button class="small secondary" onclick="editMotive(${m.id})">Edit</button>
-            <button class="small danger" onclick="deleteMotive(${m.id})">Delete</button>
-          </td>
-        </tr>`).join('');
-      } catch (e) { tbody.innerHTML = '<tr><td colspan="3">Error</td></tr>'; }
-    }
-
     document.getElementById('userForm').onsubmit = async e => {
       e.preventDefault();
       const f = e.target;
@@ -124,19 +81,6 @@
       const j = await res.json();
       if (j.ok) { msg('userResult', 'User added', false); f.reset(); loadUsers(); }
       else msg('userResult', j.error || 'Error', true);
-    };
-
-    document.getElementById('motiveForm').onsubmit = async e => {
-      e.preventDefault();
-      const f = e.target;
-      const res = await fetch('/api/admin/motive', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ motive: f.motive.value, budget: f.budget.value || 0 })
-      });
-      const j = await res.json();
-      if (j.ok) { msg('motiveResult', 'Added', false); f.reset(); loadMotives(); }
-      else msg('motiveResult', j.error || 'Error', true);
     };
 
     async function resetPassword(email) {
@@ -168,37 +112,6 @@
       const j = await res.json();
       if (j.ok) { msg('userResult', 'Deleted', false); loadUsers(); }
       else msg('userResult', j.error || 'Error', true);
-    }
-
-    function editMotive(id) {
-      const row = document.querySelector(`#motiveBody tr[data-id="${id}"]`);
-      const name = row.querySelector('[data-f="name"]').textContent;
-      const budget = parseFloat(row.querySelector('[data-f="budget"]').textContent.replace(/[^\d,.-]/g,'').replace(',','.')) || 0;
-      row.querySelector('[data-f="name"]').innerHTML = `<input class="edit-input" value="${esc(name)}" data-f="name">`;
-      row.querySelector('[data-f="budget"]').innerHTML = `<input type="number" class="edit-input" value="${budget.toFixed(2)}" step="0.01" data-f="budget">`;
-      row.querySelector('td:last-child').innerHTML = `<button class="small" onclick="saveMotive(${id})">Save</button> <button class="small secondary" onclick="loadMotives()">Cancel</button>`;
-    }
-
-    async function saveMotive(id) {
-      const row = document.querySelector(`#motiveBody tr[data-id="${id}"]`);
-      const motive = row.querySelector('input[data-f="name"]').value;
-      const budget = row.querySelector('input[data-f="budget"]').value;
-      const res = await fetch('/api/admin/motive/' + id, {
-        method: 'PUT',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ motive, budget })
-      });
-      const j = await res.json();
-      if (j.ok) { msg('motiveResult', 'Saved', false); loadMotives(); }
-      else msg('motiveResult', j.error || 'Error', true);
-    }
-
-    async function deleteMotive(id) {
-      if (!confirm('Delete this motive?')) return;
-      const res = await fetch('/api/admin/motive/' + id, { method: 'DELETE' });
-      const j = await res.json();
-      if (j.ok) { msg('motiveResult', 'Deleted', false); loadMotives(); }
-      else msg('motiveResult', j.error || 'Error', true);
     }
 
     async function loadSettings() {
@@ -252,68 +165,7 @@
       }
     };
 
-    async function loadCategories() {
-      const tbody = document.getElementById('categoryBody');
-      try {
-        const categories = await (await fetch('/api/categories')).json();
-        tbody.innerHTML = categories.map((c) => `<tr data-id="${c.id}">
-          <td data-f="name">${esc(c.name)}</td>
-          <td data-f="budget">${fmt(c.budget)}</td>
-          <td>
-            <button class="small secondary" onclick="editCategory(${c.id})">Edit</button>
-            <button class="small danger" onclick="deleteCategory(${c.id})">Delete</button>
-          </td>
-        </tr>`).join('');
-      } catch (e) { tbody.innerHTML = '<tr><td colspan="3">Error</td></tr>'; }
-    }
-
-    document.getElementById('categoryForm').onsubmit = async e => {
-      e.preventDefault();
-      const f = e.target;
-      const res = await fetch('/api/admin/category', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ category: f.category.value, budget: f.budget.value || 0 })
-      });
-      const j = await res.json();
-      if (j.ok) { msg('categoryResult', 'Added', false); f.reset(); loadCategories(); }
-      else msg('categoryResult', j.error || 'Error', true);
-    };
-
-    function editCategory(id) {
-      const row = document.querySelector(`#categoryBody tr[data-id="${id}"]`);
-      const name = row.querySelector('[data-f="name"]').textContent;
-      const budget = parseFloat(row.querySelector('[data-f="budget"]').textContent.replace(/[^\d,.-]/g,'').replace(',','.')) || 0;
-      row.querySelector('[data-f="name"]').innerHTML = `<input class="edit-input" value="${esc(name)}" data-f="name">`;
-      row.querySelector('[data-f="budget"]').innerHTML = `<input type="number" class="edit-input" value="${budget.toFixed(2)}" step="0.01" data-f="budget">`;
-      row.querySelector('td:last-child').innerHTML = `<button class="small" onclick="saveCategory(${id})">Save</button> <button class="small secondary" onclick="loadCategories()">Cancel</button>`;
-    }
-
-    async function saveCategory(id) {
-      const row = document.querySelector(`#categoryBody tr[data-id="${id}"]`);
-      const category = row.querySelector('input[data-f="name"]').value;
-      const budget = row.querySelector('input[data-f="budget"]').value;
-      const res = await fetch('/api/admin/category/' + id, {
-        method: 'PUT',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ category, budget })
-      });
-      const j = await res.json();
-      if (j.ok) { msg('categoryResult', 'Saved', false); loadCategories(); }
-      else msg('categoryResult', j.error || 'Error', true);
-    }
-
-    async function deleteCategory(id) {
-      if (!confirm('Delete this category?')) return;
-      const res = await fetch('/api/admin/category/' + id, { method: 'DELETE' });
-      const j = await res.json();
-      if (j.ok) { msg('categoryResult', 'Deleted', false); loadCategories(); }
-      else msg('categoryResult', j.error || 'Error', true);
-    }
-
     loadUsers();
-    loadMotives();
-    loadCategories();
     loadSettings();
     loadCredStatus();
   </script>

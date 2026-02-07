@@ -21,6 +21,7 @@
           <button class="tab" data-tab="bills">Bills</button>
           <button class="tab" data-tab="spending">Spending</button>
           <button class="tab" data-tab="vgeld">V-Geld</button>
+          <button class="tab" data-tab="budget">Budget</button>
           <button class="tab" data-tab="reports">Reports</button>
         </div>
 
@@ -188,6 +189,54 @@
           </div>
         </div>
 
+        <div id="tab-budget" class="tab-content">
+          <div class="card">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:16px;">
+              <h2 style="margin:0">Budget Matrix</h2>
+              <div id="budgetGrandTotal" style="font-size:1.1em; font-weight:600; color:#2c3e50;"></div>
+            </div>
+            <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:16px;">
+              <label style="flex-direction:row; align-items:center; gap:8px; margin:0; font-weight:normal;">
+                <span>Filter Motive:</span>
+                <select id="budgetMotiveFilter" style="max-width:200px;">
+                  <option value="">All Motives</option>
+                </select>
+              </label>
+            </div>
+            <div id="budgetMatrixContainer" style="overflow-x:auto;"></div>
+            <div id="budgetSaveWrap" class="admin-only" style="display:none; margin-top:16px;">
+              <button id="budgetSaveBtn">Save All Changes</button>
+              <span id="budgetSaveResult" style="margin-left:12px;"></span>
+            </div>
+          </div>
+
+          <div id="budgetMotiveCard" class="card admin-only" style="display:none">
+            <h2>Motives</h2>
+            <div class="inline-form" style="margin-bottom:12px;">
+              <input type="text" id="newMotiveName" placeholder="Motive name">
+              <button id="addMotiveBtn" class="small">Add Motive</button>
+            </div>
+            <div id="budgetMotiveResult"></div>
+            <table class="data-table">
+              <thead><tr><th>Motive</th><th>Actions</th></tr></thead>
+              <tbody id="budgetMotiveBody"></tbody>
+            </table>
+          </div>
+
+          <div id="budgetCategoryCard" class="card admin-only" style="display:none">
+            <h2>Ausstattungs-Kategorien</h2>
+            <div class="inline-form" style="margin-bottom:12px;">
+              <input type="text" id="newCategoryName" placeholder="Kategorie name">
+              <button id="addCategoryBtn" class="small">Add Kategorie</button>
+            </div>
+            <div id="budgetCategoryResult"></div>
+            <table class="data-table">
+              <thead><tr><th>Kategorie</th><th>Actions</th></tr></thead>
+              <tbody id="budgetCategoryBody"></tbody>
+            </table>
+          </div>
+        </div>
+
         <div id="tab-reports" class="tab-content">
           <div class="card">
             <h2>PDF Reports</h2>
@@ -331,20 +380,26 @@
       }
 
       // ========== Allocation Widget ==========
-      function createAllocationWidget(containerId, type, options, existing) {
+      function createAllocationWidget(containerId, type, options, existing, totalAmount) {
         const container = document.getElementById(containerId);
         container.innerHTML = '';
         const idField = type === 'motive' ? 'motiveId' : 'categoryId';
         const label = type === 'motive' ? 'Motive' : 'Kategorie';
+        const uncategorizedOpt = options.find(o => o.name === 'Uncategorized');
 
         let rows = [];
         if (existing && existing.length > 0) {
-          rows = existing.map(e => ({ id: e[idField], percentage: e.percentage }));
+          rows = existing.filter(e => e.name !== 'Uncategorized').map(e => ({ id: e[idField], percentage: Math.round(e.percentage) }));
         }
 
         function render() {
           container.innerHTML = '';
-          const totalPct = rows.reduce((s, r) => s + (parseFloat(r.percentage) || 0), 0);
+          const totalPct = rows.reduce((s, r) => s + (parseInt(r.percentage) || 0), 0);
+          const remainingPct = Math.max(0, 100 - totalPct);
+          const amount = totalAmount || 0;
+
+          // Filter out Uncategorized from selectable options
+          const selectableOptions = options.filter(o => o.name !== 'Uncategorized');
 
           rows.forEach((row, idx) => {
             const rowDiv = document.createElement('div');
@@ -352,20 +407,25 @@
 
             const sel = document.createElement('select');
             sel.innerHTML = '<option value="">-- Select --</option>' +
-              options.map(o => `<option value="${o.id}" ${o.id === row.id ? 'selected' : ''}>${escapeHtml(o.name)}</option>`).join('');
+              selectableOptions.map(o => `<option value="${o.id}" ${o.id === row.id ? 'selected' : ''}>${escapeHtml(o.name)}</option>`).join('');
             sel.addEventListener('change', () => { row.id = parseInt(sel.value) || 0; render(); });
 
             const pctInput = document.createElement('input');
             pctInput.type = 'number';
             pctInput.min = '0';
             pctInput.max = '100';
-            pctInput.step = '0.01';
-            pctInput.value = row.percentage;
-            pctInput.style.width = '80px';
-            pctInput.addEventListener('change', () => { row.percentage = parseFloat(pctInput.value) || 0; render(); });
+            pctInput.step = '1';
+            pctInput.value = Math.round(row.percentage);
+            pctInput.style.width = '60px';
+            pctInput.addEventListener('change', () => { row.percentage = parseInt(pctInput.value) || 0; render(); });
 
             const pctLabel = document.createElement('span');
             pctLabel.textContent = '%';
+
+            const euroAmount = document.createElement('span');
+            euroAmount.style.marginLeft = '8px';
+            euroAmount.style.color = '#666';
+            euroAmount.textContent = formatCurrency(amount * (parseInt(row.percentage) || 0) / 100);
 
             const removeBtn = document.createElement('button');
             removeBtn.type = 'button';
@@ -376,9 +436,42 @@
             rowDiv.appendChild(sel);
             rowDiv.appendChild(pctInput);
             rowDiv.appendChild(pctLabel);
+            rowDiv.appendChild(euroAmount);
             rowDiv.appendChild(removeBtn);
             container.appendChild(rowDiv);
           });
+
+          // Show uncategorized row (read-only, styled like a regular allocation row)
+          if (remainingPct > 0 && uncategorizedOpt) {
+            const uncatDiv = document.createElement('div');
+            uncatDiv.className = 'alloc-row';
+
+            const uncatSel = document.createElement('select');
+            uncatSel.innerHTML = `<option selected>Uncategorized</option>`;
+            uncatSel.disabled = true;
+            uncatSel.style.opacity = '0.7';
+
+            const uncatInput = document.createElement('input');
+            uncatInput.type = 'number';
+            uncatInput.value = remainingPct;
+            uncatInput.readOnly = true;
+            uncatInput.style.width = '60px';
+            uncatInput.style.opacity = '0.7';
+
+            const uncatPctLabel = document.createElement('span');
+            uncatPctLabel.textContent = '%';
+
+            const uncatEuro = document.createElement('span');
+            uncatEuro.style.marginLeft = '8px';
+            uncatEuro.style.color = '#666';
+            uncatEuro.textContent = formatCurrency(amount * remainingPct / 100);
+
+            uncatDiv.appendChild(uncatSel);
+            uncatDiv.appendChild(uncatInput);
+            uncatDiv.appendChild(uncatPctLabel);
+            uncatDiv.appendChild(uncatEuro);
+            container.appendChild(uncatDiv);
+          }
 
           // Add button
           const addBtn = document.createElement('button');
@@ -391,20 +484,17 @@
           });
           container.appendChild(addBtn);
 
-          // Remaining indicator
-          if (rows.length > 0) {
-            const remaining = 100 - totalPct;
-            const indicator = document.createElement('span');
-            indicator.className = 'alloc-remaining';
-            if (Math.abs(remaining) < 0.01) {
-              indicator.style.color = '#27ae60';
-              indicator.textContent = ' 100% allocated';
-            } else if (remaining > 0) {
-              indicator.style.color = '#f39c12';
-              indicator.textContent = ` ${remaining.toFixed(1)}% remaining`;
-            } else {
+          // Total indicator
+          if (rows.length > 0 || remainingPct < 100) {
+            const indicator = document.createElement('div');
+            indicator.style.marginTop = '8px';
+            indicator.style.fontSize = '0.9em';
+            if (totalPct > 100) {
               indicator.style.color = '#e74c3c';
-              indicator.textContent = ` ${Math.abs(remaining).toFixed(1)}% over!`;
+              indicator.textContent = `Total: ${totalPct}% (${totalPct - 100}% over!)`;
+            } else {
+              indicator.style.color = '#27ae60';
+              indicator.textContent = `Total: 100% allocated`;
             }
             container.appendChild(indicator);
           }
@@ -414,14 +504,25 @@
 
         // Methods attached to container element
         container.getAllocations = function() {
-          return rows.filter(r => r.id > 0 && r.percentage > 0).map(r => {
+          const allocs = rows.filter(r => r.id > 0 && r.percentage > 0).map(r => {
             const opt = options.find(o => o.id === r.id);
-            return { [idField]: r.id, name: opt ? opt.name : '', percentage: r.percentage };
+            return { [idField]: r.id, name: opt ? opt.name : '', percentage: Math.round(r.percentage) };
           });
+          // Include uncategorized remainder
+          const totalPct = allocs.reduce((s, a) => s + a.percentage, 0);
+          const remainingPct = Math.max(0, 100 - totalPct);
+          if (remainingPct > 0 && uncategorizedOpt) {
+            allocs.push({ [idField]: uncategorizedOpt.id, name: 'Uncategorized', percentage: remainingPct });
+          }
+          return allocs;
         };
         container.getTotalPercent = function() {
           const allocs = container.getAllocations();
-          return allocs.reduce((s, a) => s + a.percentage, 0);
+          return allocs.reduce((s, a) => s + Math.round(a.percentage), 0);
+        };
+        container.updateAmount = function(newAmount) {
+          totalAmount = newAmount;
+          render();
         };
       }
 
@@ -436,6 +537,7 @@
           if (tab.dataset.tab === 'bills') loadBills();
           if (tab.dataset.tab === 'spending') { loadSpending(); loadCategorySpending(); }
           if (tab.dataset.tab === 'vgeld') { loadVGeld(); loadVGeldAnalysis(); }
+          if (tab.dataset.tab === 'budget') loadBudgetMatrix();
           if (tab.dataset.tab === 'reports') loadReportUsers();
         });
       });
@@ -444,7 +546,7 @@
       function formatAllocations(allocs, idField) {
         if (!allocs || allocs.length === 0) return '';
         if (allocs.length === 1 && allocs[0].percentage === 100) return escapeHtml(allocs[0].name);
-        return allocs.map(a => `${escapeHtml(a.name)} (${a.percentage}%)`).join(', ');
+        return allocs.map(a => `${escapeHtml(a.name)} (${Math.round(a.percentage)}%)`).join(', ');
       }
 
       async function loadBills() {
@@ -713,9 +815,24 @@
         document.getElementById('detailBrutto0').value = bill.brutto0 || 0;
         document.getElementById('detailComment').value = bill.comment || '';
 
+        // Calculate total amount
+        const billTotal = (bill.brutto19 || 0) + (bill.brutto7 || 0) + (bill.brutto0 || 0);
+
         // Initialize allocation widgets with existing data
-        createAllocationWidget('detailMotiveAlloc', 'motive', motivesData, bill.motiveAllocations || []);
-        createAllocationWidget('detailCategoryAlloc', 'category', categoriesData, bill.categoryAllocations || []);
+        createAllocationWidget('detailMotiveAlloc', 'motive', motivesData, bill.motiveAllocations || [], billTotal);
+        createAllocationWidget('detailCategoryAlloc', 'category', categoriesData, bill.categoryAllocations || [], billTotal);
+
+        // Update allocation amounts when brutto values change in detail form
+        const detailBruttoInputs = ['detailBrutto19', 'detailBrutto7', 'detailBrutto0'].map(id =>
+          document.getElementById(id)
+        );
+        detailBruttoInputs.forEach(input => {
+          input.addEventListener('input', () => {
+            const total = detailBruttoInputs.reduce((sum, inp) => sum + (parseFloat(inp.value) || 0), 0);
+            document.getElementById('detailMotiveAlloc').updateAmount(total);
+            document.getElementById('detailCategoryAlloc').updateAmount(total);
+          });
+        });
 
         // Handle image
         const img = document.getElementById('billImage');
@@ -812,20 +929,16 @@
         const motiveAllocs = motiveAllocContainer.getAllocations();
         const categoryAllocs = categoryAllocContainer.getAllocations();
 
-        // Validate allocation totals (only if allocations exist)
-        if (motiveAllocs.length > 0) {
-          const motiveTotal = motiveAllocContainer.getTotalPercent();
-          if (Math.abs(motiveTotal - 100) > 0.01) {
-            showMessage('detailResult', 'Motive allocations must sum to 100% (currently ' + motiveTotal.toFixed(1) + '%)', true);
-            return;
-          }
+        // Validate allocation totals (only if they exceed 100%)
+        const motiveTotal = motiveAllocContainer.getTotalPercent();
+        if (motiveTotal > 100) {
+          showMessage('detailResult', 'Motive allocations cannot exceed 100% (currently ' + motiveTotal + '%)', true);
+          return;
         }
-        if (categoryAllocs.length > 0) {
-          const catTotal = categoryAllocContainer.getTotalPercent();
-          if (Math.abs(catTotal - 100) > 0.01) {
-            showMessage('detailResult', 'Kategorie allocations must sum to 100% (currently ' + catTotal.toFixed(1) + '%)', true);
-            return;
-          }
+        const catTotal = categoryAllocContainer.getTotalPercent();
+        if (catTotal > 100) {
+          showMessage('detailResult', 'Kategorie allocations cannot exceed 100% (currently ' + catTotal + '%)', true);
+          return;
         }
 
         const data = {
@@ -1002,6 +1115,323 @@
         setTimeout(() => { resultEl.textContent = ''; resultEl.className = ''; }, 5000);
       }
 
+      // ========== Budget Matrix ==========
+      let budgetData = null;
+
+      async function loadBudgetMatrix() {
+        try {
+          const res = await fetch('/api/budget-matrix');
+          budgetData = await res.json();
+        } catch (e) {
+          document.getElementById('budgetMatrixContainer').innerHTML = '<p>Error loading budget matrix.</p>';
+          return;
+        }
+
+        // Populate filter dropdown
+        var filter = document.getElementById('budgetMotiveFilter');
+        var savedFilter = filter.value;
+        var opts = '<option value="">All Motives</option>';
+        for (var i = 0; i < budgetData.motives.length; i++) {
+          var m = budgetData.motives[i];
+          opts += '<option value="' + m.id + '">' + escapeHtml(m.name) + '</option>';
+        }
+        filter.innerHTML = opts;
+        filter.value = savedFilter || '';
+
+        // Show unfiltered grand total
+        document.getElementById('budgetGrandTotal').textContent = 'Total Budget: ' + formatCurrency(budgetData.grandTotal);
+
+        renderBudgetMatrix();
+
+        // Load management tables for admins
+        if (currentUser && currentUser.admin) {
+          loadBudgetMotives();
+          loadBudgetCategories();
+        }
+      }
+
+      function renderBudgetMatrix() {
+        if (!budgetData) return;
+        var container = document.getElementById('budgetMatrixContainer');
+        var filterVal = document.getElementById('budgetMotiveFilter').value;
+        var isAdmin = currentUser && currentUser.admin;
+
+        var motives = filterVal
+          ? budgetData.motives.filter(function(m) { return String(m.id) === filterVal; })
+          : budgetData.motives;
+        var categories = budgetData.categories;
+
+        if (motives.length === 0 || categories.length === 0) {
+          container.innerHTML = '<p>No data to display. Add motives and categories first.</p>';
+          return;
+        }
+
+        var html = '<table id="budgetMatrixTable" class="data-table"><thead><tr><th>Kategorie</th>';
+        for (var mi = 0; mi < motives.length; mi++) {
+          html += '<th style="white-space:nowrap">' + escapeHtml(motives[mi].name) + '</th>';
+        }
+        html += '<th style="white-space:nowrap"><strong>Row Total</strong></th></tr></thead><tbody>';
+
+        for (var ci = 0; ci < categories.length; ci++) {
+          var cat = categories[ci];
+          html += '<tr><td><strong>' + escapeHtml(cat.name) + '</strong></td>';
+          var rowTotal = 0;
+          for (var mi2 = 0; mi2 < motives.length; mi2++) {
+            var mot = motives[mi2];
+            var key = cat.id + '_' + mot.id;
+            var val = budgetData.matrix[key] || 0;
+            rowTotal += val;
+            if (isAdmin) {
+              html += '<td><input type="number" class="budget-cell-input" step="0.01" min="0" value="' + val + '" data-cat="' + cat.id + '" data-mot="' + mot.id + '"></td>';
+            } else {
+              html += '<td>' + formatCurrency(val) + '</td>';
+            }
+          }
+          html += '<td class="budget-row-total"><strong>' + formatCurrency(rowTotal) + '</strong></td></tr>';
+        }
+
+        // Footer with column totals
+        html += '</tbody><tfoot><tr><th><strong>Col Total</strong></th>';
+        var footerGrand = 0;
+        for (var mi3 = 0; mi3 < motives.length; mi3++) {
+          var colTotal = 0;
+          for (var ci2 = 0; ci2 < categories.length; ci2++) {
+            colTotal += budgetData.matrix[categories[ci2].id + '_' + motives[mi3].id] || 0;
+          }
+          footerGrand += colTotal;
+          html += '<th class="budget-col-total" data-mot="' + motives[mi3].id + '">' + formatCurrency(colTotal) + '</th>';
+        }
+        html += '<th class="budget-footer-grand"><strong>' + formatCurrency(footerGrand) + '</strong></th>';
+        html += '</tr></tfoot></table>';
+
+        container.innerHTML = html;
+
+        // Attach input listeners for live total updates
+        if (isAdmin) {
+          var inputs = container.querySelectorAll('.budget-cell-input');
+          for (var ii = 0; ii < inputs.length; ii++) {
+            inputs[ii].addEventListener('input', updateBudgetTotals);
+          }
+        }
+      }
+
+      function updateBudgetTotals() {
+        if (!budgetData) return;
+        var inputs = document.querySelectorAll('.budget-cell-input');
+        var filterVal = document.getElementById('budgetMotiveFilter').value;
+        var motives = filterVal
+          ? budgetData.motives.filter(function(m) { return String(m.id) === filterVal; })
+          : budgetData.motives;
+        var categories = budgetData.categories;
+
+        // Update matrix values from inputs
+        for (var i = 0; i < inputs.length; i++) {
+          var inp = inputs[i];
+          budgetData.matrix[inp.dataset.cat + '_' + inp.dataset.mot] = parseFloat(inp.value) || 0;
+        }
+
+        // Recalculate row totals
+        var rows = document.querySelectorAll('#budgetMatrixTable tbody tr');
+        for (var ri = 0; ri < rows.length; ri++) {
+          if (ri >= categories.length) break;
+          var rowTotal = 0;
+          for (var mi = 0; mi < motives.length; mi++) {
+            rowTotal += budgetData.matrix[categories[ri].id + '_' + motives[mi].id] || 0;
+          }
+          var cell = rows[ri].querySelector('.budget-row-total');
+          if (cell) cell.innerHTML = '<strong>' + formatCurrency(rowTotal) + '</strong>';
+        }
+
+        // Recalculate column totals
+        var footerGrand = 0;
+        for (var mi2 = 0; mi2 < motives.length; mi2++) {
+          var colTotal = 0;
+          for (var ci = 0; ci < categories.length; ci++) {
+            colTotal += budgetData.matrix[categories[ci].id + '_' + motives[mi2].id] || 0;
+          }
+          footerGrand += colTotal;
+          var colCell = document.querySelector('.budget-col-total[data-mot="' + motives[mi2].id + '"]');
+          if (colCell) colCell.textContent = formatCurrency(colTotal);
+        }
+
+        var grandCell = document.querySelector('.budget-footer-grand');
+        if (grandCell) grandCell.innerHTML = '<strong>' + formatCurrency(footerGrand) + '</strong>';
+      }
+
+      async function saveBudgetMatrix() {
+        var inputs = document.querySelectorAll('.budget-cell-input');
+        var cells = [];
+        for (var i = 0; i < inputs.length; i++) {
+          cells.push({
+            category_id: parseInt(inputs[i].dataset.cat),
+            motive_id: parseInt(inputs[i].dataset.mot),
+            amount: parseFloat(inputs[i].value) || 0
+          });
+        }
+        try {
+          var res = await fetch('/api/admin/budget-matrix', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cells: cells })
+          });
+          var j = await res.json();
+          if (j.ok) {
+            showMessage('budgetSaveResult', 'Budget saved!', false);
+            loadBudgetMatrix();
+          } else {
+            showMessage('budgetSaveResult', 'Error: ' + (j.error || 'unknown'), true);
+          }
+        } catch (e) {
+          showMessage('budgetSaveResult', 'Error: ' + e.message, true);
+        }
+      }
+
+      // ========== Motive Management (Budget tab) ==========
+      async function loadBudgetMotives() {
+        var tbody = document.getElementById('budgetMotiveBody');
+        try {
+          var motives = await (await fetch('/api/motives')).json();
+          var html = '';
+          for (var i = 0; i < motives.length; i++) {
+            var m = motives[i];
+            if (m.name === 'Uncategorized') {
+              html += '<tr data-id="' + m.id + '"><td>' + escapeHtml(m.name) + '</td><td><em style="color:#999">System default</em></td></tr>';
+            } else {
+              html += '<tr data-id="' + m.id + '"><td class="bm-name">' + escapeHtml(m.name) + '</td>'
+                + '<td><button class="small secondary" onclick="editBudgetMotive(' + m.id + ')">Edit</button> '
+                + '<button class="small danger" onclick="deleteBudgetMotive(' + m.id + ')">Delete</button></td></tr>';
+            }
+          }
+          tbody.innerHTML = html;
+        } catch (e) { tbody.innerHTML = '<tr><td colspan="2">Error</td></tr>'; }
+      }
+
+      function editBudgetMotive(id) {
+        var row = document.querySelector('#budgetMotiveBody tr[data-id="' + id + '"]');
+        if (!row) return;
+        var nameCell = row.querySelector('.bm-name');
+        if (!nameCell) return;
+        var name = nameCell.textContent;
+        nameCell.innerHTML = '<input class="edit-input" value="' + escapeHtml(name) + '">';
+        row.querySelector('td:last-child').innerHTML = '<button class="small" onclick="saveBudgetMotive(' + id + ')">Save</button> <button class="small secondary" onclick="loadBudgetMotives()">Cancel</button>';
+      }
+
+      async function saveBudgetMotive(id) {
+        var row = document.querySelector('#budgetMotiveBody tr[data-id="' + id + '"]');
+        if (!row) return;
+        var input = row.querySelector('.bm-name input');
+        if (!input) return;
+        try {
+          var res = await fetch('/api/admin/motive/' + id, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ motive: input.value })
+          });
+          var j = await res.json();
+          if (j.ok) { showMessage('budgetMotiveResult', 'Saved', false); loadBudgetMotives(); loadBudgetMatrix(); }
+          else showMessage('budgetMotiveResult', j.error || 'Error', true);
+        } catch (e) { showMessage('budgetMotiveResult', 'Error: ' + e.message, true); }
+      }
+
+      async function deleteBudgetMotive(id) {
+        if (!confirm('Delete this motive? Budget matrix entries for it will also be removed.')) return;
+        try {
+          var res = await fetch('/api/admin/motive/' + id, { method: 'DELETE' });
+          var j = await res.json();
+          if (j.ok) { showMessage('budgetMotiveResult', 'Deleted', false); loadBudgetMotives(); loadBudgetMatrix(); }
+          else showMessage('budgetMotiveResult', j.error || 'Error', true);
+        } catch (e) { showMessage('budgetMotiveResult', 'Error: ' + e.message, true); }
+      }
+
+      async function addBudgetMotive() {
+        var input = document.getElementById('newMotiveName');
+        var name = (input.value || '').trim();
+        if (!name) return;
+        try {
+          var res = await fetch('/api/admin/motive', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ motive: name, budget: 0 })
+          });
+          var j = await res.json();
+          if (j.ok) { showMessage('budgetMotiveResult', 'Added', false); input.value = ''; loadBudgetMotives(); loadBudgetMatrix(); }
+          else showMessage('budgetMotiveResult', j.error || 'Error', true);
+        } catch (e) { showMessage('budgetMotiveResult', 'Error: ' + e.message, true); }
+      }
+
+      // ========== Kategorie Management (Budget tab) ==========
+      async function loadBudgetCategories() {
+        var tbody = document.getElementById('budgetCategoryBody');
+        try {
+          var categories = await (await fetch('/api/categories')).json();
+          var html = '';
+          for (var i = 0; i < categories.length; i++) {
+            var c = categories[i];
+            if (c.name === 'Uncategorized') {
+              html += '<tr data-id="' + c.id + '"><td>' + escapeHtml(c.name) + '</td><td><em style="color:#999">System default</em></td></tr>';
+            } else {
+              html += '<tr data-id="' + c.id + '"><td class="bc-name">' + escapeHtml(c.name) + '</td>'
+                + '<td><button class="small secondary" onclick="editBudgetCategory(' + c.id + ')">Edit</button> '
+                + '<button class="small danger" onclick="deleteBudgetCategory(' + c.id + ')">Delete</button></td></tr>';
+            }
+          }
+          tbody.innerHTML = html;
+        } catch (e) { tbody.innerHTML = '<tr><td colspan="2">Error</td></tr>'; }
+      }
+
+      function editBudgetCategory(id) {
+        var row = document.querySelector('#budgetCategoryBody tr[data-id="' + id + '"]');
+        if (!row) return;
+        var nameCell = row.querySelector('.bc-name');
+        if (!nameCell) return;
+        var name = nameCell.textContent;
+        nameCell.innerHTML = '<input class="edit-input" value="' + escapeHtml(name) + '">';
+        row.querySelector('td:last-child').innerHTML = '<button class="small" onclick="saveBudgetCategory(' + id + ')">Save</button> <button class="small secondary" onclick="loadBudgetCategories()">Cancel</button>';
+      }
+
+      async function saveBudgetCategory(id) {
+        var row = document.querySelector('#budgetCategoryBody tr[data-id="' + id + '"]');
+        if (!row) return;
+        var input = row.querySelector('.bc-name input');
+        if (!input) return;
+        try {
+          var res = await fetch('/api/admin/category/' + id, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ category: input.value })
+          });
+          var j = await res.json();
+          if (j.ok) { showMessage('budgetCategoryResult', 'Saved', false); loadBudgetCategories(); loadBudgetMatrix(); }
+          else showMessage('budgetCategoryResult', j.error || 'Error', true);
+        } catch (e) { showMessage('budgetCategoryResult', 'Error: ' + e.message, true); }
+      }
+
+      async function deleteBudgetCategory(id) {
+        if (!confirm('Delete this category? Budget matrix entries for it will also be removed.')) return;
+        try {
+          var res = await fetch('/api/admin/category/' + id, { method: 'DELETE' });
+          var j = await res.json();
+          if (j.ok) { showMessage('budgetCategoryResult', 'Deleted', false); loadBudgetCategories(); loadBudgetMatrix(); }
+          else showMessage('budgetCategoryResult', j.error || 'Error', true);
+        } catch (e) { showMessage('budgetCategoryResult', 'Error: ' + e.message, true); }
+      }
+
+      async function addBudgetCategory() {
+        var input = document.getElementById('newCategoryName');
+        var name = (input.value || '').trim();
+        if (!name) return;
+        try {
+          var res = await fetch('/api/admin/category', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ category: name, budget: 0 })
+          });
+          var j = await res.json();
+          if (j.ok) { showMessage('budgetCategoryResult', 'Added', false); input.value = ''; loadBudgetCategories(); loadBudgetMatrix(); }
+          else showMessage('budgetCategoryResult', j.error || 'Error', true);
+        } catch (e) { showMessage('budgetCategoryResult', 'Error: ' + e.message, true); }
+      }
+
       async function init() {
         const res = await fetch('/api/user');
         const user = await res.json();
@@ -1019,14 +1449,54 @@
         categoriesData = await categoriesRes.json();
 
         // Initialize upload allocation widgets (empty)
-        createAllocationWidget('uploadMotiveAlloc', 'motive', motivesData, []);
-        createAllocationWidget('uploadCategoryAlloc', 'category', categoriesData, []);
+        createAllocationWidget('uploadMotiveAlloc', 'motive', motivesData, [], 0);
+        createAllocationWidget('uploadCategoryAlloc', 'category', categoriesData, [], 0);
+
+        // Update allocation amounts when brutto values change
+        const bruttoInputs = ['brutto19', 'brutto7', 'brutto0'].map(name =>
+          document.querySelector(`#uploadForm input[name="${name}"]`)
+        );
+        bruttoInputs.forEach(input => {
+          input.addEventListener('input', () => {
+            const total = bruttoInputs.reduce((sum, inp) => sum + (parseFloat(inp.value) || 0), 0);
+            document.getElementById('uploadMotiveAlloc').updateAmount(total);
+            document.getElementById('uploadCategoryAlloc').updateAmount(total);
+          });
+        });
 
         // Show admin-only V-Geld form
         if (user.admin) {
           document.getElementById('vgeldFormSection').style.display = 'block';
           document.querySelectorAll('.admin-only').forEach(el => el.style.display = '');
           loadUsersForVGeld();
+
+          // Budget tab: motive add form
+          document.getElementById('budgetMotiveForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const f = e.target;
+            const res = await fetch('/api/admin/motive', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ motive: f.motive.value, budget: 0 })
+            });
+            const j = await res.json();
+            if (j.ok) { showMessage('budgetMotiveResult', 'Added', false); f.reset(); loadBudgetMotives(); loadBudgetMatrix(); }
+            else showMessage('budgetMotiveResult', j.error || 'Error', true);
+          });
+
+          // Budget tab: kategorie add form
+          document.getElementById('budgetCategoryForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const f = e.target;
+            const res = await fetch('/api/admin/category', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ category: f.category.value, budget: 0 })
+            });
+            const j = await res.json();
+            if (j.ok) { showMessage('budgetCategoryResult', 'Added', false); f.reset(); loadBudgetCategories(); loadBudgetMatrix(); }
+            else showMessage('budgetCategoryResult', j.error || 'Error', true);
+          });
         }
 
         document.getElementById('uploadForm').addEventListener('submit', async (e)=>{
@@ -1067,8 +1537,8 @@
             result.textContent = 'Bill uploaded successfully!';
             form.reset();
             // Re-initialize allocation widgets
-            createAllocationWidget('uploadMotiveAlloc', 'motive', motivesData, []);
-            createAllocationWidget('uploadCategoryAlloc', 'category', categoriesData, []);
+            createAllocationWidget('uploadMotiveAlloc', 'motive', motivesData, [], 0);
+            createAllocationWidget('uploadCategoryAlloc', 'category', categoriesData, [], 0);
           } else {
             result.className = 'message error';
             result.textContent = 'Error: ' + (json.error || 'unknown');

@@ -172,6 +172,14 @@ db.exec(`
     percentage REAL NOT NULL DEFAULT 100,
     UNIQUE(bill_id, category_id)
   );
+
+  CREATE TABLE IF NOT EXISTS budget_matrix (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    motive_id INTEGER NOT NULL,
+    category_id INTEGER NOT NULL,
+    amount REAL DEFAULT 0,
+    UNIQUE(motive_id, category_id)
+  );
 `);
 
 // Legacy JSON helpers (for migration only)
@@ -299,6 +307,12 @@ function initMotives() {
     }
     console.log('Created default motives');
   }
+  // Ensure "Uncategorized" motive exists
+  const uncatMotive = db.prepare('SELECT id FROM motives WHERE name = ?').get('Uncategorized');
+  if (!uncatMotive) {
+    db.prepare('INSERT INTO motives (name, budget) VALUES (?, 0)').run('Uncategorized');
+    console.log('Created Uncategorized motive');
+  }
 }
 
 // Initialize default categories if none exist
@@ -316,6 +330,12 @@ function initCategories() {
       insert.run(name);
     }
     console.log('Created default categories');
+  }
+  // Ensure "Uncategorized" category exists
+  const uncatCategory = db.prepare('SELECT id FROM categories WHERE name = ?').get('Uncategorized');
+  if (!uncatCategory) {
+    db.prepare('INSERT INTO categories (name, budget) VALUES (?, 0)').run('Uncategorized');
+    console.log('Created Uncategorized category');
   }
 }
 
@@ -544,9 +564,14 @@ app.put('/api/admin/motive/:id', ensureAdmin, (req, res) => {
 
 app.delete('/api/admin/motive/:id', ensureAdmin, (req, res) => {
   const id = parseInt(req.params.id);
+  const motive = db.prepare('SELECT name FROM motives WHERE id = ?').get(id);
+  if (!motive) return res.status(404).json({ error: 'Not found' });
+  if (motive.name === 'Uncategorized') {
+    return res.status(400).json({ error: 'Cannot delete Uncategorized motive' });
+  }
   const result = db.prepare('DELETE FROM motives WHERE id = ?').run(id);
-  if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
   db.prepare('DELETE FROM bill_motives WHERE motive_id = ?').run(id);
+  db.prepare('DELETE FROM budget_matrix WHERE motive_id = ?').run(id);
   res.json({ ok: true });
 });
 
@@ -581,9 +606,45 @@ app.put('/api/admin/category/:id', ensureAdmin, (req, res) => {
 
 app.delete('/api/admin/category/:id', ensureAdmin, (req, res) => {
   const id = parseInt(req.params.id);
+  const category = db.prepare('SELECT name FROM categories WHERE id = ?').get(id);
+  if (!category) return res.status(404).json({ error: 'Not found' });
+  if (category.name === 'Uncategorized') {
+    return res.status(400).json({ error: 'Cannot delete Uncategorized category' });
+  }
   const result = db.prepare('DELETE FROM categories WHERE id = ?').run(id);
-  if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
   db.prepare('DELETE FROM bill_categories WHERE category_id = ?').run(id);
+  db.prepare('DELETE FROM budget_matrix WHERE category_id = ?').run(id);
+  res.json({ ok: true });
+});
+
+// API: Budget Matrix
+app.get('/api/budget-matrix', ensureAuth, (req, res) => {
+  const motives = db.prepare("SELECT id, name FROM motives WHERE name != 'Uncategorized' ORDER BY id").all();
+  const categories = db.prepare("SELECT id, name FROM categories WHERE name != 'Uncategorized' ORDER BY id").all();
+  const rows = db.prepare('SELECT motive_id, category_id, amount FROM budget_matrix').all();
+
+  const matrix = {};
+  let grandTotal = 0;
+  for (const r of rows) {
+    matrix[r.category_id + '_' + r.motive_id] = r.amount;
+    grandTotal += r.amount || 0;
+  }
+
+  res.json({ motives, categories, matrix, grandTotal });
+});
+
+app.put('/api/admin/budget-matrix', ensureAdmin, (req, res) => {
+  const { cells } = req.body;
+  if (!Array.isArray(cells)) return res.status(400).json({ error: 'cells array required' });
+
+  const upsert = db.prepare('INSERT OR REPLACE INTO budget_matrix (motive_id, category_id, amount) VALUES (?, ?, ?)');
+  const runTransaction = db.transaction((cells) => {
+    for (const cell of cells) {
+      upsert.run(cell.motive_id, cell.category_id, parseFloat(cell.amount) || 0);
+    }
+  });
+  runTransaction(cells);
+
   res.json({ ok: true });
 });
 
@@ -592,22 +653,50 @@ function saveAllocations(billId, motiveAllocations, categoryAllocations) {
   db.prepare('DELETE FROM bill_motives WHERE bill_id = ?').run(billId);
   db.prepare('DELETE FROM bill_categories WHERE bill_id = ?').run(billId);
 
+  // Get uncategorized IDs
+  const uncatMotive = db.prepare('SELECT id FROM motives WHERE name = ?').get('Uncategorized');
+  const uncatCategory = db.prepare('SELECT id FROM categories WHERE name = ?').get('Uncategorized');
+
+  // Save motive allocations
   if (Array.isArray(motiveAllocations)) {
     const insertMotive = db.prepare('INSERT OR IGNORE INTO bill_motives (bill_id, motive_id, percentage) VALUES (?, ?, ?)');
+    let totalMotivePct = 0;
     for (const a of motiveAllocations) {
       if (a.motiveId && a.percentage > 0) {
-        insertMotive.run(billId, a.motiveId, a.percentage);
+        const pct = Math.round(a.percentage);
+        insertMotive.run(billId, a.motiveId, pct);
+        totalMotivePct += pct;
       }
     }
+    // Add uncategorized for remaining percentage
+    if (totalMotivePct < 100 && uncatMotive) {
+      const remaining = 100 - totalMotivePct;
+      insertMotive.run(billId, uncatMotive.id, remaining);
+    }
+  } else if (uncatMotive) {
+    // No allocations provided, allocate 100% to uncategorized
+    db.prepare('INSERT INTO bill_motives (bill_id, motive_id, percentage) VALUES (?, ?, 100)').run(billId, uncatMotive.id);
   }
 
+  // Save category allocations
   if (Array.isArray(categoryAllocations)) {
     const insertCat = db.prepare('INSERT OR IGNORE INTO bill_categories (bill_id, category_id, percentage) VALUES (?, ?, ?)');
+    let totalCatPct = 0;
     for (const a of categoryAllocations) {
       if (a.categoryId && a.percentage > 0) {
-        insertCat.run(billId, a.categoryId, a.percentage);
+        const pct = Math.round(a.percentage);
+        insertCat.run(billId, a.categoryId, pct);
+        totalCatPct += pct;
       }
     }
+    // Add uncategorized for remaining percentage
+    if (totalCatPct < 100 && uncatCategory) {
+      const remaining = 100 - totalCatPct;
+      insertCat.run(billId, uncatCategory.id, remaining);
+    }
+  } else if (uncatCategory) {
+    // No allocations provided, allocate 100% to uncategorized
+    db.prepare('INSERT INTO bill_categories (bill_id, category_id, percentage) VALUES (?, ?, 100)').run(billId, uncatCategory.id);
   }
 }
 
