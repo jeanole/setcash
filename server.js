@@ -307,11 +307,17 @@ function initMotives() {
     }
     console.log('Created default motives');
   }
-  // Ensure "Uncategorized" motive exists
-  const uncatMotive = db.prepare('SELECT id FROM motives WHERE name = ?').get('Uncategorized');
-  if (!uncatMotive) {
-    db.prepare('INSERT INTO motives (name, budget) VALUES (?, 0)').run('Uncategorized');
-    console.log('Created Uncategorized motive');
+  // Rename legacy "Uncategorized" motive to "Default"
+  const legacyMotive = db.prepare('SELECT id FROM motives WHERE name = ?').get('Uncategorized');
+  if (legacyMotive) {
+    db.prepare('UPDATE motives SET name = ? WHERE id = ?').run('Default', legacyMotive.id);
+    console.log('Renamed Uncategorized motive to Default');
+  }
+  // Ensure "Default" motive exists
+  const defaultMotive = db.prepare('SELECT id FROM motives WHERE name = ?').get('Default');
+  if (!defaultMotive) {
+    db.prepare('INSERT INTO motives (name, budget) VALUES (?, 0)').run('Default');
+    console.log('Created Default motive');
   }
 }
 
@@ -550,6 +556,7 @@ app.put('/api/admin/motive/:id', ensureAdmin, (req, res) => {
   const id = parseInt(req.params.id);
   const existing = db.prepare('SELECT * FROM motives WHERE id = ?').get(id);
   if (!existing) return res.status(404).json({ error: 'Not found' });
+  if (existing.name === 'Default') return res.status(400).json({ error: 'Cannot edit Default motive' });
   const { motive, budget } = req.body;
   const updates = [];
   const params = [];
@@ -566,8 +573,8 @@ app.delete('/api/admin/motive/:id', ensureAdmin, (req, res) => {
   const id = parseInt(req.params.id);
   const motive = db.prepare('SELECT name FROM motives WHERE id = ?').get(id);
   if (!motive) return res.status(404).json({ error: 'Not found' });
-  if (motive.name === 'Uncategorized') {
-    return res.status(400).json({ error: 'Cannot delete Uncategorized motive' });
+  if (motive.name === 'Default') {
+    return res.status(400).json({ error: 'Cannot delete Default motive' });
   }
   const result = db.prepare('DELETE FROM motives WHERE id = ?').run(id);
   db.prepare('DELETE FROM bill_motives WHERE motive_id = ?').run(id);
@@ -592,6 +599,7 @@ app.put('/api/admin/category/:id', ensureAdmin, (req, res) => {
   const id = parseInt(req.params.id);
   const existing = db.prepare('SELECT * FROM categories WHERE id = ?').get(id);
   if (!existing) return res.status(404).json({ error: 'Not found' });
+  if (existing.name === 'Uncategorized') return res.status(400).json({ error: 'Cannot edit Uncategorized category' });
   const { category, budget } = req.body;
   const updates = [];
   const params = [];
@@ -619,8 +627,8 @@ app.delete('/api/admin/category/:id', ensureAdmin, (req, res) => {
 
 // API: Budget Matrix
 app.get('/api/budget-matrix', ensureAuth, (req, res) => {
-  const motives = db.prepare("SELECT id, name FROM motives WHERE name != 'Uncategorized' ORDER BY id").all();
-  const categories = db.prepare("SELECT id, name FROM categories WHERE name != 'Uncategorized' ORDER BY id").all();
+  const motives = db.prepare("SELECT id, name FROM motives ORDER BY CASE WHEN name = 'Default' THEN 1 ELSE 0 END, id").all();
+  const categories = db.prepare("SELECT id, name FROM categories ORDER BY CASE WHEN name = 'Uncategorized' THEN 1 ELSE 0 END, id").all();
   const rows = db.prepare('SELECT motive_id, category_id, amount FROM budget_matrix').all();
 
   const matrix = {};
@@ -630,7 +638,34 @@ app.get('/api/budget-matrix', ensureAuth, (req, res) => {
     grandTotal += r.amount || 0;
   }
 
-  res.json({ motives, categories, matrix, grandTotal });
+  // Spending per motive (proportional via junction table)
+  const motiveSpending = {};
+  db.prepare(`
+    SELECT bm.motive_id, SUM(b.amount * bm.percentage / 100) as spent
+    FROM bill_motives bm JOIN bills b ON b.id = bm.bill_id
+    GROUP BY bm.motive_id
+  `).all().forEach(r => { motiveSpending[r.motive_id] = r.spent || 0; });
+
+  // Spending per category (proportional via junction table)
+  const categorySpending = {};
+  db.prepare(`
+    SELECT bc.category_id, SUM(b.amount * bc.percentage / 100) as spent
+    FROM bill_categories bc JOIN bills b ON b.id = bc.bill_id
+    GROUP BY bc.category_id
+  `).all().forEach(r => { categorySpending[r.category_id] = r.spent || 0; });
+
+  // Spending per cell (motive x category intersection)
+  const cellSpending = {};
+  db.prepare(`
+    SELECT bm.motive_id, bc.category_id,
+      SUM(b.amount * bm.percentage / 100 * bc.percentage / 100) as spent
+    FROM bill_motives bm
+    JOIN bill_categories bc ON bc.bill_id = bm.bill_id
+    JOIN bills b ON b.id = bm.bill_id
+    GROUP BY bm.motive_id, bc.category_id
+  `).all().forEach(r => { cellSpending[r.category_id + '_' + r.motive_id] = r.spent || 0; });
+
+  res.json({ motives, categories, matrix, grandTotal, motiveSpending, categorySpending, cellSpending });
 });
 
 app.put('/api/admin/budget-matrix', ensureAdmin, (req, res) => {
@@ -653,8 +688,8 @@ function saveAllocations(billId, motiveAllocations, categoryAllocations) {
   db.prepare('DELETE FROM bill_motives WHERE bill_id = ?').run(billId);
   db.prepare('DELETE FROM bill_categories WHERE bill_id = ?').run(billId);
 
-  // Get uncategorized IDs
-  const uncatMotive = db.prepare('SELECT id FROM motives WHERE name = ?').get('Uncategorized');
+  // Get default IDs
+  const uncatMotive = db.prepare('SELECT id FROM motives WHERE name = ?').get('Default');
   const uncatCategory = db.prepare('SELECT id FROM categories WHERE name = ?').get('Uncategorized');
 
   // Save motive allocations
@@ -1023,7 +1058,7 @@ app.get('/api/bills/by-motive', ensureAuth, (req, res) => {
   });
 
   if (uncatSpent && uncatSpent.spent > 0) {
-    result.push({ motive: 'Uncategorized', budget: 0, spent: uncatSpent.spent, remaining: 0, percent: 0 });
+    result.push({ motive: 'Default', budget: 0, spent: uncatSpent.spent, remaining: 0, percent: 0 });
   }
   res.json(result);
 });
