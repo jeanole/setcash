@@ -1565,24 +1565,27 @@ app.get('/api/report/:email', ensureAuth, async (req, res) => {
     doc.moveDown(0.5);
 
     const tableTop = doc.y;
-    const colX = [50, 80, 140, 220, 295, 355, 415, 475];
+    const colX = [50, 75, 125, 190, 250, 295, 340, 385, 430, 475, 515];
 
     // Table header
-    doc.font('Helvetica-Bold').fontSize(7);
+    doc.font('Helvetica-Bold').fontSize(6);
     doc.text('Nr.', colX[0], tableTop);
     doc.text('Datum', colX[1], tableTop);
     doc.text('Handler', colX[2], tableTop);
     doc.text('Artikel', colX[3], tableTop);
-    doc.text('19%', colX[4], tableTop);
-    doc.text('7%', colX[5], tableTop);
-    doc.text('0%', colX[6], tableTop);
-    doc.text('Summe', colX[7], tableTop);
+    doc.text('Br. 19%', colX[4], tableTop);
+    doc.text('Br. 7%', colX[5], tableTop);
+    doc.text('Br. 0%', colX[6], tableTop);
+    doc.text('Brutto', colX[7], tableTop);
+    doc.text('Nt. 19%', colX[8], tableTop);
+    doc.text('Nt. 7%', colX[9], tableTop);
+    doc.text('Netto', colX[10], tableTop);
 
     // Header underline
     doc.moveTo(50, tableTop + 10).lineTo(545, tableTop + 10).stroke();
 
     // Table rows
-    doc.font('Helvetica').fontSize(7);
+    doc.font('Helvetica').fontSize(6);
     let rowY = tableTop + 14;
     for (let i = 0; i < userBills.length; i++) {
       const bill = userBills[i];
@@ -1590,15 +1593,25 @@ app.get('/api/report/:email', ensureAuth, async (req, res) => {
         doc.addPage();
         rowY = 50;
       }
-      doc.text(bill.bill_number || String(i + 1), colX[0], rowY, { width: 28 });
-      doc.text(new Date(bill.date).toLocaleDateString('de-DE'), colX[1], rowY, { width: 58 });
-      doc.text((bill.vendor || '-').substring(0, 14), colX[2], rowY, { width: 78 });
-      doc.text((bill.item || '-').substring(0, 12), colX[3], rowY, { width: 73 });
-      doc.text((bill.brutto19 || 0).toFixed(2), colX[4], rowY, { width: 58 });
-      doc.text((bill.brutto7 || 0).toFixed(2), colX[5], rowY, { width: 58 });
-      doc.text((bill.brutto0 || 0).toFixed(2), colX[6], rowY, { width: 58 });
-      doc.text((bill.amount || 0).toFixed(2), colX[7], rowY, { width: 65 });
-      rowY += 12;
+      const b19 = bill.brutto19 || 0;
+      const b7 = bill.brutto7 || 0;
+      const b0 = bill.brutto0 || 0;
+      const n19 = b19 / 1.19;
+      const n7 = b7 / 1.07;
+      const netto = n19 + n7 + b0;
+      doc.text(bill.bill_number || String(i + 1), colX[0], rowY, { width: 23 });
+      doc.text(new Date(bill.date).toLocaleDateString('de-DE'), colX[1], rowY, { width: 48 });
+      doc.text((bill.vendor || '-').substring(0, 11), colX[2], rowY, { width: 63 });
+      doc.text((bill.item || '-').substring(0, 10), colX[3], rowY, { width: 58 });
+      doc.text(b19.toFixed(2), colX[4], rowY, { width: 43 });
+      doc.text(b7.toFixed(2), colX[5], rowY, { width: 43 });
+      doc.text(b0.toFixed(2), colX[6], rowY, { width: 43 });
+      doc.font('Helvetica-Bold').text((b19 + b7 + b0).toFixed(2), colX[7], rowY, { width: 43 });
+      doc.font('Helvetica').text(n19.toFixed(2), colX[8], rowY, { width: 43 });
+      doc.text(n7.toFixed(2), colX[9], rowY, { width: 38 });
+      doc.font('Helvetica-Bold').text(netto.toFixed(2), colX[10], rowY, { width: 38 });
+      doc.font('Helvetica');
+      rowY += 11;
     }
     doc.y = rowY;
     doc.moveDown(1);
@@ -1613,47 +1626,62 @@ app.get('/api/report/:email', ensureAuth, async (req, res) => {
   const total19 = userBills.reduce((sum, b) => sum + (b.brutto19 || 0), 0);
   const total7 = userBills.reduce((sum, b) => sum + (b.brutto7 || 0), 0);
   const total0 = userBills.reduce((sum, b) => sum + (b.brutto0 || 0), 0);
+  const totalNetto19 = total19 / 1.19;
+  const totalNetto7 = total7 / 1.07;
+  const totalNetto = totalNetto19 + totalNetto7 + total0;
 
   const summaryX = 50;
+  const bruttoX = 200;
+  const nettoX = 320;
   doc.fontSize(12).font('Helvetica-Bold').text('Ausgaben Zusammenfassung', summaryX);
   doc.moveDown(0.5);
-  const valueX = 180;
   let summaryY = doc.y;
+
+  // Column headers
+  doc.fontSize(9).font('Helvetica-Bold');
+  doc.text('', summaryX, summaryY);
+  doc.text('Brutto', bruttoX, summaryY);
+  doc.text('Netto', nettoX, summaryY);
+  summaryY += 14;
 
   doc.fontSize(10).font('Helvetica');
   doc.text('Anzahl Belege:', summaryX, summaryY);
-  doc.text(String(userBills.length), valueX, summaryY);
+  doc.text(String(userBills.length), bruttoX, summaryY);
   summaryY += 14;
 
   doc.text('Gesamt 19%:', summaryX, summaryY);
-  doc.text(`${total19.toFixed(2)} EUR`, valueX, summaryY);
+  doc.text(`${total19.toFixed(2)} EUR`, bruttoX, summaryY);
+  doc.text(`${totalNetto19.toFixed(2)} EUR`, nettoX, summaryY);
   summaryY += 14;
 
   doc.text('Gesamt 7%:', summaryX, summaryY);
-  doc.text(`${total7.toFixed(2)} EUR`, valueX, summaryY);
+  doc.text(`${total7.toFixed(2)} EUR`, bruttoX, summaryY);
+  doc.text(`${totalNetto7.toFixed(2)} EUR`, nettoX, summaryY);
   summaryY += 14;
 
   doc.text('Gesamt 0%:', summaryX, summaryY);
-  doc.text(`${total0.toFixed(2)} EUR`, valueX, summaryY);
+  doc.text(`${total0.toFixed(2)} EUR`, bruttoX, summaryY);
+  doc.text(`${total0.toFixed(2)} EUR`, nettoX, summaryY);
   summaryY += 14;
 
-  doc.moveTo(summaryX, summaryY).lineTo(250, summaryY).stroke();
+  doc.moveTo(summaryX, summaryY).lineTo(420, summaryY).stroke();
   summaryY += 6;
 
   doc.font('Helvetica-Bold');
   doc.text('Ausgaben Gesamt:', summaryX, summaryY);
-  doc.text(`${totalAmount.toFixed(2)} EUR`, valueX, summaryY);
+  doc.text(`${totalAmount.toFixed(2)} EUR`, bruttoX, summaryY);
+  doc.text(`${totalNetto.toFixed(2)} EUR`, nettoX, summaryY);
   summaryY += 14;
 
   doc.text('V-Geld Gesamt:', summaryX, summaryY);
-  doc.text(`${totalVGeld.toFixed(2)} EUR`, valueX, summaryY);
+  doc.text(`${totalVGeld.toFixed(2)} EUR`, bruttoX, summaryY);
   summaryY += 14;
 
-  // Balance
+  // Balance (brutto)
   const balance = totalVGeld - totalAmount;
   doc.fillColor(balance >= 0 ? 'green' : 'red');
-  doc.text('Saldo:', summaryX, summaryY);
-  doc.text(`${balance.toFixed(2)} EUR`, valueX, summaryY);
+  doc.text('Saldo (brutto):', summaryX, summaryY);
+  doc.text(`${balance.toFixed(2)} EUR`, bruttoX, summaryY);
   doc.fillColor('black');
 
   doc.y = summaryY + 20;
@@ -1722,12 +1750,23 @@ app.get('/api/report/:email', ensureAuth, async (req, res) => {
     }
     doc.text(`Handler: ${bill.vendor || '-'} | Artikel: ${bill.item || '-'}`);
 
-    // Amounts
-    const amounts = [];
-    if (bill.brutto19) amounts.push(`19%: ${bill.brutto19.toFixed(2)}EUR`);
-    if (bill.brutto7) amounts.push(`7%: ${bill.brutto7.toFixed(2)}EUR`);
-    if (bill.brutto0) amounts.push(`0%: ${bill.brutto0.toFixed(2)}EUR`);
-    doc.text(`Betrage: ${amounts.join(' | ') || '-'} | Gesamt: ${(bill.amount || 0).toFixed(2)}EUR`);
+    // Amounts (brutto + netto)
+    const b19 = bill.brutto19 || 0;
+    const b7 = bill.brutto7 || 0;
+    const b0 = bill.brutto0 || 0;
+    const n19 = b19 / 1.19;
+    const n7 = b7 / 1.07;
+    const billNetto = n19 + n7 + b0;
+    const bruttoAmounts = [];
+    if (b19) bruttoAmounts.push(`19%: ${b19.toFixed(2)}`);
+    if (b7) bruttoAmounts.push(`7%: ${b7.toFixed(2)}`);
+    if (b0) bruttoAmounts.push(`0%: ${b0.toFixed(2)}`);
+    doc.text(`Brutto: ${bruttoAmounts.join(' | ') || '-'} | Gesamt: ${(b19 + b7 + b0).toFixed(2)} EUR`);
+    const nettoAmounts = [];
+    if (b19) nettoAmounts.push(`19%: ${n19.toFixed(2)}`);
+    if (b7) nettoAmounts.push(`7%: ${n7.toFixed(2)}`);
+    if (b0) nettoAmounts.push(`0%: ${b0.toFixed(2)}`);
+    doc.text(`Netto:  ${nettoAmounts.join(' | ') || '-'} | Gesamt: ${billNetto.toFixed(2)} EUR`);
 
     if (bill.comment) {
       doc.text(`Notiz: ${bill.comment}`);
