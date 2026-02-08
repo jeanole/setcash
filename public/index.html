@@ -603,7 +603,7 @@
             const b7 = bill.brutto7 || 0;
             const b0 = bill.brutto0 || 0;
             const total = b19 + b7 + b0 || bill.amount || 0;
-            const nettoTotal = bill.nettoAmount || 0;
+            const nettoTotal = b19 / 1.19 + b7 / 1.07 + b0;
             const motiveDisplay = formatAllocations(bill.motiveAllocations) || escapeHtml(bill.motive);
             const categoryDisplay = formatAllocations(bill.categoryAllocations);
             return `
