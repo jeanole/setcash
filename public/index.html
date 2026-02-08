@@ -34,6 +34,12 @@
               <label>Brutto 19% (EUR) <input type="number" name="brutto19" step="0.01" min="0" value="0"></label>
               <label>Brutto 7% (EUR) <input type="number" name="brutto7" step="0.01" min="0" value="0"></label>
               <label>Brutto 0% (EUR) <input type="number" name="brutto0" step="0.01" min="0" value="0"></label>
+              <div style="background:#f8f9fa; padding:8px 12px; border-radius:6px; display:flex; gap:16px; flex-wrap:wrap; font-size:14px;">
+                <span>Netto 19%: <strong id="uploadNetto19">0,00 €</strong></span>
+                <span>Netto 7%: <strong id="uploadNetto7">0,00 €</strong></span>
+                <span>Netto 0%: <strong id="uploadNetto0">0,00 €</strong></span>
+                <span>Netto Total: <strong id="uploadNettoTotal" style="color:#2c3e50">0,00 €</strong></span>
+              </div>
               <label>Vendor <input name="vendor"></label>
               <label>Item <input name="item"></label>
               <label>Comment <input name="comment"></label>
@@ -71,10 +77,11 @@
                   <th>Type</th>
                   <th>Vendor</th>
                   <th>Item</th>
-                  <th>19%</th>
-                  <th>7%</th>
-                  <th>0%</th>
-                  <th>Total</th>
+                  <th>Brutto 19%</th>
+                  <th>Brutto 7%</th>
+                  <th>Brutto 0%</th>
+                  <th>Brutto</th>
+                  <th>Netto</th>
                   <th>Motive / Kategorie</th>
                   <th>Actions</th>
                 </tr>
@@ -274,6 +281,12 @@
                 <label>Brutto 7% (EUR) <input type="number" id="detailBrutto7" name="brutto7" step="0.01" min="0"></label>
                 <label>Brutto 0% (EUR) <input type="number" id="detailBrutto0" name="brutto0" step="0.01" min="0"></label>
               </div>
+              <div class="form-row" style="background:#f8f9fa; padding:8px; border-radius:6px;">
+                <label>Netto 19% <span id="detailNetto19" style="font-weight:600"></span></label>
+                <label>Netto 7% <span id="detailNetto7" style="font-weight:600"></span></label>
+                <label>Netto 0% <span id="detailNetto0" style="font-weight:600"></span></label>
+                <label>Netto Total <span id="detailNettoTotal" style="font-weight:700; color:#2c3e50"></span></label>
+              </div>
               <div class="form-row">
                 <label>Comment <input type="text" id="detailComment" name="comment"></label>
               </div>
@@ -339,6 +352,23 @@
 
       function formatCurrency(amount) {
         return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(amount || 0);
+      }
+
+      // Parse number accepting both comma and dot as decimal separator
+      function parseNum(val) {
+        if (typeof val === 'number') return val;
+        if (!val) return 0;
+        // Remove thousands separators (dots when comma is decimal), then replace comma with dot
+        var s = String(val).trim();
+        // If both dot and comma exist, the last one is the decimal separator
+        var lastDot = s.lastIndexOf('.');
+        var lastComma = s.lastIndexOf(',');
+        if (lastComma > lastDot) {
+          // Comma is decimal separator: remove dots (thousands), replace comma with dot
+          s = s.replace(/\./g, '').replace(',', '.');
+        }
+        // else dot is decimal or no comma present — parseFloat handles it
+        return parseFloat(s) || 0;
       }
 
       function showMessage(elementId, text, isError) {
@@ -496,6 +526,39 @@
         };
       }
 
+      // ========== Netto calculation helper ==========
+      function calcNetto(brutto, taxRate) {
+        return (parseFloat(brutto) || 0) / (1 + taxRate);
+      }
+
+      function updateDetailNetto() {
+        const b19 = parseFloat(document.getElementById('detailBrutto19').value) || 0;
+        const b7 = parseFloat(document.getElementById('detailBrutto7').value) || 0;
+        const b0 = parseFloat(document.getElementById('detailBrutto0').value) || 0;
+        const n19 = b19 / 1.19;
+        const n7 = b7 / 1.07;
+        const n0 = b0;
+        document.getElementById('detailNetto19').textContent = formatCurrency(n19);
+        document.getElementById('detailNetto7').textContent = formatCurrency(n7);
+        document.getElementById('detailNetto0').textContent = formatCurrency(n0);
+        document.getElementById('detailNettoTotal').textContent = formatCurrency(n19 + n7 + n0);
+      }
+
+      // ========== Comma/dot decimal handling for number inputs ==========
+      // Intercept comma key on type="number" inputs and convert to dot
+      document.addEventListener('keydown', function(e) {
+        if (e.key === ',' && e.target.tagName === 'INPUT' && e.target.type === 'number') {
+          e.preventDefault();
+          // Insert a dot at cursor position
+          var inp = e.target;
+          var start = inp.selectionStart;
+          var val = inp.value;
+          inp.value = val.slice(0, start) + '.' + val.slice(inp.selectionEnd);
+          inp.setSelectionRange(start + 1, start + 1);
+          inp.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      });
+
       // ========== Tab switching ==========
       document.querySelectorAll('.tab').forEach(tab => {
         tab.addEventListener('click', () => {
@@ -531,7 +594,7 @@
           allLogs = await logsRes.json();
 
           if (allBills.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="13">No bills yet.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="14">No bills yet.</td></tr>';
             return;
           }
           const isAdmin = currentUser && currentUser.admin;
@@ -540,6 +603,7 @@
             const b7 = bill.brutto7 || 0;
             const b0 = bill.brutto0 || 0;
             const total = b19 + b7 + b0 || bill.amount || 0;
+            const nettoTotal = bill.nettoAmount || 0;
             const motiveDisplay = formatAllocations(bill.motiveAllocations) || escapeHtml(bill.motive);
             const categoryDisplay = formatAllocations(bill.categoryAllocations);
             return `
@@ -555,12 +619,13 @@
               <td>${b7 ? formatCurrency(b7) : '-'}</td>
               <td>${b0 ? formatCurrency(b0) : '-'}</td>
               <td><strong>${formatCurrency(total)}</strong></td>
+              <td><strong>${formatCurrency(nettoTotal)}</strong></td>
               <td>${motiveDisplay}${categoryDisplay ? '<br><small>' + categoryDisplay + '</small>' : ''}</td>
               <td><button class="small" onclick="event.stopPropagation(); openBillDetail(${bill.id})">View</button></td>
             </tr>`;
           }).join('');
         } catch (e) {
-          tbody.innerHTML = '<tr><td colspan="13">Error loading bills.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="14">Error loading bills.</td></tr>';
         }
         // Reset selection state
         const selectAll = document.getElementById('selectAllBills');
@@ -785,6 +850,9 @@
         document.getElementById('detailBrutto0').value = bill.brutto0 || 0;
         document.getElementById('detailComment').value = bill.comment || '';
 
+        // Show netto values
+        updateDetailNetto();
+
         // Calculate total amount
         const billTotal = (bill.brutto19 || 0) + (bill.brutto7 || 0) + (bill.brutto0 || 0);
 
@@ -792,7 +860,7 @@
         createAllocationWidget('detailMotiveAlloc', 'motive', motivesData, bill.motiveAllocations || [], billTotal);
         createAllocationWidget('detailCategoryAlloc', 'category', categoriesData, bill.categoryAllocations || [], billTotal);
 
-        // Update allocation amounts when brutto values change in detail form
+        // Update allocation amounts and netto display when brutto values change
         const detailBruttoInputs = ['detailBrutto19', 'detailBrutto7', 'detailBrutto0'].map(id =>
           document.getElementById(id)
         );
@@ -801,6 +869,7 @@
             const total = detailBruttoInputs.reduce((sum, inp) => sum + (parseFloat(inp.value) || 0), 0);
             document.getElementById('detailMotiveAlloc').updateAmount(total);
             document.getElementById('detailCategoryAlloc').updateAmount(total);
+            updateDetailNetto();
           });
         });
 
@@ -1231,8 +1300,9 @@
             var ct = cellTooltip(cSpent, val);
             rowTotal += val;
             if (isAdmin) {
+              var displayVal = val ? val.toFixed(2).replace('.', ',') : '0,00';
               html += '<td class="bm-cell bm-cell-editable' + (cc ? ' ' + cc : '') + '"' + (ct ? ' title="' + escapeHtml(ct) + '"' : '') + '>'
-                + '<input type="number" class="budget-cell-input" step="0.01" min="0" value="' + val + '" data-cat="' + cat.id + '" data-mot="' + mot.id + '">'
+                + '<input type="text" inputmode="decimal" class="budget-cell-input" value="' + displayVal + '" data-cat="' + cat.id + '" data-mot="' + mot.id + '">'
                 + '</td>';
             } else {
               html += '<td class="bm-cell' + (cc ? ' ' + cc : '') + '"' + (ct ? ' title="' + escapeHtml(ct) + '"' : '') + '>'
@@ -1304,9 +1374,20 @@
 
         // Wire up admin interactions
         if (isAdmin) {
-          // Live total updates on cell input
+          // Live total updates on cell input + format on blur
           container.querySelectorAll('.budget-cell-input').forEach(function(inp) {
             inp.addEventListener('input', updateBudgetTotals);
+            inp.addEventListener('focus', function() {
+              // On focus, show raw number for easy editing
+              var num = parseNum(inp.value);
+              inp.value = num ? num.toString().replace('.', ',') : '';
+              inp.select();
+            });
+            inp.addEventListener('blur', function() {
+              // On blur, format with comma
+              var num = parseNum(inp.value);
+              inp.value = num.toFixed(2).replace('.', ',');
+            });
           });
 
           // Helper: turn a header cell into an inline edit input
@@ -1482,7 +1563,7 @@
         // Update matrix from inputs and refresh cell appearance
         document.querySelectorAll('.budget-cell-input').forEach(function(inp) {
           var key = inp.dataset.cat + '_' + inp.dataset.mot;
-          var newVal = parseFloat(inp.value) || 0;
+          var newVal = parseNum(inp.value);
           budgetData.matrix[key] = newVal;
           var td = inp.closest('td');
           var cSpent = cellSpending[key] || 0;
@@ -1547,7 +1628,7 @@
           cells.push({
             category_id: parseInt(inp.dataset.cat),
             motive_id: parseInt(inp.dataset.mot),
-            amount: parseFloat(inp.value) || 0
+            amount: parseNum(inp.value)
           });
         });
         try {
@@ -1588,15 +1669,25 @@
         createAllocationWidget('uploadMotiveAlloc', 'motive', motivesData, [], 0);
         createAllocationWidget('uploadCategoryAlloc', 'category', categoriesData, [], 0);
 
-        // Update allocation amounts when brutto values change
+        // Update allocation amounts and netto display when brutto values change
         const bruttoInputs = ['brutto19', 'brutto7', 'brutto0'].map(name =>
           document.querySelector(`#uploadForm input[name="${name}"]`)
         );
+        function updateUploadNetto() {
+          const b19 = parseFloat(bruttoInputs[0].value) || 0;
+          const b7 = parseFloat(bruttoInputs[1].value) || 0;
+          const b0 = parseFloat(bruttoInputs[2].value) || 0;
+          document.getElementById('uploadNetto19').textContent = formatCurrency(b19 / 1.19);
+          document.getElementById('uploadNetto7').textContent = formatCurrency(b7 / 1.07);
+          document.getElementById('uploadNetto0').textContent = formatCurrency(b0);
+          document.getElementById('uploadNettoTotal').textContent = formatCurrency(b19 / 1.19 + b7 / 1.07 + b0);
+        }
         bruttoInputs.forEach(input => {
           input.addEventListener('input', () => {
             const total = bruttoInputs.reduce((sum, inp) => sum + (parseFloat(inp.value) || 0), 0);
             document.getElementById('uploadMotiveAlloc').updateAmount(total);
             document.getElementById('uploadCategoryAlloc').updateAmount(total);
+            updateUploadNetto();
           });
         });
 

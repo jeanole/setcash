@@ -182,6 +182,15 @@ db.exec(`
   );
 `);
 
+// Add netto_amount column if missing (migration)
+try {
+  db.prepare("SELECT netto_amount FROM bills LIMIT 1").get();
+} catch (e) {
+  db.exec("ALTER TABLE bills ADD COLUMN netto_amount REAL DEFAULT 0");
+  db.exec("UPDATE bills SET netto_amount = COALESCE(brutto19,0)/1.19 + COALESCE(brutto7,0)/1.07 + COALESCE(brutto0,0)");
+  console.log('Migrated: added netto_amount column and backfilled');
+}
+
 // Legacy JSON helpers (for migration only)
 function loadJSON(file, defaultValue = []) {
   try {
@@ -638,27 +647,27 @@ app.get('/api/budget-matrix', ensureAuth, (req, res) => {
     grandTotal += r.amount || 0;
   }
 
-  // Spending per motive (proportional via junction table)
+  // Spending per motive (proportional via junction table, netto)
   const motiveSpending = {};
   db.prepare(`
-    SELECT bm.motive_id, SUM(b.amount * bm.percentage / 100) as spent
+    SELECT bm.motive_id, SUM(b.netto_amount * bm.percentage / 100) as spent
     FROM bill_motives bm JOIN bills b ON b.id = bm.bill_id
     GROUP BY bm.motive_id
   `).all().forEach(r => { motiveSpending[r.motive_id] = r.spent || 0; });
 
-  // Spending per category (proportional via junction table)
+  // Spending per category (proportional via junction table, netto)
   const categorySpending = {};
   db.prepare(`
-    SELECT bc.category_id, SUM(b.amount * bc.percentage / 100) as spent
+    SELECT bc.category_id, SUM(b.netto_amount * bc.percentage / 100) as spent
     FROM bill_categories bc JOIN bills b ON b.id = bc.bill_id
     GROUP BY bc.category_id
   `).all().forEach(r => { categorySpending[r.category_id] = r.spent || 0; });
 
-  // Spending per cell (motive x category intersection)
+  // Spending per cell (motive x category intersection, netto)
   const cellSpending = {};
   db.prepare(`
     SELECT bm.motive_id, bc.category_id,
-      SUM(b.amount * bm.percentage / 100 * bc.percentage / 100) as spent
+      SUM(b.netto_amount * bm.percentage / 100 * bc.percentage / 100) as spent
     FROM bill_motives bm
     JOIN bill_categories bc ON bc.bill_id = bm.bill_id
     JOIN bills b ON b.id = bm.bill_id
@@ -786,6 +795,10 @@ app.get('/api/bills', ensureAuth, (req, res) => {
     brutto7: b.brutto7,
     brutto0: b.brutto0,
     amount: b.amount,
+    netto19: (b.brutto19 || 0) / 1.19,
+    netto7: (b.brutto7 || 0) / 1.07,
+    netto0: b.brutto0 || 0,
+    nettoAmount: b.netto_amount || 0,
     filename: b.filename,
     file: b.file,
     motiveAllocations: motivesByBill[b.id] || [],
@@ -841,9 +854,11 @@ app.post('/upload', ensureAuth, upload.single('photo'), (req, res) => {
     filename = req.file.originalname;
   }
 
+  const nettoAmount = b19 / 1.19 + b7 / 1.07 + b0;
+
   const result = db.prepare(`INSERT INTO bills
-    (date, email, bill_number, type, vendor, item, comment, motive, brutto19, brutto7, brutto0, amount, filename, file)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+    (date, email, bill_number, type, vendor, item, comment, motive, brutto19, brutto7, brutto0, amount, netto_amount, filename, file)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
     new Date().toISOString(),
     req.user.email,
     billNumber,
@@ -856,6 +871,7 @@ app.post('/upload', ensureAuth, upload.single('photo'), (req, res) => {
     b7,
     b0,
     b19 + b7 + b0,
+    nettoAmount,
     filename,
     filePath
   );
@@ -940,12 +956,14 @@ app.put('/api/bills/:id', ensureAuth, (req, res) => {
   }
 
   if (Object.keys(changes).length > 0) {
-    // Recalculate total amount
+    // Recalculate total amount and netto
     const newB19 = changes.brutto19 !== undefined ? changes.brutto19 : bill.brutto19;
     const newB7 = changes.brutto7 !== undefined ? changes.brutto7 : bill.brutto7;
     const newB0 = changes.brutto0 !== undefined ? changes.brutto0 : bill.brutto0;
     updates.push('amount = ?');
     params.push((newB19 || 0) + (newB7 || 0) + (newB0 || 0));
+    updates.push('netto_amount = ?');
+    params.push((newB19 || 0) / 1.19 + (newB7 || 0) / 1.07 + (newB0 || 0));
 
     params.push(id);
     db.prepare(`UPDATE bills SET ${updates.join(', ')} WHERE id = ?`).run(...params);
@@ -1027,9 +1045,9 @@ app.get('/api/bills/log', ensureAuth, (req, res) => {
 });
 
 app.get('/api/bills/by-motive', ensureAuth, (req, res) => {
-  // Use proportional calculation via junction table
+  // Use proportional calculation via junction table (netto)
   const allocated = db.prepare(`
-    SELECT bm.motive_id, m.name as motive, SUM(b.amount * bm.percentage / 100) as spent
+    SELECT bm.motive_id, m.name as motive, SUM(b.netto_amount * bm.percentage / 100) as spent
     FROM bill_motives bm
     JOIN bills b ON b.id = bm.bill_id
     JOIN motives m ON m.id = bm.motive_id
@@ -1038,7 +1056,7 @@ app.get('/api/bills/by-motive', ensureAuth, (req, res) => {
 
   // Also find bills with no motive allocations (uncategorized)
   const uncatSpent = db.prepare(`
-    SELECT SUM(b.amount) as spent FROM bills b
+    SELECT SUM(b.netto_amount) as spent FROM bills b
     WHERE b.id NOT IN (SELECT DISTINCT bill_id FROM bill_motives)
   `).get();
 
@@ -1065,7 +1083,7 @@ app.get('/api/bills/by-motive', ensureAuth, (req, res) => {
 
 app.get('/api/bills/by-category', ensureAuth, (req, res) => {
   const allocated = db.prepare(`
-    SELECT bc.category_id, c.name as category, SUM(b.amount * bc.percentage / 100) as spent
+    SELECT bc.category_id, c.name as category, SUM(b.netto_amount * bc.percentage / 100) as spent
     FROM bill_categories bc
     JOIN bills b ON b.id = bc.bill_id
     JOIN categories c ON c.id = bc.category_id
@@ -1073,7 +1091,7 @@ app.get('/api/bills/by-category', ensureAuth, (req, res) => {
   `).all();
 
   const uncatSpent = db.prepare(`
-    SELECT SUM(b.amount) as spent FROM bills b
+    SELECT SUM(b.netto_amount) as spent FROM bills b
     WHERE b.id NOT IN (SELECT DISTINCT bill_id FROM bill_categories)
   `).get();
 
