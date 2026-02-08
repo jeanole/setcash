@@ -93,13 +93,13 @@
 
         <div id="tab-spending" class="tab-content">
           <div class="card">
-            <h2>Spending by Motive</h2>
+            <h2>Spending by Motive <span style="font-size:0.65em; font-weight:400; color:#7f8c8d">(netto)</span></h2>
             <table id="spendingTable" class="data-table">
               <thead>
                 <tr>
                   <th>Motive</th>
-                  <th>Budget</th>
-                  <th>Spent</th>
+                  <th>Budget (netto)</th>
+                  <th>Spent (netto)</th>
                   <th>Remaining</th>
                   <th>Used</th>
                 </tr>
@@ -117,13 +117,13 @@
             </table>
           </div>
           <div class="card">
-            <h2>Spending by Kategorie</h2>
+            <h2>Spending by Kategorie <span style="font-size:0.65em; font-weight:400; color:#7f8c8d">(netto)</span></h2>
             <table id="categorySpendingTable" class="data-table">
               <thead>
                 <tr>
                   <th>Kategorie</th>
-                  <th>Budget</th>
-                  <th>Spent</th>
+                  <th>Budget (netto)</th>
+                  <th>Spent (netto)</th>
                   <th>Remaining</th>
                   <th>Used</th>
                 </tr>
@@ -199,7 +199,7 @@
         <div id="tab-budget" class="tab-content">
           <div class="card">
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:16px;">
-              <h2 style="margin:0">Budget Matrix</h2>
+              <h2 style="margin:0">Budget Matrix <span style="font-size:0.65em; font-weight:400; color:#7f8c8d">(netto)</span></h2>
               <div style="text-align:right;">
                 <div id="budgetGrandTotal" style="font-size:1.1em; font-weight:600; color:#2c3e50;"></div>
                 <div id="budgetGrandSpent" style="font-size:1.1em; font-weight:600;"></div>
@@ -1171,7 +1171,7 @@
           document.getElementById('budgetMatrixContainer').innerHTML = '<p>Error loading budget matrix.</p>';
           return;
         }
-        document.getElementById('budgetGrandTotal').textContent = 'Total Budget: ' + formatCurrency(budgetData.grandTotal);
+        document.getElementById('budgetGrandTotal').textContent = 'Total Budget (netto): ' + formatCurrency(budgetData.grandTotal);
         // Compute total spent
         var ms = budgetData.motiveSpending || {};
         var totalSpent = 0;
@@ -1180,7 +1180,7 @@
         var spentCls = budgetData.grandTotal <= 0 ? (totalSpent > 0 ? 'bm-spent-over' : '')
           : totalSpent / budgetData.grandTotal >= 1 ? 'bm-spent-over'
           : totalSpent / budgetData.grandTotal >= 0.8 ? 'bm-spent-warn' : 'bm-spent-ok';
-        spentEl.textContent = 'Total Ausgaben: ' + formatCurrency(totalSpent);
+        spentEl.textContent = 'Total Ausgaben (netto): ' + formatCurrency(totalSpent);
         spentEl.className = spentCls;
         renderBudgetMatrix();
       }
@@ -1226,8 +1226,8 @@
           if (spent <= 0 && budget <= 0) return '';
           var remaining = budget - spent;
           var pct = budget > 0 ? (spent / budget * 100).toFixed(1) : '—';
-          return 'Budget: ' + formatCurrency(budget) + '\n'
-            + 'Ausgaben: ' + formatCurrency(spent) + '\n'
+          return 'Budget (netto): ' + formatCurrency(budget) + '\n'
+            + 'Ausgaben (netto): ' + formatCurrency(spent) + '\n'
             + 'Verbleibend: ' + formatCurrency(remaining) + '\n'
             + 'Verbraucht: ' + pct + '%';
         }
@@ -1264,8 +1264,8 @@
             + '</th>';
         }
 
-        html += '<th class="bm-total-header">Budget</th>';
-        html += '<th class="bm-total-header bm-spent-header">Ausgaben</th>';
+        html += '<th class="bm-total-header">Budget (netto)</th>';
+        html += '<th class="bm-total-header bm-spent-header">Ausgaben (netto)</th>';
         html += '</tr></thead><tbody>';
 
         // Data rows
@@ -1336,7 +1336,7 @@
         }
 
         // Footer: budget totals row
-        html += '</tbody><tfoot><tr><th class="bm-total-header">Budget</th>';
+        html += '</tbody><tfoot><tr><th class="bm-total-header">Budget (netto)</th>';
         var footerGrand = 0;
         for (var mi3 = 0; mi3 < motives.length; mi3++) {
           var colTotal = 0;
@@ -1352,7 +1352,7 @@
         html += '</tr>';
 
         // Footer: spent totals row
-        html += '<tr><th class="bm-total-header bm-spent-header">Ausgaben</th>';
+        html += '<tr><th class="bm-total-header bm-spent-header">Ausgaben (netto)</th>';
         var footerSpentGrand = 0;
         for (var mi4 = 0; mi4 < motives.length; mi4++) {
           var motSpent = motiveSpending[motives[mi4].id] || 0;
@@ -1546,8 +1546,8 @@
           if (spent <= 0 && budget <= 0) return '';
           var remaining = budget - spent;
           var pct = budget > 0 ? (spent / budget * 100).toFixed(1) : '—';
-          return 'Budget: ' + formatCurrency(budget) + '\n'
-            + 'Ausgaben: ' + formatCurrency(spent) + '\n'
+          return 'Budget (netto): ' + formatCurrency(budget) + '\n'
+            + 'Ausgaben (netto): ' + formatCurrency(spent) + '\n'
             + 'Verbleibend: ' + formatCurrency(remaining) + '\n'
             + 'Verbraucht: ' + pct + '%';
         }
@@ -1611,7 +1611,7 @@
         if (grandCell) grandCell.innerHTML = '<strong>' + formatCurrency(footerGrand) + '</strong>';
 
         // Update header grand total + spent color
-        document.getElementById('budgetGrandTotal').textContent = 'Total Budget: ' + formatCurrency(footerGrand);
+        document.getElementById('budgetGrandTotal').textContent = 'Total Budget (netto): ' + formatCurrency(footerGrand);
         var totalSpent = 0;
         for (var k in motiveSpending) totalSpent += motiveSpending[k] || 0;
         var spentEl = document.getElementById('budgetGrandSpent');
