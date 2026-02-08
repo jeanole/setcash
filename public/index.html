@@ -200,16 +200,18 @@
           <div class="card">
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:16px;">
               <h2 style="margin:0">Budget Matrix <span style="font-size:0.65em; font-weight:400; color:#7f8c8d">(netto)</span></h2>
-              <div style="text-align:right;">
-                <div id="budgetGrandTotal" style="font-size:1.1em; font-weight:600; color:#2c3e50;"></div>
-                <div id="budgetGrandSpent" style="font-size:1.1em; font-weight:600;"></div>
+              <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                <div id="budgetSaveWrap" class="admin-only" style="display:none;">
+                  <button id="budgetSaveBtn" onclick="saveBudgetMatrix()">Save All Changes</button>
+                  <span id="budgetSaveResult" style="margin-left:8px;"></span>
+                </div>
+                <div style="text-align:right;">
+                  <div id="budgetGrandTotal" style="font-size:1.1em; font-weight:600; color:#2c3e50;"></div>
+                  <div id="budgetGrandSpent" style="font-size:1.1em; font-weight:600;"></div>
+                </div>
               </div>
             </div>
             <div id="budgetMatrixContainer" style="overflow-x:auto;"></div>
-            <div id="budgetSaveWrap" class="admin-only" style="display:none; margin-top:16px;">
-              <button id="budgetSaveBtn" onclick="saveBudgetMatrix()">Save All Changes</button>
-              <span id="budgetSaveResult" style="margin-left:12px;"></span>
-            </div>
             <div style="margin-top:16px; padding-top:16px; border-top:1px solid #eee;">
               <button class="secondary" onclick="window.open('/api/budget-report','_blank')">Export Budget PDF</button>
             </div>
