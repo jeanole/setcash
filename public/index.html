@@ -29,7 +29,22 @@
           <div class="card">
             <h2>Upload Bill</h2>
             <form id="uploadForm">
-              <label>Photo (optional) <input type="file" name="photo" accept="image/*"></label>
+              <div>
+                <label style="margin-bottom:8px">Photos (optional, max 10)</label>
+                <div class="photo-upload-area" id="uploadPhotoArea">
+                  <div class="photo-thumbnails" id="uploadThumbnails"></div>
+                  <div class="photo-upload-buttons">
+                    <label class="photo-upload-btn">
+                      <input type="file" accept="image/*" multiple id="uploadFileInput" style="display:none">
+                      Choose Files
+                    </label>
+                    <label class="photo-upload-btn photo-camera-btn">
+                      <input type="file" accept="image/*" capture="environment" id="uploadCameraInput" style="display:none">
+                      Take Photo
+                    </label>
+                  </div>
+                </div>
+              </div>
               <label>Type <select name="type"><option>Kauf</option><option>Leih</option><option>Verbrauch</option></select></label>
               <label>Brutto 19% (EUR) <input type="number" name="brutto19" step="0.01" min="0" value="0"></label>
               <label>Brutto 7% (EUR) <input type="number" name="brutto7" step="0.01" min="0" value="0"></label>
@@ -246,17 +261,29 @@
         </div>
         <div class="modal-body">
           <div class="bill-image-section">
-            <h3>Bill Image</h3>
-            <div id="billImageContainer">
-              <p id="noImageText">No image available</p>
-              <img id="billImage" style="display:none; cursor:pointer" onclick="openImageModal()" title="Click to view full size" />
+            <h3>Images <span id="imageCounter" style="font-weight:400; font-size:0.85em; color:#7f8c8d"></span></h3>
+            <div id="billGallery">
+              <p id="noImageText">No images uploaded</p>
+              <div id="galleryCarousel" class="gallery-carousel" style="display:none">
+                <div class="gallery-viewport">
+                  <div class="gallery-track" id="galleryTrack"></div>
+                </div>
+                <button class="gallery-nav gallery-prev" id="galleryPrev" onclick="galleryNav(-1)">&lsaquo;</button>
+                <button class="gallery-nav gallery-next" id="galleryNext" onclick="galleryNav(1)">&rsaquo;</button>
+                <div class="gallery-dots" id="galleryDots"></div>
+              </div>
             </div>
             <div class="bill-image-actions">
               <a id="downloadLink" style="display:none"><button type="button" class="small">Download</button></a>
-              <form id="replaceImageForm" class="inline-form">
-                <input type="file" name="photo" accept="image/*" id="replaceImageInput">
-                <button type="submit" class="small secondary">Replace Image</button>
-              </form>
+              <button type="button" class="small danger" id="deleteImageBtn" style="display:none" onclick="deleteCurrentImage()">Delete Image</button>
+              <label class="photo-upload-btn small" style="display:none" id="addImageLabel">
+                <input type="file" accept="image/*" multiple id="addImageInput" style="display:none">
+                Add Images
+              </label>
+              <label class="photo-upload-btn photo-camera-btn small" style="display:none" id="addCameraLabel">
+                <input type="file" accept="image/*" capture="environment" id="addCameraInput" style="display:none">
+                Take Photo
+              </label>
             </div>
             <div id="imageResult"></div>
           </div>
@@ -332,7 +359,10 @@
     <div id="imageModal" class="modal" style="display:none" onclick="closeImageModal()">
       <div class="image-modal-content" onclick="event.stopPropagation()">
         <button class="modal-close" onclick="closeImageModal()">&times;</button>
+        <button class="gallery-nav gallery-prev fullsize-nav" id="fullPrev" onclick="fullsizeNav(-1)">&lsaquo;</button>
         <img id="fullSizeImage" />
+        <button class="gallery-nav gallery-next fullsize-nav" id="fullNext" onclick="fullsizeNav(1)">&rsaquo;</button>
+        <div class="fullsize-counter" id="fullsizeCounter"></div>
       </div>
     </div>
 
@@ -342,6 +372,13 @@
       let allBills = [];
       let allLogs = [];
       let currentBillId = null;
+
+      // Multi-image upload state
+      let pendingFiles = [];
+
+      // Gallery state
+      let galleryImages = [];
+      let galleryIndex = 0;
 
       function escapeHtml(text) {
         const div = document.createElement('div');
@@ -878,24 +915,10 @@
           });
         });
 
-        // Handle image
-        const img = document.getElementById('billImage');
-        const noImageText = document.getElementById('noImageText');
-        const downloadLink = document.getElementById('downloadLink');
-
-        if (bill.file) {
-          img.src = '/uploads/' + bill.file;
-          img.style.display = 'block';
-          noImageText.style.display = 'none';
-          downloadLink.href = '/uploads/' + bill.file;
-          downloadLink.download = bill.filename || 'bill';
-          downloadLink.style.display = 'inline-block';
-        } else {
-          img.style.display = 'none';
-          noImageText.style.display = 'block';
-          noImageText.textContent = 'No image uploaded';
-          downloadLink.style.display = 'none';
-        }
+        // Handle images (gallery)
+        galleryImages = bill.images || [];
+        galleryIndex = 0;
+        renderGallery();
 
         // Load edit history for this bill (by ID)
         const billLogs = allLogs.filter(log => log.billId === id);
@@ -926,19 +949,204 @@
       function closeModal() {
         document.getElementById('billModal').style.display = 'none';
         currentBillId = null;
-        document.getElementById('replaceImageInput').value = '';
+        galleryImages = [];
+        galleryIndex = 0;
       }
 
-      function openImageModal() {
-        const src = document.getElementById('billImage').src;
-        if (src) {
-          document.getElementById('fullSizeImage').src = src;
-          document.getElementById('imageModal').style.display = 'flex';
+      // ========== Gallery ==========
+      function renderGallery() {
+        const noImageText = document.getElementById('noImageText');
+        const carousel = document.getElementById('galleryCarousel');
+        const track = document.getElementById('galleryTrack');
+        const dots = document.getElementById('galleryDots');
+        const downloadLink = document.getElementById('downloadLink');
+        const deleteBtn = document.getElementById('deleteImageBtn');
+        const addLabel = document.getElementById('addImageLabel');
+        const addCamera = document.getElementById('addCameraLabel');
+        const counter = document.getElementById('imageCounter');
+
+        // Always show add buttons
+        addLabel.style.display = 'inline-block';
+        addCamera.style.display = 'inline-block';
+
+        if (galleryImages.length === 0) {
+          noImageText.style.display = 'block';
+          carousel.style.display = 'none';
+          downloadLink.style.display = 'none';
+          deleteBtn.style.display = 'none';
+          counter.textContent = '';
+          return;
         }
+
+        noImageText.style.display = 'none';
+        carousel.style.display = 'block';
+        deleteBtn.style.display = 'inline-block';
+
+        // Build track slides
+        track.innerHTML = galleryImages.map((img, i) =>
+          `<div class="gallery-slide"><img src="/uploads/${escapeHtml(img.file)}" onclick="openImageModal(${i})" title="Click to view full size" /></div>`
+        ).join('');
+
+        // Dots
+        dots.innerHTML = galleryImages.map((_, i) =>
+          `<span class="gallery-dot${i === galleryIndex ? ' active' : ''}" onclick="galleryGoTo(${i})"></span>`
+        ).join('');
+
+        // Counter
+        counter.textContent = `(${galleryIndex + 1} / ${galleryImages.length})`;
+
+        // Download link
+        const current = galleryImages[galleryIndex];
+        if (current) {
+          downloadLink.href = '/uploads/' + current.file;
+          downloadLink.download = current.filename || 'image';
+          downloadLink.style.display = 'inline-block';
+        }
+
+        // Nav visibility
+        document.getElementById('galleryPrev').style.display = galleryImages.length > 1 ? '' : 'none';
+        document.getElementById('galleryNext').style.display = galleryImages.length > 1 ? '' : 'none';
+
+        updateGalleryPosition();
+      }
+
+      function updateGalleryPosition() {
+        const track = document.getElementById('galleryTrack');
+        track.style.transform = `translateX(-${galleryIndex * 100}%)`;
+        // Update active dot
+        document.querySelectorAll('.gallery-dot').forEach((d, i) => {
+          d.classList.toggle('active', i === galleryIndex);
+        });
+        // Update counter and download link
+        const counter = document.getElementById('imageCounter');
+        if (galleryImages.length > 0) {
+          counter.textContent = `(${galleryIndex + 1} / ${galleryImages.length})`;
+          const current = galleryImages[galleryIndex];
+          const downloadLink = document.getElementById('downloadLink');
+          downloadLink.href = '/uploads/' + current.file;
+          downloadLink.download = current.filename || 'image';
+        }
+      }
+
+      function galleryNav(dir) {
+        if (galleryImages.length === 0) return;
+        galleryIndex = (galleryIndex + dir + galleryImages.length) % galleryImages.length;
+        updateGalleryPosition();
+      }
+
+      function galleryGoTo(idx) {
+        galleryIndex = idx;
+        updateGalleryPosition();
+      }
+
+      // Swipe support for gallery
+      (function() {
+        let touchStartX = 0;
+        let touchStartY = 0;
+        document.addEventListener('touchstart', function(e) {
+          if (e.target.closest('.gallery-viewport') || e.target.closest('.image-modal-content')) {
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+          }
+        }, { passive: true });
+        document.addEventListener('touchend', function(e) {
+          if (!touchStartX) return;
+          const dx = e.changedTouches[0].clientX - touchStartX;
+          const dy = e.changedTouches[0].clientY - touchStartY;
+          touchStartX = 0;
+          if (Math.abs(dx) < 40 || Math.abs(dy) > Math.abs(dx)) return; // Not a horizontal swipe
+
+          if (e.target.closest('.image-modal-content')) {
+            fullsizeNav(dx < 0 ? 1 : -1);
+          } else if (e.target.closest('.gallery-viewport')) {
+            galleryNav(dx < 0 ? 1 : -1);
+          }
+        }, { passive: true });
+      })();
+
+      function openImageModal(idx) {
+        if (idx !== undefined) galleryIndex = idx;
+        if (galleryImages.length === 0) return;
+        const current = galleryImages[galleryIndex];
+        document.getElementById('fullSizeImage').src = '/uploads/' + current.file;
+        updateFullsizeCounter();
+        document.getElementById('imageModal').style.display = 'flex';
       }
 
       function closeImageModal() {
         document.getElementById('imageModal').style.display = 'none';
+      }
+
+      function fullsizeNav(dir) {
+        if (galleryImages.length <= 1) return;
+        galleryIndex = (galleryIndex + dir + galleryImages.length) % galleryImages.length;
+        document.getElementById('fullSizeImage').src = '/uploads/' + galleryImages[galleryIndex].file;
+        updateFullsizeCounter();
+        updateGalleryPosition();
+      }
+
+      function updateFullsizeCounter() {
+        const el = document.getElementById('fullsizeCounter');
+        const prevBtn = document.getElementById('fullPrev');
+        const nextBtn = document.getElementById('fullNext');
+        if (galleryImages.length > 1) {
+          el.textContent = `${galleryIndex + 1} / ${galleryImages.length}`;
+          el.style.display = 'block';
+          prevBtn.style.display = '';
+          nextBtn.style.display = '';
+        } else {
+          el.style.display = 'none';
+          prevBtn.style.display = 'none';
+          nextBtn.style.display = 'none';
+        }
+      }
+
+      async function deleteCurrentImage() {
+        if (currentBillId === null || galleryImages.length === 0) return;
+        const img = galleryImages[galleryIndex];
+        if (!confirm('Delete this image?')) return;
+        try {
+          const res = await fetch(`/api/bills/${currentBillId}/images/${img.id}`, { method: 'DELETE' });
+          const j = await res.json();
+          if (j.ok) {
+            showMessage('imageResult', 'Image deleted', false);
+            await loadBills();
+            const bill = allBills.find(b => b.id === currentBillId);
+            if (bill) {
+              galleryImages = bill.images || [];
+              if (galleryIndex >= galleryImages.length) galleryIndex = Math.max(0, galleryImages.length - 1);
+              renderGallery();
+            }
+          } else {
+            showMessage('imageResult', 'Error: ' + (j.error || 'unknown'), true);
+          }
+        } catch (err) {
+          showMessage('imageResult', 'Error: ' + err.message, true);
+        }
+      }
+
+      async function addImagesToCurrentBill(files) {
+        if (currentBillId === null || !files || files.length === 0) return;
+        const formData = new FormData();
+        for (const f of files) formData.append('photos', f);
+        try {
+          const res = await fetch(`/api/bills/${currentBillId}/images`, { method: 'POST', body: formData });
+          const j = await res.json();
+          if (j.ok) {
+            showMessage('imageResult', `Added ${j.images.length} image(s)`, false);
+            await loadBills();
+            const bill = allBills.find(b => b.id === currentBillId);
+            if (bill) {
+              galleryImages = bill.images || [];
+              galleryIndex = galleryImages.length - 1; // Show last added
+              renderGallery();
+            }
+          } else {
+            showMessage('imageResult', 'Error: ' + (j.error || 'unknown'), true);
+          }
+        } catch (err) {
+          showMessage('imageResult', 'Error: ' + err.message, true);
+        }
       }
 
       async function deleteBill() {
@@ -1018,37 +1226,14 @@
         }
       });
 
-      // Replace image
-      document.getElementById('replaceImageForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        if (currentBillId === null) return;
-
-        const fileInput = document.getElementById('replaceImageInput');
-        if (!fileInput.files[0]) {
-          showMessage('imageResult', 'Please select a file', true);
-          return;
-        }
-
-        const formData = new FormData();
-        formData.append('photo', fileInput.files[0]);
-
-        try {
-          const res = await fetch('/api/bills/' + currentBillId + '/image', {
-            method: 'POST',
-            body: formData
-          });
-          const j = await res.json();
-          if (j.ok) {
-            showMessage('imageResult', 'Image replaced!', false);
-            fileInput.value = '';
-            await loadBills();
-            openBillDetail(currentBillId);
-          } else {
-            showMessage('imageResult', 'Error: ' + (j.error || 'unknown'), true);
-          }
-        } catch (err) {
-          showMessage('imageResult', 'Error: ' + err.message, true);
-        }
+      // Add images to current bill
+      document.getElementById('addImageInput').addEventListener('change', function() {
+        if (this.files.length > 0) addImagesToCurrentBill(this.files);
+        this.value = '';
+      });
+      document.getElementById('addCameraInput').addEventListener('change', function() {
+        if (this.files.length > 0) addImagesToCurrentBill(this.files);
+        this.value = '';
       });
 
       function toggleSelectAll(checkbox) {
@@ -1704,6 +1889,46 @@
 
         }
 
+        // Multi-file upload preview
+        function renderUploadThumbnails() {
+          const container = document.getElementById('uploadThumbnails');
+          container.innerHTML = '';
+          pendingFiles.forEach((f, i) => {
+            const thumb = document.createElement('div');
+            thumb.className = 'photo-thumb';
+            const img = document.createElement('img');
+            img.src = URL.createObjectURL(f);
+            img.onload = function() { URL.revokeObjectURL(this.src); };
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'photo-thumb-remove';
+            removeBtn.textContent = '\u00d7';
+            removeBtn.onclick = function() {
+              pendingFiles.splice(i, 1);
+              renderUploadThumbnails();
+            };
+            thumb.appendChild(img);
+            thumb.appendChild(removeBtn);
+            container.appendChild(thumb);
+          });
+        }
+
+        document.getElementById('uploadFileInput').addEventListener('change', function() {
+          const newFiles = Array.from(this.files);
+          const space = 10 - pendingFiles.length;
+          pendingFiles.push(...newFiles.slice(0, space));
+          renderUploadThumbnails();
+          this.value = '';
+        });
+
+        document.getElementById('uploadCameraInput').addEventListener('change', function() {
+          if (this.files[0] && pendingFiles.length < 10) {
+            pendingFiles.push(this.files[0]);
+            renderUploadThumbnails();
+          }
+          this.value = '';
+        });
+
         document.getElementById('uploadForm').addEventListener('submit', async (e)=>{
           e.preventDefault();
           const form = e.target;
@@ -1729,7 +1954,19 @@
             }
           }
 
-          const data = new FormData(form);
+          const data = new FormData();
+          // Add form fields (excluding file inputs)
+          data.append('type', form.type.value);
+          data.append('brutto19', form.brutto19.value);
+          data.append('brutto7', form.brutto7.value);
+          data.append('brutto0', form.brutto0.value);
+          data.append('vendor', form.vendor.value);
+          data.append('item', form.item.value);
+          data.append('comment', form.comment.value);
+          // Add pending files
+          for (const f of pendingFiles) {
+            data.append('photos', f);
+          }
           // Add allocation data as JSON strings
           data.append('motiveAllocations', JSON.stringify(motiveAllocs));
           data.append('categoryAllocations', JSON.stringify(categoryAllocs));
@@ -1741,6 +1978,8 @@
             result.className = 'message success';
             result.textContent = 'Bill uploaded successfully!';
             form.reset();
+            pendingFiles = [];
+            renderUploadThumbnails();
             // Re-initialize allocation widgets
             createAllocationWidget('uploadMotiveAlloc', 'motive', motivesData, [], 0);
             createAllocationWidget('uploadCategoryAlloc', 'category', categoriesData, [], 0);

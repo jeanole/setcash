@@ -47,7 +47,7 @@ async function initGoogleServices() {
 }
 
 const app = express();
-const upload = multer();
+const upload = multer({ limits: { fileSize: 10 * 1024 * 1024 } }); // 10MB per file
 
 // Security: Block access to data directory
 app.use('/data', (req, res) => res.status(403).send('Forbidden'));
@@ -179,6 +179,16 @@ db.exec(`
     category_id INTEGER NOT NULL,
     amount REAL DEFAULT 0,
     UNIQUE(motive_id, category_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS bill_images (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    bill_id INTEGER NOT NULL,
+    filename TEXT,
+    file TEXT,
+    sort_order INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (bill_id) REFERENCES bills(id) ON DELETE CASCADE
   );
 `);
 
@@ -382,6 +392,25 @@ function migrateMotiveAllocations() {
   }
 }
 
+// Migrate existing bill images to bill_images table
+function migrateBillImages() {
+  const imgCount = db.prepare('SELECT COUNT(*) as count FROM bill_images').get().count;
+  if (imgCount > 0) return; // Already migrated
+
+  const bills = db.prepare("SELECT id, filename, file FROM bills WHERE file IS NOT NULL AND file != ''").all();
+  if (bills.length === 0) return;
+
+  const insert = db.prepare('INSERT INTO bill_images (bill_id, filename, file, sort_order) VALUES (?, ?, ?, 0)');
+  let migrated = 0;
+  for (const bill of bills) {
+    insert.run(bill.id, bill.filename || '', bill.file);
+    migrated++;
+  }
+  if (migrated > 0) {
+    console.log(`Migrated ${migrated} bill images to bill_images table`);
+  }
+}
+
 // Initialize default settings if none exist
 function initSettings() {
   const settingCount = db.prepare('SELECT COUNT(*) as count FROM settings').get().count;
@@ -399,6 +428,7 @@ initUsers();
 initMotives();
 initCategories();
 migrateMotiveAllocations();
+migrateBillImages();
 initSettings();
 
 // Helper to get all settings as object
@@ -770,6 +800,14 @@ app.get('/api/bills', ensureAuth, (req, res) => {
     FROM bill_categories bc JOIN categories c ON c.id = bc.category_id
   `).all();
 
+  // Bulk-fetch all images
+  const allImages = db.prepare('SELECT * FROM bill_images ORDER BY sort_order, id').all();
+  const imagesByBill = {};
+  for (const img of allImages) {
+    if (!imagesByBill[img.bill_id]) imagesByBill[img.bill_id] = [];
+    imagesByBill[img.bill_id].push({ id: img.id, filename: img.filename, file: img.file, sortOrder: img.sort_order });
+  }
+
   const motivesByBill = {};
   for (const a of allMotiveAllocs) {
     if (!motivesByBill[a.bill_id]) motivesByBill[a.bill_id] = [];
@@ -801,6 +839,7 @@ app.get('/api/bills', ensureAuth, (req, res) => {
     nettoAmount: b.netto_amount || 0,
     filename: b.filename,
     file: b.file,
+    images: imagesByBill[b.id] || [],
     motiveAllocations: motivesByBill[b.id] || [],
     categoryAllocations: categoriesByBill[b.id] || []
   }));
@@ -815,7 +854,7 @@ function calculateBillNumber(userEmail) {
   return `${group}.${position.toString().padStart(2, '0')}`;
 }
 
-app.post('/upload', ensureAuth, upload.single('photo'), (req, res) => {
+app.post('/upload', ensureAuth, upload.array('photos', 10), (req, res) => {
   const { type, vendor, comment, item, motive, brutto19, brutto7, brutto0 } = req.body;
   const b19 = parseFloat(brutto19) || 0;
   const b7 = parseFloat(brutto7) || 0;
@@ -834,25 +873,8 @@ app.post('/upload', ensureAuth, upload.single('photo'), (req, res) => {
     motiveDisplay = motiveAllocations.map(a => a.name || '').filter(Boolean).join(', ');
   }
 
-  let filePath = '';
-  let filename = '';
-
-  // Save file if uploaded
-  if (req.file) {
-    const userFolder = req.user.email.split('@')[0];
-    const uploadsDir = path.join(DATA_DIR, 'uploads', userFolder);
-    if (!fs.existsSync(path.join(DATA_DIR, 'uploads'))) fs.mkdirSync(path.join(DATA_DIR, 'uploads'));
-    if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir);
-
-    // Format: user_billNumber_date.ext (e.g., paula_1.01_2024-01-29.jpg)
-    const dateStr = new Date().toISOString().split('T')[0];
-    const ext = path.extname(req.file.originalname) || '.jpg';
-    const savedFilename = `${userFolder}_${billNumber}_${dateStr}${ext}`;
-    const savedFilePath = path.join(uploadsDir, savedFilename);
-    fs.writeFileSync(savedFilePath, req.file.buffer);
-    filePath = `${userFolder}/${savedFilename}`;
-    filename = req.file.originalname;
-  }
+  let firstFilePath = '';
+  let firstFilename = '';
 
   const nettoAmount = b19 / 1.19 + b7 / 1.07 + b0;
 
@@ -872,19 +894,52 @@ app.post('/upload', ensureAuth, upload.single('photo'), (req, res) => {
     b0,
     b19 + b7 + b0,
     nettoAmount,
-    filename,
-    filePath
+    '', // filename - will update after saving images
+    ''  // file - will update after saving images
   );
 
+  const billId = result.lastInsertRowid;
+
+  // Save uploaded files
+  const files = req.files || [];
+  if (files.length > 0) {
+    const userFolder = req.user.email.split('@')[0];
+    const uploadsDir = path.join(DATA_DIR, 'uploads', userFolder);
+    if (!fs.existsSync(path.join(DATA_DIR, 'uploads'))) fs.mkdirSync(path.join(DATA_DIR, 'uploads'));
+    if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir);
+
+    const insertImg = db.prepare('INSERT INTO bill_images (bill_id, filename, file, sort_order) VALUES (?, ?, ?, ?)');
+    const dateStr = new Date().toISOString().split('T')[0];
+
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      const ext = path.extname(f.originalname) || '.jpg';
+      const suffix = files.length > 1 ? `_${i + 1}` : '';
+      const savedFilename = `${userFolder}_${billNumber}_${dateStr}${suffix}${ext}`;
+      const savedFilePath = path.join(uploadsDir, savedFilename);
+      fs.writeFileSync(savedFilePath, f.buffer);
+      const relPath = `${userFolder}/${savedFilename}`;
+      insertImg.run(billId, f.originalname, relPath, i);
+
+      if (i === 0) {
+        firstFilePath = relPath;
+        firstFilename = f.originalname;
+      }
+    }
+
+    // Update legacy columns with first image for backward compat
+    db.prepare('UPDATE bills SET filename = ?, file = ? WHERE id = ?').run(firstFilename, firstFilePath, billId);
+  }
+
   // Save allocations to junction tables
-  saveAllocations(result.lastInsertRowid, motiveAllocations, categoryAllocations);
+  saveAllocations(billId, motiveAllocations, categoryAllocations);
 
   // Get the inserted bill for Google Sheets sync
-  const bill = db.prepare('SELECT * FROM bills WHERE id = ?').get(result.lastInsertRowid);
-  bill.motiveDisplay = getMotiveDisplayString(result.lastInsertRowid);
+  const bill = db.prepare('SELECT * FROM bills WHERE id = ?').get(billId);
+  bill.motiveDisplay = getMotiveDisplayString(billId);
   appendBillToSheet(bill);
 
-  res.json({ ok: true, id: result.lastInsertRowid });
+  res.json({ ok: true, id: billId });
 });
 
 app.put('/api/bills/:id', ensureAuth, (req, res) => {
@@ -981,6 +1036,19 @@ app.put('/api/bills/:id', ensureAuth, (req, res) => {
 
 app.delete('/api/bills/:id', ensureAdmin, (req, res) => {
   const id = parseInt(req.params.id);
+
+  // Clean up image files from disk
+  const images = db.prepare('SELECT file FROM bill_images WHERE bill_id = ?').all(id);
+  for (const img of images) {
+    if (img.file) {
+      const imgPath = path.join(DATA_DIR, 'uploads', img.file);
+      if (fs.existsSync(imgPath)) {
+        try { fs.unlinkSync(imgPath); } catch (e) { console.error('Failed to delete image file:', e.message); }
+      }
+    }
+  }
+
+  db.prepare('DELETE FROM bill_images WHERE bill_id = ?').run(id);
   db.prepare('DELETE FROM bill_motives WHERE bill_id = ?').run(id);
   db.prepare('DELETE FROM bill_categories WHERE bill_id = ?').run(id);
   const result = db.prepare('DELETE FROM bills WHERE id = ?').run(id);
@@ -996,6 +1064,19 @@ app.post('/api/bills/bulk-delete', ensureAdmin, (req, res) => {
   }
 
   const placeholders = ids.map(() => '?').join(',');
+
+  // Clean up image files from disk
+  const images = db.prepare(`SELECT file FROM bill_images WHERE bill_id IN (${placeholders})`).all(...ids);
+  for (const img of images) {
+    if (img.file) {
+      const imgPath = path.join(DATA_DIR, 'uploads', img.file);
+      if (fs.existsSync(imgPath)) {
+        try { fs.unlinkSync(imgPath); } catch (e) { console.error('Failed to delete image file:', e.message); }
+      }
+    }
+  }
+
+  db.prepare(`DELETE FROM bill_images WHERE bill_id IN (${placeholders})`).run(...ids);
   db.prepare(`DELETE FROM bill_motives WHERE bill_id IN (${placeholders})`).run(...ids);
   db.prepare(`DELETE FROM bill_categories WHERE bill_id IN (${placeholders})`).run(...ids);
   const result = db.prepare(`DELETE FROM bills WHERE id IN (${placeholders})`).run(...ids);
@@ -1004,6 +1085,91 @@ app.post('/api/bills/bulk-delete', ensureAdmin, (req, res) => {
   res.json({ ok: true, deleted: result.changes });
 });
 
+// Add images to existing bill
+app.post('/api/bills/:id/images', ensureAuth, upload.array('photos', 10), (req, res) => {
+  const id = parseInt(req.params.id);
+  const bill = db.prepare('SELECT * FROM bills WHERE id = ?').get(id);
+  if (!bill) return res.status(404).json({ error: 'Not found' });
+
+  const files = req.files || [];
+  if (files.length === 0) return res.status(400).json({ error: 'No files' });
+
+  // Check current image count
+  const currentCount = db.prepare('SELECT COUNT(*) as count FROM bill_images WHERE bill_id = ?').get(id).count;
+  if (currentCount + files.length > 10) {
+    return res.status(400).json({ error: 'Maximum 10 images per bill' });
+  }
+
+  const userFolder = bill.email.split('@')[0];
+  const uploadsDir = path.join(DATA_DIR, 'uploads', userFolder);
+  if (!fs.existsSync(path.join(DATA_DIR, 'uploads'))) fs.mkdirSync(path.join(DATA_DIR, 'uploads'));
+  if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir);
+
+  const insertImg = db.prepare('INSERT INTO bill_images (bill_id, filename, file, sort_order) VALUES (?, ?, ?, ?)');
+  const dateStr = new Date().toISOString().split('T')[0];
+  const newImages = [];
+
+  for (let i = 0; i < files.length; i++) {
+    const f = files[i];
+    const ext = path.extname(f.originalname) || '.jpg';
+    const sortOrder = currentCount + i;
+    const savedFilename = `${userFolder}_${bill.bill_number || id}_${dateStr}_${sortOrder}${ext}`;
+    const savedFilePath = path.join(uploadsDir, savedFilename);
+    fs.writeFileSync(savedFilePath, f.buffer);
+    const relPath = `${userFolder}/${savedFilename}`;
+    const imgResult = insertImg.run(id, f.originalname, relPath, sortOrder);
+    newImages.push({ id: imgResult.lastInsertRowid, filename: f.originalname, file: relPath, sortOrder });
+  }
+
+  // Update legacy columns with first image
+  syncLegacyImageColumns(id);
+
+  db.prepare('INSERT INTO editlog (timestamp, user, bill_id, changes) VALUES (?, ?, ?, ?)')
+    .run(new Date().toISOString(), req.user.email, id, JSON.stringify({ images: `added ${files.length}` }));
+
+  res.json({ ok: true, images: newImages });
+});
+
+// Delete single image from bill
+app.delete('/api/bills/:id/images/:imageId', ensureAuth, (req, res) => {
+  const billId = parseInt(req.params.id);
+  const imageId = parseInt(req.params.imageId);
+  const bill = db.prepare('SELECT * FROM bills WHERE id = ?').get(billId);
+  if (!bill) return res.status(404).json({ error: 'Bill not found' });
+
+  const image = db.prepare('SELECT * FROM bill_images WHERE id = ? AND bill_id = ?').get(imageId, billId);
+  if (!image) return res.status(404).json({ error: 'Image not found' });
+
+  // Delete file from disk
+  if (image.file) {
+    const imgPath = path.join(DATA_DIR, 'uploads', image.file);
+    if (fs.existsSync(imgPath)) {
+      try { fs.unlinkSync(imgPath); } catch (e) { console.error('Failed to delete image file:', e.message); }
+    }
+  }
+
+  db.prepare('DELETE FROM bill_images WHERE id = ?').run(imageId);
+
+  // Update legacy columns
+  syncLegacyImageColumns(billId);
+
+  db.prepare('INSERT INTO editlog (timestamp, user, bill_id, changes) VALUES (?, ?, ?, ?)')
+    .run(new Date().toISOString(), req.user.email, billId, JSON.stringify({ image: 'deleted' }));
+
+  res.json({ ok: true });
+});
+
+// Keep legacy bills.filename/file in sync with first image
+function syncLegacyImageColumns(billId) {
+  const firstImage = db.prepare('SELECT filename, file FROM bill_images WHERE bill_id = ? ORDER BY sort_order, id LIMIT 1').get(billId);
+  if (firstImage) {
+    db.prepare('UPDATE bills SET filename = ?, file = ? WHERE id = ?').run(firstImage.filename, firstImage.file, billId);
+  } else {
+    db.prepare('UPDATE bills SET filename = ?, file = ? WHERE id = ?').run('', '', billId);
+  }
+}
+
+// Legacy single image replace (backward compat)
 app.post('/api/bills/:id/image', ensureAuth, upload.single('photo'), (req, res) => {
   const id = parseInt(req.params.id);
   const bill = db.prepare('SELECT * FROM bills WHERE id = ?').get(id);
@@ -1015,7 +1181,6 @@ app.post('/api/bills/:id/image', ensureAuth, upload.single('photo'), (req, res) 
   if (!fs.existsSync(path.join(DATA_DIR, 'uploads'))) fs.mkdirSync(path.join(DATA_DIR, 'uploads'));
   if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir);
 
-  // Format: user_billNumber_date.ext (e.g., paula_1.01_2024-01-29.jpg)
   const dateStr = new Date().toISOString().split('T')[0];
   const ext = path.extname(req.file.originalname) || '.jpg';
   const filename = `${userFolder}_${bill.bill_number || id}_${dateStr}${ext}`;
@@ -1023,10 +1188,13 @@ app.post('/api/bills/:id/image', ensureAuth, upload.single('photo'), (req, res) 
   fs.writeFileSync(filePath, req.file.buffer);
 
   const file = `${userFolder}/${filename}`;
-  db.prepare('UPDATE bills SET file = ?, filename = ? WHERE id = ?').run(file, req.file.originalname, id);
+  // Also add to bill_images
+  db.prepare('INSERT INTO bill_images (bill_id, filename, file, sort_order) VALUES (?, ?, ?, ?)')
+    .run(id, req.file.originalname, file, 0);
+  syncLegacyImageColumns(id);
 
   db.prepare('INSERT INTO editlog (timestamp, user, bill_id, changes) VALUES (?, ?, ?, ?)')
-    .run(new Date().toISOString(), req.user.email, id, JSON.stringify({ image: 'replaced' }));
+    .run(new Date().toISOString(), req.user.email, id, JSON.stringify({ image: 'added' }));
 
   res.json({ ok: true, file });
 });
@@ -1773,38 +1941,59 @@ app.get('/api/report/:email', ensureAuth, async (req, res) => {
     }
     doc.moveDown(0.5);
 
-    // Image if exists
-    if (bill.file) {
+    // Images from bill_images table
+    const billImages = db.prepare('SELECT * FROM bill_images WHERE bill_id = ? ORDER BY sort_order, id').all(bill.id);
+    if (billImages.length > 0) {
+      for (let imgIdx = 0; imgIdx < billImages.length; imgIdx++) {
+        const img = billImages[imgIdx];
+        if (!img.file) continue;
+        const imagePath = path.join(DATA_DIR, 'uploads', img.file);
+        if (fs.existsSync(imagePath)) {
+          try {
+            const ext = path.extname(imagePath).toLowerCase();
+            if (['.jpg', '.jpeg', '.png'].includes(ext)) {
+              if (doc.y > 450) {
+                doc.addPage();
+              }
+              if (billImages.length > 1) {
+                doc.fontSize(8).fillColor('gray').text(`Bild ${imgIdx + 1} / ${billImages.length}`);
+                doc.fillColor('black');
+              }
+              const maxWidth = 400;
+              const maxHeight = 300;
+              doc.image(imagePath, {
+                fit: [maxWidth, maxHeight],
+                align: 'center'
+              });
+              doc.moveDown(0.5);
+            } else {
+              doc.fontSize(9).fillColor('gray').text(`[Bild: ${img.file} - Format nicht unterstutzt]`);
+              doc.fillColor('black');
+            }
+          } catch (imgErr) {
+            console.error('PDF image error:', imgErr.message);
+            doc.fontSize(9).fillColor('gray').text(`[Bild konnte nicht geladen werden: ${img.file}]`);
+            doc.fillColor('black');
+          }
+        } else {
+          doc.fontSize(9).fillColor('gray').text(`[Bild nicht gefunden: ${img.file}]`);
+          doc.fillColor('black');
+        }
+      }
+    } else if (bill.file) {
+      // Fallback to legacy column
       const imagePath = path.join(DATA_DIR, 'uploads', bill.file);
       if (fs.existsSync(imagePath)) {
         try {
           const ext = path.extname(imagePath).toLowerCase();
           if (['.jpg', '.jpeg', '.png'].includes(ext)) {
-            // Check if we need a new page for the image
-            if (doc.y > 450) {
-              doc.addPage();
-            }
-
-            // Fit image to page width while maintaining aspect ratio
-            const maxWidth = 400;
-            const maxHeight = 300;
-            doc.image(imagePath, {
-              fit: [maxWidth, maxHeight],
-              align: 'center'
-            });
+            if (doc.y > 450) { doc.addPage(); }
+            doc.image(imagePath, { fit: [400, 300], align: 'center' });
             doc.moveDown(0.5);
-          } else {
-            doc.fontSize(9).fillColor('gray').text(`[Bild: ${bill.file} - Format nicht unterstutzt]`);
-            doc.fillColor('black');
           }
         } catch (imgErr) {
           console.error('PDF image error:', imgErr.message);
-          doc.fontSize(9).fillColor('gray').text(`[Bild konnte nicht geladen werden: ${bill.file}]`);
-          doc.fillColor('black');
         }
-      } else {
-        doc.fontSize(9).fillColor('gray').text(`[Bild nicht gefunden: ${bill.file}]`);
-        doc.fillColor('black');
       }
     }
 
