@@ -11,6 +11,8 @@ const fs = require('fs');
 const path = require('path');
 const { google } = require('googleapis');
 const PDFDocument = require('pdfkit');
+const ExcelJS = require('exceljs');
+const archiver = require('archiver');
 const Database = require('better-sqlite3');
 
 // Google Sheets setup
@@ -1423,6 +1425,15 @@ app.get('/api/vgeld/analysis', ensureAuth, (req, res) => {
 });
 
 // Settings API
+// Public endpoint for project title (no auth required)
+app.get('/api/project-info', (req, res) => {
+  const settings = getSettings();
+  res.json({
+    projectTitle: settings.projectTitle || '',
+    projectSubtitle: settings.projectSubtitle || ''
+  });
+});
+
 app.get('/api/admin/settings', ensureAdmin, (req, res) => {
   res.json(getSettings());
 });
@@ -1430,10 +1441,12 @@ app.get('/api/admin/settings', ensureAdmin, (req, res) => {
 app.put('/api/admin/settings', ensureAdmin, (req, res) => {
   console.log('=== Settings update ===');
   console.log('Request body:', req.body);
-  const { googleSheetId, googleSheetEnabled } = req.body;
+  const { googleSheetId, googleSheetEnabled, projectTitle, projectSubtitle } = req.body;
   const insert = db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
   if (googleSheetId !== undefined) insert.run('googleSheetId', JSON.stringify(googleSheetId));
   if (googleSheetEnabled !== undefined) insert.run('googleSheetEnabled', JSON.stringify(googleSheetEnabled === true));
+  if (projectTitle !== undefined) insert.run('projectTitle', JSON.stringify(projectTitle));
+  if (projectSubtitle !== undefined) insert.run('projectSubtitle', JSON.stringify(projectSubtitle));
   const newSettings = getSettings();
   console.log('New settings:', newSettings);
   res.json({ ok: true });
@@ -1693,6 +1706,11 @@ app.get('/api/report/:email', ensureAuth, async (req, res) => {
     return res.status(404).json({ error: 'No data found for this user' });
   }
 
+  const pdfSettings = getSettings();
+  const pTitle = pdfSettings.projectTitle || '';
+  const pSubtitle = pdfSettings.projectSubtitle || '';
+  const pdfPrefix = pTitle ? pTitle + ' - ' : 'vBudget - ';
+
   const doc = new PDFDocument({ margin: 50, size: 'A4' });
 
   res.setHeader('Content-Type', 'application/pdf');
@@ -1701,7 +1719,10 @@ app.get('/api/report/:email', ensureAuth, async (req, res) => {
   doc.pipe(res);
 
   // Title
-  doc.fontSize(20).font('Helvetica-Bold').text('vBudget - Belegubersicht', { align: 'center' });
+  doc.fontSize(20).font('Helvetica-Bold').text(`${pdfPrefix}Belegubersicht`, { align: 'center' });
+  if (pSubtitle) {
+    doc.fontSize(12).font('Helvetica').text(pSubtitle, { align: 'center' });
+  }
   doc.moveDown(0.5);
   doc.fontSize(14).font('Helvetica').text(`Benutzer: ${targetEmail}`, { align: 'center' });
   doc.fontSize(10).text(`Erstellt: ${new Date().toLocaleDateString('de-DE')}`, { align: 'center' });
@@ -2051,13 +2072,21 @@ app.get('/api/budget-report', ensureAuth, (req, res) => {
 
   const eur = (v) => (v || 0).toFixed(2).replace('.', ',') + ' €';
 
+  const bmSettings = getSettings();
+  const bmTitle = bmSettings.projectTitle || '';
+  const bmSubtitle = bmSettings.projectSubtitle || '';
+  const bmPrefix = bmTitle ? bmTitle + ' - ' : 'vBudget - ';
+
   const doc = new PDFDocument({ margin: 40, size: 'A4', layout: 'landscape' });
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename="budget_matrix_${new Date().toISOString().split('T')[0]}.pdf"`);
   doc.pipe(res);
 
   // Title
-  doc.fontSize(18).font('Helvetica-Bold').text('vBudget - Budget Matrix (netto)', { align: 'center' });
+  doc.fontSize(18).font('Helvetica-Bold').text(`${bmPrefix}Budget Matrix (netto)`, { align: 'center' });
+  if (bmSubtitle) {
+    doc.fontSize(10).font('Helvetica').text(bmSubtitle, { align: 'center' });
+  }
   doc.fontSize(10).font('Helvetica').text(`Erstellt: ${new Date().toLocaleDateString('de-DE')}`, { align: 'center' });
   doc.moveDown(1);
 
@@ -2248,6 +2277,280 @@ app.get('/api/budget-report', ensureAuth, (req, res) => {
   doc.text(`Verbraucht: ${usedPct}%`, leftMargin, y);
 
   doc.end();
+});
+
+// ========== Admin Export / Backup ==========
+
+// Excel export: bills, vgeld, budget matrix
+app.get('/api/admin/export/excel', ensureAdmin, async (req, res) => {
+  try {
+    const workbook = new ExcelJS.Workbook();
+    const settings = getSettings();
+    const projectName = settings.projectTitle || 'vBudget';
+
+    // --- Bills sheet ---
+    const billsSheet = workbook.addWorksheet('Bills');
+    const bills = db.prepare('SELECT * FROM bills ORDER BY id').all();
+    const allMotiveAllocs = db.prepare(`
+      SELECT bm.bill_id, m.name, bm.percentage
+      FROM bill_motives bm JOIN motives m ON m.id = bm.motive_id
+      ORDER BY bm.bill_id, bm.id
+    `).all();
+    const allCategoryAllocs = db.prepare(`
+      SELECT bc.bill_id, c.name, bc.percentage
+      FROM bill_categories bc JOIN categories c ON c.id = bc.category_id
+      ORDER BY bc.bill_id, bc.id
+    `).all();
+
+    const motivesByBill = {};
+    for (const a of allMotiveAllocs) {
+      if (!motivesByBill[a.bill_id]) motivesByBill[a.bill_id] = [];
+      motivesByBill[a.bill_id].push(a);
+    }
+    const categoriesByBill = {};
+    for (const a of allCategoryAllocs) {
+      if (!categoriesByBill[a.bill_id]) categoriesByBill[a.bill_id] = [];
+      categoriesByBill[a.bill_id].push(a);
+    }
+
+    billsSheet.columns = [
+      { header: 'ID', key: 'id', width: 6 },
+      { header: 'Nr.', key: 'bill_number', width: 10 },
+      { header: 'Date', key: 'date', width: 18 },
+      { header: 'Email', key: 'email', width: 24 },
+      { header: 'Type', key: 'type', width: 10 },
+      { header: 'Vendor', key: 'vendor', width: 20 },
+      { header: 'Item', key: 'item', width: 24 },
+      { header: 'Comment', key: 'comment', width: 24 },
+      { header: 'Brutto 19%', key: 'brutto19', width: 14 },
+      { header: 'Brutto 7%', key: 'brutto7', width: 14 },
+      { header: 'Brutto 0%', key: 'brutto0', width: 14 },
+      { header: 'Brutto Total', key: 'brutto_total', width: 14 },
+      { header: 'Netto', key: 'netto', width: 14 },
+      { header: 'Motives', key: 'motives', width: 30 },
+      { header: 'Categories', key: 'categories', width: 30 },
+    ];
+
+    // Style header row
+    billsSheet.getRow(1).font = { bold: true };
+    billsSheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2C3E50' } };
+    billsSheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+
+    for (const bill of bills) {
+      const b19 = bill.brutto19 || 0;
+      const b7 = bill.brutto7 || 0;
+      const b0 = bill.brutto0 || 0;
+      const total = b19 + b7 + b0 || bill.amount || 0;
+      const netto = bill.netto_amount || (b19 / 1.19 + b7 / 1.07 + b0);
+
+      const motiveAllocs = motivesByBill[bill.id] || [];
+      const motiveStr = motiveAllocs.map(a => motiveAllocs.length === 1 && a.percentage === 100 ? a.name : `${a.name} (${Math.round(a.percentage)}%)`).join(', ') || bill.motive || '';
+      const categoryAllocs = categoriesByBill[bill.id] || [];
+      const categoryStr = categoryAllocs.map(a => categoryAllocs.length === 1 && a.percentage === 100 ? a.name : `${a.name} (${Math.round(a.percentage)}%)`).join(', ');
+
+      billsSheet.addRow({
+        id: bill.id,
+        bill_number: bill.bill_number || '',
+        date: bill.date ? new Date(bill.date) : '',
+        email: bill.email,
+        type: bill.type || 'Kauf',
+        vendor: bill.vendor || '',
+        item: bill.item || '',
+        comment: bill.comment || '',
+        brutto19: b19,
+        brutto7: b7,
+        brutto0: b0,
+        brutto_total: total,
+        netto: netto,
+        motives: motiveStr,
+        categories: categoryStr,
+      });
+    }
+
+    // Format currency columns
+    ['brutto19', 'brutto7', 'brutto0', 'brutto_total', 'netto'].forEach(key => {
+      const col = billsSheet.getColumn(key);
+      col.numFmt = '#,##0.00 €';
+    });
+    // Format date column
+    billsSheet.getColumn('date').numFmt = 'DD.MM.YYYY HH:MM';
+
+    // --- VGeld sheet ---
+    const vgeldSheet = workbook.addWorksheet('V-Geld');
+    const vgeld = db.prepare('SELECT * FROM vgeld ORDER BY id').all();
+
+    vgeldSheet.columns = [
+      { header: 'ID', key: 'id', width: 6 },
+      { header: 'Date', key: 'date', width: 18 },
+      { header: 'Amount', key: 'amount', width: 14 },
+      { header: 'From', key: 'from_user', width: 24 },
+      { header: 'To', key: 'to_user', width: 24 },
+      { header: 'Created By', key: 'created_by', width: 24 },
+    ];
+
+    vgeldSheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2C3E50' } };
+    vgeldSheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+
+    for (const v of vgeld) {
+      vgeldSheet.addRow({
+        id: v.id,
+        date: v.date ? new Date(v.date) : '',
+        amount: v.amount || 0,
+        from_user: v.from_user || '',
+        to_user: v.to_user,
+        created_by: v.created_by || '',
+      });
+    }
+    vgeldSheet.getColumn('amount').numFmt = '#,##0.00 €';
+    vgeldSheet.getColumn('date').numFmt = 'DD.MM.YYYY HH:MM';
+
+    // --- Budget Matrix sheet ---
+    const bmSheet = workbook.addWorksheet('Budget Matrix');
+    const motives = db.prepare("SELECT id, name FROM motives ORDER BY CASE WHEN name = 'Default' THEN 1 ELSE 0 END, id").all();
+    const categories = db.prepare("SELECT id, name FROM categories ORDER BY CASE WHEN name = 'Uncategorized' THEN 1 ELSE 0 END, id").all();
+    const matrixRows = db.prepare('SELECT motive_id, category_id, amount FROM budget_matrix').all();
+    const matrix = {};
+    for (const r of matrixRows) {
+      matrix[r.category_id + '_' + r.motive_id] = r.amount;
+    }
+
+    // Spending data
+    const motiveSpending = {};
+    db.prepare(`SELECT bm.motive_id, SUM(b.netto_amount * bm.percentage / 100) as spent FROM bill_motives bm JOIN bills b ON b.id = bm.bill_id GROUP BY bm.motive_id`).all().forEach(r => { motiveSpending[r.motive_id] = r.spent || 0; });
+    const categorySpending = {};
+    db.prepare(`SELECT bc.category_id, SUM(b.netto_amount * bc.percentage / 100) as spent FROM bill_categories bc JOIN bills b ON b.id = bc.bill_id GROUP BY bc.category_id`).all().forEach(r => { categorySpending[r.category_id] = r.spent || 0; });
+
+    // Header row: corner + motive names + Total Budget + Spent
+    const bmHeaders = ['Category \\ Motive', ...motives.map(m => m.name), 'Total Budget', 'Spent'];
+    bmSheet.addRow(bmHeaders);
+    const bmHeaderRow = bmSheet.getRow(1);
+    bmHeaderRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2C3E50' } };
+    bmHeaderRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+
+    // Data rows per category
+    for (const cat of categories) {
+      const rowData = [cat.name];
+      let rowTotal = 0;
+      for (const mot of motives) {
+        const val = matrix[cat.id + '_' + mot.id] || 0;
+        rowData.push(val);
+        rowTotal += val;
+      }
+      rowData.push(rowTotal);
+      rowData.push(categorySpending[cat.id] || 0);
+      bmSheet.addRow(rowData);
+    }
+
+    // Totals row
+    const totalRowData = ['Total'];
+    let grandTotal = 0;
+    let grandSpent = 0;
+    for (const mot of motives) {
+      let colTotal = 0;
+      for (const cat of categories) {
+        colTotal += matrix[cat.id + '_' + mot.id] || 0;
+      }
+      totalRowData.push(colTotal);
+      grandTotal += colTotal;
+    }
+    totalRowData.push(grandTotal);
+    for (const cat of categories) grandSpent += categorySpending[cat.id] || 0;
+    totalRowData.push(grandSpent);
+    bmSheet.addRow(totalRowData);
+
+    // Spent row (per motive)
+    const spentRowData = ['Spent'];
+    for (const mot of motives) {
+      spentRowData.push(motiveSpending[mot.id] || 0);
+    }
+    spentRowData.push(grandSpent);
+    spentRowData.push('');
+    bmSheet.addRow(spentRowData);
+
+    // Style totals/spent rows
+    const totalRow = bmSheet.getRow(categories.length + 2);
+    totalRow.font = { bold: true };
+    totalRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFECF0F1' } };
+    const spentRow = bmSheet.getRow(categories.length + 3);
+    spentRow.font = { bold: true };
+
+    // Format number columns as currency
+    for (let c = 2; c <= motives.length + 3; c++) {
+      bmSheet.getColumn(c).numFmt = '#,##0.00 €';
+      bmSheet.getColumn(c).width = 14;
+    }
+    bmSheet.getColumn(1).width = 20;
+
+    // Write response
+    const dateStr = new Date().toISOString().split('T')[0];
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${projectName.replace(/[^a-zA-Z0-9_-]/g, '_')}_export_${dateStr}.xlsx"`);
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error('Excel export error:', err);
+    res.status(500).json({ error: 'Export failed' });
+  }
+});
+
+// Images backup: zip of all bill images in folder structure
+app.get('/api/admin/export/images', ensureAdmin, (req, res) => {
+  try {
+    const images = db.prepare(`
+      SELECT bi.bill_id, bi.filename, bi.file, bi.sort_order,
+             b.bill_number, b.vendor, b.email, b.date
+      FROM bill_images bi
+      JOIN bills b ON b.id = bi.bill_id
+      ORDER BY b.email, bi.bill_id, bi.sort_order, bi.id
+    `).all();
+
+    if (images.length === 0) {
+      return res.status(404).json({ error: 'No images to export' });
+    }
+
+    const settings = getSettings();
+    const projectName = settings.projectTitle || 'vBudget';
+    const dateStr = new Date().toISOString().split('T')[0];
+    const zipName = `${projectName.replace(/[^a-zA-Z0-9_-]/g, '_')}_images_${dateStr}.zip`;
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${zipName}"`);
+
+    const archive = archiver('zip', { zlib: { level: 5 } });
+    archive.on('error', (err) => { throw err; });
+    archive.pipe(res);
+
+    // Count images per bill to know when to append _nn suffixes
+    const billImageCounts = {};
+    for (const img of images) {
+      billImageCounts[img.bill_id] = (billImageCounts[img.bill_id] || 0) + 1;
+    }
+
+    const billImageIndex = {};
+    for (const img of images) {
+      const filePath = path.join(DATA_DIR, 'uploads', img.file);
+      if (fs.existsSync(filePath)) {
+        const username = (img.email || 'unknown').split('@')[0].replace(/[^a-zA-Z0-9_\-]/g, '');
+        const billNum = img.bill_number || String(img.bill_id);
+        const d = new Date(img.date || 0);
+        const date = String(d.getFullYear()).slice(2) + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0');
+        const vendor = (img.vendor || 'unknown').replace(/[^a-zA-Z0-9_\- ]/g, '').trim().replace(/ /g, '-');
+        const ext = path.extname(img.filename || img.file) || '.jpg';
+        let fileName = `${username}_${billNum}_${date}_${vendor}`;
+        if (billImageCounts[img.bill_id] > 1) {
+          billImageIndex[img.bill_id] = (billImageIndex[img.bill_id] || 0) + 1;
+          fileName += `_${String(billImageIndex[img.bill_id]).padStart(2, '0')}`;
+        }
+        fileName += ext;
+        archive.file(filePath, { name: `${username}/${fileName}` });
+      }
+    }
+
+    archive.finalize();
+  } catch (err) {
+    console.error('Image export error:', err);
+    if (!res.headersSent) res.status(500).json({ error: 'Export failed' });
+  }
 });
 
 // Admin page
