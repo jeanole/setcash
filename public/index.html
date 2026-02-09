@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="/style.css">
   </head>
   <body>
-    <h1>vBudget</h1>
+    <h1 id="appTitle">vBudget</h1>
     <div id="app">
       <div id="not-signed-in" class="card" style="display:none">
         <p>Please log in to continue.</p>
@@ -75,34 +75,53 @@
         <div id="tab-bills" class="tab-content">
           <div class="card">
             <h2>All Bills</h2>
-            <div class="sync-buttons admin-only" style="display:none; margin-bottom: 12px;">
-              <button onclick="syncToSheet()" class="small secondary">Up Push to Sheet</button>
-              <button onclick="syncFromSheet()" class="small secondary">Down Pull from Sheet</button>
+            <div class="admin-only" style="display:none; margin-bottom: 12px;">
               <button onclick="deleteSelected()" class="small danger" id="deleteSelectedBtn" style="display:none">Delete Selected (<span id="selectedCount">0</span>)</button>
-              <span id="syncResult" style="margin-left: 10px;"></span>
             </div>
             <div id="billsResult"></div>
+            <div class="bills-filter-bar" id="billsFilterBar">
+              <select id="filterPerson"><option value="">All Persons</option></select>
+              <select id="filterMotive"><option value="">All Motives</option></select>
+              <select id="filterCategory"><option value="">All Categories</option></select>
+              <select id="filterType">
+                <option value="">All Types</option>
+                <option value="Kauf">Kauf</option>
+                <option value="Leih">Leih</option>
+                <option value="Verbrauch">Verbrauch</option>
+              </select>
+              <input type="date" id="filterDateFrom" title="Date from">
+              <input type="date" id="filterDateTo" title="Date to">
+              <input type="text" id="filterSearch" placeholder="Search vendor, item, comment...">
+              <button class="small secondary" onclick="resetBillFilters()">Reset</button>
+              <span id="billsCount" class="bills-count"></span>
+            </div>
             <table id="billsTable" class="data-table">
               <thead>
                 <tr>
                   <th class="admin-only" style="display:none"><input type="checkbox" id="selectAllBills" onchange="toggleSelectAll(this)"></th>
-                  <th>Nr.</th>
-                  <th>Date</th>
-                  <th>Uploaded By</th>
-                  <th>Type</th>
-                  <th>Vendor</th>
-                  <th>Item</th>
-                  <th>Brutto 19%</th>
-                  <th>Brutto 7%</th>
-                  <th>Brutto 0%</th>
-                  <th>Brutto</th>
-                  <th>Netto</th>
+                  <th class="sortable" data-sort="billNumber">Nr.</th>
+                  <th class="sortable" data-sort="date">Date</th>
+                  <th class="sortable" data-sort="email">Uploaded By</th>
+                  <th class="sortable" data-sort="type">Type</th>
+                  <th class="sortable" data-sort="vendor">Vendor</th>
+                  <th class="sortable" data-sort="item">Item</th>
+                  <th class="sortable" data-sort="brutto19">Brutto 19%</th>
+                  <th class="sortable" data-sort="brutto7">Brutto 7%</th>
+                  <th class="sortable" data-sort="brutto0">Brutto 0%</th>
+                  <th class="sortable" data-sort="total">Brutto</th>
+                  <th class="sortable" data-sort="netto">Netto</th>
                   <th>Motive / Kategorie</th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody id="billsBody"></tbody>
             </table>
+            <div class="bills-pagination" id="billsPagination"></div>
+            <div class="sync-buttons admin-only" style="display:none; margin-top: 16px; padding-top: 16px; border-top: 1px solid #eee;">
+              <button onclick="syncToSheet()" class="small secondary">Up Push to Sheet</button>
+              <button onclick="syncFromSheet()" class="small secondary">Down Pull from Sheet</button>
+              <span id="syncResult" style="margin-left: 10px;"></span>
+            </div>
           </div>
         </div>
 
@@ -373,6 +392,12 @@
       let allLogs = [];
       let currentBillId = null;
 
+      // Bills filter, sort & pagination state
+      let billFilters = { person: '', motive: '', category: '', type: '', dateFrom: '', dateTo: '', search: '' };
+      let billSort = { column: null, dir: 'asc' };
+      let billPage = 1;
+      const BILLS_PER_PAGE = 20;
+
       // Multi-image upload state
       let pendingFiles = [];
 
@@ -624,23 +649,160 @@
         return allocs.map(a => `${escapeHtml(a.name)} (${Math.round(a.percentage)}%)`).join(', ');
       }
 
-      async function loadBills() {
-        const tbody = document.getElementById('billsBody');
-        tbody.innerHTML = '<tr><td colspan="7">Loading...</td></tr>';
-        try {
-          const [billsRes, logsRes] = await Promise.all([
-            fetch('/api/bills'),
-            fetch('/api/bills/log')
-          ]);
-          allBills = await billsRes.json();
-          allLogs = await logsRes.json();
+      // ========== Bills filter / sort ==========
+      function populateFilterDropdowns() {
+        const personSel = document.getElementById('filterPerson');
+        const motiveSel = document.getElementById('filterMotive');
+        const categorySel = document.getElementById('filterCategory');
 
-          if (allBills.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="14">No bills yet.</td></tr>';
-            return;
-          }
-          const isAdmin = currentUser && currentUser.admin;
-          tbody.innerHTML = allBills.map((bill) => {
+        // Person
+        const persons = [...new Set(allBills.map(b => b.email))].sort();
+        personSel.innerHTML = '<option value="">All Persons</option>' +
+          persons.map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('');
+
+        // Motives
+        motiveSel.innerHTML = '<option value="">All Motives</option>' +
+          motivesData.map(m => `<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('');
+
+        // Categories
+        categorySel.innerHTML = '<option value="">All Categories</option>' +
+          categoriesData.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+
+        // Restore current filter values
+        personSel.value = billFilters.person;
+        motiveSel.value = billFilters.motive;
+        categorySel.value = billFilters.category;
+      }
+
+      function initFilterListeners() {
+        const ids = ['filterPerson', 'filterMotive', 'filterCategory', 'filterType', 'filterDateFrom', 'filterDateTo', 'filterSearch'];
+        ids.forEach(id => {
+          const el = document.getElementById(id);
+          el.addEventListener(el.tagName === 'INPUT' && el.type === 'text' ? 'input' : 'change', () => {
+            billFilters.person = document.getElementById('filterPerson').value;
+            billFilters.motive = document.getElementById('filterMotive').value;
+            billFilters.category = document.getElementById('filterCategory').value;
+            billFilters.type = document.getElementById('filterType').value;
+            billFilters.dateFrom = document.getElementById('filterDateFrom').value;
+            billFilters.dateTo = document.getElementById('filterDateTo').value;
+            billFilters.search = document.getElementById('filterSearch').value;
+            billPage = 1;
+            renderFilteredBills();
+          });
+        });
+
+        // Sortable headers
+        document.querySelectorAll('#billsTable th.sortable').forEach(th => {
+          th.addEventListener('click', () => {
+            const col = th.dataset.sort;
+            if (billSort.column === col) {
+              if (billSort.dir === 'asc') billSort.dir = 'desc';
+              else if (billSort.dir === 'desc') { billSort.column = null; billSort.dir = 'asc'; }
+            } else {
+              billSort.column = col;
+              billSort.dir = 'asc';
+            }
+            // Update arrow indicators
+            document.querySelectorAll('#billsTable th.sortable').forEach(h => {
+              h.classList.remove('sort-asc', 'sort-desc');
+            });
+            if (billSort.column) {
+              th.classList.add(billSort.dir === 'asc' ? 'sort-asc' : 'sort-desc');
+            }
+            renderFilteredBills();
+          });
+        });
+      }
+
+      function resetBillFilters() {
+        billFilters = { person: '', motive: '', category: '', type: '', dateFrom: '', dateTo: '', search: '' };
+        billSort = { column: null, dir: 'asc' };
+        billPage = 1;
+        document.getElementById('filterPerson').value = '';
+        document.getElementById('filterMotive').value = '';
+        document.getElementById('filterCategory').value = '';
+        document.getElementById('filterType').value = '';
+        document.getElementById('filterDateFrom').value = '';
+        document.getElementById('filterDateTo').value = '';
+        document.getElementById('filterSearch').value = '';
+        document.querySelectorAll('#billsTable th.sortable').forEach(h => h.classList.remove('sort-asc', 'sort-desc'));
+        renderFilteredBills();
+      }
+
+      function renderFilteredBills() {
+        let bills = allBills.slice();
+
+        // Apply filters
+        if (billFilters.person) bills = bills.filter(b => b.email === billFilters.person);
+        if (billFilters.motive) {
+          const mid = Number(billFilters.motive);
+          bills = bills.filter(b => b.motiveAllocations && b.motiveAllocations.some(a => a.motiveId === mid));
+        }
+        if (billFilters.category) {
+          const cid = Number(billFilters.category);
+          bills = bills.filter(b => b.categoryAllocations && b.categoryAllocations.some(a => a.categoryId === cid));
+        }
+        if (billFilters.type) bills = bills.filter(b => (b.type || 'Kauf') === billFilters.type);
+        if (billFilters.dateFrom) {
+          const from = new Date(billFilters.dateFrom);
+          bills = bills.filter(b => new Date(b.date) >= from);
+        }
+        if (billFilters.dateTo) {
+          const to = new Date(billFilters.dateTo);
+          to.setHours(23, 59, 59, 999);
+          bills = bills.filter(b => new Date(b.date) <= to);
+        }
+        if (billFilters.search) {
+          const q = billFilters.search.toLowerCase();
+          bills = bills.filter(b =>
+            (b.vendor || '').toLowerCase().includes(q) ||
+            (b.item || '').toLowerCase().includes(q) ||
+            (b.comment || '').toLowerCase().includes(q)
+          );
+        }
+
+        // Apply sort
+        if (billSort.column) {
+          const dir = billSort.dir === 'asc' ? 1 : -1;
+          bills.sort((a, b) => {
+            let va, vb;
+            const col = billSort.column;
+            if (col === 'total') {
+              va = (a.brutto19 || 0) + (a.brutto7 || 0) + (a.brutto0 || 0) || a.amount || 0;
+              vb = (b.brutto19 || 0) + (b.brutto7 || 0) + (b.brutto0 || 0) || b.amount || 0;
+            } else if (col === 'netto') {
+              va = (a.brutto19 || 0) / 1.19 + (a.brutto7 || 0) / 1.07 + (a.brutto0 || 0);
+              vb = (b.brutto19 || 0) / 1.19 + (b.brutto7 || 0) / 1.07 + (b.brutto0 || 0);
+            } else if (col === 'date') {
+              va = new Date(a.date || 0).getTime();
+              vb = new Date(b.date || 0).getTime();
+            } else if (['brutto19', 'brutto7', 'brutto0'].includes(col)) {
+              va = a[col] || 0;
+              vb = b[col] || 0;
+            } else {
+              va = (a[col] || '').toString().toLowerCase();
+              vb = (b[col] || '').toString().toLowerCase();
+            }
+            if (va < vb) return -dir;
+            if (va > vb) return dir;
+            return 0;
+          });
+        }
+
+        // Pagination
+        const totalFiltered = bills.length;
+        const totalPages = Math.max(1, Math.ceil(totalFiltered / BILLS_PER_PAGE));
+        if (billPage > totalPages) billPage = totalPages;
+        const startIdx = (billPage - 1) * BILLS_PER_PAGE;
+        const pageBills = bills.slice(startIdx, startIdx + BILLS_PER_PAGE);
+
+        // Render
+        const tbody = document.getElementById('billsBody');
+        const isAdmin = currentUser && currentUser.admin;
+        if (totalFiltered === 0) {
+          tbody.innerHTML = '<tr><td colspan="14">No matching bills.</td></tr>';
+        } else {
+          tbody.innerHTML = pageBills.map(bill => {
             const b19 = bill.brutto19 || 0;
             const b7 = bill.brutto7 || 0;
             const b0 = bill.brutto0 || 0;
@@ -666,13 +828,86 @@
               <td><button class="small" onclick="event.stopPropagation(); openBillDetail(${bill.id})">View</button></td>
             </tr>`;
           }).join('');
-        } catch (e) {
-          tbody.innerHTML = '<tr><td colspan="14">Error loading bills.</td></tr>';
         }
+
+        // Update count
+        const endIdx = Math.min(startIdx + BILLS_PER_PAGE, totalFiltered);
+        document.getElementById('billsCount').textContent = totalFiltered === allBills.length
+          ? `${startIdx + 1}\u2013${endIdx} of ${totalFiltered}`
+          : `${startIdx + 1}\u2013${endIdx} of ${totalFiltered} (filtered from ${allBills.length})`;
+
+        // Render pagination controls
+        renderBillsPagination(totalPages);
+
         // Reset selection state
         const selectAll = document.getElementById('selectAllBills');
         if (selectAll) selectAll.checked = false;
         updateSelectedCount();
+      }
+
+      function renderBillsPagination(totalPages) {
+        const container = document.getElementById('billsPagination');
+        if (totalPages <= 1) { container.innerHTML = ''; return; }
+
+        let html = '';
+        html += `<button class="pg-btn" ${billPage <= 1 ? 'disabled' : ''} onclick="goToBillPage(${billPage - 1})">\u2039</button>`;
+
+        const maxVisible = 7;
+        let start = Math.max(1, billPage - Math.floor(maxVisible / 2));
+        let end = Math.min(totalPages, start + maxVisible - 1);
+        if (end - start < maxVisible - 1) start = Math.max(1, end - maxVisible + 1);
+
+        if (start > 1) {
+          html += `<button class="pg-btn" onclick="goToBillPage(1)">1</button>`;
+          if (start > 2) html += '<span class="pg-ellipsis">\u2026</span>';
+        }
+        for (let i = start; i <= end; i++) {
+          html += `<button class="pg-btn${i === billPage ? ' pg-active' : ''}" onclick="goToBillPage(${i})">${i}</button>`;
+        }
+        if (end < totalPages) {
+          if (end < totalPages - 1) html += '<span class="pg-ellipsis">\u2026</span>';
+          html += `<button class="pg-btn" onclick="goToBillPage(${totalPages})">${totalPages}</button>`;
+        }
+
+        html += `<button class="pg-btn" ${billPage >= totalPages ? 'disabled' : ''} onclick="goToBillPage(${billPage + 1})">\u203A</button>`;
+        container.innerHTML = html;
+      }
+
+      function goToBillPage(page) {
+        billPage = page;
+        renderFilteredBills();
+        document.getElementById('billsTable').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+
+      // One-time init for filter listeners
+      let filtersInitialized = false;
+
+      async function loadBills() {
+        const tbody = document.getElementById('billsBody');
+        tbody.innerHTML = '<tr><td colspan="14">Loading...</td></tr>';
+        try {
+          const [billsRes, logsRes] = await Promise.all([
+            fetch('/api/bills'),
+            fetch('/api/bills/log')
+          ]);
+          allBills = await billsRes.json();
+          allLogs = await logsRes.json();
+
+          if (!filtersInitialized) {
+            initFilterListeners();
+            filtersInitialized = true;
+          }
+          populateFilterDropdowns();
+
+          if (allBills.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="14">No bills yet.</td></tr>';
+            document.getElementById('billsCount').textContent = '';
+            return;
+          }
+          renderFilteredBills();
+        } catch (e) {
+          tbody.innerHTML = '<tr><td colspan="14">Error loading bills.</td></tr>';
+        }
       }
 
       async function loadSpending() {
@@ -1847,13 +2082,20 @@
         document.getElementById('signed-in').style.display='block';
         document.getElementById('user').textContent = user.email + (user.admin ? ' [admin]' : '');
 
-        // Load motives and categories
-        const [motivesRes, categoriesRes] = await Promise.all([
+        // Load motives, categories, and project info
+        const [motivesRes, categoriesRes, projectRes] = await Promise.all([
           fetch('/api/motives'),
-          fetch('/api/categories')
+          fetch('/api/categories'),
+          fetch('/api/project-info')
         ]);
         motivesData = await motivesRes.json();
         categoriesData = await categoriesRes.json();
+        const projectInfo = await projectRes.json();
+        if (projectInfo.projectTitle) {
+          const subtitle = projectInfo.projectSubtitle ? `<span class="project-subtitle">${escapeHtml(projectInfo.projectSubtitle)}</span>` : '';
+          document.getElementById('appTitle').innerHTML = escapeHtml(projectInfo.projectTitle) + subtitle;
+          document.title = projectInfo.projectTitle + ' - vBudget';
+        }
 
         // Initialize upload allocation widgets (empty)
         createAllocationWidget('uploadMotiveAlloc', 'motive', motivesData, [], 0);

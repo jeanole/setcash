@@ -13,7 +13,7 @@
     <h2>Users</h2>
     <form id="userForm" class="inline-form">
       <input type="email" name="email" placeholder="Email" required>
-      <input type="password" name="password" placeholder="Password" required>
+      <div class="password-wrapper"><input type="password" name="password" placeholder="Password" required><button type="button" class="password-toggle" onclick="togglePw(this)">Show</button></div>
       <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" name="admin"> Admin</label>
       <button type="submit">Add User</button>
     </form>
@@ -22,6 +22,17 @@
       <thead><tr><th>Email</th><th>Role</th><th>Actions</th></tr></thead>
       <tbody id="userBody"></tbody>
     </table>
+  </div>
+
+  <div class="card">
+    <h2>Project Settings</h2>
+    <form id="projectForm" class="inline-form" style="flex-wrap:wrap">
+      <input type="text" id="projectTitle" placeholder="Film Project Title" style="flex:1;min-width:200px">
+      <input type="text" id="projectSubtitle" placeholder="Subtitle (optional)" style="flex:1;min-width:200px">
+      <button type="submit">Save</button>
+    </form>
+    <div id="projectResult"></div>
+    <p style="font-size:0.85em;color:#666">Appears in the app header and PDF exports.</p>
   </div>
 
   <div class="card">
@@ -47,9 +58,28 @@
     <div id="credResult"></div>
   </div>
 
+  <div class="card">
+    <h2>Export / Backup</h2>
+    <div style="display:flex;gap:12px;flex-wrap:wrap">
+      <a href="/api/admin/export/excel" class="export-btn">Excel Export (Bills, V-Geld, Budget)</a>
+      <a href="/api/admin/export/images" class="export-btn export-btn-secondary">Download All Images (ZIP)</a>
+    </div>
+    <p style="font-size:0.85em;color:#666;margin-top:8px">Excel contains sheets for Bills, V-Geld, and Budget Matrix. Images are organized in folders by bill.</p>
+
+    <h3 style="margin-top:20px">Google Sheet Export</h3>
+    <form id="exportSheetForm" class="inline-form">
+      <input type="text" id="exportSheetId" placeholder="Export Sheet ID" style="flex:1">
+      <button type="submit">Save</button>
+      <button type="button" class="export-btn export-btn-secondary" onclick="exportGoogleSheet(this)">Export Now</button>
+    </form>
+    <div id="googleExportResult" style="margin-top:4px"></div>
+    <p style="font-size:0.85em;color:#666;margin-top:4px">Create a Google Sheet, share it (Editor) with the service account email shown above, and paste the Sheet ID here. Export writes Bills, V-Geld, and Budget Matrix tabs.</p>
+  </div>
+
   <p><a href="/">Back</a> | <a href="/logout">Logout</a></p>
 
   <script>
+    function togglePw(btn){const i=btn.previousElementSibling;const show=i.type==='password';i.type=show?'text':'password';btn.textContent=show?'Hide':'Show';}
     const esc = t => { const d = document.createElement('div'); d.textContent = t || ''; return d.innerHTML; };
     const fmt = n => new Intl.NumberFormat('de-DE', {style:'currency',currency:'EUR'}).format(n||0);
     const msg = (id, t, err) => { const e = document.getElementById(id); e.textContent = t; e.className = 'message ' + (err ? 'error' : 'success'); setTimeout(() => e.textContent = '', 3000); };
@@ -119,8 +149,26 @@
         const settings = await (await fetch('/api/admin/settings')).json();
         document.getElementById('sheetEnabled').checked = settings.googleSheetEnabled;
         document.getElementById('sheetId').value = settings.googleSheetId || '';
+        document.getElementById('projectTitle').value = settings.projectTitle || '';
+        document.getElementById('projectSubtitle').value = settings.projectSubtitle || '';
+        if (settings.projectTitle) document.title = settings.projectTitle + ' - Admin';
+        document.getElementById('exportSheetId').value = settings.exportSheetId || '';
       } catch (e) { console.error('Error loading settings', e); }
     }
+
+    document.getElementById('projectForm').onsubmit = async e => {
+      e.preventDefault();
+      const res = await fetch('/api/admin/settings', {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          projectTitle: document.getElementById('projectTitle').value,
+          projectSubtitle: document.getElementById('projectSubtitle').value
+        })
+      });
+      const j = await res.json();
+      msg('projectResult', j.ok ? 'Project settings saved' : (j.error || 'Error'), !j.ok);
+    };
 
     document.getElementById('settingsForm').onsubmit = async e => {
       e.preventDefault();
@@ -164,6 +212,37 @@
         msg('credResult', j.error || 'Error', true);
       }
     };
+
+    document.getElementById('exportSheetForm').onsubmit = async e => {
+      e.preventDefault();
+      const res = await fetch('/api/admin/settings', {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ exportSheetId: document.getElementById('exportSheetId').value })
+      });
+      const j = await res.json();
+      msg('googleExportResult', j.ok ? 'Export Sheet ID saved' : (j.error || 'Error'), !j.ok);
+    };
+
+    async function exportGoogleSheet(btn) {
+      btn.disabled = true;
+      btn.textContent = 'Exporting...';
+      const resultEl = document.getElementById('googleExportResult');
+      resultEl.innerHTML = '';
+      try {
+        const res = await fetch('/api/admin/export/google-sheet', { method: 'POST' });
+        const j = await res.json();
+        if (j.ok) {
+          resultEl.innerHTML = '<span style="color:green">Export complete!</span> <a href="' + esc(j.sheetUrl) + '" target="_blank" style="color:#2980b9">Open Google Sheet</a>';
+        } else {
+          resultEl.innerHTML = '<span style="color:red">' + esc(j.error || 'Export failed') + '</span>';
+        }
+      } catch (e) {
+        resultEl.innerHTML = '<span style="color:red">Export failed: ' + esc(e.message) + '</span>';
+      }
+      btn.disabled = false;
+      btn.textContent = 'Export Now';
+    }
 
     loadUsers();
     loadSettings();

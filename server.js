@@ -543,7 +543,8 @@ app.get('/login', (req, res) => {
 <div class="card"><h2>Login</h2>${error}
 <form method="POST" action="/login">
 <label>Email<input type="email" name="email" required autofocus></label>
-<label>Password<input type="password" name="password" required></label>
+<label>Password<div class="password-wrapper"><input type="password" name="password" required><button type="button" class="password-toggle" onclick="togglePw(this)">Show</button></div></label>
+<script>function togglePw(btn){const i=btn.previousElementSibling;const show=i.type==='password';i.type=show?'text':'password';btn.textContent=show?'Hide':'Show';}</script>
 <button type="submit">Login</button>
 </form></div></body></html>`);
 });
@@ -1441,12 +1442,13 @@ app.get('/api/admin/settings', ensureAdmin, (req, res) => {
 app.put('/api/admin/settings', ensureAdmin, (req, res) => {
   console.log('=== Settings update ===');
   console.log('Request body:', req.body);
-  const { googleSheetId, googleSheetEnabled, projectTitle, projectSubtitle } = req.body;
+  const { googleSheetId, googleSheetEnabled, projectTitle, projectSubtitle, exportSheetId } = req.body;
   const insert = db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
   if (googleSheetId !== undefined) insert.run('googleSheetId', JSON.stringify(googleSheetId));
   if (googleSheetEnabled !== undefined) insert.run('googleSheetEnabled', JSON.stringify(googleSheetEnabled === true));
   if (projectTitle !== undefined) insert.run('projectTitle', JSON.stringify(projectTitle));
   if (projectSubtitle !== undefined) insert.run('projectSubtitle', JSON.stringify(projectSubtitle));
+  if (exportSheetId !== undefined) insert.run('exportSheetId', JSON.stringify(exportSheetId));
   const newSettings = getSettings();
   console.log('New settings:', newSettings);
   res.json({ ok: true });
@@ -2550,6 +2552,228 @@ app.get('/api/admin/export/images', ensureAdmin, (req, res) => {
   } catch (err) {
     console.error('Image export error:', err);
     if (!res.headersSent) res.status(500).json({ error: 'Export failed' });
+  }
+});
+
+// Google Sheet export (create or update persistent sheet)
+app.post('/api/admin/export/google-sheet', ensureAdmin, async (req, res) => {
+  if (!sheets) {
+    return res.status(400).json({ error: 'Google services not configured. Please add service account credentials first.' });
+  }
+  try {
+    const settings = getSettings();
+
+    // --- Gather data (same as Excel export) ---
+    const bills = db.prepare('SELECT * FROM bills ORDER BY id').all();
+    const allMotiveAllocs = db.prepare(`
+      SELECT bm.bill_id, m.name, bm.percentage
+      FROM bill_motives bm JOIN motives m ON m.id = bm.motive_id
+      ORDER BY bm.bill_id, bm.id
+    `).all();
+    const allCategoryAllocs = db.prepare(`
+      SELECT bc.bill_id, c.name, bc.percentage
+      FROM bill_categories bc JOIN categories c ON c.id = bc.category_id
+      ORDER BY bc.bill_id, bc.id
+    `).all();
+
+    const motivesByBill = {};
+    for (const a of allMotiveAllocs) {
+      if (!motivesByBill[a.bill_id]) motivesByBill[a.bill_id] = [];
+      motivesByBill[a.bill_id].push(a);
+    }
+    const categoriesByBill = {};
+    for (const a of allCategoryAllocs) {
+      if (!categoriesByBill[a.bill_id]) categoriesByBill[a.bill_id] = [];
+      categoriesByBill[a.bill_id].push(a);
+    }
+
+    const vgeld = db.prepare('SELECT * FROM vgeld ORDER BY id').all();
+
+    const motives = db.prepare("SELECT id, name FROM motives ORDER BY CASE WHEN name = 'Default' THEN 1 ELSE 0 END, id").all();
+    const categories = db.prepare("SELECT id, name FROM categories ORDER BY CASE WHEN name = 'Uncategorized' THEN 1 ELSE 0 END, id").all();
+    const matrixRows = db.prepare('SELECT motive_id, category_id, amount FROM budget_matrix').all();
+    const matrix = {};
+    for (const r of matrixRows) {
+      matrix[r.category_id + '_' + r.motive_id] = r.amount;
+    }
+    const motiveSpending = {};
+    db.prepare(`SELECT bm.motive_id, SUM(b.netto_amount * bm.percentage / 100) as spent FROM bill_motives bm JOIN bills b ON b.id = bm.bill_id GROUP BY bm.motive_id`).all().forEach(r => { motiveSpending[r.motive_id] = r.spent || 0; });
+    const categorySpending = {};
+    db.prepare(`SELECT bc.category_id, SUM(b.netto_amount * bc.percentage / 100) as spent FROM bill_categories bc JOIN bills b ON b.id = bc.bill_id GROUP BY bc.category_id`).all().forEach(r => { categorySpending[r.category_id] = r.spent || 0; });
+
+    // --- Build sheet data arrays ---
+    // Bills
+    const billsHeaders = ['ID', 'Nr.', 'Date', 'Email', 'Type', 'Vendor', 'Item', 'Comment', 'Brutto 19%', 'Brutto 7%', 'Brutto 0%', 'Brutto Total', 'Netto', 'Motives', 'Categories'];
+    const billsData = [billsHeaders];
+    for (const bill of bills) {
+      const b19 = bill.brutto19 || 0;
+      const b7 = bill.brutto7 || 0;
+      const b0 = bill.brutto0 || 0;
+      const total = b19 + b7 + b0 || bill.amount || 0;
+      const netto = bill.netto_amount || (b19 / 1.19 + b7 / 1.07 + b0);
+      const motiveAllocs = motivesByBill[bill.id] || [];
+      const motiveStr = motiveAllocs.map(a => motiveAllocs.length === 1 && a.percentage === 100 ? a.name : `${a.name} (${Math.round(a.percentage)}%)`).join(', ') || bill.motive || '';
+      const categoryAllocs = categoriesByBill[bill.id] || [];
+      const categoryStr = categoryAllocs.map(a => categoryAllocs.length === 1 && a.percentage === 100 ? a.name : `${a.name} (${Math.round(a.percentage)}%)`).join(', ');
+      const dateStr = bill.date ? new Date(bill.date).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+      billsData.push([bill.id, bill.bill_number || '', dateStr, bill.email, bill.type || 'Kauf', bill.vendor || '', bill.item || '', bill.comment || '', b19, b7, b0, total, netto, motiveStr, categoryStr]);
+    }
+
+    // V-Geld
+    const vgeldHeaders = ['ID', 'Date', 'Amount', 'From', 'To', 'Created By'];
+    const vgeldData = [vgeldHeaders];
+    for (const v of vgeld) {
+      const dateStr = v.date ? new Date(v.date).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+      vgeldData.push([v.id, dateStr, v.amount || 0, v.from_user || '', v.to_user, v.created_by || '']);
+    }
+
+    // Budget Matrix
+    const bmHeaders = ['Category \\ Motive', ...motives.map(m => m.name), 'Total Budget', 'Spent'];
+    const bmData = [bmHeaders];
+    for (const cat of categories) {
+      const rowData = [cat.name];
+      let rowTotal = 0;
+      for (const mot of motives) {
+        const val = matrix[cat.id + '_' + mot.id] || 0;
+        rowData.push(val);
+        rowTotal += val;
+      }
+      rowData.push(rowTotal);
+      rowData.push(categorySpending[cat.id] || 0);
+      bmData.push(rowData);
+    }
+    // Totals row
+    const totalRowData = ['Total'];
+    let grandTotal = 0;
+    let grandSpent = 0;
+    for (const mot of motives) {
+      let colTotal = 0;
+      for (const cat of categories) colTotal += matrix[cat.id + '_' + mot.id] || 0;
+      totalRowData.push(colTotal);
+      grandTotal += colTotal;
+    }
+    totalRowData.push(grandTotal);
+    for (const cat of categories) grandSpent += categorySpending[cat.id] || 0;
+    totalRowData.push(grandSpent);
+    bmData.push(totalRowData);
+    // Spent row
+    const spentRowData = ['Spent'];
+    for (const mot of motives) spentRowData.push(motiveSpending[mot.id] || 0);
+    spentRowData.push(grandSpent);
+    spentRowData.push('');
+    bmData.push(spentRowData);
+
+    // V-Geld Analysis by User
+    const vgeldAnalysisHeaders = ['User', 'Received', 'Spent', 'Remaining', '% Used'];
+    const vgeldAnalysisData = [vgeldAnalysisHeaders];
+    const vgeldSums = db.prepare('SELECT to_user as user, SUM(amount) as received FROM vgeld GROUP BY to_user').all();
+    const billSums = db.prepare('SELECT email as user, SUM(amount) as spent FROM bills GROUP BY email').all();
+    const analysis = {};
+    vgeldSums.forEach(v => {
+      if (!analysis[v.user]) analysis[v.user] = { received: 0, spent: 0 };
+      analysis[v.user].received = v.received || 0;
+    });
+    billSums.forEach(b => {
+      if (!analysis[b.user]) analysis[b.user] = { received: 0, spent: 0 };
+      analysis[b.user].spent = b.spent || 0;
+    });
+    for (const [user, data] of Object.entries(analysis)) {
+      const remaining = data.received - data.spent;
+      const pctUsed = data.received > 0 ? Math.round((data.spent / data.received) * 100) : 0;
+      vgeldAnalysisData.push([user, data.received, data.spent, remaining, pctUsed + '%']);
+    }
+
+    // --- Write to user-provided Google Sheet ---
+    const spreadsheetId = settings.exportSheetId;
+    if (!spreadsheetId) {
+      return res.status(400).json({ error: 'No Export Sheet ID configured. Create a Google Sheet, share it with the service account, and paste the Sheet ID below.' });
+    }
+
+    // Ensure the 3 tabs exist, remove any extras
+    const meta = await sheets.spreadsheets.get({ spreadsheetId });
+    const requiredTabs = ['Bills', 'V-Geld', 'Budget Matrix'];
+    const existingSheets = meta.data.sheets;
+    const existingNames = existingSheets.map(s => s.properties.title);
+    const setupRequests = [];
+    // Add missing tabs
+    for (const title of requiredTabs) {
+      if (!existingNames.includes(title)) setupRequests.push({ addSheet: { properties: { title } } });
+    }
+    // Delete extra tabs (e.g. default "Sheet1")
+    for (const s of existingSheets) {
+      if (!requiredTabs.includes(s.properties.title)) {
+        setupRequests.push({ deleteSheet: { sheetId: s.properties.sheetId } });
+      }
+    }
+    if (setupRequests.length > 0) {
+      await sheets.spreadsheets.batchUpdate({ spreadsheetId, requestBody: { requests: setupRequests } });
+    }
+
+    // Clear existing data
+    await sheets.spreadsheets.values.batchClear({
+      spreadsheetId,
+      requestBody: { ranges: requiredTabs }
+    });
+
+    // Write all data
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        valueInputOption: 'USER_ENTERED',
+        data: [
+          { range: 'Bills!A1', values: billsData },
+          { range: 'V-Geld!A1', values: vgeldData },
+          { range: 'Budget Matrix!A1', values: bmData },
+        ]
+      }
+    });
+
+    // Get sheet IDs for formatting
+    const sheetMeta = await sheets.spreadsheets.get({ spreadsheetId });
+    const sheetIds = {};
+    for (const s of sheetMeta.data.sheets) {
+      sheetIds[s.properties.title] = s.properties.sheetId;
+    }
+
+    // Format headers (dark bg, white bold text, frozen first row)
+    const formatRequests = [];
+    const headerBg = { red: 0.173, green: 0.243, blue: 0.314, alpha: 1 }; // #2C3E50
+    const headerFg = { red: 1, green: 1, blue: 1, alpha: 1 };
+
+    for (const [name, sheetId] of Object.entries(sheetIds)) {
+      const colCount = name === 'Bills' ? billsHeaders.length : name === 'V-Geld' ? vgeldHeaders.length : bmHeaders.length;
+      // Freeze header row
+      formatRequests.push({
+        updateSheetProperties: {
+          properties: { sheetId, gridProperties: { frozenRowCount: 1 } },
+          fields: 'gridProperties.frozenRowCount'
+        }
+      });
+      // Header style
+      formatRequests.push({
+        repeatCell: {
+          range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: colCount },
+          cell: {
+            userEnteredFormat: {
+              backgroundColor: headerBg,
+              textFormat: { bold: true, foregroundColor: headerFg }
+            }
+          },
+          fields: 'userEnteredFormat(backgroundColor,textFormat)'
+        }
+      });
+    }
+
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: { requests: formatRequests }
+    });
+
+    const sheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`;
+    res.json({ ok: true, sheetUrl });
+  } catch (err) {
+    console.error('Google Sheet export error:', err);
+    res.status(500).json({ error: 'Google Sheet export failed: ' + err.message });
   }
 });
 

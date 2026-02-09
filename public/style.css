@@ -16,6 +16,13 @@ h1 {
   margin-bottom: 24px;
 }
 
+.project-subtitle {
+  display: block;
+  font-size: 0.5em;
+  font-weight: 400;
+  color: #7f8c8d;
+}
+
 h2 {
   color: #34495e;
   margin-top: 0;
@@ -54,6 +61,7 @@ label {
 
 input[type="text"],
 input[type="email"],
+input[type="password"],
 input[type="file"],
 input:not([type]),
 select,
@@ -64,6 +72,42 @@ textarea {
   font-size: 16px;
   width: 100%;
   max-width: 400px;
+}
+
+.password-wrapper {
+  position: relative;
+  display: inline-flex;
+  width: 100%;
+  max-width: 400px;
+}
+
+.password-wrapper input[type="password"],
+.password-wrapper input[type="text"] {
+  padding-right: 52px;
+  max-width: 100%;
+}
+
+.password-toggle {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  padding: 4px 8px;
+  cursor: pointer;
+  color: #95a5a6;
+  font-size: 12px;
+  font-weight: 500;
+  width: auto;
+  line-height: 1;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+
+.password-toggle:hover {
+  color: #2c3e50;
+  background: none;
 }
 
 input:focus,
@@ -458,6 +502,122 @@ tr.over-budget {
   background: #fdedec;
 }
 
+/* Bills filter bar */
+.bills-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 4px;
+  margin-top: 12px;
+}
+
+.bills-filter-bar select,
+.bills-filter-bar input[type="date"],
+.bills-filter-bar input[type="text"] {
+  padding: 6px 10px;
+  font-size: 14px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  max-width: 180px;
+  width: auto;
+}
+
+.bills-filter-bar input[type="text"] {
+  max-width: 220px;
+}
+
+.bills-filter-bar input:focus,
+.bills-filter-bar select:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 3px rgba(52,152,219,0.1);
+}
+
+.bills-count {
+  font-size: 13px;
+  color: #7f8c8d;
+  white-space: nowrap;
+}
+
+/* Sortable column headers */
+th.sortable {
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+  padding-right: 20px !important;
+}
+
+th.sortable:hover {
+  background: #ecf0f1;
+}
+
+th.sortable::after {
+  content: '\2195';
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+  color: #bdc3c7;
+}
+
+th.sortable.sort-asc::after {
+  content: '\25B2';
+  color: #3498db;
+}
+
+th.sortable.sort-desc::after {
+  content: '\25BC';
+  color: #3498db;
+}
+
+/* Bills pagination */
+.bills-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+
+.pg-btn {
+  background: #fff;
+  color: #2c3e50;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-size: 14px;
+  cursor: pointer;
+  min-width: 34px;
+  text-align: center;
+  transition: background 0.15s, border-color 0.15s;
+  width: auto;
+}
+
+.pg-btn:hover:not(:disabled) {
+  background: #ecf0f1;
+  border-color: #bdc3c7;
+}
+
+.pg-btn:disabled {
+  color: #bdc3c7;
+  cursor: default;
+  background: #f8f9fa;
+}
+
+.pg-btn.pg-active {
+  background: #3498db;
+  color: #fff;
+  border-color: #3498db;
+}
+
+.pg-ellipsis {
+  padding: 0 4px;
+  color: #7f8c8d;
+}
+
 @media (max-width: 600px) {
   body {
     padding: 12px;
@@ -467,15 +627,41 @@ tr.over-budget {
     padding: 16px;
   }
 
+  .bills-filter-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .bills-filter-bar select,
+  .bills-filter-bar input[type="date"],
+  .bills-filter-bar input[type="text"] {
+    max-width: 100%;
+    width: 100%;
+  }
+
   input[type="text"],
   input[type="email"],
+  input[type="password"],
   input:not([type]),
   select {
     max-width: 100%;
   }
 
+  .password-wrapper {
+    max-width: 100%;
+  }
+
   button {
     width: 100%;
+  }
+
+  .bills-filter-bar button,
+  .alloc-row button,
+  .bill-image-actions button,
+  .form-actions button,
+  .sync-buttons button,
+  .pg-btn {
+    width: auto;
   }
 
   .inline-form {
@@ -577,6 +763,33 @@ tr.over-budget {
     width: 60px;
     height: 60px;
   }
+}
+
+/* Export buttons */
+.export-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 20px;
+  background: #27ae60;
+  color: #fff;
+  text-decoration: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+
+.export-btn:hover {
+  background: #219a52;
+  color: #fff;
+}
+
+.export-btn-secondary {
+  background: #3498db;
+}
+
+.export-btn-secondary:hover {
+  background: #2980b9;
 }
 
 /* Full size image modal */
