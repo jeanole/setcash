@@ -175,6 +175,11 @@ db.exec(`
     UNIQUE(bill_id, category_id)
   );
 
+  CREATE TABLE IF NOT EXISTS roles (
+    id   INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE
+  );
+
   CREATE TABLE IF NOT EXISTS budget_matrix (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     motive_id INTEGER NOT NULL,
@@ -201,6 +206,14 @@ try {
   db.exec("ALTER TABLE bills ADD COLUMN netto_amount REAL DEFAULT 0");
   db.exec("UPDATE bills SET netto_amount = COALESCE(brutto19,0)/1.19 + COALESCE(brutto7,0)/1.07 + COALESCE(brutto0,0)");
   console.log('Migrated: added netto_amount column and backfilled');
+}
+
+// Add role_id column to users if missing (migration)
+try {
+  db.prepare("SELECT role_id FROM users LIMIT 1").get();
+} catch (e) {
+  db.exec("ALTER TABLE users ADD COLUMN role_id INTEGER REFERENCES roles(id)");
+  console.log('Migrated: added role_id column to users');
 }
 
 // Legacy JSON helpers (for migration only)
@@ -366,6 +379,28 @@ function initCategories() {
   }
 }
 
+// Initialize default roles if none exist
+function initRoles() {
+  const roleCount = db.prepare('SELECT COUNT(*) as count FROM roles').get().count;
+  if (roleCount === 0) {
+    const defaultRoles = [
+      'Misc', 'Szenenbild', 'Szenenbild Assistenz', 'Props', 'Set Dec',
+      'Innenrequisite', 'Außenrequisite', 'Fahrer', 'Baubühne', 'Helping Hand'
+    ];
+    const insert = db.prepare('INSERT INTO roles (name) VALUES (?)');
+    for (const name of defaultRoles) {
+      insert.run(name);
+    }
+    console.log('Created default roles');
+  }
+  // Ensure "Misc" role exists
+  const miscRole = db.prepare('SELECT id FROM roles WHERE name = ?').get('Misc');
+  if (!miscRole) {
+    db.prepare('INSERT INTO roles (name) VALUES (?)').run('Misc');
+    console.log('Created Misc role');
+  }
+}
+
 // Migrate existing bills.motive text values into bill_motives junction table
 function migrateMotiveAllocations() {
   const junctionCount = db.prepare('SELECT COUNT(*) as count FROM bill_motives').get().count;
@@ -429,6 +464,7 @@ migrateData();
 initUsers();
 initMotives();
 initCategories();
+initRoles();
 migrateMotiveAllocations();
 migrateBillImages();
 initSettings();
@@ -555,7 +591,8 @@ app.post('/login', loginLimiter, async (req, res) => {
   if (!user || !bcrypt.compareSync(password, user.hash)) {
     return res.redirect('/login?error=1');
   }
-  req.session.user = { email: user.email, admin: user.admin === 1 };
+  const roleRow = user.role_id ? db.prepare('SELECT name FROM roles WHERE id = ?').get(user.role_id) : null;
+  req.session.user = { email: user.email, admin: user.admin === 1, role: roleRow ? roleRow.name : 'Misc' };
   res.redirect('/');
 });
 
@@ -664,6 +701,51 @@ app.delete('/api/admin/category/:id', ensureAdmin, (req, res) => {
   const result = db.prepare('DELETE FROM categories WHERE id = ?').run(id);
   db.prepare('DELETE FROM bill_categories WHERE category_id = ?').run(id);
   db.prepare('DELETE FROM budget_matrix WHERE category_id = ?').run(id);
+  res.json({ ok: true });
+});
+
+// API: Roles
+app.get('/api/roles', ensureAuth, (req, res) => {
+  const roles = db.prepare('SELECT * FROM roles ORDER BY id').all();
+  res.json(roles);
+});
+
+app.post('/api/admin/role', ensureAdmin, (req, res) => {
+  const { role } = req.body;
+  if (!role) return res.status(400).json({ error: 'Role name required' });
+  try {
+    const result = db.prepare('INSERT INTO roles (name) VALUES (?)').run(role);
+    res.json({ ok: true, id: result.lastInsertRowid });
+  } catch (e) {
+    if (e.message.includes('UNIQUE')) return res.status(400).json({ error: 'Role already exists' });
+    throw e;
+  }
+});
+
+app.put('/api/admin/role/:id', ensureAdmin, (req, res) => {
+  const id = parseInt(req.params.id);
+  const existing = db.prepare('SELECT * FROM roles WHERE id = ?').get(id);
+  if (!existing) return res.status(404).json({ error: 'Not found' });
+  if (existing.name === 'Misc') return res.status(400).json({ error: 'Cannot edit Misc role' });
+  const { role } = req.body;
+  if (!role) return res.status(400).json({ error: 'Role name required' });
+  try {
+    db.prepare('UPDATE roles SET name = ? WHERE id = ?').run(role, id);
+    res.json({ ok: true });
+  } catch (e) {
+    if (e.message.includes('UNIQUE')) return res.status(400).json({ error: 'Role already exists' });
+    throw e;
+  }
+});
+
+app.delete('/api/admin/role/:id', ensureAdmin, (req, res) => {
+  const id = parseInt(req.params.id);
+  const role = db.prepare('SELECT name FROM roles WHERE id = ?').get(id);
+  if (!role) return res.status(404).json({ error: 'Not found' });
+  if (role.name === 'Misc') return res.status(400).json({ error: 'Cannot delete Misc role' });
+  // Reassign affected users to NULL (will display as "Misc")
+  db.prepare('UPDATE users SET role_id = NULL WHERE role_id = ?').run(id);
+  db.prepare('DELETE FROM roles WHERE id = ?').run(id);
   res.json({ ok: true });
 });
 
@@ -793,6 +875,11 @@ function getMotiveDisplayString(billId) {
 app.get('/api/bills', ensureAuth, (req, res) => {
   const bills = db.prepare('SELECT * FROM bills ORDER BY id').all();
 
+  // Bulk-fetch email -> role map
+  const userRoles = {};
+  db.prepare(`SELECT u.email, COALESCE(r.name, 'Misc') as role_name FROM users u LEFT JOIN roles r ON r.id = u.role_id`).all()
+    .forEach(u => { userRoles[u.email] = u.role_name; });
+
   // Bulk-fetch all allocations
   const allMotiveAllocs = db.prepare(`
     SELECT bm.bill_id, bm.motive_id, bm.percentage, m.name
@@ -826,6 +913,7 @@ app.get('/api/bills', ensureAuth, (req, res) => {
     id: b.id,
     date: b.date,
     email: b.email,
+    role: userRoles[b.email] || 'Misc',
     billNumber: b.bill_number,
     type: b.type,
     vendor: b.vendor,
@@ -1304,25 +1392,29 @@ app.get('/api/users', ensureAuth, (req, res) => {
 
 // API: Users (admin only)
 app.get('/api/admin/users', ensureAdmin, (req, res) => {
-  const users = db.prepare('SELECT id, email, admin FROM users ORDER BY email').all();
-  res.json(users.map(u => ({ id: u.id, email: u.email, admin: u.admin === 1 })));
+  const users = db.prepare(`
+    SELECT u.id, u.email, u.admin, u.role_id, COALESCE(r.name, 'Misc') as role_name
+    FROM users u LEFT JOIN roles r ON r.id = u.role_id
+    ORDER BY u.email
+  `).all();
+  res.json(users.map(u => ({ id: u.id, email: u.email, admin: u.admin === 1, roleId: u.role_id, roleName: u.role_name })));
 });
 
 app.post('/api/admin/users', ensureAdmin, async (req, res) => {
-  const { email, password, admin } = req.body;
+  const { email, password, admin, roleId } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
   const pwError = validatePassword(password);
   if (pwError) return res.status(400).json({ error: pwError });
   if (findUser(email)) return res.status(400).json({ error: 'User already exists' });
   const hash = await bcrypt.hash(password, 12);
-  const result = db.prepare('INSERT INTO users (email, hash, admin) VALUES (?, ?, ?)').run(email, hash, admin === true ? 1 : 0);
+  const result = db.prepare('INSERT INTO users (email, hash, admin, role_id) VALUES (?, ?, ?, ?)').run(email, hash, admin === true ? 1 : 0, roleId || null);
   res.json({ ok: true, id: result.lastInsertRowid });
 });
 
 app.put('/api/admin/users/:email', ensureAdmin, async (req, res) => {
   const user = findUser(req.params.email);
   if (!user) return res.status(404).json({ error: 'User not found' });
-  const { password, admin } = req.body;
+  const { password, admin, roleId } = req.body;
   const updates = [];
   const params = [];
   if (password) {
@@ -1335,6 +1427,10 @@ app.put('/api/admin/users/:email', ensureAdmin, async (req, res) => {
   if (admin !== undefined) {
     updates.push('admin = ?');
     params.push(admin === true ? 1 : 0);
+  }
+  if (roleId !== undefined) {
+    updates.push('role_id = ?');
+    params.push(roleId || null);
   }
   if (updates.length > 0) {
     params.push(user.id);
@@ -1708,6 +1804,10 @@ app.get('/api/report/:email', ensureAuth, async (req, res) => {
     return res.status(404).json({ error: 'No data found for this user' });
   }
 
+  // Look up user's role
+  const targetUser = db.prepare(`SELECT u.role_id, COALESCE(r.name, 'Misc') as role_name FROM users u LEFT JOIN roles r ON r.id = u.role_id WHERE LOWER(u.email) = LOWER(?)`).get(targetEmail);
+  const userRole = targetUser ? targetUser.role_name : 'Misc';
+
   const pdfSettings = getSettings();
   const pTitle = pdfSettings.projectTitle || '';
   const pSubtitle = pdfSettings.projectSubtitle || '';
@@ -1726,7 +1826,7 @@ app.get('/api/report/:email', ensureAuth, async (req, res) => {
     doc.fontSize(12).font('Helvetica').text(pSubtitle, { align: 'center' });
   }
   doc.moveDown(0.5);
-  doc.fontSize(14).font('Helvetica').text(`Benutzer: ${targetEmail}`, { align: 'center' });
+  doc.fontSize(14).font('Helvetica').text(`Benutzer: ${targetEmail} (${userRole})`, { align: 'center' });
   doc.fontSize(10).text(`Erstellt: ${new Date().toLocaleDateString('de-DE')}`, { align: 'center' });
   doc.moveDown(1);
 
@@ -1906,11 +2006,6 @@ app.get('/api/report/:email', ensureAuth, async (req, res) => {
   for (let i = 0; i < userBills.length; i++) {
     const bill = userBills[i];
 
-    // Check if we need a new page (leave room for image)
-    if (doc.y > 600) {
-      doc.addPage();
-    }
-
     // Bill header
     doc.fontSize(12).font('Helvetica-Bold');
     doc.text(`Beleg ${bill.bill_number || (i + 1)}`, { continued: true });
@@ -2020,13 +2115,9 @@ app.get('/api/report/:email', ensureAuth, async (req, res) => {
       }
     }
 
-    doc.moveDown(0.5);
-
-    // Separator between bills
+    // New page after each bill (except the last)
     if (i < userBills.length - 1) {
-      doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor('#cccccc').stroke();
-      doc.strokeColor('black');
-      doc.moveDown(1);
+      doc.addPage();
     }
   }
 
@@ -2036,12 +2127,18 @@ app.get('/api/report/:email', ensureAuth, async (req, res) => {
 // List users for report dropdown (admins see all, users see only themselves)
 app.get('/api/report-users', ensureAuth, (req, res) => {
   if (req.user.admin) {
-    // Admins see all users who have bills
-    const usersWithBills = db.prepare('SELECT DISTINCT email FROM bills ORDER BY email').all();
-    res.json(usersWithBills);
+    // Admins see all users who have bills, with their roles
+    const usersWithBills = db.prepare(`
+      SELECT DISTINCT b.email, COALESCE(r.name, 'Misc') as role_name
+      FROM bills b
+      LEFT JOIN users u ON LOWER(u.email) = LOWER(b.email)
+      LEFT JOIN roles r ON r.id = u.role_id
+      ORDER BY b.email
+    `).all();
+    res.json(usersWithBills.map(u => ({ email: u.email, roleName: u.role_name })));
   } else {
     // Regular users only see themselves
-    res.json([{ email: req.user.email }]);
+    res.json([{ email: req.user.email, roleName: req.user.role || 'Misc' }]);
   }
 });
 

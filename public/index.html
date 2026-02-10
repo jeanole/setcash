@@ -83,6 +83,7 @@
               <select id="filterPerson"><option value="">All Persons</option></select>
               <select id="filterMotive"><option value="">All Motives</option></select>
               <select id="filterCategory"><option value="">All Categories</option></select>
+              <select id="filterRole"><option value="">All Roles</option></select>
               <select id="filterType">
                 <option value="">All Types</option>
                 <option value="Kauf">Kauf</option>
@@ -102,6 +103,7 @@
                   <th class="sortable" data-sort="billNumber">Nr.</th>
                   <th class="sortable" data-sort="date">Date</th>
                   <th class="sortable" data-sort="email">Uploaded By</th>
+                  <th class="sortable" data-sort="role">Role</th>
                   <th class="sortable" data-sort="type">Type</th>
                   <th class="sortable" data-sort="vendor">Vendor</th>
                   <th class="sortable" data-sort="item">Item</th>
@@ -245,7 +247,7 @@
                 </div>
               </div>
             </div>
-            <div id="budgetMatrixContainer" style="overflow-x:auto;"></div>
+            <div id="budgetMatrixContainer" style="overflow:auto; scroll-snap-type:x mandatory; max-height:70vh;"></div>
             <div style="margin-top:16px; padding-top:16px; border-top:1px solid #eee;">
               <button class="secondary" onclick="window.open('/api/budget-report','_blank')">Export Budget PDF</button>
             </div>
@@ -388,12 +390,13 @@
     <script>
       let motivesData = [];
       let categoriesData = [];
+      let rolesData = [];
       let allBills = [];
       let allLogs = [];
       let currentBillId = null;
 
       // Bills filter, sort & pagination state
-      let billFilters = { person: '', motive: '', category: '', type: '', dateFrom: '', dateTo: '', search: '' };
+      let billFilters = { person: '', motive: '', category: '', role: '', type: '', dateFrom: '', dateTo: '', search: '' };
       let billSort = { column: null, dir: 'asc' };
       let billPage = 1;
       const BILLS_PER_PAGE = 20;
@@ -654,6 +657,7 @@
         const personSel = document.getElementById('filterPerson');
         const motiveSel = document.getElementById('filterMotive');
         const categorySel = document.getElementById('filterCategory');
+        const roleSel = document.getElementById('filterRole');
 
         // Person
         const persons = [...new Set(allBills.map(b => b.email))].sort();
@@ -668,20 +672,26 @@
         categorySel.innerHTML = '<option value="">All Categories</option>' +
           categoriesData.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
 
+        // Roles
+        roleSel.innerHTML = '<option value="">All Roles</option>' +
+          rolesData.map(r => `<option value="${escapeHtml(r.name)}">${escapeHtml(r.name)}</option>`).join('');
+
         // Restore current filter values
         personSel.value = billFilters.person;
         motiveSel.value = billFilters.motive;
         categorySel.value = billFilters.category;
+        roleSel.value = billFilters.role;
       }
 
       function initFilterListeners() {
-        const ids = ['filterPerson', 'filterMotive', 'filterCategory', 'filterType', 'filterDateFrom', 'filterDateTo', 'filterSearch'];
+        const ids = ['filterPerson', 'filterMotive', 'filterCategory', 'filterRole', 'filterType', 'filterDateFrom', 'filterDateTo', 'filterSearch'];
         ids.forEach(id => {
           const el = document.getElementById(id);
           el.addEventListener(el.tagName === 'INPUT' && el.type === 'text' ? 'input' : 'change', () => {
             billFilters.person = document.getElementById('filterPerson').value;
             billFilters.motive = document.getElementById('filterMotive').value;
             billFilters.category = document.getElementById('filterCategory').value;
+            billFilters.role = document.getElementById('filterRole').value;
             billFilters.type = document.getElementById('filterType').value;
             billFilters.dateFrom = document.getElementById('filterDateFrom').value;
             billFilters.dateTo = document.getElementById('filterDateTo').value;
@@ -715,12 +725,13 @@
       }
 
       function resetBillFilters() {
-        billFilters = { person: '', motive: '', category: '', type: '', dateFrom: '', dateTo: '', search: '' };
+        billFilters = { person: '', motive: '', category: '', role: '', type: '', dateFrom: '', dateTo: '', search: '' };
         billSort = { column: null, dir: 'asc' };
         billPage = 1;
         document.getElementById('filterPerson').value = '';
         document.getElementById('filterMotive').value = '';
         document.getElementById('filterCategory').value = '';
+        document.getElementById('filterRole').value = '';
         document.getElementById('filterType').value = '';
         document.getElementById('filterDateFrom').value = '';
         document.getElementById('filterDateTo').value = '';
@@ -742,6 +753,7 @@
           const cid = Number(billFilters.category);
           bills = bills.filter(b => b.categoryAllocations && b.categoryAllocations.some(a => a.categoryId === cid));
         }
+        if (billFilters.role) bills = bills.filter(b => (b.role || 'Misc') === billFilters.role);
         if (billFilters.type) bills = bills.filter(b => (b.type || 'Kauf') === billFilters.type);
         if (billFilters.dateFrom) {
           const from = new Date(billFilters.dateFrom);
@@ -800,7 +812,7 @@
         const tbody = document.getElementById('billsBody');
         const isAdmin = currentUser && currentUser.admin;
         if (totalFiltered === 0) {
-          tbody.innerHTML = '<tr><td colspan="14">No matching bills.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="15">No matching bills.</td></tr>';
         } else {
           tbody.innerHTML = pageBills.map(bill => {
             const b19 = bill.brutto19 || 0;
@@ -816,6 +828,7 @@
               <td><strong>${escapeHtml(bill.billNumber || '-')}</strong></td>
               <td>${escapeHtml(formatDate(bill.date))}</td>
               <td>${escapeHtml(bill.email)}</td>
+              <td>${escapeHtml(bill.role || 'Misc')}</td>
               <td>${escapeHtml(bill.type || 'Kauf')}</td>
               <td>${escapeHtml(bill.vendor)}</td>
               <td>${escapeHtml(bill.item)}</td>
@@ -884,7 +897,7 @@
 
       async function loadBills() {
         const tbody = document.getElementById('billsBody');
-        tbody.innerHTML = '<tr><td colspan="14">Loading...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="15">Loading...</td></tr>';
         try {
           const [billsRes, logsRes] = await Promise.all([
             fetch('/api/bills'),
@@ -900,13 +913,13 @@
           populateFilterDropdowns();
 
           if (allBills.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="14">No bills yet.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="15">No bills yet.</td></tr>';
             document.getElementById('billsCount').textContent = '';
             return;
           }
           renderFilteredBills();
         } catch (e) {
-          tbody.innerHTML = '<tr><td colspan="14">Error loading bills.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="15">Error loading bills.</td></tr>';
         }
       }
 
@@ -1541,7 +1554,10 @@
           const res = await fetch('/api/report-users');
           const users = await res.json();
           const sel = document.getElementById('reportUserSelect');
-          sel.innerHTML = users.map(u => `<option value="${escapeHtml(u.email)}">${escapeHtml(u.email)}</option>`).join('');
+          sel.innerHTML = users.map(u => {
+            const label = u.roleName && u.roleName !== 'Misc' ? `${u.email} (${u.roleName})` : u.email;
+            return `<option value="${escapeHtml(u.email)}">${escapeHtml(label)}</option>`;
+          }).join('');
         } catch (e) {
           console.error('Could not load report users:', e);
         }
@@ -1796,6 +1812,12 @@
         html += '</tfoot></table>';
 
         container.innerHTML = html;
+
+        // Set scroll-padding to match sticky column width for snap alignment
+        var cornerEl = container.querySelector('.bm-corner');
+        if (cornerEl) {
+          container.style.scrollPaddingLeft = cornerEl.offsetWidth + 'px';
+        }
 
         // Wire up admin interactions
         if (isAdmin) {
@@ -2082,14 +2104,16 @@
         document.getElementById('signed-in').style.display='block';
         document.getElementById('user').textContent = user.email + (user.admin ? ' [admin]' : '');
 
-        // Load motives, categories, and project info
-        const [motivesRes, categoriesRes, projectRes] = await Promise.all([
+        // Load motives, categories, roles, and project info
+        const [motivesRes, categoriesRes, rolesRes, projectRes] = await Promise.all([
           fetch('/api/motives'),
           fetch('/api/categories'),
+          fetch('/api/roles'),
           fetch('/api/project-info')
         ]);
         motivesData = await motivesRes.json();
         categoriesData = await categoriesRes.json();
+        rolesData = await rolesRes.json();
         const projectInfo = await projectRes.json();
         if (projectInfo.projectTitle) {
           const subtitle = projectInfo.projectSubtitle ? `<span class="project-subtitle">${escapeHtml(projectInfo.projectSubtitle)}</span>` : '';
