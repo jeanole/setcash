@@ -1525,9 +1525,11 @@ app.get('/api/vgeld/analysis', ensureAuth, (req, res) => {
 // Public endpoint for project title (no auth required)
 app.get('/api/project-info', (req, res) => {
   const settings = getSettings();
+  const pkg = require('./package.json');
   res.json({
     projectTitle: settings.projectTitle || '',
-    projectSubtitle: settings.projectSubtitle || ''
+    projectSubtitle: settings.projectSubtitle || '',
+    version: pkg.version
   });
 });
 

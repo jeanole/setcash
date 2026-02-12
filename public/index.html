@@ -269,7 +269,7 @@
           </div>
         </div>
 
-        <p><a href="/admin">Admin panel</a> (admins only) | <a href="/logout">Logout</a></p>
+        <p><a href="/admin">Admin panel</a> (admins only) | <a href="/logout">Logout</a> | <span id="appVersion" style="color:#999; font-size:0.85em"></span></p>
       </div>
     </div>
 
@@ -2119,6 +2119,9 @@
           const subtitle = projectInfo.projectSubtitle ? `<span class="project-subtitle">${escapeHtml(projectInfo.projectSubtitle)}</span>` : '';
           document.getElementById('appTitle').innerHTML = escapeHtml(projectInfo.projectTitle) + subtitle;
           document.title = projectInfo.projectTitle + ' - vBudget';
+        }
+        if (projectInfo.version) {
+          document.getElementById('appVersion').textContent = 'v' + projectInfo.version;
         }
 
         // Initialize upload allocation widgets (empty)

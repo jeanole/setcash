@@ -104,7 +104,7 @@
     </div>
   </div>
 
-  <p><a href="/">Back</a> | <a href="/logout">Logout</a></p>
+  <p><a href="/">Back</a> | <a href="/logout">Logout</a> | <span id="adminVersion" style="color:#999; font-size:0.85em"></span></p>
 
   <script>
     function togglePw(btn){const i=btn.previousElementSibling;const show=i.type==='password';i.type=show?'text':'password';btn.textContent=show?'Hide':'Show';}
@@ -355,6 +355,9 @@
     loadRoles().then(() => loadUsers());
     loadSettings();
     loadCredStatus();
+    fetch('/api/project-info').then(r => r.json()).then(d => {
+      if (d.version) document.getElementById('adminVersion').textContent = 'v' + d.version;
+    });
   </script>
 </body>
 </html>
