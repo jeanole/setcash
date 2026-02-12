@@ -7,41 +7,43 @@
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <h1>Admin Panel</h1>
+  <h1>Project Admin</h1>
 
   <div class="tabs">
-    <button class="tab active" data-tab="users">Users</button>
+    <button class="tab active" data-tab="members">Members</button>
     <button class="tab" data-tab="settings">Settings</button>
     <button class="tab" data-tab="google">Google</button>
     <button class="tab" data-tab="export">Export</button>
   </div>
 
-  <div id="tab-users" class="tab-content active">
+  <div id="tab-members" class="tab-content active">
     <div class="card">
-      <h2>Users</h2>
-      <form id="userForm" class="inline-form">
-        <input type="email" name="email" placeholder="Email" required>
-        <div class="password-wrapper"><input type="password" name="password" placeholder="Password" required><button type="button" class="password-toggle" onclick="togglePw(this)">Show</button></div>
-        <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" name="admin"> Admin</label>
-        <button type="submit">Add User</button>
+      <h2>Project Members</h2>
+      <form id="memberForm" class="inline-form">
+        <input type="email" name="email" placeholder="User email (must exist)" required>
+        <select name="projectRole">
+          <option value="user">User</option>
+          <option value="admin">Admin</option>
+        </select>
+        <button type="submit">Add Member</button>
       </form>
-      <div id="userResult"></div>
+      <div id="memberResult"></div>
       <table class="data-table">
-        <thead><tr><th>Email</th><th>Role</th><th>Actions</th></tr></thead>
-        <tbody id="userBody"></tbody>
+        <thead><tr><th>Email</th><th>Role</th><th>Position</th><th>Actions</th></tr></thead>
+        <tbody id="memberBody"></tbody>
       </table>
     </div>
 
     <div class="card">
-      <h2>Roles</h2>
-      <form id="roleForm" class="inline-form">
-        <input type="text" name="role" placeholder="Role name" required>
-        <button type="submit">Add Role</button>
+      <h2>Positions</h2>
+      <form id="positionForm" class="inline-form">
+        <input type="text" name="name" placeholder="Position name" required>
+        <button type="submit">Add Position</button>
       </form>
-      <div id="roleResult"></div>
+      <div id="positionResult"></div>
       <table class="data-table">
         <thead><tr><th>Name</th><th>Actions</th></tr></thead>
-        <tbody id="roleBody"></tbody>
+        <tbody id="positionBody"></tbody>
       </table>
     </div>
   </div>
@@ -100,7 +102,7 @@
         <button type="button" class="export-btn export-btn-secondary" onclick="exportGoogleSheet(this)">Export Now</button>
       </form>
       <div id="googleExportResult" style="margin-top:4px"></div>
-      <p style="font-size:0.85em;color:#666;margin-top:4px">Create a Google Sheet, share it (Editor) with the service account email shown above, and paste the Sheet ID here. Export writes Bills, V-Geld, and Budget Matrix tabs.</p>
+      <p style="font-size:0.85em;color:#666;margin-top:4px">Create a Google Sheet, share it (Editor) with the service account email shown above, and paste the Sheet ID here.</p>
     </div>
   </div>
 
@@ -122,134 +124,123 @@
       });
     });
 
-    let rolesCache = [];
+    let positionsCache = [];
 
-    async function loadRoles() {
+    async function loadPositions() {
       try {
-        rolesCache = await (await fetch('/api/roles')).json();
-        const tbody = document.getElementById('roleBody');
-        tbody.innerHTML = rolesCache.map(r => {
-          const isMisc = r.name === 'Misc';
-          const safeName = esc(r.name).replace(/'/g, '&#39;');
-          return `<tr data-id="${r.id}">
-            <td>${esc(r.name)}</td>
-            <td>${isMisc ? '' : `<button class="small secondary" onclick="renameRole(${r.id}, '${safeName}')">Rename</button>
-              <button class="small danger" onclick="deleteRole(${r.id})">Delete</button>`}</td>
+        positionsCache = await (await fetch('/api/positions')).json();
+        const tbody = document.getElementById('positionBody');
+        tbody.innerHTML = positionsCache.map(p => {
+          const isMisc = p.name === 'Misc';
+          const safeName = esc(p.name).replace(/'/g, '&#39;');
+          return `<tr data-id="${p.id}">
+            <td>${esc(p.name)}</td>
+            <td>${isMisc ? '' : `<button class="small secondary" onclick="renamePosition(${p.id}, '${safeName}')">Rename</button>
+              <button class="small danger" onclick="deletePosition(${p.id})">Delete</button>`}</td>
           </tr>`;
         }).join('');
-      } catch (e) { console.error('Error loading roles', e); }
+      } catch (e) { console.error('Error loading positions', e); }
     }
 
-    document.getElementById('roleForm').onsubmit = async e => {
+    document.getElementById('positionForm').onsubmit = async e => {
       e.preventDefault();
       const f = e.target;
-      const res = await fetch('/api/admin/role', {
+      const res = await fetch('/api/admin/position', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ role: f.role.value })
+        body: JSON.stringify({ name: f.name.value })
       });
       const j = await res.json();
-      if (j.ok) { msg('roleResult', 'Role added', false); f.reset(); loadRoles().then(() => loadUsers()); }
-      else msg('roleResult', j.error || 'Error', true);
+      if (j.ok) { msg('positionResult', 'Position added', false); f.reset(); loadPositions().then(() => loadMembers()); }
+      else msg('positionResult', j.error || 'Error', true);
     };
 
-    async function renameRole(id, oldName) {
-      const newName = prompt('Rename role "' + oldName + '" to:', oldName);
+    async function renamePosition(id, oldName) {
+      const newName = prompt('Rename position "' + oldName + '" to:', oldName);
       if (!newName || newName === oldName) return;
-      const res = await fetch('/api/admin/role/' + id, {
+      const res = await fetch('/api/admin/position/' + id, {
         method: 'PUT',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ role: newName })
+        body: JSON.stringify({ name: newName })
       });
       const j = await res.json();
-      if (j.ok) { msg('roleResult', 'Role renamed', false); loadRoles().then(() => loadUsers()); }
-      else msg('roleResult', j.error || 'Error', true);
+      if (j.ok) { msg('positionResult', 'Position renamed', false); loadPositions().then(() => loadMembers()); }
+      else msg('positionResult', j.error || 'Error', true);
     }
 
-    async function deleteRole(id) {
-      if (!confirm('Delete this role? Users with this role will revert to Misc.')) return;
-      const res = await fetch('/api/admin/role/' + id, { method: 'DELETE' });
+    async function deletePosition(id) {
+      if (!confirm('Delete this position? Members with this position will revert to unset.')) return;
+      const res = await fetch('/api/admin/position/' + id, { method: 'DELETE' });
       const j = await res.json();
-      if (j.ok) { msg('roleResult', 'Deleted', false); loadRoles().then(() => loadUsers()); }
-      else msg('roleResult', j.error || 'Error', true);
+      if (j.ok) { msg('positionResult', 'Deleted', false); loadPositions().then(() => loadMembers()); }
+      else msg('positionResult', j.error || 'Error', true);
     }
 
-    async function setUserRole(email, roleId) {
-      const res = await fetch('/api/admin/users/' + encodeURIComponent(email), {
+    async function setMemberPosition(memberId, positionId) {
+      const res = await fetch('/api/admin/project/members/' + memberId, {
         method: 'PUT',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ roleId: roleId ? parseInt(roleId) : null })
+        body: JSON.stringify({ positionId: positionId ? parseInt(positionId) : null })
       });
       const j = await res.json();
-      if (!j.ok) msg('userResult', j.error || 'Error', true);
+      if (!j.ok) msg('memberResult', j.error || 'Error', true);
     }
 
-    async function loadUsers() {
-      const tbody = document.getElementById('userBody');
+    async function setMemberRole(memberId, projectRole) {
+      const res = await fetch('/api/admin/project/members/' + memberId, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ projectRole })
+      });
+      const j = await res.json();
+      if (j.ok) loadMembers();
+      else msg('memberResult', j.error || 'Error', true);
+    }
+
+    async function loadMembers() {
+      const tbody = document.getElementById('memberBody');
       try {
-        const users = await (await fetch('/api/admin/users')).json();
-        tbody.innerHTML = users.map(u => {
-          const miscOpt = rolesCache.find(r => r.name === 'Misc');
-          const effectiveRoleId = u.roleId || (miscOpt ? miscOpt.id : null);
-          const roleOptions = rolesCache.map(r =>
-            `<option value="${r.id}" ${r.id === effectiveRoleId ? 'selected' : ''}>${esc(r.name)}</option>`
+        const members = await (await fetch('/api/admin/project/members')).json();
+        tbody.innerHTML = members.map(m => {
+          const posOptions = '<option value="">-- None --</option>' + positionsCache.map(p =>
+            `<option value="${p.id}" ${p.id === m.positionId ? 'selected' : ''}>${esc(p.name)}</option>`
           ).join('');
-          const roleSelect = `<select onchange="setUserRole('${esc(u.email)}', this.value)">${roleOptions}</select>`;
+          const posSelect = `<select onchange="setMemberPosition(${m.id}, this.value)">${posOptions}</select>`;
+          const roleSelect = `<select onchange="setMemberRole(${m.id}, this.value)">
+            <option value="user" ${m.projectRole === 'user' ? 'selected' : ''}>User</option>
+            <option value="admin" ${m.projectRole === 'admin' ? 'selected' : ''}>Admin</option>
+          </select>`;
           return `<tr>
-          <td>${esc(u.email)}</td>
+          <td>${esc(m.email)}</td>
           <td>${roleSelect}</td>
+          <td>${posSelect}</td>
           <td>
-            <button class="small secondary" onclick="resetPassword('${esc(u.email)}')">Reset PW</button>
-            <button class="small ${u.admin ? '' : 'secondary'}" onclick="toggleAdmin('${esc(u.email)}', ${!u.admin})">${u.admin ? 'Demote' : 'Promote'}</button>
-            <button class="small danger" onclick="deleteUser('${esc(u.email)}')">Delete</button>
+            <button class="small danger" onclick="removeMember(${m.id}, '${esc(m.email)}')">Remove</button>
           </td>
         </tr>`;
         }).join('');
-      } catch (e) { tbody.innerHTML = '<tr><td colspan="3">Error</td></tr>'; }
+      } catch (e) { tbody.innerHTML = '<tr><td colspan="4">Error loading members</td></tr>'; }
     }
 
-    document.getElementById('userForm').onsubmit = async e => {
+    document.getElementById('memberForm').onsubmit = async e => {
       e.preventDefault();
       const f = e.target;
-      const res = await fetch('/api/admin/users', {
+      const res = await fetch('/api/admin/project/members', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ email: f.email.value, password: f.password.value, admin: f.admin.checked })
+        body: JSON.stringify({ email: f.email.value, projectRole: f.projectRole.value })
       });
       const j = await res.json();
-      if (j.ok) { msg('userResult', 'User added', false); f.reset(); loadUsers(); }
-      else msg('userResult', j.error || 'Error', true);
+      if (j.ok) { msg('memberResult', 'Member added', false); f.reset(); loadMembers(); }
+      else msg('memberResult', j.error || 'Error', true);
     };
 
-    async function resetPassword(email) {
-      const pw = prompt('New password for ' + email + ':');
-      if (!pw) return;
-      const res = await fetch('/api/admin/users/' + encodeURIComponent(email), {
-        method: 'PUT',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ password: pw })
-      });
+    async function removeMember(id, email) {
+      if (!confirm('Remove ' + email + ' from this project?')) return;
+      const res = await fetch('/api/admin/project/members/' + id, { method: 'DELETE' });
       const j = await res.json();
-      msg('userResult', j.ok ? 'Password reset' : (j.error || 'Error'), !j.ok);
-    }
-
-    async function toggleAdmin(email, makeAdmin) {
-      const res = await fetch('/api/admin/users/' + encodeURIComponent(email), {
-        method: 'PUT',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ admin: makeAdmin })
-      });
-      const j = await res.json();
-      if (j.ok) loadUsers();
-      else msg('userResult', j.error || 'Error', true);
-    }
-
-    async function deleteUser(email) {
-      if (!confirm('Delete ' + email + '?')) return;
-      const res = await fetch('/api/admin/users/' + encodeURIComponent(email), { method: 'DELETE' });
-      const j = await res.json();
-      if (j.ok) { msg('userResult', 'Deleted', false); loadUsers(); }
-      else msg('userResult', j.error || 'Error', true);
+      if (j.ok) { msg('memberResult', 'Member removed', false); loadMembers(); }
+      else msg('memberResult', j.error || 'Error', true);
     }
 
     async function loadSettings() {
@@ -352,7 +343,7 @@
       btn.textContent = 'Export Now';
     }
 
-    loadRoles().then(() => loadUsers());
+    loadPositions().then(() => loadMembers());
     loadSettings();
     loadCredStatus();
     fetch('/api/project-info').then(r => r.json()).then(d => {

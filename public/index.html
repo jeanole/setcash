@@ -7,14 +7,56 @@
     <link rel="stylesheet" href="/style.css">
   </head>
   <body>
-    <h1 id="appTitle">vBudget</h1>
+    <!-- Sidebar overlay -->
+    <div id="sidebarOverlay" class="sidebar-overlay" onclick="closeMenu()"></div>
+
+    <!-- Sidebar -->
+    <nav id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <span id="sidebarTitle" class="sidebar-app-title">vBudget</span>
+        <button class="sidebar-close" onclick="closeMenu()">&#x2715;</button>
+      </div>
+      <div class="sidebar-user">
+        <span id="sidebarEmail" style="font-weight:600;font-size:0.95em"></span>
+        <span id="sidebarRole" style="font-size:0.8em;color:#7f8c8d;margin-top:2px"></span>
+      </div>
+      <div class="sidebar-section" id="sidebarProjectsSection" style="display:none">
+        <div class="sidebar-section-label">Projects</div>
+        <div id="sidebarProjectList"></div>
+      </div>
+      <div class="sidebar-section sidebar-links">
+        <a id="sidebarAdminLink" href="/admin" class="sidebar-link" style="display:none">Settings</a>
+        <a id="sidebarSuperAdminLink" href="/superadmin" class="sidebar-link sidebar-link-danger" style="display:none">Super Admin</a>
+      </div>
+      <div class="sidebar-footer">
+        <a href="/logout" class="sidebar-link">Logout</a>
+        <span id="sidebarVersion" style="font-size:0.75em;color:#95a5a6;margin-top:4px"></span>
+      </div>
+    </nav>
+
+    <div class="app-header">
+      <button class="burger-btn" onclick="openMenu()" aria-label="Menu">
+        <span></span><span></span><span></span>
+      </button>
+      <h1 id="appTitle">vBudget</h1>
+    </div>
+
+    <!-- Project selector overlay (shown when user has multiple projects and none selected) -->
+    <div id="projectSelectorOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; display:none; align-items:center; justify-content:center;">
+      <div class="card" style="min-width:320px; max-width:500px; margin:0 auto; position:relative; top:auto; left:auto; transform:none;">
+        <h2>Select Project</h2>
+        <p style="color:#7f8c8d; margin-bottom:16px;">Choose a project to continue:</p>
+        <div id="projectList" style="display:flex; flex-direction:column; gap:8px;"></div>
+      </div>
+    </div>
+
     <div id="app">
       <div id="not-signed-in" class="card" style="display:none">
         <p>Please log in to continue.</p>
         <a href="/login"><button type="button">Login</button></a>
       </div>
       <div id="signed-in" style="display:none">
-        <p id="user"></p>
+        <p id="user" style="display:none"></p>
 
         <div class="tabs">
           <button class="tab active" data-tab="upload">Upload</button>
@@ -269,7 +311,7 @@
           </div>
         </div>
 
-        <p><a href="/admin">Admin panel</a> (admins only) | <a href="/logout">Logout</a> | <span id="appVersion" style="color:#999; font-size:0.85em"></span></p>
+        <p id="footerLinks" style="font-size:0.85em;color:#999"><span id="appVersion"></span></p>
       </div>
     </div>
 
@@ -2096,24 +2138,58 @@
         }
       }
 
-      async function init() {
-        const res = await fetch('/api/user');
-        const user = await res.json();
-        if (!user) { window.location.href = '/login'; return; }
-        currentUser = user;
-        document.getElementById('signed-in').style.display='block';
-        document.getElementById('user').textContent = user.email + (user.admin ? ' [admin]' : '');
+      async function showProjectSelector() {
+        const res = await fetch('/api/projects');
+        if (!res.ok) return;
+        const projects = await res.json();
+        if (projects.length === 0) {
+          document.getElementById('projectList').innerHTML = '<p style="color:#e74c3c">No projects available. Contact your administrator.</p>';
+          document.getElementById('projectSelectorOverlay').style.display = 'flex';
+          return;
+        }
+        if (projects.length === 1) {
+          // Auto-select
+          await selectProject(projects[0].id);
+          return;
+        }
+        const listEl = document.getElementById('projectList');
+        listEl.innerHTML = '';
+        for (const p of projects) {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.style.cssText = 'padding:12px 16px; text-align:left; background:#ecf0f1; border:1px solid #bdc3c7; border-radius:6px; cursor:pointer; font-size:1em;';
+          btn.innerHTML = `<strong>${escapeHtml(p.name)}</strong>${p.subtitle ? `<br><small style="color:#7f8c8d">${escapeHtml(p.subtitle)}</small>` : ''}`;
+          btn.addEventListener('mouseover', () => btn.style.background = '#d5e8f5');
+          btn.addEventListener('mouseout', () => btn.style.background = '#ecf0f1');
+          btn.addEventListener('click', () => selectProject(p.id));
+          listEl.appendChild(btn);
+        }
+        document.getElementById('projectSelectorOverlay').style.display = 'flex';
+      }
 
-        // Load motives, categories, roles, and project info
-        const [motivesRes, categoriesRes, rolesRes, projectRes] = await Promise.all([
+      async function selectProject(projectId) {
+        const r = await fetch(`/api/projects/select/${projectId}`, { method: 'POST' });
+        if (!r.ok) { alert('Failed to select project'); return; }
+        const data = await r.json();
+        currentUser.currentProjectId = data.projectId;
+        currentUser.currentProjectRole = data.projectRole;
+        currentUser.currentProjectName = data.projectName;
+        document.getElementById('projectSelectorOverlay').style.display = 'none';
+        await loadProjectData();
+      }
+
+      async function loadProjectData() {
+        // Load motives, categories, positions, and project info for current project
+        const [motivesRes, categoriesRes, positionsRes, projectRes] = await Promise.all([
           fetch('/api/motives'),
           fetch('/api/categories'),
-          fetch('/api/roles'),
+          fetch('/api/positions'),
           fetch('/api/project-info')
         ]);
+        if (motivesRes.status === 403) { await showProjectSelector(); return; }
         motivesData = await motivesRes.json();
         categoriesData = await categoriesRes.json();
-        rolesData = await rolesRes.json();
+        rolesData = positionsRes.ok ? await positionsRes.json() : [];
         const projectInfo = await projectRes.json();
         if (projectInfo.projectTitle) {
           const subtitle = projectInfo.projectSubtitle ? `<span class="project-subtitle">${escapeHtml(projectInfo.projectSubtitle)}</span>` : '';
@@ -2123,6 +2199,11 @@
         if (projectInfo.version) {
           document.getElementById('appVersion').textContent = 'v' + projectInfo.version;
         }
+
+        // Update sidebar
+        const isAdmin = currentUser.superAdmin || currentUser.currentProjectRole === 'admin';
+        document.getElementById('user').innerHTML = '';
+        updateSidebar(isAdmin, projectInfo.version || '', projectInfo.projectTitle || '');
 
         // Initialize upload allocation widgets (empty)
         createAllocationWidget('uploadMotiveAlloc', 'motive', motivesData, [], 0);
@@ -2150,12 +2231,91 @@
           });
         });
 
-        // Show admin-only V-Geld form
-        if (user.admin) {
+        // Show admin-only V-Geld form (project-admin or super-admin)
+        if (isAdmin) {
           document.getElementById('vgeldFormSection').style.display = 'block';
           document.querySelectorAll('.admin-only').forEach(el => el.style.display = '');
           loadUsersForVGeld();
+        }
+      }
 
+      // ========== Sidebar / Burger Menu ==========
+      function openMenu() {
+        document.getElementById('sidebar').classList.add('open');
+        document.getElementById('sidebarOverlay').classList.add('open');
+        document.body.style.overflow = 'hidden';
+      }
+
+      function closeMenu() {
+        document.getElementById('sidebar').classList.remove('open');
+        document.getElementById('sidebarOverlay').classList.remove('open');
+        document.body.style.overflow = '';
+      }
+
+      async function updateSidebar(isAdmin, version, projectTitle) {
+        // User info
+        document.getElementById('sidebarEmail').textContent = currentUser.email || '';
+        const roleLabel = currentUser.superAdmin ? 'Super Admin' : isAdmin ? 'Admin' : 'Member';
+        document.getElementById('sidebarRole').textContent = roleLabel;
+        // Version
+        if (version) document.getElementById('sidebarVersion').textContent = 'v' + version;
+        // Sidebar title = project title (or fallback)
+        document.getElementById('sidebarTitle').textContent = projectTitle || 'vBudget';
+        // Admin links
+        document.getElementById('sidebarAdminLink').style.display = isAdmin ? '' : 'none';
+        document.getElementById('sidebarSuperAdminLink').style.display = currentUser.superAdmin ? '' : 'none';
+        // Project list
+        try {
+          const projects = await (await fetch('/api/projects')).json();
+          const section = document.getElementById('sidebarProjectsSection');
+          if (projects.length > 1) {
+            section.style.display = '';
+            document.getElementById('sidebarProjectList').innerHTML = projects.map(p => {
+              const active = p.id === currentUser.currentProjectId;
+              return `<button class="sidebar-project-item${active ? ' active' : ''}" onclick="sidebarSelectProject(${p.id})">${escapeHtml(p.name)}</button>`;
+            }).join('');
+          } else {
+            section.style.display = 'none';
+          }
+        } catch (e) { /* ignore */ }
+      }
+
+      async function sidebarSelectProject(projectId) {
+        closeMenu();
+        if (projectId === currentUser.currentProjectId) return;
+        const r = await fetch('/api/projects/select/' + projectId, { method: 'POST' });
+        if (!r.ok) { alert('Failed to select project'); return; }
+        const data = await r.json();
+        currentUser.currentProjectId = data.projectId;
+        currentUser.currentProjectRole = data.projectRole;
+        currentUser.currentProjectName = data.projectName;
+        await loadProjectData();
+      }
+
+      async function switchProject() {
+        closeMenu();
+        await fetch('/api/projects/clear', { method: 'POST' });
+        currentUser.currentProjectId = null;
+        currentUser.currentProjectRole = null;
+        currentUser.currentProjectName = null;
+        await showProjectSelector();
+      }
+
+      async function init() {
+        const res = await fetch('/api/user');
+        const user = await res.json();
+        if (!user) { window.location.href = '/login'; return; }
+        currentUser = user;
+        document.getElementById('signed-in').style.display='block';
+
+        // If user has a project selected, load project data immediately
+        if (user.currentProjectId) {
+          await loadProjectData();
+        } else {
+          // Need to select a project first
+          document.getElementById('user').innerHTML = '';
+          updateSidebar(user.superAdmin, '', '');
+          await showProjectSelector();
         }
 
         // Multi-file upload preview

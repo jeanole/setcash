@@ -197,6 +197,36 @@ db.exec(`
     created_at TEXT DEFAULT (datetime('now')),
     FOREIGN KEY (bill_id) REFERENCES bills(id) ON DELETE CASCADE
   );
+
+  CREATE TABLE IF NOT EXISTS projects (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    subtitle TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS project_positions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    UNIQUE(project_id, name)
+  );
+
+  CREATE TABLE IF NOT EXISTS project_members (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    user_email TEXT NOT NULL REFERENCES users(email) ON DELETE CASCADE,
+    project_role TEXT NOT NULL DEFAULT 'user',
+    position_id INTEGER REFERENCES project_positions(id) ON DELETE SET NULL,
+    UNIQUE(project_id, user_email)
+  );
+
+  CREATE TABLE IF NOT EXISTS project_settings (
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    key TEXT NOT NULL,
+    value TEXT,
+    PRIMARY KEY(project_id, key)
+  );
 `);
 
 // Add netto_amount column if missing (migration)
@@ -214,6 +244,32 @@ try {
 } catch (e) {
   db.exec("ALTER TABLE users ADD COLUMN role_id INTEGER REFERENCES roles(id)");
   console.log('Migrated: added role_id column to users');
+}
+
+// Add super_admin column to users if missing (migration)
+try {
+  db.prepare("SELECT super_admin FROM users LIMIT 1").get();
+} catch (e) {
+  db.exec("ALTER TABLE users ADD COLUMN super_admin INTEGER DEFAULT 0");
+  console.log('Migrated: added super_admin column to users');
+}
+
+// Add project_id columns to data tables if missing (migration)
+const projectIdMigrations = [
+  { table: 'bills', check: 'SELECT project_id FROM bills LIMIT 1' },
+  { table: 'motives', check: 'SELECT project_id FROM motives LIMIT 1' },
+  { table: 'categories', check: 'SELECT project_id FROM categories LIMIT 1' },
+  { table: 'vgeld', check: 'SELECT project_id FROM vgeld LIMIT 1' },
+  { table: 'editlog', check: 'SELECT project_id FROM editlog LIMIT 1' },
+  { table: 'budget_matrix', check: 'SELECT project_id FROM budget_matrix LIMIT 1' },
+];
+for (const m of projectIdMigrations) {
+  try {
+    db.prepare(m.check).get();
+  } catch (e) {
+    db.exec(`ALTER TABLE ${m.table} ADD COLUMN project_id INTEGER REFERENCES projects(id)`);
+    console.log(`Migrated: added project_id to ${m.table}`);
+  }
 }
 
 // Legacy JSON helpers (for migration only)
@@ -459,6 +515,89 @@ function initSettings() {
   }
 }
 
+// Migrate existing data to multi-project schema
+function migrateToProjects() {
+  const projectCount = db.prepare('SELECT COUNT(*) as count FROM projects').get().count;
+  if (projectCount > 0) return; // Already migrated
+
+  // Get current project title/subtitle from settings
+  const titleRow = db.prepare("SELECT value FROM settings WHERE key = 'projectTitle'").get();
+  const subtitleRow = db.prepare("SELECT value FROM settings WHERE key = 'projectSubtitle'").get();
+  let projName = 'Default Project';
+  let projSubtitle = null;
+  try { if (titleRow) projName = JSON.parse(titleRow.value) || projName; } catch (e) {}
+  try { if (subtitleRow) projSubtitle = JSON.parse(subtitleRow.value) || null; } catch (e) {}
+
+  // Create default project
+  const projResult = db.prepare('INSERT INTO projects (name, subtitle) VALUES (?, ?)').run(projName, projSubtitle);
+  const projectId = projResult.lastInsertRowid;
+
+  // Stamp project_id = 1 on all existing data
+  for (const table of ['bills', 'motives', 'categories', 'vgeld', 'editlog', 'budget_matrix']) {
+    db.prepare(`UPDATE ${table} SET project_id = ? WHERE project_id IS NULL`).run(projectId);
+  }
+
+  // Migrate global roles → project_positions
+  const roles = db.prepare('SELECT id, name FROM roles').all();
+  const roleToPosition = {};
+  const insertPos = db.prepare('INSERT OR IGNORE INTO project_positions (project_id, name) VALUES (?, ?)');
+  for (const r of roles) {
+    insertPos.run(projectId, r.name);
+    const pos = db.prepare('SELECT id FROM project_positions WHERE project_id = ? AND name = ?').get(projectId, r.name);
+    if (pos) roleToPosition[r.id] = pos.id;
+  }
+
+  // Add all users to Default Project; map role_id → position_id
+  const users = db.prepare('SELECT id, email, admin, role_id FROM users').all();
+  const insertMember = db.prepare('INSERT OR IGNORE INTO project_members (project_id, user_email, project_role, position_id) VALUES (?, ?, ?, ?)');
+  for (const u of users) {
+    const projectRole = u.admin === 1 ? 'admin' : 'user';
+    const positionId = u.role_id ? (roleToPosition[u.role_id] || null) : null;
+    insertMember.run(projectId, u.email, projectRole, positionId);
+  }
+
+  // Copy settings rows to project_settings for project 1
+  const settingsRows = db.prepare('SELECT key, value FROM settings').all();
+  const insertProjSetting = db.prepare('INSERT OR IGNORE INTO project_settings (project_id, key, value) VALUES (?, ?, ?)');
+  for (const s of settingsRows) {
+    insertProjSetting.run(projectId, s.key, s.value);
+  }
+
+  // Set super_admin = admin on all users (initial setup)
+  db.prepare('UPDATE users SET super_admin = admin WHERE super_admin IS NULL OR super_admin = 0').run();
+  // Ensure at least one super_admin exists
+  const adminCount = db.prepare('SELECT COUNT(*) as count FROM users WHERE admin = 1').get().count;
+  if (adminCount > 0) {
+    db.prepare('UPDATE users SET super_admin = 1 WHERE admin = 1').run();
+  }
+
+  console.log(`Migrated to multi-project schema: created "${projName}" (id=${projectId}) with ${users.length} members`);
+}
+
+// Initialize defaults for a new project
+function initProjectDefaults(projectId) {
+  // Default motive
+  const defMotive = db.prepare('SELECT id FROM motives WHERE project_id = ? AND name = ?').get(projectId, 'Default');
+  if (!defMotive) {
+    db.prepare('INSERT INTO motives (name, budget, project_id) VALUES (?, 0, ?)').run('Default', projectId);
+  }
+  // Uncategorized category
+  const uncatCat = db.prepare('SELECT id FROM categories WHERE project_id = ? AND name = ?').get(projectId, 'Uncategorized');
+  if (!uncatCat) {
+    db.prepare('INSERT INTO categories (name, budget, project_id) VALUES (?, 0, ?)').run('Uncategorized', projectId);
+  }
+  // Default positions
+  const defaultPositions = ['Misc', 'Szenenbild', 'Props', 'Set Dec', 'Fahrer', 'Baubühne'];
+  const insertPos = db.prepare('INSERT OR IGNORE INTO project_positions (project_id, name) VALUES (?, ?)');
+  for (const name of defaultPositions) {
+    insertPos.run(projectId, name);
+  }
+  // Default project_settings
+  const insertSetting = db.prepare('INSERT OR IGNORE INTO project_settings (project_id, key, value) VALUES (?, ?, ?)');
+  insertSetting.run(projectId, 'googleSheetEnabled', JSON.stringify(false));
+  insertSetting.run(projectId, 'googleSheetId', JSON.stringify(''));
+}
+
 // Run migrations and initialization
 migrateData();
 initUsers();
@@ -468,10 +607,22 @@ initRoles();
 migrateMotiveAllocations();
 migrateBillImages();
 initSettings();
+migrateToProjects();
 
-// Helper to get all settings as object
-function getSettings() {
-  const rows = db.prepare('SELECT key, value FROM settings').all();
+// Helper to get all settings as object (optionally scoped to a project)
+function getSettings(projectId) {
+  let rows;
+  if (projectId) {
+    rows = db.prepare('SELECT key, value FROM project_settings WHERE project_id = ?').all(projectId);
+    // Fall back to global settings for keys not in project_settings
+    const globalRows = db.prepare('SELECT key, value FROM settings').all();
+    const keys = new Set(rows.map(r => r.key));
+    for (const r of globalRows) {
+      if (!keys.has(r.key)) rows.push(r);
+    }
+  } else {
+    rows = db.prepare('SELECT key, value FROM settings').all();
+  }
   const settings = {};
   for (const row of rows) {
     try {
@@ -568,6 +719,47 @@ function ensureAdmin(req, res, next) {
   res.status(403).send('Admin access required');
 }
 
+function ensureSuperAdmin(req, res, next) {
+  if (req.session && req.session.user && req.session.user.superAdmin) {
+    req.user = req.session.user;
+    return next();
+  }
+  if (req.path.startsWith('/api/')) return res.status(403).json({ error: 'Super-admin required' });
+  res.status(403).send('Super-admin access required');
+}
+
+function ensureProjectAccess(req, res, next) {
+  if (!req.session || !req.session.user) {
+    if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'Not logged in' });
+    return res.redirect('/login');
+  }
+  req.user = req.session.user;
+  // Super-admins bypass project membership check
+  if (req.user.superAdmin) return next();
+  if (!req.user.currentProjectId) {
+    return res.status(403).json({ error: 'No project selected' });
+  }
+  return next();
+}
+
+function ensureProjectAdmin(req, res, next) {
+  if (!req.session || !req.session.user) {
+    if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'Not logged in' });
+    return res.redirect('/login');
+  }
+  req.user = req.session.user;
+  if (req.user.superAdmin) return next();
+  if (!req.user.currentProjectId) {
+    if (req.path.startsWith('/api/')) return res.status(403).json({ error: 'No project selected' });
+    return res.status(403).send('No project selected');
+  }
+  if (req.user.currentProjectRole !== 'admin') {
+    if (req.path.startsWith('/api/')) return res.status(403).json({ error: 'Project admin required' });
+    return res.status(403).send('Project admin access required');
+  }
+  return next();
+}
+
 // Login page
 app.get('/login', (req, res) => {
   if (req.session.user) return res.redirect('/');
@@ -592,7 +784,44 @@ app.post('/login', loginLimiter, async (req, res) => {
     return res.redirect('/login?error=1');
   }
   const roleRow = user.role_id ? db.prepare('SELECT name FROM roles WHERE id = ?').get(user.role_id) : null;
-  req.session.user = { email: user.email, admin: user.admin === 1, role: roleRow ? roleRow.name : 'Misc' };
+  const superAdmin = user.super_admin === 1;
+
+  // Auto-select project if user is member of exactly one project
+  let currentProjectId = null;
+  let currentProjectRole = null;
+  let currentProjectName = null;
+
+  if (superAdmin) {
+    // Super-admins: auto-select first project if only one exists
+    const projects = db.prepare('SELECT * FROM projects ORDER BY id').all();
+    if (projects.length === 1) {
+      currentProjectId = projects[0].id;
+      currentProjectName = projects[0].name;
+      const membership = db.prepare('SELECT project_role FROM project_members WHERE project_id = ? AND LOWER(user_email) = LOWER(?)').get(currentProjectId, email);
+      currentProjectRole = membership ? membership.project_role : 'admin';
+    }
+  } else {
+    const memberships = db.prepare(`
+      SELECT pm.project_id, pm.project_role, p.name
+      FROM project_members pm JOIN projects p ON p.id = pm.project_id
+      WHERE LOWER(pm.user_email) = LOWER(?)
+    `).all(email);
+    if (memberships.length === 1) {
+      currentProjectId = memberships[0].project_id;
+      currentProjectRole = memberships[0].project_role;
+      currentProjectName = memberships[0].name;
+    }
+  }
+
+  req.session.user = {
+    email: user.email,
+    admin: user.admin === 1,
+    superAdmin,
+    role: roleRow ? roleRow.name : 'Misc',
+    currentProjectId,
+    currentProjectRole,
+    currentProjectName
+  };
   res.redirect('/');
 });
 
@@ -618,22 +847,74 @@ app.get('/api/user', (req, res) => {
   res.json(req.session.user || null);
 });
 
+// API: Projects — list accessible projects
+app.get('/api/projects', ensureAuth, (req, res) => {
+  let projects;
+  if (req.session.user.superAdmin) {
+    projects = db.prepare('SELECT * FROM projects ORDER BY id').all();
+  } else {
+    projects = db.prepare(`
+      SELECT p.*, pm.project_role
+      FROM projects p
+      JOIN project_members pm ON pm.project_id = p.id
+      WHERE LOWER(pm.user_email) = LOWER(?)
+      ORDER BY p.id
+    `).all(req.session.user.email);
+  }
+  res.json(projects);
+});
+
+// API: Select a project
+app.post('/api/projects/select/:id', ensureAuth, (req, res) => {
+  const projectId = parseInt(req.params.id);
+  const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(projectId);
+  if (!project) return res.status(404).json({ error: 'Project not found' });
+
+  // Super-admins can access any project
+  if (req.session.user.superAdmin) {
+    const membership = db.prepare('SELECT project_role FROM project_members WHERE project_id = ? AND LOWER(user_email) = LOWER(?)').get(projectId, req.session.user.email);
+    req.session.user.currentProjectId = projectId;
+    req.session.user.currentProjectRole = membership ? membership.project_role : 'admin';
+    req.session.user.currentProjectName = project.name;
+    return res.json({ ok: true, projectId, projectName: project.name, projectRole: req.session.user.currentProjectRole });
+  }
+
+  const membership = db.prepare('SELECT project_role FROM project_members WHERE project_id = ? AND LOWER(user_email) = LOWER(?)').get(projectId, req.session.user.email);
+  if (!membership) return res.status(403).json({ error: 'Not a member of this project' });
+
+  req.session.user.currentProjectId = projectId;
+  req.session.user.currentProjectRole = membership.project_role;
+  req.session.user.currentProjectName = project.name;
+  res.json({ ok: true, projectId, projectName: project.name, projectRole: membership.project_role });
+});
+
+// API: Clear project selection
+app.post('/api/projects/clear', ensureAuth, (req, res) => {
+  req.session.user.currentProjectId = null;
+  req.session.user.currentProjectRole = null;
+  req.session.user.currentProjectName = null;
+  res.json({ ok: true });
+});
+
 // API: Motives
-app.get('/api/motives', ensureAuth, (req, res) => {
-  const motives = db.prepare('SELECT * FROM motives ORDER BY id').all();
+app.get('/api/motives', ensureProjectAccess, (req, res) => {
+  const projectId = req.user.currentProjectId;
+  const motives = db.prepare('SELECT * FROM motives WHERE project_id = ? ORDER BY id').all(projectId);
   res.json(motives);
 });
 
-app.post('/api/admin/motive', ensureAdmin, (req, res) => {
+app.post('/api/admin/motive', ensureProjectAdmin, (req, res) => {
+  const projectId = req.user.currentProjectId;
   const { motive, budget } = req.body;
   if (!motive) return res.status(400).json({ error: 'Motive name required' });
-  const result = db.prepare('INSERT INTO motives (name, budget) VALUES (?, ?)').run(motive, parseFloat(budget) || 0);
+  const result = db.prepare('INSERT INTO motives (name, budget, project_id) VALUES (?, ?, ?)').run(motive, parseFloat(budget) || 0, projectId);
   res.json({ ok: true, id: result.lastInsertRowid });
 });
 
-app.put('/api/admin/motive/:id', ensureAdmin, (req, res) => {
+app.put('/api/admin/motive/:id', ensureProjectAdmin, (req, res) => {
+  const projectId = req.user.currentProjectId;
   const id = parseInt(req.params.id);
-  const existing = db.prepare('SELECT * FROM motives WHERE id = ?').get(id);
+  const existing = db.prepare('SELECT * FROM motives WHERE id = ? AND project_id = ?').get(id, projectId);
   if (!existing) return res.status(404).json({ error: 'Not found' });
   if (existing.name === 'Default') return res.status(400).json({ error: 'Cannot edit Default motive' });
   const { motive, budget } = req.body;
@@ -648,35 +929,39 @@ app.put('/api/admin/motive/:id', ensureAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
-app.delete('/api/admin/motive/:id', ensureAdmin, (req, res) => {
+app.delete('/api/admin/motive/:id', ensureProjectAdmin, (req, res) => {
+  const projectId = req.user.currentProjectId;
   const id = parseInt(req.params.id);
-  const motive = db.prepare('SELECT name FROM motives WHERE id = ?').get(id);
+  const motive = db.prepare('SELECT name FROM motives WHERE id = ? AND project_id = ?').get(id, projectId);
   if (!motive) return res.status(404).json({ error: 'Not found' });
   if (motive.name === 'Default') {
     return res.status(400).json({ error: 'Cannot delete Default motive' });
   }
-  const result = db.prepare('DELETE FROM motives WHERE id = ?').run(id);
+  db.prepare('DELETE FROM motives WHERE id = ?').run(id);
   db.prepare('DELETE FROM bill_motives WHERE motive_id = ?').run(id);
   db.prepare('DELETE FROM budget_matrix WHERE motive_id = ?').run(id);
   res.json({ ok: true });
 });
 
 // API: Categories
-app.get('/api/categories', ensureAuth, (req, res) => {
-  const categories = db.prepare('SELECT * FROM categories ORDER BY id').all();
+app.get('/api/categories', ensureProjectAccess, (req, res) => {
+  const projectId = req.user.currentProjectId;
+  const categories = db.prepare('SELECT * FROM categories WHERE project_id = ? ORDER BY id').all(projectId);
   res.json(categories);
 });
 
-app.post('/api/admin/category', ensureAdmin, (req, res) => {
+app.post('/api/admin/category', ensureProjectAdmin, (req, res) => {
+  const projectId = req.user.currentProjectId;
   const { category, budget } = req.body;
   if (!category) return res.status(400).json({ error: 'Category name required' });
-  const result = db.prepare('INSERT INTO categories (name, budget) VALUES (?, ?)').run(category, parseFloat(budget) || 0);
+  const result = db.prepare('INSERT INTO categories (name, budget, project_id) VALUES (?, ?, ?)').run(category, parseFloat(budget) || 0, projectId);
   res.json({ ok: true, id: result.lastInsertRowid });
 });
 
-app.put('/api/admin/category/:id', ensureAdmin, (req, res) => {
+app.put('/api/admin/category/:id', ensureProjectAdmin, (req, res) => {
+  const projectId = req.user.currentProjectId;
   const id = parseInt(req.params.id);
-  const existing = db.prepare('SELECT * FROM categories WHERE id = ?').get(id);
+  const existing = db.prepare('SELECT * FROM categories WHERE id = ? AND project_id = ?').get(id, projectId);
   if (!existing) return res.status(404).json({ error: 'Not found' });
   if (existing.name === 'Uncategorized') return res.status(400).json({ error: 'Cannot edit Uncategorized category' });
   const { category, budget } = req.body;
@@ -691,20 +976,69 @@ app.put('/api/admin/category/:id', ensureAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
-app.delete('/api/admin/category/:id', ensureAdmin, (req, res) => {
+app.delete('/api/admin/category/:id', ensureProjectAdmin, (req, res) => {
+  const projectId = req.user.currentProjectId;
   const id = parseInt(req.params.id);
-  const category = db.prepare('SELECT name FROM categories WHERE id = ?').get(id);
+  const category = db.prepare('SELECT name FROM categories WHERE id = ? AND project_id = ?').get(id, projectId);
   if (!category) return res.status(404).json({ error: 'Not found' });
   if (category.name === 'Uncategorized') {
     return res.status(400).json({ error: 'Cannot delete Uncategorized category' });
   }
-  const result = db.prepare('DELETE FROM categories WHERE id = ?').run(id);
+  db.prepare('DELETE FROM categories WHERE id = ?').run(id);
   db.prepare('DELETE FROM bill_categories WHERE category_id = ?').run(id);
   db.prepare('DELETE FROM budget_matrix WHERE category_id = ?').run(id);
   res.json({ ok: true });
 });
 
-// API: Roles
+// API: Positions (per-project, replaces global roles for display/filter)
+app.get('/api/positions', ensureProjectAccess, (req, res) => {
+  const projectId = req.user.currentProjectId;
+  const positions = db.prepare('SELECT * FROM project_positions WHERE project_id = ? ORDER BY id').all(projectId);
+  res.json(positions);
+});
+
+app.post('/api/admin/position', ensureProjectAdmin, (req, res) => {
+  const projectId = req.user.currentProjectId;
+  const { name } = req.body;
+  if (!name) return res.status(400).json({ error: 'Position name required' });
+  try {
+    const result = db.prepare('INSERT INTO project_positions (project_id, name) VALUES (?, ?)').run(projectId, name);
+    res.json({ ok: true, id: result.lastInsertRowid });
+  } catch (e) {
+    if (e.message.includes('UNIQUE')) return res.status(400).json({ error: 'Position already exists' });
+    throw e;
+  }
+});
+
+app.put('/api/admin/position/:id', ensureProjectAdmin, (req, res) => {
+  const projectId = req.user.currentProjectId;
+  const id = parseInt(req.params.id);
+  const existing = db.prepare('SELECT * FROM project_positions WHERE id = ? AND project_id = ?').get(id, projectId);
+  if (!existing) return res.status(404).json({ error: 'Not found' });
+  if (existing.name === 'Misc') return res.status(400).json({ error: 'Cannot edit Misc position' });
+  const { name } = req.body;
+  if (!name) return res.status(400).json({ error: 'Position name required' });
+  try {
+    db.prepare('UPDATE project_positions SET name = ? WHERE id = ?').run(name, id);
+    res.json({ ok: true });
+  } catch (e) {
+    if (e.message.includes('UNIQUE')) return res.status(400).json({ error: 'Position already exists' });
+    throw e;
+  }
+});
+
+app.delete('/api/admin/position/:id', ensureProjectAdmin, (req, res) => {
+  const projectId = req.user.currentProjectId;
+  const id = parseInt(req.params.id);
+  const position = db.prepare('SELECT name FROM project_positions WHERE id = ? AND project_id = ?').get(id, projectId);
+  if (!position) return res.status(404).json({ error: 'Not found' });
+  if (position.name === 'Misc') return res.status(400).json({ error: 'Cannot delete Misc position' });
+  db.prepare('UPDATE project_members SET position_id = NULL WHERE position_id = ?').run(id);
+  db.prepare('DELETE FROM project_positions WHERE id = ?').run(id);
+  res.json({ ok: true });
+});
+
+// API: Roles (legacy — kept for backward compat)
 app.get('/api/roles', ensureAuth, (req, res) => {
   const roles = db.prepare('SELECT * FROM roles ORDER BY id').all();
   res.json(roles);
@@ -750,10 +1084,11 @@ app.delete('/api/admin/role/:id', ensureAdmin, (req, res) => {
 });
 
 // API: Budget Matrix
-app.get('/api/budget-matrix', ensureAuth, (req, res) => {
-  const motives = db.prepare("SELECT id, name FROM motives ORDER BY CASE WHEN name = 'Default' THEN 1 ELSE 0 END, id").all();
-  const categories = db.prepare("SELECT id, name FROM categories ORDER BY CASE WHEN name = 'Uncategorized' THEN 1 ELSE 0 END, id").all();
-  const rows = db.prepare('SELECT motive_id, category_id, amount FROM budget_matrix').all();
+app.get('/api/budget-matrix', ensureProjectAccess, (req, res) => {
+  const projectId = req.user.currentProjectId;
+  const motives = db.prepare("SELECT id, name FROM motives WHERE project_id = ? ORDER BY CASE WHEN name = 'Default' THEN 1 ELSE 0 END, id").all(projectId);
+  const categories = db.prepare("SELECT id, name FROM categories WHERE project_id = ? ORDER BY CASE WHEN name = 'Uncategorized' THEN 1 ELSE 0 END, id").all(projectId);
+  const rows = db.prepare('SELECT motive_id, category_id, amount FROM budget_matrix WHERE project_id = ?').all(projectId);
 
   const matrix = {};
   let grandTotal = 0;
@@ -767,16 +1102,18 @@ app.get('/api/budget-matrix', ensureAuth, (req, res) => {
   db.prepare(`
     SELECT bm.motive_id, SUM(b.netto_amount * bm.percentage / 100) as spent
     FROM bill_motives bm JOIN bills b ON b.id = bm.bill_id
+    WHERE b.project_id = ?
     GROUP BY bm.motive_id
-  `).all().forEach(r => { motiveSpending[r.motive_id] = r.spent || 0; });
+  `).all(projectId).forEach(r => { motiveSpending[r.motive_id] = r.spent || 0; });
 
   // Spending per category (proportional via junction table, netto)
   const categorySpending = {};
   db.prepare(`
     SELECT bc.category_id, SUM(b.netto_amount * bc.percentage / 100) as spent
     FROM bill_categories bc JOIN bills b ON b.id = bc.bill_id
+    WHERE b.project_id = ?
     GROUP BY bc.category_id
-  `).all().forEach(r => { categorySpending[r.category_id] = r.spent || 0; });
+  `).all(projectId).forEach(r => { categorySpending[r.category_id] = r.spent || 0; });
 
   // Spending per cell (motive x category intersection, netto)
   const cellSpending = {};
@@ -786,20 +1123,22 @@ app.get('/api/budget-matrix', ensureAuth, (req, res) => {
     FROM bill_motives bm
     JOIN bill_categories bc ON bc.bill_id = bm.bill_id
     JOIN bills b ON b.id = bm.bill_id
+    WHERE b.project_id = ?
     GROUP BY bm.motive_id, bc.category_id
-  `).all().forEach(r => { cellSpending[r.category_id + '_' + r.motive_id] = r.spent || 0; });
+  `).all(projectId).forEach(r => { cellSpending[r.category_id + '_' + r.motive_id] = r.spent || 0; });
 
   res.json({ motives, categories, matrix, grandTotal, motiveSpending, categorySpending, cellSpending });
 });
 
-app.put('/api/admin/budget-matrix', ensureAdmin, (req, res) => {
+app.put('/api/admin/budget-matrix', ensureProjectAdmin, (req, res) => {
+  const projectId = req.user.currentProjectId;
   const { cells } = req.body;
   if (!Array.isArray(cells)) return res.status(400).json({ error: 'cells array required' });
 
-  const upsert = db.prepare('INSERT OR REPLACE INTO budget_matrix (motive_id, category_id, amount) VALUES (?, ?, ?)');
+  const upsert = db.prepare('INSERT OR REPLACE INTO budget_matrix (motive_id, category_id, amount, project_id) VALUES (?, ?, ?, ?)');
   const runTransaction = db.transaction((cells) => {
     for (const cell of cells) {
-      upsert.run(cell.motive_id, cell.category_id, parseFloat(cell.amount) || 0);
+      upsert.run(cell.motive_id, cell.category_id, parseFloat(cell.amount) || 0, projectId);
     }
   });
   runTransaction(cells);
@@ -808,13 +1147,17 @@ app.put('/api/admin/budget-matrix', ensureAdmin, (req, res) => {
 });
 
 // Helper: save allocations for a bill
-function saveAllocations(billId, motiveAllocations, categoryAllocations) {
+function saveAllocations(billId, motiveAllocations, categoryAllocations, projectId) {
   db.prepare('DELETE FROM bill_motives WHERE bill_id = ?').run(billId);
   db.prepare('DELETE FROM bill_categories WHERE bill_id = ?').run(billId);
 
-  // Get default IDs
-  const uncatMotive = db.prepare('SELECT id FROM motives WHERE name = ?').get('Default');
-  const uncatCategory = db.prepare('SELECT id FROM categories WHERE name = ?').get('Uncategorized');
+  // Get default IDs scoped to project
+  const uncatMotive = projectId
+    ? db.prepare('SELECT id FROM motives WHERE name = ? AND project_id = ?').get('Default', projectId)
+    : db.prepare('SELECT id FROM motives WHERE name = ?').get('Default');
+  const uncatCategory = projectId
+    ? db.prepare('SELECT id FROM categories WHERE name = ? AND project_id = ?').get('Uncategorized', projectId)
+    : db.prepare('SELECT id FROM categories WHERE name = ?').get('Uncategorized');
 
   // Save motive allocations
   if (Array.isArray(motiveAllocations)) {
@@ -872,23 +1215,30 @@ function getMotiveDisplayString(billId) {
 }
 
 // API: Bills
-app.get('/api/bills', ensureAuth, (req, res) => {
-  const bills = db.prepare('SELECT * FROM bills ORDER BY id').all();
+app.get('/api/bills', ensureProjectAccess, (req, res) => {
+  const projectId = req.user.currentProjectId;
+  const bills = db.prepare('SELECT * FROM bills WHERE project_id = ? ORDER BY id').all(projectId);
 
-  // Bulk-fetch email -> role map
+  // Bulk-fetch email -> position map for this project
   const userRoles = {};
-  db.prepare(`SELECT u.email, COALESCE(r.name, 'Misc') as role_name FROM users u LEFT JOIN roles r ON r.id = u.role_id`).all()
-    .forEach(u => { userRoles[u.email] = u.role_name; });
+  db.prepare(`
+    SELECT pm.user_email as email, COALESCE(pp.name, 'Misc') as role_name
+    FROM project_members pm
+    LEFT JOIN project_positions pp ON pp.id = pm.position_id
+    WHERE pm.project_id = ?
+  `).all(projectId).forEach(u => { userRoles[u.email] = u.role_name; });
 
   // Bulk-fetch all allocations
   const allMotiveAllocs = db.prepare(`
     SELECT bm.bill_id, bm.motive_id, bm.percentage, m.name
     FROM bill_motives bm JOIN motives m ON m.id = bm.motive_id
-  `).all();
+    JOIN bills b ON b.id = bm.bill_id WHERE b.project_id = ?
+  `).all(projectId);
   const allCategoryAllocs = db.prepare(`
     SELECT bc.bill_id, bc.category_id, bc.percentage, c.name
     FROM bill_categories bc JOIN categories c ON c.id = bc.category_id
-  `).all();
+    JOIN bills b ON b.id = bc.bill_id WHERE b.project_id = ?
+  `).all(projectId);
 
   // Bulk-fetch all images
   const allImages = db.prepare('SELECT * FROM bill_images ORDER BY sort_order, id').all();
@@ -937,20 +1287,23 @@ app.get('/api/bills', ensureAuth, (req, res) => {
   res.json(mapped);
 });
 
-// Calculate bill number for a user (1.01-1.20, 2.01-2.20, etc.)
-function calculateBillNumber(userEmail) {
-  const count = db.prepare('SELECT COUNT(*) as count FROM bills WHERE LOWER(email) = LOWER(?)').get(userEmail).count;
+// Calculate bill number for a user within a project (1.01-1.20, 2.01-2.20, etc.)
+function calculateBillNumber(userEmail, projectId) {
+  const count = projectId
+    ? db.prepare('SELECT COUNT(*) as count FROM bills WHERE LOWER(email) = LOWER(?) AND project_id = ?').get(userEmail, projectId).count
+    : db.prepare('SELECT COUNT(*) as count FROM bills WHERE LOWER(email) = LOWER(?)').get(userEmail).count;
   const group = Math.floor(count / 20) + 1;
   const position = (count % 20) + 1;
   return `${group}.${position.toString().padStart(2, '0')}`;
 }
 
-app.post('/upload', ensureAuth, upload.array('photos', 10), (req, res) => {
+app.post('/upload', ensureProjectAccess, upload.array('photos', 10), (req, res) => {
+  const projectId = req.user.currentProjectId;
   const { type, vendor, comment, item, motive, brutto19, brutto7, brutto0 } = req.body;
   const b19 = parseFloat(brutto19) || 0;
   const b7 = parseFloat(brutto7) || 0;
   const b0 = parseFloat(brutto0) || 0;
-  const billNumber = calculateBillNumber(req.user.email);
+  const billNumber = calculateBillNumber(req.user.email, projectId);
 
   // Parse allocation JSON strings from FormData
   let motiveAllocations = [];
@@ -970,8 +1323,8 @@ app.post('/upload', ensureAuth, upload.array('photos', 10), (req, res) => {
   const nettoAmount = b19 / 1.19 + b7 / 1.07 + b0;
 
   const result = db.prepare(`INSERT INTO bills
-    (date, email, bill_number, type, vendor, item, comment, motive, brutto19, brutto7, brutto0, amount, netto_amount, filename, file)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+    (date, email, bill_number, type, vendor, item, comment, motive, brutto19, brutto7, brutto0, amount, netto_amount, filename, file, project_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
     new Date().toISOString(),
     req.user.email,
     billNumber,
@@ -986,7 +1339,8 @@ app.post('/upload', ensureAuth, upload.array('photos', 10), (req, res) => {
     b19 + b7 + b0,
     nettoAmount,
     '', // filename - will update after saving images
-    ''  // file - will update after saving images
+    '',  // file - will update after saving images
+    projectId
   );
 
   const billId = result.lastInsertRowid;
@@ -1023,7 +1377,7 @@ app.post('/upload', ensureAuth, upload.array('photos', 10), (req, res) => {
   }
 
   // Save allocations to junction tables
-  saveAllocations(billId, motiveAllocations, categoryAllocations);
+  saveAllocations(billId, motiveAllocations, categoryAllocations, projectId);
 
   // Get the inserted bill for Google Sheets sync
   const bill = db.prepare('SELECT * FROM bills WHERE id = ?').get(billId);
@@ -1033,9 +1387,10 @@ app.post('/upload', ensureAuth, upload.array('photos', 10), (req, res) => {
   res.json({ ok: true, id: billId });
 });
 
-app.put('/api/bills/:id', ensureAuth, (req, res) => {
+app.put('/api/bills/:id', ensureProjectAccess, (req, res) => {
+  const projectId = req.user.currentProjectId;
   const id = parseInt(req.params.id);
-  const bill = db.prepare('SELECT * FROM bills WHERE id = ?').get(id);
+  const bill = db.prepare('SELECT * FROM bills WHERE id = ? AND project_id = ?').get(id, projectId);
   if (!bill) return res.status(404).json({ error: 'Not found' });
 
   const { email, type, vendor, item, comment, motive, brutto19, brutto7, brutto0, motiveAllocations, categoryAllocations } = req.body;
@@ -1091,7 +1446,7 @@ app.put('/api/bills/:id', ensureAuth, (req, res) => {
 
   // Save allocations if provided
   if (motiveAllocations !== undefined || categoryAllocations !== undefined) {
-    saveAllocations(id, motiveAllocations || [], categoryAllocations || []);
+    saveAllocations(id, motiveAllocations || [], categoryAllocations || [], projectId);
     // Update legacy motive column with display string
     const motiveStr = getMotiveDisplayString(id);
     if (motiveStr !== bill.motive) {
@@ -1115,18 +1470,23 @@ app.put('/api/bills/:id', ensureAuth, (req, res) => {
     db.prepare(`UPDATE bills SET ${updates.join(', ')} WHERE id = ?`).run(...params);
 
     // Log the edit
-    db.prepare('INSERT INTO editlog (timestamp, user, bill_id, changes) VALUES (?, ?, ?, ?)')
-      .run(new Date().toISOString(), req.user.email, id, JSON.stringify(changes));
+    db.prepare('INSERT INTO editlog (timestamp, user, bill_id, changes, project_id) VALUES (?, ?, ?, ?, ?)')
+      .run(new Date().toISOString(), req.user.email, id, JSON.stringify(changes), projectId);
   } else if (motiveAllocations !== undefined || categoryAllocations !== undefined) {
     // Log allocation changes even if no other fields changed
-    db.prepare('INSERT INTO editlog (timestamp, user, bill_id, changes) VALUES (?, ?, ?, ?)')
-      .run(new Date().toISOString(), req.user.email, id, JSON.stringify({ allocations: 'updated' }));
+    db.prepare('INSERT INTO editlog (timestamp, user, bill_id, changes, project_id) VALUES (?, ?, ?, ?, ?)')
+      .run(new Date().toISOString(), req.user.email, id, JSON.stringify({ allocations: 'updated' }), projectId);
   }
   res.json({ ok: true });
 });
 
-app.delete('/api/bills/:id', ensureAdmin, (req, res) => {
+app.delete('/api/bills/:id', ensureProjectAdmin, (req, res) => {
+  const projectId = req.user.currentProjectId;
   const id = parseInt(req.params.id);
+
+  // Verify bill belongs to this project
+  const bill = db.prepare('SELECT id FROM bills WHERE id = ? AND project_id = ?').get(id, projectId);
+  if (!bill) return res.status(404).json({ error: 'Not found' });
 
   // Clean up image files from disk
   const images = db.prepare('SELECT file FROM bill_images WHERE bill_id = ?').all(id);
@@ -1142,22 +1502,28 @@ app.delete('/api/bills/:id', ensureAdmin, (req, res) => {
   db.prepare('DELETE FROM bill_images WHERE bill_id = ?').run(id);
   db.prepare('DELETE FROM bill_motives WHERE bill_id = ?').run(id);
   db.prepare('DELETE FROM bill_categories WHERE bill_id = ?').run(id);
-  const result = db.prepare('DELETE FROM bills WHERE id = ?').run(id);
-  if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
+  db.prepare('DELETE FROM bills WHERE id = ?').run(id);
   res.json({ ok: true });
 });
 
 // Bulk delete bills
-app.post('/api/bills/bulk-delete', ensureAdmin, (req, res) => {
+app.post('/api/bills/bulk-delete', ensureProjectAdmin, (req, res) => {
+  const projectId = req.user.currentProjectId;
   const { ids } = req.body;
   if (!Array.isArray(ids) || ids.length === 0) {
     return res.status(400).json({ error: 'No ids provided' });
   }
 
+  // Filter to only bills in this project
   const placeholders = ids.map(() => '?').join(',');
+  const validBills = db.prepare(`SELECT id FROM bills WHERE id IN (${placeholders}) AND project_id = ?`).all(...ids, projectId);
+  const validIds = validBills.map(b => b.id);
+  if (validIds.length === 0) return res.json({ ok: true, deleted: 0 });
+
+  const vPlaceholders = validIds.map(() => '?').join(',');
 
   // Clean up image files from disk
-  const images = db.prepare(`SELECT file FROM bill_images WHERE bill_id IN (${placeholders})`).all(...ids);
+  const images = db.prepare(`SELECT file FROM bill_images WHERE bill_id IN (${vPlaceholders})`).all(...validIds);
   for (const img of images) {
     if (img.file) {
       const imgPath = path.join(DATA_DIR, 'uploads', img.file);
@@ -1167,19 +1533,20 @@ app.post('/api/bills/bulk-delete', ensureAdmin, (req, res) => {
     }
   }
 
-  db.prepare(`DELETE FROM bill_images WHERE bill_id IN (${placeholders})`).run(...ids);
-  db.prepare(`DELETE FROM bill_motives WHERE bill_id IN (${placeholders})`).run(...ids);
-  db.prepare(`DELETE FROM bill_categories WHERE bill_id IN (${placeholders})`).run(...ids);
-  const result = db.prepare(`DELETE FROM bills WHERE id IN (${placeholders})`).run(...ids);
+  db.prepare(`DELETE FROM bill_images WHERE bill_id IN (${vPlaceholders})`).run(...validIds);
+  db.prepare(`DELETE FROM bill_motives WHERE bill_id IN (${vPlaceholders})`).run(...validIds);
+  db.prepare(`DELETE FROM bill_categories WHERE bill_id IN (${vPlaceholders})`).run(...validIds);
+  const result = db.prepare(`DELETE FROM bills WHERE id IN (${vPlaceholders})`).run(...validIds);
 
   console.log('Bulk deleted', result.changes, 'bills');
   res.json({ ok: true, deleted: result.changes });
 });
 
 // Add images to existing bill
-app.post('/api/bills/:id/images', ensureAuth, upload.array('photos', 10), (req, res) => {
+app.post('/api/bills/:id/images', ensureProjectAccess, upload.array('photos', 10), (req, res) => {
+  const projectId = req.user.currentProjectId;
   const id = parseInt(req.params.id);
-  const bill = db.prepare('SELECT * FROM bills WHERE id = ?').get(id);
+  const bill = db.prepare('SELECT * FROM bills WHERE id = ? AND project_id = ?').get(id, projectId);
   if (!bill) return res.status(404).json({ error: 'Not found' });
 
   const files = req.files || [];
@@ -1215,17 +1582,18 @@ app.post('/api/bills/:id/images', ensureAuth, upload.array('photos', 10), (req, 
   // Update legacy columns with first image
   syncLegacyImageColumns(id);
 
-  db.prepare('INSERT INTO editlog (timestamp, user, bill_id, changes) VALUES (?, ?, ?, ?)')
-    .run(new Date().toISOString(), req.user.email, id, JSON.stringify({ images: `added ${files.length}` }));
+  db.prepare('INSERT INTO editlog (timestamp, user, bill_id, changes, project_id) VALUES (?, ?, ?, ?, ?)')
+    .run(new Date().toISOString(), req.user.email, id, JSON.stringify({ images: `added ${files.length}` }), projectId);
 
   res.json({ ok: true, images: newImages });
 });
 
 // Delete single image from bill
-app.delete('/api/bills/:id/images/:imageId', ensureAuth, (req, res) => {
+app.delete('/api/bills/:id/images/:imageId', ensureProjectAccess, (req, res) => {
+  const projectId = req.user.currentProjectId;
   const billId = parseInt(req.params.id);
   const imageId = parseInt(req.params.imageId);
-  const bill = db.prepare('SELECT * FROM bills WHERE id = ?').get(billId);
+  const bill = db.prepare('SELECT * FROM bills WHERE id = ? AND project_id = ?').get(billId, projectId);
   if (!bill) return res.status(404).json({ error: 'Bill not found' });
 
   const image = db.prepare('SELECT * FROM bill_images WHERE id = ? AND bill_id = ?').get(imageId, billId);
@@ -1244,8 +1612,8 @@ app.delete('/api/bills/:id/images/:imageId', ensureAuth, (req, res) => {
   // Update legacy columns
   syncLegacyImageColumns(billId);
 
-  db.prepare('INSERT INTO editlog (timestamp, user, bill_id, changes) VALUES (?, ?, ?, ?)')
-    .run(new Date().toISOString(), req.user.email, billId, JSON.stringify({ image: 'deleted' }));
+  db.prepare('INSERT INTO editlog (timestamp, user, bill_id, changes, project_id) VALUES (?, ?, ?, ?, ?)')
+    .run(new Date().toISOString(), req.user.email, billId, JSON.stringify({ image: 'deleted' }), projectId);
 
   res.json({ ok: true });
 });
@@ -1261,9 +1629,10 @@ function syncLegacyImageColumns(billId) {
 }
 
 // Legacy single image replace (backward compat)
-app.post('/api/bills/:id/image', ensureAuth, upload.single('photo'), (req, res) => {
+app.post('/api/bills/:id/image', ensureProjectAccess, upload.single('photo'), (req, res) => {
+  const projectId = req.user.currentProjectId;
   const id = parseInt(req.params.id);
-  const bill = db.prepare('SELECT * FROM bills WHERE id = ?').get(id);
+  const bill = db.prepare('SELECT * FROM bills WHERE id = ? AND project_id = ?').get(id, projectId);
   if (!bill) return res.status(404).json({ error: 'Not found' });
   if (!req.file) return res.status(400).json({ error: 'No file' });
 
@@ -1284,15 +1653,15 @@ app.post('/api/bills/:id/image', ensureAuth, upload.single('photo'), (req, res) 
     .run(id, req.file.originalname, file, 0);
   syncLegacyImageColumns(id);
 
-  db.prepare('INSERT INTO editlog (timestamp, user, bill_id, changes) VALUES (?, ?, ?, ?)')
-    .run(new Date().toISOString(), req.user.email, id, JSON.stringify({ image: 'added' }));
+  db.prepare('INSERT INTO editlog (timestamp, user, bill_id, changes, project_id) VALUES (?, ?, ?, ?, ?)')
+    .run(new Date().toISOString(), req.user.email, id, JSON.stringify({ image: 'added' }), projectId);
 
   res.json({ ok: true, file });
 });
 
-app.get('/api/bills/log', ensureAuth, (req, res) => {
-  const logs = db.prepare('SELECT * FROM editlog ORDER BY id').all();
-  // Map to frontend-expected format
+app.get('/api/bills/log', ensureProjectAccess, (req, res) => {
+  const projectId = req.user.currentProjectId;
+  const logs = db.prepare('SELECT * FROM editlog WHERE project_id = ? ORDER BY id').all(projectId);
   const mapped = logs.map(l => ({
     id: l.id,
     timestamp: l.timestamp,
@@ -1303,35 +1672,29 @@ app.get('/api/bills/log', ensureAuth, (req, res) => {
   res.json(mapped);
 });
 
-app.get('/api/bills/by-motive', ensureAuth, (req, res) => {
-  // Use proportional calculation via junction table (netto)
+app.get('/api/bills/by-motive', ensureProjectAccess, (req, res) => {
+  const projectId = req.user.currentProjectId;
   const allocated = db.prepare(`
     SELECT bm.motive_id, m.name as motive, SUM(b.netto_amount * bm.percentage / 100) as spent
     FROM bill_motives bm
     JOIN bills b ON b.id = bm.bill_id
     JOIN motives m ON m.id = bm.motive_id
+    WHERE b.project_id = ?
     GROUP BY bm.motive_id
-  `).all();
+  `).all(projectId);
 
-  // Also find bills with no motive allocations (uncategorized)
   const uncatSpent = db.prepare(`
     SELECT SUM(b.netto_amount) as spent FROM bills b
-    WHERE b.id NOT IN (SELECT DISTINCT bill_id FROM bill_motives)
-  `).get();
+    WHERE b.project_id = ? AND b.id NOT IN (SELECT DISTINCT bill_id FROM bill_motives)
+  `).get(projectId);
 
-  const motives = db.prepare('SELECT * FROM motives ORDER BY id').all();
+  const motives = db.prepare('SELECT * FROM motives WHERE project_id = ? ORDER BY id').all(projectId);
   const spending = {};
   allocated.forEach(a => { spending[a.motive] = a.spent || 0; });
 
   const result = motives.map(m => {
     const spent = spending[m.name] || 0;
-    return {
-      motive: m.name,
-      budget: m.budget,
-      spent,
-      remaining: m.budget - spent,
-      percent: m.budget > 0 ? (spent / m.budget) * 100 : 0
-    };
+    return { motive: m.name, budget: m.budget, spent, remaining: m.budget - spent, percent: m.budget > 0 ? (spent / m.budget) * 100 : 0 };
   });
 
   if (uncatSpent && uncatSpent.spent > 0) {
@@ -1340,33 +1703,29 @@ app.get('/api/bills/by-motive', ensureAuth, (req, res) => {
   res.json(result);
 });
 
-app.get('/api/bills/by-category', ensureAuth, (req, res) => {
+app.get('/api/bills/by-category', ensureProjectAccess, (req, res) => {
+  const projectId = req.user.currentProjectId;
   const allocated = db.prepare(`
     SELECT bc.category_id, c.name as category, SUM(b.netto_amount * bc.percentage / 100) as spent
     FROM bill_categories bc
     JOIN bills b ON b.id = bc.bill_id
     JOIN categories c ON c.id = bc.category_id
+    WHERE b.project_id = ?
     GROUP BY bc.category_id
-  `).all();
+  `).all(projectId);
 
   const uncatSpent = db.prepare(`
     SELECT SUM(b.netto_amount) as spent FROM bills b
-    WHERE b.id NOT IN (SELECT DISTINCT bill_id FROM bill_categories)
-  `).get();
+    WHERE b.project_id = ? AND b.id NOT IN (SELECT DISTINCT bill_id FROM bill_categories)
+  `).get(projectId);
 
-  const categories = db.prepare('SELECT * FROM categories ORDER BY id').all();
+  const categories = db.prepare('SELECT * FROM categories WHERE project_id = ? ORDER BY id').all(projectId);
   const spending = {};
   allocated.forEach(a => { spending[a.category] = a.spent || 0; });
 
   const result = categories.map(c => {
     const spent = spending[c.name] || 0;
-    return {
-      category: c.name,
-      budget: c.budget,
-      spent,
-      remaining: c.budget - spent,
-      percent: c.budget > 0 ? (spent / c.budget) * 100 : 0
-    };
+    return { category: c.name, budget: c.budget, spent, remaining: c.budget - spent, percent: c.budget > 0 ? (spent / c.budget) * 100 : 0 };
   });
 
   if (uncatSpent && uncatSpent.spent > 0) {
@@ -1384,23 +1743,91 @@ app.get('/uploads/*', ensureAuth, (req, res) => {
   res.status(404).send('Not found');
 });
 
-// API: Users list (for dropdowns)
-app.get('/api/users', ensureAuth, (req, res) => {
-  const users = db.prepare('SELECT email FROM users ORDER BY email').all();
+// API: Users list for dropdowns (members of current project)
+app.get('/api/users', ensureProjectAccess, (req, res) => {
+  const projectId = req.user.currentProjectId;
+  const users = db.prepare(`
+    SELECT DISTINCT pm.user_email as email
+    FROM project_members pm
+    WHERE pm.project_id = ?
+    ORDER BY pm.user_email
+  `).all(projectId);
   res.json(users);
 });
 
-// API: Users (admin only)
-app.get('/api/admin/users', ensureAdmin, (req, res) => {
+// API: Project members (project-admin)
+app.get('/api/admin/project/members', ensureProjectAdmin, (req, res) => {
+  const projectId = req.user.currentProjectId;
+  const members = db.prepare(`
+    SELECT pm.id, pm.user_email as email, pm.project_role, pm.position_id,
+           COALESCE(pp.name, 'Misc') as position_name
+    FROM project_members pm
+    LEFT JOIN project_positions pp ON pp.id = pm.position_id
+    WHERE pm.project_id = ?
+    ORDER BY pm.user_email
+  `).all(projectId);
+  res.json(members.map(m => ({
+    id: m.id,
+    email: m.email,
+    projectRole: m.project_role,
+    positionId: m.position_id,
+    positionName: m.position_name
+  })));
+});
+
+app.post('/api/admin/project/members', ensureProjectAdmin, (req, res) => {
+  const projectId = req.user.currentProjectId;
+  const { email, projectRole, positionId } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email required' });
+  const foundUser = findUser(email);
+  if (!foundUser) return res.status(400).json({ error: 'User not found' });
+  try {
+    const result = db.prepare('INSERT INTO project_members (project_id, user_email, project_role, position_id) VALUES (?, ?, ?, ?)')
+      .run(projectId, foundUser.email, projectRole || 'user', positionId || null);
+    res.json({ ok: true, id: result.lastInsertRowid });
+  } catch (e) {
+    if (e.message.includes('UNIQUE')) return res.status(400).json({ error: 'User is already a member' });
+    throw e;
+  }
+});
+
+app.put('/api/admin/project/members/:id', ensureProjectAdmin, (req, res) => {
+  const projectId = req.user.currentProjectId;
+  const id = parseInt(req.params.id);
+  const member = db.prepare('SELECT * FROM project_members WHERE id = ? AND project_id = ?').get(id, projectId);
+  if (!member) return res.status(404).json({ error: 'Member not found' });
+  const { projectRole, positionId } = req.body;
+  const updates = [];
+  const params = [];
+  if (projectRole !== undefined) { updates.push('project_role = ?'); params.push(projectRole); }
+  if (positionId !== undefined) { updates.push('position_id = ?'); params.push(positionId || null); }
+  if (updates.length > 0) {
+    params.push(id);
+    db.prepare(`UPDATE project_members SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+  }
+  res.json({ ok: true });
+});
+
+app.delete('/api/admin/project/members/:id', ensureProjectAdmin, (req, res) => {
+  const projectId = req.user.currentProjectId;
+  const id = parseInt(req.params.id);
+  const member = db.prepare('SELECT * FROM project_members WHERE id = ? AND project_id = ?').get(id, projectId);
+  if (!member) return res.status(404).json({ error: 'Member not found' });
+  db.prepare('DELETE FROM project_members WHERE id = ?').run(id);
+  res.json({ ok: true });
+});
+
+// Legacy admin users (kept for backward compat, now super-admin only)
+app.get('/api/admin/users', ensureSuperAdmin, (req, res) => {
   const users = db.prepare(`
-    SELECT u.id, u.email, u.admin, u.role_id, COALESCE(r.name, 'Misc') as role_name
+    SELECT u.id, u.email, u.admin, u.super_admin, u.role_id, COALESCE(r.name, 'Misc') as role_name
     FROM users u LEFT JOIN roles r ON r.id = u.role_id
     ORDER BY u.email
   `).all();
-  res.json(users.map(u => ({ id: u.id, email: u.email, admin: u.admin === 1, roleId: u.role_id, roleName: u.role_name })));
+  res.json(users.map(u => ({ id: u.id, email: u.email, admin: u.admin === 1, superAdmin: u.super_admin === 1, roleId: u.role_id, roleName: u.role_name })));
 });
 
-app.post('/api/admin/users', ensureAdmin, async (req, res) => {
+app.post('/api/admin/users', ensureSuperAdmin, async (req, res) => {
   const { email, password, admin, roleId } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
   const pwError = validatePassword(password);
@@ -1411,7 +1838,7 @@ app.post('/api/admin/users', ensureAdmin, async (req, res) => {
   res.json({ ok: true, id: result.lastInsertRowid });
 });
 
-app.put('/api/admin/users/:email', ensureAdmin, async (req, res) => {
+app.put('/api/admin/users/:email', ensureSuperAdmin, async (req, res) => {
   const user = findUser(req.params.email);
   if (!user) return res.status(404).json({ error: 'User not found' });
   const { password, admin, roleId } = req.body;
@@ -1439,7 +1866,7 @@ app.put('/api/admin/users/:email', ensureAdmin, async (req, res) => {
   res.json({ ok: true });
 });
 
-app.delete('/api/admin/users/:email', ensureAdmin, (req, res) => {
+app.delete('/api/admin/users/:email', ensureSuperAdmin, (req, res) => {
   const user = findUser(req.params.email);
   if (!user) return res.status(404).json({ error: 'User not found' });
   if (user.email.toLowerCase() === req.session.user.email.toLowerCase()) {
@@ -1463,9 +1890,9 @@ app.post('/api/user/password', ensureAuth, async (req, res) => {
 });
 
 // V-Geld endpoints
-app.get('/api/vgeld', ensureAuth, (req, res) => {
-  const vgeld = db.prepare('SELECT * FROM vgeld ORDER BY id').all();
-  // Map to frontend-expected format
+app.get('/api/vgeld', ensureProjectAccess, (req, res) => {
+  const projectId = req.user.currentProjectId;
+  const vgeld = db.prepare('SELECT * FROM vgeld WHERE project_id = ? ORDER BY id').all(projectId);
   const mapped = vgeld.map(v => ({
     id: v.id,
     date: v.date,
@@ -1477,28 +1904,31 @@ app.get('/api/vgeld', ensureAuth, (req, res) => {
   res.json(mapped);
 });
 
-app.post('/api/vgeld', ensureAdmin, (req, res) => {
+app.post('/api/vgeld', ensureProjectAdmin, (req, res) => {
+  const projectId = req.user.currentProjectId;
   const { amount, from, to } = req.body;
   if (!amount || !to) return res.status(400).json({ error: 'Amount and recipient required' });
-  if (!findUser(to)) return res.status(400).json({ error: 'Recipient must be a registered user' });
-  const result = db.prepare('INSERT INTO vgeld (date, amount, from_user, to_user, created_by) VALUES (?, ?, ?, ?, ?)')
-    .run(new Date().toISOString(), parseFloat(amount) || 0, from || 'External', to, req.user.email);
+  // Recipient must be a member of this project
+  const member = db.prepare('SELECT id FROM project_members WHERE project_id = ? AND LOWER(user_email) = LOWER(?)').get(projectId, to);
+  if (!member) return res.status(400).json({ error: 'Recipient must be a project member' });
+  const result = db.prepare('INSERT INTO vgeld (date, amount, from_user, to_user, created_by, project_id) VALUES (?, ?, ?, ?, ?, ?)')
+    .run(new Date().toISOString(), parseFloat(amount) || 0, from || 'External', to, req.user.email, projectId);
   res.json({ ok: true, id: result.lastInsertRowid });
 });
 
-app.delete('/api/vgeld/:id', ensureAdmin, (req, res) => {
+app.delete('/api/vgeld/:id', ensureProjectAdmin, (req, res) => {
+  const projectId = req.user.currentProjectId;
   const id = parseInt(req.params.id);
-  const result = db.prepare('DELETE FROM vgeld WHERE id = ?').run(id);
+  const result = db.prepare('DELETE FROM vgeld WHERE id = ? AND project_id = ?').run(id, projectId);
   if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
   res.json({ ok: true });
 });
 
 // V-Geld analysis per user
-app.get('/api/vgeld/analysis', ensureAuth, (req, res) => {
-  // Sum v-geld received per user
-  const vgeldSums = db.prepare('SELECT to_user as user, SUM(amount) as received FROM vgeld GROUP BY to_user').all();
-  // Sum spending per user
-  const billSums = db.prepare('SELECT email as user, SUM(amount) as spent FROM bills GROUP BY email').all();
+app.get('/api/vgeld/analysis', ensureProjectAccess, (req, res) => {
+  const projectId = req.user.currentProjectId;
+  const vgeldSums = db.prepare('SELECT to_user as user, SUM(amount) as received FROM vgeld WHERE project_id = ? GROUP BY to_user').all(projectId);
+  const billSums = db.prepare('SELECT email as user, SUM(amount) as spent FROM bills WHERE project_id = ? GROUP BY email').all(projectId);
 
   const analysis = {};
   vgeldSums.forEach(v => {
@@ -1524,35 +1954,49 @@ app.get('/api/vgeld/analysis', ensureAuth, (req, res) => {
 // Settings API
 // Public endpoint for project title (no auth required)
 app.get('/api/project-info', (req, res) => {
-  const settings = getSettings();
+  const projectId = req.session?.user?.currentProjectId || null;
+  const settings = getSettings(projectId);
+  // Fall back to global settings if no project
+  const globalSettings = getSettings();
   const pkg = require('./package.json');
   res.json({
-    projectTitle: settings.projectTitle || '',
-    projectSubtitle: settings.projectSubtitle || '',
-    version: pkg.version
+    projectTitle: settings.projectTitle || globalSettings.projectTitle || '',
+    projectSubtitle: settings.projectSubtitle || globalSettings.projectSubtitle || '',
+    version: pkg.version,
+    currentProjectId: projectId,
+    currentProjectName: req.session?.user?.currentProjectName || null
   });
 });
 
-app.get('/api/admin/settings', ensureAdmin, (req, res) => {
-  res.json(getSettings());
+app.get('/api/admin/settings', ensureProjectAdmin, (req, res) => {
+  const projectId = req.user.currentProjectId;
+  res.json(getSettings(projectId));
 });
 
-app.put('/api/admin/settings', ensureAdmin, (req, res) => {
+app.put('/api/admin/settings', ensureProjectAdmin, (req, res) => {
+  const projectId = req.user.currentProjectId;
   console.log('=== Settings update ===');
   console.log('Request body:', req.body);
   const { googleSheetId, googleSheetEnabled, projectTitle, projectSubtitle, exportSheetId } = req.body;
-  const insert = db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
-  if (googleSheetId !== undefined) insert.run('googleSheetId', JSON.stringify(googleSheetId));
-  if (googleSheetEnabled !== undefined) insert.run('googleSheetEnabled', JSON.stringify(googleSheetEnabled === true));
-  if (projectTitle !== undefined) insert.run('projectTitle', JSON.stringify(projectTitle));
-  if (projectSubtitle !== undefined) insert.run('projectSubtitle', JSON.stringify(projectSubtitle));
-  if (exportSheetId !== undefined) insert.run('exportSheetId', JSON.stringify(exportSheetId));
-  const newSettings = getSettings();
-  console.log('New settings:', newSettings);
+  const insert = db.prepare('INSERT OR REPLACE INTO project_settings (project_id, key, value) VALUES (?, ?, ?)');
+  // Also update global settings for project title/subtitle (for project-info endpoint)
+  const globalInsert = db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
+  if (googleSheetId !== undefined) insert.run(projectId, 'googleSheetId', JSON.stringify(googleSheetId));
+  if (googleSheetEnabled !== undefined) insert.run(projectId, 'googleSheetEnabled', JSON.stringify(googleSheetEnabled === true));
+  if (projectTitle !== undefined) {
+    insert.run(projectId, 'projectTitle', JSON.stringify(projectTitle));
+    // Update project name in projects table too
+    db.prepare('UPDATE projects SET name = ? WHERE id = ?').run(projectTitle, projectId);
+  }
+  if (projectSubtitle !== undefined) {
+    insert.run(projectId, 'projectSubtitle', JSON.stringify(projectSubtitle));
+    db.prepare('UPDATE projects SET subtitle = ? WHERE id = ?').run(projectSubtitle, projectId);
+  }
+  if (exportSheetId !== undefined) insert.run(projectId, 'exportSheetId', JSON.stringify(exportSheetId));
   res.json({ ok: true });
 });
 
-app.post('/api/admin/google-credentials', ensureAdmin, async (req, res) => {
+app.post('/api/admin/google-credentials', ensureProjectAdmin, async (req, res) => {
   console.log('=== Credentials upload ===');
   const { credentials } = req.body;
   if (!credentials) return res.status(400).json({ error: 'Credentials required' });
@@ -1575,7 +2019,7 @@ app.post('/api/admin/google-credentials', ensureAdmin, async (req, res) => {
   }
 });
 
-app.get('/api/admin/google-credentials/status', ensureAdmin, (req, res) => {
+app.get('/api/admin/google-credentials/status', ensureProjectAdmin, (req, res) => {
   const credPath = getCredentialsPath();
   if (!credPath) return res.json({ configured: false });
   try {
@@ -1617,9 +2061,10 @@ function sheetRowKey(row) {
 }
 
 // Sync all bills to Google Sheet (append only, no duplicates)
-app.post('/api/sync/to-sheet', ensureAdmin, async (req, res) => {
+app.post('/api/sync/to-sheet', ensureProjectAdmin, async (req, res) => {
+  const projectId = req.user.currentProjectId;
   console.log('=== Sync to Sheet ===');
-  const settings = getSettings();
+  const settings = getSettings(projectId);
   if (!sheets || !settings.googleSheetEnabled || !settings.googleSheetId) {
     return res.status(400).json({ error: 'Google Sheets not configured' });
   }
@@ -1639,7 +2084,7 @@ app.post('/api/sync/to-sheet', ensureAdmin, async (req, res) => {
     }
     console.log('Existing entries in sheet:', existingKeys.size);
 
-    const bills = db.prepare('SELECT * FROM bills ORDER BY id').all();
+    const bills = db.prepare('SELECT * FROM bills WHERE project_id = ? ORDER BY id').all(projectId);
     const typeMap = { 'Kauf': 'K', 'Leih': 'L', 'Verbrauch': 'V' };
     const newRows = [];
 
@@ -1684,9 +2129,10 @@ app.post('/api/sync/to-sheet', ensureAdmin, async (req, res) => {
 });
 
 // Sync from Google Sheet to local (append only, no duplicates)
-app.post('/api/sync/from-sheet', ensureAdmin, async (req, res) => {
+app.post('/api/sync/from-sheet', ensureProjectAdmin, async (req, res) => {
+  const projectId = req.user.currentProjectId;
   console.log('=== Sync from Sheet ===');
-  const settings = getSettings();
+  const settings = getSettings(projectId);
   if (!sheets || !settings.googleSheetEnabled || !settings.googleSheetId) {
     return res.status(400).json({ error: 'Google Sheets not configured' });
   }
@@ -1699,8 +2145,8 @@ app.post('/api/sync/from-sheet', ensureAdmin, async (req, res) => {
     const rows = response.data.values || [];
     console.log('Read', rows.length, 'rows from sheet');
 
-    // Build set of existing local bill keys
-    const bills = db.prepare('SELECT * FROM bills').all();
+    // Build set of existing local bill keys (scoped to project)
+    const bills = db.prepare('SELECT * FROM bills WHERE project_id = ?').all(projectId);
     const existingKeys = new Set(bills.map(b => billKey(b)));
     console.log('Existing local bills:', existingKeys.size);
 
@@ -1709,8 +2155,8 @@ app.post('/api/sync/from-sheet', ensureAdmin, async (req, res) => {
     let skipped = 0;
 
     const insert = db.prepare(`INSERT INTO bills
-      (date, email, bill_number, type, vendor, item, comment, motive, brutto19, brutto7, brutto0, amount, filename, file)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', '')`);
+      (date, email, bill_number, type, vendor, item, comment, motive, brutto19, brutto7, brutto0, amount, filename, file, project_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', '', ?)`);
 
     for (const row of rows) {
       // Skip empty rows (check WAS and brutto columns)
@@ -1746,7 +2192,7 @@ app.post('/api/sync/from-sheet', ensureAdmin, async (req, res) => {
       insert.run(
         bill.date, bill.email, bill.bill_number, bill.type,
         bill.vendor, bill.item, bill.comment, bill.motive,
-        bill.brutto19, bill.brutto7, bill.brutto0, bill.amount
+        bill.brutto19, bill.brutto7, bill.brutto0, bill.amount, projectId
       );
       added++;
     }
@@ -1791,26 +2237,32 @@ function parseSheetNumber(val) {
 }
 
 // PDF Report per user
-app.get('/api/report/:email', ensureAuth, async (req, res) => {
+app.get('/api/report/:email', ensureProjectAccess, async (req, res) => {
+  const projectId = req.user.currentProjectId;
   const targetEmail = decodeURIComponent(req.params.email);
 
-  // Only admins can view other users' reports
-  if (!req.user.admin && req.user.email.toLowerCase() !== targetEmail.toLowerCase()) {
+  // Only project-admins/super-admins can view other users' reports
+  const isAdmin = req.user.superAdmin || req.user.currentProjectRole === 'admin';
+  if (!isAdmin && req.user.email.toLowerCase() !== targetEmail.toLowerCase()) {
     return res.status(403).json({ error: 'Access denied' });
   }
 
-  const userBills = db.prepare('SELECT * FROM bills WHERE LOWER(email) = LOWER(?) ORDER BY date').all(targetEmail);
-  const userVGeld = db.prepare('SELECT * FROM vgeld WHERE LOWER(to_user) = LOWER(?) ORDER BY date').all(targetEmail);
+  const userBills = db.prepare('SELECT * FROM bills WHERE LOWER(email) = LOWER(?) AND project_id = ? ORDER BY date').all(targetEmail, projectId);
+  const userVGeld = db.prepare('SELECT * FROM vgeld WHERE LOWER(to_user) = LOWER(?) AND project_id = ? ORDER BY date').all(targetEmail, projectId);
 
   if (userBills.length === 0 && userVGeld.length === 0) {
     return res.status(404).json({ error: 'No data found for this user' });
   }
 
-  // Look up user's role
-  const targetUser = db.prepare(`SELECT u.role_id, COALESCE(r.name, 'Misc') as role_name FROM users u LEFT JOIN roles r ON r.id = u.role_id WHERE LOWER(u.email) = LOWER(?)`).get(targetEmail);
-  const userRole = targetUser ? targetUser.role_name : 'Misc';
+  // Look up user's position in this project
+  const memberRow = db.prepare(`
+    SELECT COALESCE(pp.name, 'Misc') as position_name
+    FROM project_members pm LEFT JOIN project_positions pp ON pp.id = pm.position_id
+    WHERE pm.project_id = ? AND LOWER(pm.user_email) = LOWER(?)
+  `).get(projectId, targetEmail);
+  const userRole = memberRow ? memberRow.position_name : 'Misc';
 
-  const pdfSettings = getSettings();
+  const pdfSettings = getSettings(projectId);
   const pTitle = pdfSettings.projectTitle || '';
   const pSubtitle = pdfSettings.projectSubtitle || '';
   const pdfPrefix = pTitle ? pTitle + ' - ' : 'vBudget - ';
@@ -2126,29 +2578,32 @@ app.get('/api/report/:email', ensureAuth, async (req, res) => {
   doc.end();
 });
 
-// List users for report dropdown (admins see all, users see only themselves)
-app.get('/api/report-users', ensureAuth, (req, res) => {
-  if (req.user.admin) {
-    // Admins see all users who have bills, with their roles
+// List users for report dropdown (project-admins/super-admins see all, users see only themselves)
+app.get('/api/report-users', ensureProjectAccess, (req, res) => {
+  const projectId = req.user.currentProjectId;
+  const isAdmin = req.user.superAdmin || req.user.currentProjectRole === 'admin';
+  if (isAdmin) {
+    // Admins see all project members who have bills
     const usersWithBills = db.prepare(`
-      SELECT DISTINCT b.email, COALESCE(r.name, 'Misc') as role_name
+      SELECT DISTINCT b.email, COALESCE(pp.name, 'Misc') as role_name
       FROM bills b
-      LEFT JOIN users u ON LOWER(u.email) = LOWER(b.email)
-      LEFT JOIN roles r ON r.id = u.role_id
+      LEFT JOIN project_members pm ON LOWER(pm.user_email) = LOWER(b.email) AND pm.project_id = b.project_id
+      LEFT JOIN project_positions pp ON pp.id = pm.position_id
+      WHERE b.project_id = ?
       ORDER BY b.email
-    `).all();
+    `).all(projectId);
     res.json(usersWithBills.map(u => ({ email: u.email, roleName: u.role_name })));
   } else {
-    // Regular users only see themselves
     res.json([{ email: req.user.email, roleName: req.user.role || 'Misc' }]);
   }
 });
 
 // Budget Matrix PDF Report
-app.get('/api/budget-report', ensureAuth, (req, res) => {
-  const motives = db.prepare("SELECT id, name FROM motives ORDER BY CASE WHEN name = 'Default' THEN 1 ELSE 0 END, id").all();
-  const categories = db.prepare("SELECT id, name FROM categories ORDER BY CASE WHEN name = 'Uncategorized' THEN 1 ELSE 0 END, id").all();
-  const rows = db.prepare('SELECT motive_id, category_id, amount FROM budget_matrix').all();
+app.get('/api/budget-report', ensureProjectAccess, (req, res) => {
+  const projectId = req.user.currentProjectId;
+  const motives = db.prepare("SELECT id, name FROM motives WHERE project_id = ? ORDER BY CASE WHEN name = 'Default' THEN 1 ELSE 0 END, id").all(projectId);
+  const categories = db.prepare("SELECT id, name FROM categories WHERE project_id = ? ORDER BY CASE WHEN name = 'Uncategorized' THEN 1 ELSE 0 END, id").all(projectId);
+  const rows = db.prepare('SELECT motive_id, category_id, amount FROM budget_matrix WHERE project_id = ?').all(projectId);
 
   const matrix = {};
   let grandTotal = 0;
@@ -2161,19 +2616,21 @@ app.get('/api/budget-report', ensureAuth, (req, res) => {
   db.prepare(`
     SELECT bm.motive_id, SUM(b.netto_amount * bm.percentage / 100) as spent
     FROM bill_motives bm JOIN bills b ON b.id = bm.bill_id
+    WHERE b.project_id = ?
     GROUP BY bm.motive_id
-  `).all().forEach(r => { motiveSpending[r.motive_id] = r.spent || 0; });
+  `).all(projectId).forEach(r => { motiveSpending[r.motive_id] = r.spent || 0; });
 
   const categorySpending = {};
   db.prepare(`
     SELECT bc.category_id, SUM(b.netto_amount * bc.percentage / 100) as spent
     FROM bill_categories bc JOIN bills b ON b.id = bc.bill_id
+    WHERE b.project_id = ?
     GROUP BY bc.category_id
-  `).all().forEach(r => { categorySpending[r.category_id] = r.spent || 0; });
+  `).all(projectId).forEach(r => { categorySpending[r.category_id] = r.spent || 0; });
 
   const eur = (v) => (v || 0).toFixed(2).replace('.', ',') + ' €';
 
-  const bmSettings = getSettings();
+  const bmSettings = getSettings(projectId);
   const bmTitle = bmSettings.projectTitle || '';
   const bmSubtitle = bmSettings.projectSubtitle || '';
   const bmPrefix = bmTitle ? bmTitle + ' - ' : 'vBudget - ';
@@ -2383,25 +2840,28 @@ app.get('/api/budget-report', ensureAuth, (req, res) => {
 // ========== Admin Export / Backup ==========
 
 // Excel export: bills, vgeld, budget matrix
-app.get('/api/admin/export/excel', ensureAdmin, async (req, res) => {
+app.get('/api/admin/export/excel', ensureProjectAdmin, async (req, res) => {
+  const projectId = req.user.currentProjectId;
   try {
     const workbook = new ExcelJS.Workbook();
-    const settings = getSettings();
+    const settings = getSettings(projectId);
     const projectName = settings.projectTitle || 'vBudget';
 
     // --- Bills sheet ---
     const billsSheet = workbook.addWorksheet('Bills');
-    const bills = db.prepare('SELECT * FROM bills ORDER BY id').all();
+    const bills = db.prepare('SELECT * FROM bills WHERE project_id = ? ORDER BY id').all(projectId);
     const allMotiveAllocs = db.prepare(`
       SELECT bm.bill_id, m.name, bm.percentage
       FROM bill_motives bm JOIN motives m ON m.id = bm.motive_id
+      JOIN bills b ON b.id = bm.bill_id WHERE b.project_id = ?
       ORDER BY bm.bill_id, bm.id
-    `).all();
+    `).all(projectId);
     const allCategoryAllocs = db.prepare(`
       SELECT bc.bill_id, c.name, bc.percentage
       FROM bill_categories bc JOIN categories c ON c.id = bc.category_id
+      JOIN bills b ON b.id = bc.bill_id WHERE b.project_id = ?
       ORDER BY bc.bill_id, bc.id
-    `).all();
+    `).all(projectId);
 
     const motivesByBill = {};
     for (const a of allMotiveAllocs) {
@@ -2478,7 +2938,7 @@ app.get('/api/admin/export/excel', ensureAdmin, async (req, res) => {
 
     // --- VGeld sheet ---
     const vgeldSheet = workbook.addWorksheet('V-Geld');
-    const vgeld = db.prepare('SELECT * FROM vgeld ORDER BY id').all();
+    const vgeld = db.prepare('SELECT * FROM vgeld WHERE project_id = ? ORDER BY id').all(projectId);
 
     vgeldSheet.columns = [
       { header: 'ID', key: 'id', width: 6 },
@@ -2507,9 +2967,9 @@ app.get('/api/admin/export/excel', ensureAdmin, async (req, res) => {
 
     // --- Budget Matrix sheet ---
     const bmSheet = workbook.addWorksheet('Budget Matrix');
-    const motives = db.prepare("SELECT id, name FROM motives ORDER BY CASE WHEN name = 'Default' THEN 1 ELSE 0 END, id").all();
-    const categories = db.prepare("SELECT id, name FROM categories ORDER BY CASE WHEN name = 'Uncategorized' THEN 1 ELSE 0 END, id").all();
-    const matrixRows = db.prepare('SELECT motive_id, category_id, amount FROM budget_matrix').all();
+    const motives = db.prepare("SELECT id, name FROM motives WHERE project_id = ? ORDER BY CASE WHEN name = 'Default' THEN 1 ELSE 0 END, id").all(projectId);
+    const categories = db.prepare("SELECT id, name FROM categories WHERE project_id = ? ORDER BY CASE WHEN name = 'Uncategorized' THEN 1 ELSE 0 END, id").all(projectId);
+    const matrixRows = db.prepare('SELECT motive_id, category_id, amount FROM budget_matrix WHERE project_id = ?').all(projectId);
     const matrix = {};
     for (const r of matrixRows) {
       matrix[r.category_id + '_' + r.motive_id] = r.amount;
@@ -2595,7 +3055,7 @@ app.get('/api/admin/export/excel', ensureAdmin, async (req, res) => {
 });
 
 // Images backup: zip of all bill images in folder structure
-app.get('/api/admin/export/images', ensureAdmin, (req, res) => {
+app.get('/api/admin/export/images', ensureProjectAdmin, (req, res) => {
   try {
     const images = db.prepare(`
       SELECT bi.bill_id, bi.filename, bi.file, bi.sort_order,
@@ -2655,25 +3115,28 @@ app.get('/api/admin/export/images', ensureAdmin, (req, res) => {
 });
 
 // Google Sheet export (create or update persistent sheet)
-app.post('/api/admin/export/google-sheet', ensureAdmin, async (req, res) => {
+app.post('/api/admin/export/google-sheet', ensureProjectAdmin, async (req, res) => {
+  const projectId = req.user.currentProjectId;
   if (!sheets) {
     return res.status(400).json({ error: 'Google services not configured. Please add service account credentials first.' });
   }
   try {
-    const settings = getSettings();
+    const settings = getSettings(projectId);
 
     // --- Gather data (same as Excel export) ---
-    const bills = db.prepare('SELECT * FROM bills ORDER BY id').all();
+    const bills = db.prepare('SELECT * FROM bills WHERE project_id = ? ORDER BY id').all(projectId);
     const allMotiveAllocs = db.prepare(`
       SELECT bm.bill_id, m.name, bm.percentage
       FROM bill_motives bm JOIN motives m ON m.id = bm.motive_id
+      JOIN bills b ON b.id = bm.bill_id WHERE b.project_id = ?
       ORDER BY bm.bill_id, bm.id
-    `).all();
+    `).all(projectId);
     const allCategoryAllocs = db.prepare(`
       SELECT bc.bill_id, c.name, bc.percentage
       FROM bill_categories bc JOIN categories c ON c.id = bc.category_id
+      JOIN bills b ON b.id = bc.bill_id WHERE b.project_id = ?
       ORDER BY bc.bill_id, bc.id
-    `).all();
+    `).all(projectId);
 
     const motivesByBill = {};
     for (const a of allMotiveAllocs) {
@@ -2686,11 +3149,11 @@ app.post('/api/admin/export/google-sheet', ensureAdmin, async (req, res) => {
       categoriesByBill[a.bill_id].push(a);
     }
 
-    const vgeld = db.prepare('SELECT * FROM vgeld ORDER BY id').all();
+    const vgeld = db.prepare('SELECT * FROM vgeld WHERE project_id = ? ORDER BY id').all(projectId);
 
-    const motives = db.prepare("SELECT id, name FROM motives ORDER BY CASE WHEN name = 'Default' THEN 1 ELSE 0 END, id").all();
-    const categories = db.prepare("SELECT id, name FROM categories ORDER BY CASE WHEN name = 'Uncategorized' THEN 1 ELSE 0 END, id").all();
-    const matrixRows = db.prepare('SELECT motive_id, category_id, amount FROM budget_matrix').all();
+    const motives = db.prepare("SELECT id, name FROM motives WHERE project_id = ? ORDER BY CASE WHEN name = 'Default' THEN 1 ELSE 0 END, id").all(projectId);
+    const categories = db.prepare("SELECT id, name FROM categories WHERE project_id = ? ORDER BY CASE WHEN name = 'Uncategorized' THEN 1 ELSE 0 END, id").all(projectId);
+    const matrixRows = db.prepare('SELECT motive_id, category_id, amount FROM budget_matrix WHERE project_id = ?').all(projectId);
     const matrix = {};
     for (const r of matrixRows) {
       matrix[r.category_id + '_' + r.motive_id] = r.amount;
@@ -2877,8 +3340,226 @@ app.post('/api/admin/export/google-sheet', ensureAdmin, async (req, res) => {
 });
 
 // Admin page
-app.get('/admin', ensureAdmin, (req, res) => {
+app.get('/admin', ensureProjectAdmin, (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
+
+// Super-admin page
+app.get('/superadmin', ensureSuperAdmin, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'superadmin.html'));
+});
+
+// ==== Super-Admin API Routes ====
+
+// Projects CRUD
+app.get('/api/superadmin/projects', ensureSuperAdmin, (req, res) => {
+  const projects = db.prepare(`
+    SELECT p.*, COUNT(pm.id) as member_count
+    FROM projects p LEFT JOIN project_members pm ON pm.project_id = p.id
+    GROUP BY p.id ORDER BY p.id
+  `).all();
+  res.json(projects);
+});
+
+app.post('/api/superadmin/projects', ensureSuperAdmin, (req, res) => {
+  const { name, subtitle } = req.body;
+  if (!name) return res.status(400).json({ error: 'Project name required' });
+  const result = db.prepare('INSERT INTO projects (name, subtitle) VALUES (?, ?)').run(name, subtitle || null);
+  const projectId = result.lastInsertRowid;
+  initProjectDefaults(projectId);
+  res.json({ ok: true, id: projectId });
+});
+
+app.put('/api/superadmin/projects/:id', ensureSuperAdmin, (req, res) => {
+  const id = parseInt(req.params.id);
+  const project = db.prepare('SELECT id FROM projects WHERE id = ?').get(id);
+  if (!project) return res.status(404).json({ error: 'Not found' });
+  const { name, subtitle } = req.body;
+  const updates = [];
+  const params = [];
+  if (name !== undefined) { updates.push('name = ?'); params.push(name); }
+  if (subtitle !== undefined) { updates.push('subtitle = ?'); params.push(subtitle || null); }
+  if (updates.length > 0) {
+    params.push(id);
+    db.prepare(`UPDATE projects SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+  }
+  res.json({ ok: true });
+});
+
+app.delete('/api/superadmin/projects/:id', ensureSuperAdmin, (req, res) => {
+  const id = parseInt(req.params.id);
+  const project = db.prepare('SELECT id FROM projects WHERE id = ?').get(id);
+  if (!project) return res.status(404).json({ error: 'Not found' });
+  // Note: CASCADE will delete project_members, project_positions, project_settings
+  // Bills, motives, categories etc. have project_id set to null (not CASCADE) — clean them up
+  for (const table of ['bills', 'motives', 'categories', 'vgeld', 'editlog', 'budget_matrix']) {
+    db.prepare(`DELETE FROM ${table} WHERE project_id = ?`).run(id);
+  }
+  db.prepare('DELETE FROM projects WHERE id = ?').run(id);
+  res.json({ ok: true });
+});
+
+// Super-admin: Global users CRUD
+app.get('/api/superadmin/users', ensureSuperAdmin, (req, res) => {
+  const users = db.prepare(`
+    SELECT u.id, u.email, u.admin, u.super_admin,
+           COUNT(pm.id) as project_count
+    FROM users u LEFT JOIN project_members pm ON LOWER(pm.user_email) = LOWER(u.email)
+    GROUP BY u.id ORDER BY u.email
+  `).all();
+  res.json(users.map(u => ({
+    id: u.id, email: u.email,
+    admin: u.admin === 1, superAdmin: u.super_admin === 1,
+    projectCount: u.project_count
+  })));
+});
+
+app.post('/api/superadmin/users', ensureSuperAdmin, async (req, res) => {
+  const { email, password, superAdmin } = req.body;
+  if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+  const pwError = validatePassword(password);
+  if (pwError) return res.status(400).json({ error: pwError });
+  if (findUser(email)) return res.status(400).json({ error: 'User already exists' });
+  const hash = await bcrypt.hash(password, 12);
+  const result = db.prepare('INSERT INTO users (email, hash, admin, super_admin) VALUES (?, ?, ?, ?)')
+    .run(email, hash, superAdmin ? 1 : 0, superAdmin ? 1 : 0);
+  res.json({ ok: true, id: result.lastInsertRowid });
+});
+
+app.put('/api/superadmin/users/:email', ensureSuperAdmin, async (req, res) => {
+  const user = findUser(req.params.email);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  const { password, superAdmin } = req.body;
+  const updates = [];
+  const params = [];
+  if (password) {
+    const pwError = validatePassword(password);
+    if (pwError) return res.status(400).json({ error: pwError });
+    const hash = await bcrypt.hash(password, 12);
+    updates.push('hash = ?');
+    params.push(hash);
+  }
+  if (superAdmin !== undefined) {
+    updates.push('super_admin = ?');
+    params.push(superAdmin ? 1 : 0);
+  }
+  if (updates.length > 0) {
+    params.push(user.id);
+    db.prepare(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+  }
+  res.json({ ok: true });
+});
+
+app.delete('/api/superadmin/users/:email', ensureSuperAdmin, (req, res) => {
+  const user = findUser(req.params.email);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  if (user.email.toLowerCase() === req.session.user.email.toLowerCase()) {
+    return res.status(400).json({ error: 'Cannot delete yourself' });
+  }
+  db.prepare('DELETE FROM project_members WHERE LOWER(user_email) = LOWER(?)').run(user.email);
+  db.prepare('DELETE FROM users WHERE id = ?').run(user.id);
+  res.json({ ok: true });
+});
+
+// Super-admin: Project members
+app.get('/api/superadmin/projects/:id/members', ensureSuperAdmin, (req, res) => {
+  const projectId = parseInt(req.params.id);
+  const members = db.prepare(`
+    SELECT pm.id, pm.user_email as email, pm.project_role, pm.position_id,
+           COALESCE(pp.name, 'Misc') as position_name
+    FROM project_members pm
+    LEFT JOIN project_positions pp ON pp.id = pm.position_id
+    WHERE pm.project_id = ?
+    ORDER BY pm.user_email
+  `).all(projectId);
+  res.json(members.map(m => ({
+    id: m.id, email: m.email, projectRole: m.project_role,
+    positionId: m.position_id, positionName: m.position_name
+  })));
+});
+
+app.post('/api/superadmin/projects/:id/members', ensureSuperAdmin, (req, res) => {
+  const projectId = parseInt(req.params.id);
+  const { email, projectRole, positionId } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email required' });
+  const foundUser = findUser(email);
+  if (!foundUser) return res.status(400).json({ error: 'User not found' });
+  try {
+    const result = db.prepare('INSERT INTO project_members (project_id, user_email, project_role, position_id) VALUES (?, ?, ?, ?)')
+      .run(projectId, foundUser.email, projectRole || 'user', positionId || null);
+    res.json({ ok: true, id: result.lastInsertRowid });
+  } catch (e) {
+    if (e.message.includes('UNIQUE')) return res.status(400).json({ error: 'User is already a member' });
+    throw e;
+  }
+});
+
+app.put('/api/superadmin/projects/:id/members/:memberId', ensureSuperAdmin, (req, res) => {
+  const projectId = parseInt(req.params.id);
+  const memberId = parseInt(req.params.memberId);
+  const member = db.prepare('SELECT * FROM project_members WHERE id = ? AND project_id = ?').get(memberId, projectId);
+  if (!member) return res.status(404).json({ error: 'Member not found' });
+  const { projectRole, positionId } = req.body;
+  const updates = [];
+  const params = [];
+  if (projectRole !== undefined) { updates.push('project_role = ?'); params.push(projectRole); }
+  if (positionId !== undefined) { updates.push('position_id = ?'); params.push(positionId || null); }
+  if (updates.length > 0) {
+    params.push(memberId);
+    db.prepare(`UPDATE project_members SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+  }
+  res.json({ ok: true });
+});
+
+app.delete('/api/superadmin/projects/:id/members/:memberId', ensureSuperAdmin, (req, res) => {
+  const projectId = parseInt(req.params.id);
+  const memberId = parseInt(req.params.memberId);
+  const result = db.prepare('DELETE FROM project_members WHERE id = ? AND project_id = ?').run(memberId, projectId);
+  if (result.changes === 0) return res.status(404).json({ error: 'Member not found' });
+  res.json({ ok: true });
+});
+
+// Super-admin: Positions per project
+app.get('/api/superadmin/projects/:id/positions', ensureSuperAdmin, (req, res) => {
+  const projectId = parseInt(req.params.id);
+  const positions = db.prepare('SELECT * FROM project_positions WHERE project_id = ? ORDER BY id').all(projectId);
+  res.json(positions);
+});
+
+app.post('/api/superadmin/projects/:id/positions', ensureSuperAdmin, (req, res) => {
+  const projectId = parseInt(req.params.id);
+  const { name } = req.body;
+  if (!name) return res.status(400).json({ error: 'Name required' });
+  try {
+    const result = db.prepare('INSERT INTO project_positions (project_id, name) VALUES (?, ?)').run(projectId, name);
+    res.json({ ok: true, id: result.lastInsertRowid });
+  } catch (e) {
+    if (e.message.includes('UNIQUE')) return res.status(400).json({ error: 'Position already exists' });
+    throw e;
+  }
+});
+
+app.put('/api/superadmin/projects/:id/positions/:posId', ensureSuperAdmin, (req, res) => {
+  const projectId = parseInt(req.params.id);
+  const posId = parseInt(req.params.posId);
+  const pos = db.prepare('SELECT * FROM project_positions WHERE id = ? AND project_id = ?').get(posId, projectId);
+  if (!pos) return res.status(404).json({ error: 'Not found' });
+  if (pos.name === 'Misc') return res.status(400).json({ error: 'Cannot edit Misc position' });
+  const { name } = req.body;
+  if (!name) return res.status(400).json({ error: 'Name required' });
+  db.prepare('UPDATE project_positions SET name = ? WHERE id = ?').run(name, posId);
+  res.json({ ok: true });
+});
+
+app.delete('/api/superadmin/projects/:id/positions/:posId', ensureSuperAdmin, (req, res) => {
+  const projectId = parseInt(req.params.id);
+  const posId = parseInt(req.params.posId);
+  const pos = db.prepare('SELECT * FROM project_positions WHERE id = ? AND project_id = ?').get(posId, projectId);
+  if (!pos) return res.status(404).json({ error: 'Not found' });
+  if (pos.name === 'Misc') return res.status(400).json({ error: 'Cannot delete Misc position' });
+  db.prepare('UPDATE project_members SET position_id = NULL WHERE position_id = ?').run(posId);
+  db.prepare('DELETE FROM project_positions WHERE id = ?').run(posId);
+  res.json({ ok: true });
 });
 
 app.listen(PORT, () => {
