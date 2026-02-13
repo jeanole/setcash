@@ -14,6 +14,7 @@
     <button class="tab" data-tab="settings">Settings</button>
     <button class="tab" data-tab="google">Google</button>
     <button class="tab" data-tab="export">Export</button>
+    <button class="tab" data-tab="telegram">Telegram</button>
   </div>
 
   <div id="tab-members" class="tab-content active">
@@ -103,6 +104,35 @@
       </form>
       <div id="googleExportResult" style="margin-top:4px"></div>
       <p style="font-size:0.85em;color:#666;margin-top:4px">Create a Google Sheet, share it (Editor) with the service account email shown above, and paste the Sheet ID here.</p>
+    </div>
+  </div>
+
+  <div id="tab-telegram" class="tab-content">
+    <div class="card">
+      <h2>Telegram Integration</h2>
+      <div id="tgBotStatus" style="margin-bottom:12px"></div>
+
+      <form id="telegramForm" class="inline-form" style="flex-wrap:wrap;gap:10px">
+        <label style="flex-direction:row;align-items:center;gap:6px">
+          <input type="checkbox" id="tgEnabled"> Enabled
+        </label>
+        <input type="text" id="tgBotToken" placeholder="Bot Token (from BotFather)" style="flex:1;min-width:260px">
+        <button type="submit">Save &amp; Apply</button>
+      </form>
+      <div id="tgSettingsResult"></div>
+      <p style="font-size:0.85em;color:#666;margin-top:8px">
+        Create a bot via <strong>@BotFather</strong> on Telegram, copy the token here, enable it, and save.<br>
+        Users link their account by sending <code>/link &lt;code&gt;</code> to your bot — they get the code from vBudget.
+      </p>
+    </div>
+
+    <div class="card">
+      <h2>Linked Accounts</h2>
+      <table class="data-table">
+        <thead><tr><th>Email</th><th>Telegram User ID</th><th>Linked</th><th></th></tr></thead>
+        <tbody id="tgLinksBody"></tbody>
+      </table>
+      <div id="tgLinksResult"></div>
     </div>
   </div>
 
@@ -343,9 +373,76 @@
       btn.textContent = 'Export Now';
     }
 
+    async function loadTelegramSettings() {
+      try {
+        const settings = await (await fetch('/api/admin/settings')).json();
+        document.getElementById('tgEnabled').checked = !!settings.telegramEnabled;
+        document.getElementById('tgBotToken').value = settings.telegramBotToken || '';
+      } catch (e) { console.error('Error loading telegram settings', e); }
+      await loadTgBotStatus();
+      await loadTgLinks();
+    }
+
+    async function loadTgBotStatus() {
+      try {
+        const s = await (await fetch('/api/admin/telegram/bot-status')).json();
+        const el = document.getElementById('tgBotStatus');
+        if (s.running) {
+          el.innerHTML = '<span style="color:green">Bot is running</span>';
+        } else {
+          el.innerHTML = '<span style="color:#999">Bot not running</span>';
+        }
+      } catch (e) {}
+    }
+
+    document.getElementById('telegramForm').onsubmit = async e => {
+      e.preventDefault();
+      const res = await fetch('/api/admin/settings', {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          telegramEnabled: document.getElementById('tgEnabled').checked,
+          telegramBotToken: document.getElementById('tgBotToken').value
+        })
+      });
+      const j = await res.json();
+      if (j.ok) {
+        msg('tgSettingsResult', 'Saved', false);
+        setTimeout(loadTgBotStatus, 1500);
+      } else {
+        msg('tgSettingsResult', j.error || 'Error', true);
+      }
+    };
+
+    async function loadTgLinks() {
+      try {
+        const links = await (await fetch('/api/admin/telegram/links')).json();
+        const tbody = document.getElementById('tgLinksBody');
+        if (!links.length) {
+          tbody.innerHTML = '<tr><td colspan="4" style="color:#999">No linked accounts yet</td></tr>';
+          return;
+        }
+        tbody.innerHTML = links.map(l => `<tr>
+          <td>${esc(l.user_email)}</td>
+          <td style="font-family:monospace;font-size:0.85em">${esc(l.telegram_user_id)}</td>
+          <td style="font-size:0.85em;color:#666">${esc(l.linked_at || '')}</td>
+          <td><button class="small danger" onclick="unlinkTg(${l.id})">Unlink</button></td>
+        </tr>`).join('');
+      } catch (e) { console.error('Error loading telegram links', e); }
+    }
+
+    async function unlinkTg(id) {
+      if (!confirm('Unlink this Telegram account?')) return;
+      const res = await fetch('/api/admin/telegram/links/' + id, { method: 'DELETE' });
+      const j = await res.json();
+      if (j.ok) { msg('tgLinksResult', 'Unlinked', false); loadTgLinks(); }
+      else msg('tgLinksResult', j.error || 'Error', true);
+    }
+
     loadPositions().then(() => loadMembers());
     loadSettings();
     loadCredStatus();
+    loadTelegramSettings();
     fetch('/api/project-info').then(r => r.json()).then(d => {
       if (d.version) document.getElementById('adminVersion').textContent = 'v' + d.version;
     });

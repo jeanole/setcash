@@ -14,6 +14,7 @@ const PDFDocument = require('pdfkit');
 const ExcelJS = require('exceljs');
 const archiver = require('archiver');
 const Database = require('better-sqlite3');
+const TelegramBot = require('node-telegram-bot-api');
 
 // Google Sheets setup
 let sheets = null;
@@ -227,7 +228,40 @@ db.exec(`
     value TEXT,
     PRIMARY KEY(project_id, key)
   );
+
+  CREATE TABLE IF NOT EXISTS telegram_links (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    telegram_user_id TEXT NOT NULL,
+    user_email TEXT NOT NULL REFERENCES users(email) ON DELETE CASCADE,
+    linked_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(project_id, telegram_user_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS telegram_link_codes (
+    code TEXT PRIMARY KEY,
+    user_email TEXT NOT NULL,
+    project_id INTEGER NOT NULL,
+    expires_at TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
 `);
+
+// Add bills.status column if missing (migration)
+try {
+  db.prepare("SELECT status FROM bills LIMIT 1").get();
+} catch (e) {
+  db.exec("ALTER TABLE bills ADD COLUMN status TEXT DEFAULT 'complete'");
+  console.log('Migrated: added status column to bills');
+}
+
+// Add bills.telegram_caption column if missing (migration)
+try {
+  db.prepare("SELECT telegram_caption FROM bills LIMIT 1").get();
+} catch (e) {
+  db.exec("ALTER TABLE bills ADD COLUMN telegram_caption TEXT");
+  console.log('Migrated: added telegram_caption column to bills');
+}
 
 // Add netto_amount column if missing (migration)
 try {
@@ -1097,25 +1131,25 @@ app.get('/api/budget-matrix', ensureProjectAccess, (req, res) => {
     grandTotal += r.amount || 0;
   }
 
-  // Spending per motive (proportional via junction table, netto)
+  // Spending per motive (proportional via junction table, netto, exclude drafts)
   const motiveSpending = {};
   db.prepare(`
     SELECT bm.motive_id, SUM(b.netto_amount * bm.percentage / 100) as spent
     FROM bill_motives bm JOIN bills b ON b.id = bm.bill_id
-    WHERE b.project_id = ?
+    WHERE b.project_id = ? AND (b.status IS NULL OR b.status = 'complete')
     GROUP BY bm.motive_id
   `).all(projectId).forEach(r => { motiveSpending[r.motive_id] = r.spent || 0; });
 
-  // Spending per category (proportional via junction table, netto)
+  // Spending per category (proportional via junction table, netto, exclude drafts)
   const categorySpending = {};
   db.prepare(`
     SELECT bc.category_id, SUM(b.netto_amount * bc.percentage / 100) as spent
     FROM bill_categories bc JOIN bills b ON b.id = bc.bill_id
-    WHERE b.project_id = ?
+    WHERE b.project_id = ? AND (b.status IS NULL OR b.status = 'complete')
     GROUP BY bc.category_id
   `).all(projectId).forEach(r => { categorySpending[r.category_id] = r.spent || 0; });
 
-  // Spending per cell (motive x category intersection, netto)
+  // Spending per cell (motive x category intersection, netto, exclude drafts)
   const cellSpending = {};
   db.prepare(`
     SELECT bm.motive_id, bc.category_id,
@@ -1123,7 +1157,7 @@ app.get('/api/budget-matrix', ensureProjectAccess, (req, res) => {
     FROM bill_motives bm
     JOIN bill_categories bc ON bc.bill_id = bm.bill_id
     JOIN bills b ON b.id = bm.bill_id
-    WHERE b.project_id = ?
+    WHERE b.project_id = ? AND (b.status IS NULL OR b.status = 'complete')
     GROUP BY bm.motive_id, bc.category_id
   `).all(projectId).forEach(r => { cellSpending[r.category_id + '_' + r.motive_id] = r.spent || 0; });
 
@@ -1393,7 +1427,7 @@ app.put('/api/bills/:id', ensureProjectAccess, (req, res) => {
   const bill = db.prepare('SELECT * FROM bills WHERE id = ? AND project_id = ?').get(id, projectId);
   if (!bill) return res.status(404).json({ error: 'Not found' });
 
-  const { email, type, vendor, item, comment, motive, brutto19, brutto7, brutto0, motiveAllocations, categoryAllocations } = req.body;
+  const { email, type, vendor, item, comment, motive, brutto19, brutto7, brutto0, motiveAllocations, categoryAllocations, bill_number, date } = req.body;
   const changes = {};
   const updates = [];
   const params = [];
@@ -1442,6 +1476,18 @@ app.put('/api/bills/:id', ensureProjectAccess, (req, res) => {
     changes.brutto0 = parseFloat(brutto0);
     updates.push('brutto0 = ?');
     params.push(parseFloat(brutto0));
+  }
+
+  // Auto-promote draft to complete when any amount is saved
+  if (bill.status === 'draft') {
+    const newB19 = brutto19 !== undefined ? parseFloat(brutto19) : (bill.brutto19 || 0);
+    const newB7 = brutto7 !== undefined ? parseFloat(brutto7) : (bill.brutto7 || 0);
+    const newB0 = brutto0 !== undefined ? parseFloat(brutto0) : (bill.brutto0 || 0);
+    if (newB19 + newB7 + newB0 > 0) {
+      changes.status = 'complete';
+      updates.push('status = ?');
+      params.push('complete');
+    }
   }
 
   // Save allocations if provided
@@ -1679,13 +1725,14 @@ app.get('/api/bills/by-motive', ensureProjectAccess, (req, res) => {
     FROM bill_motives bm
     JOIN bills b ON b.id = bm.bill_id
     JOIN motives m ON m.id = bm.motive_id
-    WHERE b.project_id = ?
+    WHERE b.project_id = ? AND (b.status IS NULL OR b.status = 'complete')
     GROUP BY bm.motive_id
   `).all(projectId);
 
   const uncatSpent = db.prepare(`
     SELECT SUM(b.netto_amount) as spent FROM bills b
-    WHERE b.project_id = ? AND b.id NOT IN (SELECT DISTINCT bill_id FROM bill_motives)
+    WHERE b.project_id = ? AND (b.status IS NULL OR b.status = 'complete')
+    AND b.id NOT IN (SELECT DISTINCT bill_id FROM bill_motives)
   `).get(projectId);
 
   const motives = db.prepare('SELECT * FROM motives WHERE project_id = ? ORDER BY id').all(projectId);
@@ -1710,13 +1757,14 @@ app.get('/api/bills/by-category', ensureProjectAccess, (req, res) => {
     FROM bill_categories bc
     JOIN bills b ON b.id = bc.bill_id
     JOIN categories c ON c.id = bc.category_id
-    WHERE b.project_id = ?
+    WHERE b.project_id = ? AND (b.status IS NULL OR b.status = 'complete')
     GROUP BY bc.category_id
   `).all(projectId);
 
   const uncatSpent = db.prepare(`
     SELECT SUM(b.netto_amount) as spent FROM bills b
-    WHERE b.project_id = ? AND b.id NOT IN (SELECT DISTINCT bill_id FROM bill_categories)
+    WHERE b.project_id = ? AND (b.status IS NULL OR b.status = 'complete')
+    AND b.id NOT IN (SELECT DISTINCT bill_id FROM bill_categories)
   `).get(projectId);
 
   const categories = db.prepare('SELECT * FROM categories WHERE project_id = ? ORDER BY id').all(projectId);
@@ -1977,7 +2025,7 @@ app.put('/api/admin/settings', ensureProjectAdmin, (req, res) => {
   const projectId = req.user.currentProjectId;
   console.log('=== Settings update ===');
   console.log('Request body:', req.body);
-  const { googleSheetId, googleSheetEnabled, projectTitle, projectSubtitle, exportSheetId } = req.body;
+  const { googleSheetId, googleSheetEnabled, projectTitle, projectSubtitle, exportSheetId, telegramBotToken, telegramEnabled } = req.body;
   const insert = db.prepare('INSERT OR REPLACE INTO project_settings (project_id, key, value) VALUES (?, ?, ?)');
   // Also update global settings for project title/subtitle (for project-info endpoint)
   const globalInsert = db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
@@ -1993,6 +2041,12 @@ app.put('/api/admin/settings', ensureProjectAdmin, (req, res) => {
     db.prepare('UPDATE projects SET subtitle = ? WHERE id = ?').run(projectSubtitle, projectId);
   }
   if (exportSheetId !== undefined) insert.run(projectId, 'exportSheetId', JSON.stringify(exportSheetId));
+  if (telegramBotToken !== undefined) insert.run(projectId, 'telegramBotToken', JSON.stringify(telegramBotToken));
+  if (telegramEnabled !== undefined) {
+    insert.run(projectId, 'telegramEnabled', JSON.stringify(telegramEnabled === true));
+    // Restart bot to pick up changes
+    startProjectBot(projectId);
+  }
   res.json({ ok: true });
 });
 
@@ -2616,7 +2670,7 @@ app.get('/api/budget-report', ensureProjectAccess, (req, res) => {
   db.prepare(`
     SELECT bm.motive_id, SUM(b.netto_amount * bm.percentage / 100) as spent
     FROM bill_motives bm JOIN bills b ON b.id = bm.bill_id
-    WHERE b.project_id = ?
+    WHERE b.project_id = ? AND (b.status IS NULL OR b.status = 'complete')
     GROUP BY bm.motive_id
   `).all(projectId).forEach(r => { motiveSpending[r.motive_id] = r.spent || 0; });
 
@@ -2624,7 +2678,7 @@ app.get('/api/budget-report', ensureProjectAccess, (req, res) => {
   db.prepare(`
     SELECT bc.category_id, SUM(b.netto_amount * bc.percentage / 100) as spent
     FROM bill_categories bc JOIN bills b ON b.id = bc.bill_id
-    WHERE b.project_id = ?
+    WHERE b.project_id = ? AND (b.status IS NULL OR b.status = 'complete')
     GROUP BY bc.category_id
   `).all(projectId).forEach(r => { categorySpending[r.category_id] = r.spent || 0; });
 
@@ -2975,11 +3029,11 @@ app.get('/api/admin/export/excel', ensureProjectAdmin, async (req, res) => {
       matrix[r.category_id + '_' + r.motive_id] = r.amount;
     }
 
-    // Spending data
+    // Spending data (exclude drafts)
     const motiveSpending = {};
-    db.prepare(`SELECT bm.motive_id, SUM(b.netto_amount * bm.percentage / 100) as spent FROM bill_motives bm JOIN bills b ON b.id = bm.bill_id GROUP BY bm.motive_id`).all().forEach(r => { motiveSpending[r.motive_id] = r.spent || 0; });
+    db.prepare(`SELECT bm.motive_id, SUM(b.netto_amount * bm.percentage / 100) as spent FROM bill_motives bm JOIN bills b ON b.id = bm.bill_id WHERE (b.status IS NULL OR b.status = 'complete') GROUP BY bm.motive_id`).all().forEach(r => { motiveSpending[r.motive_id] = r.spent || 0; });
     const categorySpending = {};
-    db.prepare(`SELECT bc.category_id, SUM(b.netto_amount * bc.percentage / 100) as spent FROM bill_categories bc JOIN bills b ON b.id = bc.bill_id GROUP BY bc.category_id`).all().forEach(r => { categorySpending[r.category_id] = r.spent || 0; });
+    db.prepare(`SELECT bc.category_id, SUM(b.netto_amount * bc.percentage / 100) as spent FROM bill_categories bc JOIN bills b ON b.id = bc.bill_id WHERE (b.status IS NULL OR b.status = 'complete') GROUP BY bc.category_id`).all().forEach(r => { categorySpending[r.category_id] = r.spent || 0; });
 
     // Header row: corner + motive names + Total Budget + Spent
     const bmHeaders = ['Category \\ Motive', ...motives.map(m => m.name), 'Total Budget', 'Spent'];
@@ -3159,9 +3213,9 @@ app.post('/api/admin/export/google-sheet', ensureProjectAdmin, async (req, res) 
       matrix[r.category_id + '_' + r.motive_id] = r.amount;
     }
     const motiveSpending = {};
-    db.prepare(`SELECT bm.motive_id, SUM(b.netto_amount * bm.percentage / 100) as spent FROM bill_motives bm JOIN bills b ON b.id = bm.bill_id GROUP BY bm.motive_id`).all().forEach(r => { motiveSpending[r.motive_id] = r.spent || 0; });
+    db.prepare(`SELECT bm.motive_id, SUM(b.netto_amount * bm.percentage / 100) as spent FROM bill_motives bm JOIN bills b ON b.id = bm.bill_id WHERE (b.status IS NULL OR b.status = 'complete') GROUP BY bm.motive_id`).all().forEach(r => { motiveSpending[r.motive_id] = r.spent || 0; });
     const categorySpending = {};
-    db.prepare(`SELECT bc.category_id, SUM(b.netto_amount * bc.percentage / 100) as spent FROM bill_categories bc JOIN bills b ON b.id = bc.bill_id GROUP BY bc.category_id`).all().forEach(r => { categorySpending[r.category_id] = r.spent || 0; });
+    db.prepare(`SELECT bc.category_id, SUM(b.netto_amount * bc.percentage / 100) as spent FROM bill_categories bc JOIN bills b ON b.id = bc.bill_id WHERE (b.status IS NULL OR b.status = 'complete') GROUP BY bc.category_id`).all().forEach(r => { categorySpending[r.category_id] = r.spent || 0; });
 
     // --- Build sheet data arrays ---
     // Bills
@@ -3562,7 +3616,300 @@ app.delete('/api/superadmin/projects/:id/positions/:posId', ensureSuperAdmin, (r
   res.json({ ok: true });
 });
 
+// ============================================================
+// TELEGRAM BOT ENGINE
+// ============================================================
+
+const activeBots = new Map(); // projectId -> TelegramBot instance
+const mediaGroupBuffers = new Map(); // bufferKey -> { messages, timer }
+
+function getProjectSettings(projectId) {
+  const rows = db.prepare('SELECT key, value FROM project_settings WHERE project_id = ?').all(projectId);
+  const s = {};
+  for (const r of rows) { try { s[r.key] = JSON.parse(r.value); } catch { s[r.key] = r.value; } }
+  return s;
+}
+
+async function downloadTelegramFile(bot, fileId) {
+  const fileInfo = await bot.getFile(fileId);
+  const url = `https://api.telegram.org/file/bot${bot.token}/${fileInfo.file_path}`;
+  const https = require('https');
+  const http = require('http');
+  return new Promise((resolve, reject) => {
+    const ext = path.extname(fileInfo.file_path) || '.jpg';
+    const savedName = `tg_${Date.now()}_${Math.random().toString(36).slice(2)}${ext}`;
+    const uploadsDir = path.join(DATA_DIR, 'uploads');
+    if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+    const destPath = path.join(uploadsDir, savedName);
+    const proto = url.startsWith('https') ? https : http;
+    const file = fs.createWriteStream(destPath);
+    proto.get(url, (res) => {
+      res.pipe(file);
+      file.on('finish', () => { file.close(); resolve({ savedName, origName: path.basename(fileInfo.file_path) }); });
+    }).on('error', (err) => { fs.unlink(destPath, () => {}); reject(err); });
+  });
+}
+
+function createDraftBill(projectId, userEmail, photos, caption) {
+  const billNumber = `TG-${Date.now()}`;
+  const insertBill = db.prepare(`
+    INSERT INTO bills (date, email, bill_number, type, vendor, item, comment, brutto19, brutto7, brutto0, netto_amount, motive, project_id, status, telegram_caption)
+    VALUES (datetime('now'), ?, ?, 'Kauf', '', '', ?, 0, 0, 0, 0, 'Default', ?, 'draft', ?)
+  `);
+  const result = insertBill.run(userEmail, billNumber, caption || '', projectId, caption || null);
+  const billId = result.lastInsertRowid;
+
+  // Attach default motive allocation
+  const defaultMotive = db.prepare("SELECT id FROM motives WHERE name = 'Default' AND project_id = ?").get(projectId);
+  if (defaultMotive) {
+    db.prepare('INSERT OR IGNORE INTO bill_motives (bill_id, motive_id, percentage) VALUES (?, ?, 100)').run(billId, defaultMotive.id);
+  }
+  const defaultCat = db.prepare("SELECT id FROM categories WHERE name = 'Uncategorized' AND project_id = ?").get(projectId);
+  if (defaultCat) {
+    db.prepare('INSERT OR IGNORE INTO bill_categories (bill_id, category_id, percentage) VALUES (?, ?, 100)').run(billId, defaultCat.id);
+  }
+
+  // Attach images
+  const insertImg = db.prepare('INSERT INTO bill_images (bill_id, filename, file, sort_order) VALUES (?, ?, ?, ?)');
+  photos.forEach((p, i) => insertImg.run(billId, p.origName, p.savedName, i));
+
+  return billId;
+}
+
+async function processMediaGroup(bufferKey, projectId, userEmail) {
+  const buf = mediaGroupBuffers.get(bufferKey);
+  if (!buf) return;
+  mediaGroupBuffers.delete(bufferKey);
+
+  const bot = activeBots.get(projectId);
+  if (!bot) return;
+
+  const photos = [];
+  for (const msg of buf.messages) {
+    const photo = msg.photo[msg.photo.length - 1]; // largest size
+    try {
+      const p = await downloadTelegramFile(bot, photo.file_id);
+      photos.push(p);
+    } catch (e) {
+      console.error(`[TG ${projectId}] Error downloading photo:`, e.message);
+    }
+  }
+
+  if (photos.length === 0) return;
+  const caption = buf.messages[0].caption || null;
+  const billId = createDraftBill(projectId, userEmail, photos, caption);
+  console.log(`[TG ${projectId}] Created draft bill #${billId} with ${photos.length} image(s) for ${userEmail}`);
+
+  const chatId = buf.messages[0].chat.id;
+  bot.sendMessage(chatId,
+    `✓ ${photos.length} Foto(s) empfangen – Beleg als Entwurf gespeichert.\nBitte in vBudget vervollständigen.`
+  ).catch(() => {});
+}
+
+async function processSinglePhoto(bot, msg, projectId, userEmail) {
+  const photo = msg.photo[msg.photo.length - 1];
+  let downloaded;
+  try {
+    downloaded = await downloadTelegramFile(bot, photo.file_id);
+  } catch (e) {
+    console.error(`[TG ${projectId}] Error downloading photo:`, e.message);
+    bot.sendMessage(msg.chat.id, 'Fehler beim Speichern des Fotos. Bitte erneut versuchen.').catch(() => {});
+    return;
+  }
+  const caption = msg.caption || null;
+  const billId = createDraftBill(projectId, userEmail, [downloaded], caption);
+  console.log(`[TG ${projectId}] Created draft bill #${billId} for ${userEmail}`);
+  bot.sendMessage(msg.chat.id, `✓ Foto empfangen – Beleg als Entwurf gespeichert.\nBitte in vBudget vervollständigen.`).catch(() => {});
+}
+
+function startProjectBot(projectId) {
+  if (activeBots.has(projectId)) {
+    activeBots.get(projectId).stopPolling();
+    activeBots.delete(projectId);
+  }
+  const settings = getProjectSettings(projectId);
+  if (!settings.telegramEnabled || !settings.telegramBotToken) return;
+
+  const token = settings.telegramBotToken;
+  let bot;
+  try {
+    bot = new TelegramBot(token, { polling: { interval: 2000, autoStart: false } });
+  } catch (e) {
+    console.error(`[TG ${projectId}] Failed to create bot:`, e.message);
+    return;
+  }
+
+  bot.on('message', async (msg) => {
+    // Handle /start
+    if (msg.text && msg.text.startsWith('/start')) {
+      bot.sendMessage(msg.chat.id,
+        'Willkommen bei vBudget!\nSende /link <Code> um deinen Account zu verknüpfen.\nDen Code findest du in vBudget unter "Telegram verknüpfen".'
+      ).catch(() => {});
+      return;
+    }
+
+    // Handle /link <code>
+    if (msg.text && msg.text.startsWith('/link ')) {
+      const code = msg.text.split(' ')[1]?.trim();
+      if (!code) {
+        bot.sendMessage(msg.chat.id, 'Verwendung: /link <Code>').catch(() => {});
+        return;
+      }
+      const now = new Date().toISOString();
+      const linkCode = db.prepare(
+        'SELECT * FROM telegram_link_codes WHERE code = ? AND project_id = ? AND expires_at > ?'
+      ).get(code, projectId, now);
+      if (!linkCode) {
+        bot.sendMessage(msg.chat.id, 'Ungültiger oder abgelaufener Code.').catch(() => {});
+        return;
+      }
+      const telegramUserId = String(msg.from.id);
+      try {
+        db.prepare(
+          'INSERT OR REPLACE INTO telegram_links (project_id, telegram_user_id, user_email) VALUES (?, ?, ?)'
+        ).run(projectId, telegramUserId, linkCode.user_email);
+        db.prepare('DELETE FROM telegram_link_codes WHERE code = ?').run(code);
+        bot.sendMessage(msg.chat.id,
+          `✓ Verknüpft mit ${linkCode.user_email}!\nSende jetzt einfach Fotos deiner Belege – sie werden automatisch als Entwurf gespeichert.`
+        ).catch(() => {});
+      } catch (e) {
+        console.error(`[TG ${projectId}] Link error:`, e.message);
+        bot.sendMessage(msg.chat.id, 'Fehler beim Verknüpfen. Bitte erneut versuchen.').catch(() => {});
+      }
+      return;
+    }
+
+    // Handle photos
+    if (msg.photo) {
+      const telegramUserId = String(msg.from.id);
+      const link = db.prepare(
+        'SELECT user_email FROM telegram_links WHERE project_id = ? AND telegram_user_id = ?'
+      ).get(projectId, telegramUserId);
+      if (!link) {
+        bot.sendMessage(msg.chat.id,
+          'Dein Telegram-Account ist noch nicht verknüpft.\nSende /link <Code> – den Code findest du in vBudget.'
+        ).catch(() => {});
+        return;
+      }
+
+      if (msg.media_group_id) {
+        // Album: buffer and wait for all photos
+        const bufferKey = `${projectId}:${msg.media_group_id}`;
+        if (!mediaGroupBuffers.has(bufferKey)) {
+          mediaGroupBuffers.set(bufferKey, { messages: [], timer: null });
+        }
+        const buf = mediaGroupBuffers.get(bufferKey);
+        buf.messages.push(msg);
+        if (buf.timer) clearTimeout(buf.timer);
+        buf.timer = setTimeout(() => processMediaGroup(bufferKey, projectId, link.user_email), 1500);
+      } else {
+        await processSinglePhoto(bot, msg, projectId, link.user_email);
+      }
+    }
+  });
+
+  bot.on('polling_error', (err) => {
+    if (err.code === 'ETELEGRAM' && err.message.includes('409')) {
+      console.error(`[TG ${projectId}] Bot already running elsewhere (409). Stopping.`);
+      stopProjectBot(projectId);
+    } else {
+      console.error(`[TG ${projectId}] Polling error:`, err.message);
+    }
+  });
+
+  bot.startPolling();
+  activeBots.set(projectId, bot);
+  console.log(`[TG ${projectId}] Bot started`);
+}
+
+function stopProjectBot(projectId) {
+  const bot = activeBots.get(projectId);
+  if (bot) {
+    bot.stopPolling().catch(() => {});
+    activeBots.delete(projectId);
+    console.log(`[TG ${projectId}] Bot stopped`);
+  }
+}
+
+function startAllBots() {
+  const projects = db.prepare('SELECT id FROM projects').all();
+  for (const p of projects) {
+    startProjectBot(p.id);
+  }
+}
+
+// ============================================================
+// TELEGRAM API ROUTES
+// ============================================================
+
+// Generate a linking code for current user (10 min TTL)
+app.get('/api/telegram/link-code', ensureAuth, (req, res) => {
+  const projectId = req.user.currentProjectId;
+  if (!projectId) return res.status(400).json({ error: 'No project selected' });
+  const settings = getProjectSettings(projectId);
+  if (!settings.telegramEnabled) return res.status(400).json({ error: 'Telegram not enabled for this project' });
+
+  // Clean up expired codes for this user/project
+  db.prepare("DELETE FROM telegram_link_codes WHERE user_email = ? AND project_id = ?").run(req.user.email, projectId);
+
+  const code = Math.random().toString(36).slice(2, 8).toUpperCase();
+  const expires = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+  db.prepare('INSERT INTO telegram_link_codes (code, user_email, project_id, expires_at) VALUES (?, ?, ?, ?)').run(code, req.user.email, projectId, expires);
+
+  res.json({ code, expires });
+});
+
+// Check current user's link status for this project
+app.get('/api/telegram/status', ensureAuth, (req, res) => {
+  const projectId = req.user.currentProjectId;
+  if (!projectId) return res.json({ enabled: false, linked: false });
+  const settings = getProjectSettings(projectId);
+  const link = db.prepare('SELECT telegram_user_id, linked_at FROM telegram_links WHERE project_id = ? AND user_email = ?').get(projectId, req.user.email);
+  res.json({
+    enabled: !!settings.telegramEnabled,
+    linked: !!link,
+    linkedAt: link?.linked_at || null
+  });
+});
+
+// Unlink own Telegram account
+app.delete('/api/telegram/links/me', ensureAuth, (req, res) => {
+  const projectId = req.user.currentProjectId;
+  db.prepare('DELETE FROM telegram_links WHERE project_id = ? AND user_email = ?').run(projectId, req.user.email);
+  res.json({ ok: true });
+});
+
+// Admin: list all linked users for project
+app.get('/api/admin/telegram/links', ensureProjectAdmin, (req, res) => {
+  const projectId = req.user.currentProjectId;
+  const links = db.prepare('SELECT id, telegram_user_id, user_email, linked_at FROM telegram_links WHERE project_id = ? ORDER BY linked_at DESC').all(projectId);
+  res.json(links);
+});
+
+// Admin: unlink any user
+app.delete('/api/admin/telegram/links/:id', ensureProjectAdmin, (req, res) => {
+  db.prepare('DELETE FROM telegram_links WHERE id = ?').run(parseInt(req.params.id));
+  res.json({ ok: true });
+});
+
+// Admin: get bot status
+app.get('/api/admin/telegram/bot-status', ensureProjectAdmin, (req, res) => {
+  const projectId = req.user.currentProjectId;
+  const running = activeBots.has(projectId);
+  res.json({ running });
+});
+
+// Admin: restart/stop bot (called after settings change)
+app.post('/api/admin/telegram/restart', ensureProjectAdmin, (req, res) => {
+  const projectId = req.user.currentProjectId;
+  startProjectBot(projectId);
+  res.json({ running: activeBots.has(projectId) });
+});
+
+// ============================================================
+
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
   if (DEV_MODE) console.log('DEV_MODE is enabled');
+  startAllBots();
 });

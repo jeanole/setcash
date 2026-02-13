@@ -333,6 +333,10 @@ input[type="number"] {
   background: #e8f4fc !important;
 }
 
+.bill-draft-row {
+  background: #fff9f0 !important;
+}
+
 /* Modal */
 .modal {
   position: fixed;
