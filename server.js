@@ -251,9 +251,11 @@ db.exec(`
 try {
   db.prepare("SELECT status FROM bills LIMIT 1").get();
 } catch (e) {
-  db.exec("ALTER TABLE bills ADD COLUMN status TEXT DEFAULT 'complete'");
+  db.exec("ALTER TABLE bills ADD COLUMN status TEXT DEFAULT 'confirmed'");
   console.log('Migrated: added status column to bills');
 }
+// Rename legacy 'complete' status values to 'confirmed'
+db.exec("UPDATE bills SET status = 'confirmed' WHERE status = 'complete'");
 
 // Add bills.telegram_caption column if missing (migration)
 try {
@@ -1316,7 +1318,8 @@ app.get('/api/bills', ensureProjectAccess, (req, res) => {
     file: b.file,
     images: imagesByBill[b.id] || [],
     motiveAllocations: motivesByBill[b.id] || [],
-    categoryAllocations: categoriesByBill[b.id] || []
+    categoryAllocations: categoriesByBill[b.id] || [],
+    status: b.status || 'confirmed'
   }));
   res.json(mapped);
 });
@@ -1355,10 +1358,11 @@ app.post('/upload', ensureProjectAccess, upload.array('photos', 10), (req, res) 
   let firstFilename = '';
 
   const nettoAmount = b19 / 1.19 + b7 / 1.07 + b0;
+  const uploadStatus = (!vendor || vendor.trim() === '' || (b19 + b7 + b0) === 0) ? 'draft' : 'confirmed';
 
   const result = db.prepare(`INSERT INTO bills
-    (date, email, bill_number, type, vendor, item, comment, motive, brutto19, brutto7, brutto0, amount, netto_amount, filename, file, project_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+    (date, email, bill_number, type, vendor, item, comment, motive, brutto19, brutto7, brutto0, amount, netto_amount, filename, file, project_id, status)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
     new Date().toISOString(),
     req.user.email,
     billNumber,
@@ -1374,7 +1378,8 @@ app.post('/upload', ensureProjectAccess, upload.array('photos', 10), (req, res) 
     nettoAmount,
     '', // filename - will update after saving images
     '',  // file - will update after saving images
-    projectId
+    projectId,
+    uploadStatus
   );
 
   const billId = result.lastInsertRowid;
@@ -1478,15 +1483,16 @@ app.put('/api/bills/:id', ensureProjectAccess, (req, res) => {
     params.push(parseFloat(brutto0));
   }
 
-  // Auto-promote draft to complete when any amount is saved
+  // Auto-promote draft to confirmed when vendor and amount are both present
   if (bill.status === 'draft') {
+    const newVendor = vendor !== undefined ? vendor : (bill.vendor || '');
     const newB19 = brutto19 !== undefined ? parseFloat(brutto19) : (bill.brutto19 || 0);
     const newB7 = brutto7 !== undefined ? parseFloat(brutto7) : (bill.brutto7 || 0);
     const newB0 = brutto0 !== undefined ? parseFloat(brutto0) : (bill.brutto0 || 0);
-    if (newB19 + newB7 + newB0 > 0) {
-      changes.status = 'complete';
+    if (newVendor.trim() !== '' && newB19 + newB7 + newB0 > 0) {
+      changes.status = 'confirmed';
       updates.push('status = ?');
-      params.push('complete');
+      params.push('confirmed');
     }
   }
 

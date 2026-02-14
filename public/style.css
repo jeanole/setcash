@@ -334,7 +334,11 @@ input[type="number"] {
 }
 
 .bill-draft-row {
-  background: #fff9f0 !important;
+  background: #fde8e8 !important;
+}
+
+.bill-draft-row:hover {
+  background: #fad4d4 !important;
 }
 
 /* Modal */
