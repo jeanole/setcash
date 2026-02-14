@@ -1414,6 +1414,27 @@ th.sortable.sort-desc::after {
 
 .app-header h1 {
   margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.app-header h1 .project-subtitle {
+  display: inline;
+  margin-left: 8px;
+}
+
+@media (max-width: 600px) {
+  .app-header h1 {
+    font-size: 1.1em;
+    white-space: normal;
+  }
+  .app-header h1 .project-subtitle {
+    display: block;
+    margin-left: 0;
+  }
 }
 
 .burger-btn {

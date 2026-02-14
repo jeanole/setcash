@@ -2013,9 +2013,12 @@ app.get('/api/project-info', (req, res) => {
   // Fall back to global settings if no project
   const globalSettings = getSettings();
   const pkg = require('./package.json');
+  // Get project name directly from projects table (source of truth)
+  const project = projectId ? db.prepare('SELECT name FROM projects WHERE id = ?').get(projectId) : null;
   res.json({
     projectTitle: settings.projectTitle || globalSettings.projectTitle || '',
     projectSubtitle: settings.projectSubtitle || globalSettings.projectSubtitle || '',
+    projectName: project ? project.name : null,
     version: pkg.version,
     currentProjectId: projectId,
     currentProjectName: req.session?.user?.currentProjectName || null

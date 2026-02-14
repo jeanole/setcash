@@ -2185,6 +2185,7 @@
         currentUser.currentProjectId = data.projectId;
         currentUser.currentProjectRole = data.projectRole;
         currentUser.currentProjectName = data.projectName;
+        document.title = data.projectName + ' - vBudget';
         document.getElementById('projectSelectorOverlay').style.display = 'none';
         await loadProjectData();
       }
@@ -2202,11 +2203,12 @@
         categoriesData = await categoriesRes.json();
         rolesData = positionsRes.ok ? await positionsRes.json() : [];
         const projectInfo = await projectRes.json();
-        if (projectInfo.projectTitle) {
-          const subtitle = projectInfo.projectSubtitle ? `<span class="project-subtitle">${escapeHtml(projectInfo.projectSubtitle)}</span>` : '';
-          document.getElementById('appTitle').innerHTML = escapeHtml(projectInfo.projectTitle) + subtitle;
-          document.title = projectInfo.projectTitle + ' - vBudget';
-        }
+        const projectName = projectInfo.projectName || currentUser.currentProjectName || 'vBudget';
+        const subtitle = projectInfo.projectSubtitle ? `<span class="project-subtitle">${escapeHtml(projectInfo.projectSubtitle)}</span>` : '';
+        document.getElementById('appTitle').innerHTML = escapeHtml(projectName) + subtitle;
+        document.title = projectName + ' - vBudget';
+        // Keep currentUser in sync
+        if (projectInfo.projectName) currentUser.currentProjectName = projectInfo.projectName;
         if (projectInfo.version) {
           document.getElementById('appVersion').textContent = 'v' + projectInfo.version;
         }
@@ -2214,7 +2216,7 @@
         // Update sidebar
         const isAdmin = currentUser.superAdmin || currentUser.currentProjectRole === 'admin';
         document.getElementById('user').innerHTML = '';
-        updateSidebar(isAdmin, projectInfo.version || '', projectInfo.projectTitle || '');
+        updateSidebar(isAdmin, projectInfo.version || '', projectName);
 
         // Initialize upload allocation widgets (empty)
         createAllocationWidget('uploadMotiveAlloc', 'motive', motivesData, [], 0);
@@ -2247,6 +2249,17 @@
           document.getElementById('vgeldFormSection').style.display = 'block';
           document.querySelectorAll('.admin-only').forEach(el => el.style.display = '');
           loadUsersForVGeld();
+        }
+
+        // Reload data for whichever tab is currently visible
+        const activeTab = document.querySelector('.tab.active');
+        if (activeTab) {
+          const tab = activeTab.dataset.tab;
+          if (tab === 'bills') loadBills();
+          else if (tab === 'spending') { loadSpending(); loadCategorySpending(); }
+          else if (tab === 'vgeld') { loadVGeld(); loadVGeldAnalysis(); }
+          else if (tab === 'budget') loadBudgetMatrix();
+          else if (tab === 'reports') loadReportUsers();
         }
       }
 
@@ -2312,6 +2325,7 @@
         currentUser.currentProjectId = data.projectId;
         currentUser.currentProjectRole = data.projectRole;
         currentUser.currentProjectName = data.projectName;
+        document.title = data.projectName + ' - vBudget';
         await loadProjectData();
       }
 
