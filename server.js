@@ -240,6 +240,16 @@ db.exec(`
     expires_at TEXT NOT NULL,
     created_at TEXT DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS notifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_email TEXT NOT NULL REFERENCES users(email) ON DELETE CASCADE,
+    type TEXT NOT NULL,
+    message TEXT NOT NULL,
+    project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+    is_read INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
 `);
 
 // Add bills.status column if missing (migration)
@@ -2506,6 +2516,17 @@ app.post("/api/admin/project/members", ensureProjectAdmin, (req, res) => {
         "INSERT INTO project_members (project_id, user_email, project_role, position_id) VALUES (?, ?, ?, ?)",
       )
       .run(projectId, foundUser.email, role, positionId || null);
+    // Notify the invited user
+    const project = db.prepare("SELECT name FROM projects WHERE id = ?").get(projectId);
+    const projectName = project ? project.name : "a project";
+    db.prepare(
+      "INSERT INTO notifications (user_email, type, message, project_id) VALUES (?, ?, ?, ?)",
+    ).run(
+      foundUser.email,
+      "project_invite",
+      `You have been added to "${projectName}" as ${role}.`,
+      projectId,
+    );
     res.json({ ok: true, id: result.lastInsertRowid });
   } catch (e) {
     if (e.message.includes("UNIQUE"))
@@ -2763,14 +2784,13 @@ app.get("/api/project-info", (req, res) => {
   // Fall back to global settings if no project
   const globalSettings = getSettings();
   const pkg = require("./package.json");
-  // Get project name directly from projects table (source of truth)
+  // Get project name and subtitle directly from projects table (source of truth)
   const project = projectId
-    ? db.prepare("SELECT name FROM projects WHERE id = ?").get(projectId)
+    ? db.prepare("SELECT name, subtitle FROM projects WHERE id = ?").get(projectId)
     : null;
   res.json({
     projectTitle: settings.projectTitle || globalSettings.projectTitle || "",
-    projectSubtitle:
-      settings.projectSubtitle || globalSettings.projectSubtitle || "",
+    projectSubtitle: project ? (project.subtitle || "") : (settings.projectSubtitle || globalSettings.projectSubtitle || ""),
     projectName: project ? project.name : null,
     version: pkg.version,
     currentProjectId: projectId,
@@ -2785,9 +2805,20 @@ app.get("/api/admin/settings", ensureProjectAdmin, (req, res) => {
 
 app.put("/api/admin/settings", ensureProjectAdmin, (req, res) => {
   const projectId = req.user.currentProjectId;
-  console.log("=== Settings update ===");
-  console.log("Request body:", req.body);
-  const { exportSheetId, telegramBotToken, telegramEnabled } = req.body;
+  const { projectTitle, projectSubtitle, exportSheetId, telegramBotToken, telegramEnabled } = req.body;
+  // Save project name/subtitle directly to projects table (source of truth)
+  if (projectTitle !== undefined || projectSubtitle !== undefined) {
+    const updates = [];
+    const params = [];
+    if (projectTitle !== undefined) { updates.push("name = ?"); params.push(projectTitle); }
+    if (projectSubtitle !== undefined) { updates.push("subtitle = ?"); params.push(projectSubtitle !== null ? projectSubtitle : null); }
+    params.push(projectId);
+    db.prepare(`UPDATE projects SET ${updates.join(", ")} WHERE id = ?`).run(...params);
+    // Keep session in sync
+    if (projectTitle !== undefined && req.session?.user) {
+      req.session.user.currentProjectName = projectTitle;
+    }
+  }
   const insert = db.prepare(
     "INSERT OR REPLACE INTO project_settings (project_id, key, value) VALUES (?, ?, ?)",
   );
@@ -2804,6 +2835,30 @@ app.put("/api/admin/settings", ensureProjectAdmin, (req, res) => {
     // Restart bot to pick up changes
     startProjectBot(projectId);
   }
+  res.json({ ok: true });
+});
+
+// Notifications API
+app.get("/api/notifications", ensureAuth, (req, res) => {
+  const email = req.user.email;
+  const notifications = db
+    .prepare(
+      "SELECT id, type, message, project_id, is_read, created_at FROM notifications WHERE user_email = ? ORDER BY created_at DESC LIMIT 50",
+    )
+    .all(email);
+  res.json(notifications);
+});
+
+app.post("/api/notifications/:id/read", ensureAuth, (req, res) => {
+  const id = parseInt(req.params.id);
+  const email = req.user.email;
+  db.prepare("UPDATE notifications SET is_read = 1 WHERE id = ? AND user_email = ?").run(id, email);
+  res.json({ ok: true });
+});
+
+app.post("/api/notifications/read-all", ensureAuth, (req, res) => {
+  const email = req.user.email;
+  db.prepare("UPDATE notifications SET is_read = 1 WHERE user_email = ?").run(email);
   res.json({ ok: true });
 });
 

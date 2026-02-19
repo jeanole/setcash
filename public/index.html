@@ -47,7 +47,7 @@
                     >vBudget</span
                 >
                 <button
-                    class="md:hidden text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md px-2 py-1 text-xl leading-none"
+                    class="text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md px-2 py-1 text-xl leading-none"
                     onclick="closeMenu()"
                 >
                     &#x2715;
@@ -183,6 +183,13 @@
                 >
                     Telegram
                 </button>
+                <button
+                    class="sidebar-nav block w-full text-left px-5 py-2.5 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors bg-transparent border-none cursor-pointer"
+                    data-pane="adm-projects"
+                    onclick="switchPane('adm-projects')"
+                >
+                    Projects Overview
+                </button>
             </div>
             <div class="py-3 border-b border-slate-100 flex flex-col">
                 <div
@@ -205,6 +212,21 @@
                     Profile / Password
                 </button>
             </div>
+            <div
+                class="py-3 border-b border-slate-100 flex flex-col superadmin-only"
+                id="sidebarSuperAdminSection"
+                style="display: none"
+            >
+                <div class="px-5 pb-2 text-[0.7rem] font-bold tracking-wider uppercase text-rose-500">
+                    System
+                </div>
+                <button
+                    class="block w-full text-left px-5 py-2.5 text-sm text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition-colors bg-transparent border-none cursor-pointer font-medium"
+                    onclick="openSuperAdminModal(); closeMenu();"
+                >
+                    Super Admin
+                </button>
+            </div>
             <div class="mt-auto py-3 border-t border-slate-100 flex flex-col">
                 <a
                     href="/logout"
@@ -218,9 +240,10 @@
             </div>
         </nav>
 
-        <div class="flex items-center gap-3 px-4 py-4 md:hidden">
+        <!-- Persistent header bar — always visible on all screen sizes -->
+        <header class="sticky top-0 z-[1000] bg-white border-b border-slate-200 flex items-center gap-3 px-4 py-3">
             <button
-                class="flex flex-col justify-center gap-[5px] w-10 h-10 p-1.5 bg-transparent border-none cursor-pointer rounded-lg hover:bg-slate-100 shrink-0"
+                class="flex flex-col justify-center gap-[5px] w-9 h-9 p-1.5 bg-transparent border-none cursor-pointer rounded-lg hover:bg-slate-100 shrink-0"
                 onclick="openMenu()"
                 aria-label="Menu"
             >
@@ -228,12 +251,43 @@
                 ><span class="block w-full h-0.5 bg-slate-800 rounded"></span
                 ><span class="block w-full h-0.5 bg-slate-800 rounded"></span>
             </button>
-            <h1
-                id="appTitle"
-                class="text-xl font-bold text-slate-900 truncate flex-1 m-0"
-            >
-                vBudget
-            </h1>
+            <div class="flex-1 min-w-0">
+                <h1
+                    id="appTitle"
+                    class="text-base font-bold text-slate-900 truncate m-0 leading-tight"
+                >
+                    vBudget
+                </h1>
+            </div>
+            <div class="flex items-center gap-2 shrink-0 text-right">
+                <div class="hidden sm:flex flex-col items-end leading-tight">
+                    <span id="headerUserEmail" class="text-xs font-medium text-slate-700 truncate max-w-[160px]"></span>
+                    <span id="headerUserRole" class="text-[0.65rem] text-slate-400"></span>
+                </div>
+                <!-- Notification bell -->
+                <button
+                    id="notificationBellBtn"
+                    class="relative w-9 h-9 flex items-center justify-center rounded-lg hover:bg-slate-100 border-none bg-transparent cursor-pointer text-slate-600"
+                    onclick="toggleNotifications()"
+                    aria-label="Notifications"
+                    style="display: none"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                    </svg>
+                    <span id="notificationBadge" class="absolute top-1 right-1 min-w-[16px] h-4 bg-rose-500 text-white text-[0.6rem] font-bold rounded-full flex items-center justify-center px-0.5" style="display: none"></span>
+                </button>
+            </div>
+        </header>
+        <!-- Notification dropdown -->
+        <div id="notificationDropdown" class="fixed top-14 right-3 z-[1050] bg-white border border-slate-200 rounded-xl shadow-lg w-80 max-h-96 flex flex-col" style="display: none">
+            <div class="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+                <span class="text-sm font-semibold text-slate-800">Notifications</span>
+                <button onclick="markAllNotificationsRead()" class="text-xs text-indigo-600 hover:text-indigo-800 border-none bg-transparent cursor-pointer">Mark all read</button>
+            </div>
+            <div id="notificationList" class="overflow-y-auto flex-1 divide-y divide-slate-100">
+                <p class="text-sm text-slate-400 text-center py-6">No notifications</p>
+            </div>
         </div>
 
         <!-- Project selector overlay -->
@@ -1406,6 +1460,28 @@
                     </div>
                 </div>
 
+                <!-- ==================== ADMIN: PROJECTS OVERVIEW PANE ==================== -->
+                <div id="tab-adm-projects" class="tab-content">
+                    <div
+                        class="bg-white rounded-xl shadow-sm border border-slate-100 p-5 md:p-6 mb-5"
+                    >
+                        <h2 class="text-base font-semibold text-slate-900 mb-4">
+                            Projects Overview
+                        </h2>
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b border-slate-200">
+                                    <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Project</th>
+                                    <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Subtitle</th>
+                                    <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Your Role</th>
+                                    <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="admProjectsBody" class="divide-y divide-slate-100"></tbody>
+                        </table>
+                    </div>
+                </div>
+
                 <!-- ==================== USER SETTINGS PANE ==================== -->
                 <div id="tab-user-settings" class="tab-content">
                     <div
@@ -2020,8 +2096,9 @@
                 }
                 if (pane === "adm-export") admLoadCredStatus();
                 if (pane === "adm-telegram") admLoadTelegramSettings();
-                // Close sidebar on mobile
-                if (window.innerWidth < 768) closeMenu();
+                if (pane === "adm-projects") admLoadProjects();
+                // Close sidebar (always overlay now)
+                closeMenu();
             }
 
             // ========== Format allocation display ==========
@@ -4357,6 +4434,15 @@
                         .querySelectorAll(".owner-only")
                         .forEach((el) => (el.style.display = "none"));
                 }
+                if (currentUser.superAdmin) {
+                    document
+                        .querySelectorAll(".superadmin-only")
+                        .forEach((el) => (el.style.display = ""));
+                } else {
+                    document
+                        .querySelectorAll(".superadmin-only")
+                        .forEach((el) => (el.style.display = "none"));
+                }
 
                 // Reload data for the currently active pane
                 const activePane = document.querySelector(
@@ -4407,6 +4493,11 @@
                 // Sidebar title = project title (or fallback)
                 document.getElementById("sidebarTitle").textContent =
                     projectTitle || "vBudget";
+                // Update persistent header bar user info
+                const headerEmail = document.getElementById("headerUserEmail");
+                const headerRole = document.getElementById("headerUserRole");
+                if (headerEmail) headerEmail.textContent = currentUser.email || "";
+                if (headerRole) headerRole.textContent = roleLabel;
                 // Admin section visibility (already handled by .admin-only class toggle)
                 // V-Geld balance in sidebar
                 try {
@@ -4526,6 +4617,89 @@
                 await showProjectSelector();
             }
 
+            // ========== Notifications ==========
+            let notificationsData = [];
+
+            async function loadNotifications() {
+                try {
+                    notificationsData = await fetch("/api/notifications").then((r) => r.json());
+                    const unread = notificationsData.filter((n) => !n.is_read).length;
+                    const bell = document.getElementById("notificationBellBtn");
+                    const badge = document.getElementById("notificationBadge");
+                    if (bell) bell.style.display = "";
+                    if (badge) {
+                        if (unread > 0) {
+                            badge.textContent = unread > 99 ? "99+" : unread;
+                            badge.style.display = "";
+                        } else {
+                            badge.style.display = "none";
+                        }
+                    }
+                    renderNotificationList();
+                } catch (e) { /* ignore */ }
+            }
+
+            function renderNotificationList() {
+                const list = document.getElementById("notificationList");
+                if (!list) return;
+                if (!notificationsData.length) {
+                    list.innerHTML = '<p class="text-sm text-slate-400 text-center py-6">No notifications</p>';
+                    return;
+                }
+                list.innerHTML = notificationsData.map((n) => `
+                    <div class="flex items-start gap-3 px-4 py-3 ${n.is_read ? "opacity-50" : "bg-indigo-50/40"} hover:bg-slate-50 cursor-pointer" onclick="handleNotificationClick(${n.id}, ${n.project_id || "null"})">
+                        <div class="flex-1 min-w-0">
+                            <p class="text-sm text-slate-800 leading-snug">${escapeHtml(n.message)}</p>
+                            <p class="text-[0.65rem] text-slate-400 mt-0.5">${new Date(n.created_at).toLocaleString()}</p>
+                        </div>
+                        ${!n.is_read ? '<span class="w-2 h-2 rounded-full bg-indigo-500 mt-1.5 shrink-0"></span>' : ""}
+                    </div>
+                `).join("");
+            }
+
+            async function handleNotificationClick(id, projectId) {
+                // Mark as read
+                await fetch(`/api/notifications/${id}/read`, { method: "POST" });
+                const n = notificationsData.find((x) => x.id === id);
+                if (n) n.is_read = 1;
+                renderNotificationList();
+                const unread = notificationsData.filter((x) => !x.is_read).length;
+                const badge = document.getElementById("notificationBadge");
+                if (badge) {
+                    badge.textContent = unread > 99 ? "99+" : unread;
+                    badge.style.display = unread > 0 ? "" : "none";
+                }
+                // Switch to that project if different
+                if (projectId && projectId !== currentUser?.currentProjectId) {
+                    document.getElementById("notificationDropdown").style.display = "none";
+                    await sidebarSelectProject(projectId);
+                }
+            }
+
+            async function markAllNotificationsRead() {
+                await fetch("/api/notifications/read-all", { method: "POST" });
+                notificationsData.forEach((n) => (n.is_read = 1));
+                renderNotificationList();
+                const badge = document.getElementById("notificationBadge");
+                if (badge) badge.style.display = "none";
+            }
+
+            function toggleNotifications() {
+                const dropdown = document.getElementById("notificationDropdown");
+                if (!dropdown) return;
+                const isVisible = dropdown.style.display !== "none";
+                dropdown.style.display = isVisible ? "none" : "";
+            }
+
+            // Close notification dropdown when clicking outside
+            document.addEventListener("click", (e) => {
+                const dropdown = document.getElementById("notificationDropdown");
+                const bell = document.getElementById("notificationBellBtn");
+                if (dropdown && bell && !dropdown.contains(e.target) && !bell.contains(e.target)) {
+                    dropdown.style.display = "none";
+                }
+            });
+
             async function init() {
                 const res = await fetch("/api/user");
                 const user = await res.json();
@@ -4535,6 +4709,7 @@
                 }
                 currentUser = user;
                 document.getElementById("signed-in").style.display = "block";
+                loadNotifications(); // fire-and-forget, updates bell badge
 
                 // If user has a project selected, load project data immediately
                 if (user.currentProjectId) {
@@ -4995,13 +5170,14 @@
             // ========== Admin: Settings ==========
             async function admLoadSettings() {
                 try {
-                    const settings = await (
-                        await fetch("/api/admin/settings")
-                    ).json();
+                    const [projectInfo, settings] = await Promise.all([
+                        fetch("/api/project-info").then((r) => r.json()),
+                        fetch("/api/admin/settings").then((r) => r.json()),
+                    ]);
                     document.getElementById("admProjectTitle").value =
-                        settings.projectTitle || "";
+                        projectInfo.projectName || "";
                     document.getElementById("admProjectSubtitle").value =
-                        settings.projectSubtitle || "";
+                        projectInfo.projectSubtitle || "";
                     document.getElementById("admExportSheetId").value =
                         settings.exportSheetId || "";
                 } catch (e) {
@@ -5161,6 +5337,33 @@
                 }
                 btn.disabled = false;
                 btn.textContent = "Export Now";
+            }
+
+            // ========== Admin: Projects Overview ==========
+            async function admLoadProjects() {
+                try {
+                    const projects = await fetch("/api/projects").then((r) => r.json());
+                    const tbody = document.getElementById("admProjectsBody");
+                    if (!tbody) return;
+                    if (!projects.length) {
+                        tbody.innerHTML = '<tr><td colspan="4" class="px-3 py-4 text-sm text-slate-400 text-center">No projects found</td></tr>';
+                        return;
+                    }
+                    tbody.innerHTML = projects.map((p) => {
+                        const isActive = p.id === currentUser?.currentProjectId;
+                        const roleLabel = currentUser?.superAdmin ? "Super Admin" : p.project_role === "owner" ? "Owner" : p.project_role === "admin" ? "Admin" : "Member";
+                        return `<tr class="${isActive ? "bg-indigo-50/50" : ""}">
+                            <td class="px-3 py-3 font-medium text-slate-800">${escapeHtml(p.name)}${isActive ? ' <span class="text-[0.65rem] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full font-semibold">Active</span>' : ""}</td>
+                            <td class="px-3 py-3 text-slate-500">${escapeHtml(p.subtitle || "—")}</td>
+                            <td class="px-3 py-3 text-slate-600">${escapeHtml(roleLabel)}</td>
+                            <td class="px-3 py-3">
+                                ${!isActive ? `<button class="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 transition-colors border-none cursor-pointer" onclick="sidebarSelectProject(${p.id})">Switch</button>` : ""}
+                            </td>
+                        </tr>`;
+                    }).join("");
+                } catch (e) {
+                    console.error("Error loading projects overview", e);
+                }
             }
 
             // ========== Admin: Telegram ==========
@@ -5330,6 +5533,307 @@
                 }
             };
 
+            // ========== Super Admin Modal ==========
+            let saProjects = [];
+            let saUsers = [];
+            let saMembershipPositions = [];
+            let saCurrentMembers = [];
+            let saCurrentProjectId = null;
+
+            function openSuperAdminModal() {
+                document.getElementById("superAdminModal").style.display = "flex";
+                document.body.style.overflow = "hidden";
+                saLoadProjects();
+                saLoadUsers();
+            }
+
+            function closeSuperAdminModal() {
+                document.getElementById("superAdminModal").style.display = "none";
+                document.body.style.overflow = "";
+            }
+
+            function switchSaTab(tab) {
+                document.querySelectorAll(".sa-tab").forEach((t) => {
+                    const isActive = t.dataset.saTab === tab;
+                    t.className = `sa-tab px-4 py-2.5 text-sm font-medium border-b-2 ${isActive ? "border-indigo-600 text-indigo-600" : "border-transparent text-slate-500 hover:text-slate-700"}`;
+                });
+                document.querySelectorAll(".sa-tab-content").forEach((c) => (c.style.display = "none"));
+                const el = document.getElementById("sa-tab-" + tab);
+                if (el) el.style.display = "";
+            }
+
+            const saMsg = (id, text, isError) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.innerHTML = `<p class="text-sm ${isError ? "text-rose-600" : "text-emerald-600"} mt-1 mb-2">${escapeHtml(text)}</p>`;
+                setTimeout(() => { el.innerHTML = ""; }, isError ? 6000 : 3000);
+            };
+
+            // -- Projects --
+            async function saLoadProjects() {
+                try {
+                    saProjects = await fetch("/api/superadmin/projects").then((r) => r.json());
+                    document.getElementById("saProjectBody").innerHTML = saProjects.map((p) => `
+                        <tr>
+                            <td class="px-3 py-2.5 text-slate-500">${p.id}</td>
+                            <td class="px-3 py-2.5 font-medium text-slate-800">${escapeHtml(p.name)}</td>
+                            <td class="px-3 py-2.5 text-slate-500">${escapeHtml(p.subtitle || "")}</td>
+                            <td class="px-3 py-2.5 text-slate-500">${p.created_at ? new Date(p.created_at).toLocaleDateString("de-DE") : ""}</td>
+                            <td class="px-3 py-2.5 text-slate-500">${p.member_count}</td>
+                            <td class="px-3 py-2.5 flex flex-wrap gap-1">
+                                <button class="text-xs px-2.5 py-1 bg-indigo-100 text-indigo-700 rounded-md hover:bg-indigo-200 transition-colors border-none cursor-pointer" onclick="saOpenMemberships(${p.id}, '${escapeHtml(p.name).replace(/'/g, "&#39;")}')">Members</button>
+                                <button class="text-xs px-2.5 py-1 bg-slate-100 text-slate-700 rounded-md hover:bg-slate-200 transition-colors border-none cursor-pointer" onclick="saEditProject(${p.id}, '${escapeHtml(p.name).replace(/'/g, "&#39;")}', '${escapeHtml(p.subtitle || "").replace(/'/g, "&#39;")}')">Edit</button>
+                                <button class="text-xs px-2.5 py-1 bg-rose-100 text-rose-700 rounded-md hover:bg-rose-200 transition-colors border-none cursor-pointer" onclick="saDeleteProject(${p.id}, '${escapeHtml(p.name).replace(/'/g, "&#39;")}')">Delete</button>
+                            </td>
+                        </tr>
+                    `).join("");
+                } catch (e) { console.error("SA: Error loading projects", e); }
+            }
+
+            document.getElementById("saProjectForm").onsubmit = async (e) => {
+                e.preventDefault();
+                const f = e.target;
+                const res = await fetch("/api/superadmin/projects", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ name: f.name.value, subtitle: f.subtitle.value }),
+                });
+                const j = await res.json();
+                if (j.ok) { saMsg("saProjectResult", "Project created (ID: " + j.id + ")", false); f.reset(); saLoadProjects(); }
+                else saMsg("saProjectResult", j.error || "Error", true);
+            };
+
+            async function saEditProject(id, name, subtitle) {
+                const newName = prompt("Project name:", name);
+                if (newName === null) return;
+                const newSub = prompt("Subtitle:", subtitle);
+                if (newSub === null) return;
+                const res = await fetch("/api/superadmin/projects/" + id, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ name: newName, subtitle: newSub }),
+                });
+                const j = await res.json();
+                if (j.ok) { saMsg("saProjectResult", "Updated", false); saLoadProjects(); }
+                else saMsg("saProjectResult", j.error || "Error", true);
+            }
+
+            async function saDeleteProject(id, name) {
+                if (!confirm('Delete project "' + name + '"?\n\nThis permanently deletes ALL project data.')) return;
+                const res = await fetch("/api/superadmin/projects/" + id, { method: "DELETE" });
+                const j = await res.json();
+                if (j.ok) { saMsg("saProjectResult", "Deleted", false); saLoadProjects(); }
+                else saMsg("saProjectResult", j.error || "Error", true);
+            }
+
+            // -- Users --
+            async function saLoadUsers() {
+                try {
+                    saUsers = await fetch("/api/superadmin/users").then((r) => r.json());
+                    document.getElementById("saUserBody").innerHTML = saUsers.map((u) => `
+                        <tr>
+                            <td class="px-3 py-2.5 font-medium text-slate-800">${escapeHtml(u.email)}</td>
+                            <td class="px-3 py-2.5">
+                                ${u.superAdmin ? '<span class="bg-rose-500 text-white text-[0.65rem] px-2 py-0.5 rounded-full font-semibold">SUPER ADMIN</span>' : '<span class="text-slate-400">No</span>'}
+                                <button class="text-xs ml-2 px-2 py-0.5 bg-slate-100 text-slate-600 rounded hover:bg-slate-200 border-none cursor-pointer" onclick="saToggleSuperAdmin('${escapeHtml(u.email).replace(/'/g, "&#39;")}', ${!u.superAdmin})">${u.superAdmin ? "Revoke" : "Grant"}</button>
+                            </td>
+                            <td class="px-3 py-2.5 text-slate-500">${u.projectCount}</td>
+                            <td class="px-3 py-2.5 flex flex-wrap gap-1">
+                                <button class="text-xs px-2.5 py-1 bg-slate-100 text-slate-700 rounded-md hover:bg-slate-200 transition-colors border-none cursor-pointer" onclick="saResetPassword('${escapeHtml(u.email).replace(/'/g, "&#39;")}')">Reset PW</button>
+                                <button class="text-xs px-2.5 py-1 bg-rose-100 text-rose-700 rounded-md hover:bg-rose-200 transition-colors border-none cursor-pointer" onclick="saDeleteUser('${escapeHtml(u.email).replace(/'/g, "&#39;")}')">Delete</button>
+                            </td>
+                        </tr>
+                    `).join("");
+                    saUpdateMemberEmailSelect();
+                } catch (e) { console.error("SA: Error loading users", e); }
+            }
+
+            document.getElementById("saUserForm").onsubmit = async (e) => {
+                e.preventDefault();
+                const f = e.target;
+                const res = await fetch("/api/superadmin/users", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ email: f.email.value, password: f.password.value, superAdmin: f.isSuperAdmin.checked }),
+                });
+                const j = await res.json();
+                if (j.ok) { saMsg("saUserResult", "User created", false); f.reset(); saLoadUsers(); }
+                else saMsg("saUserResult", j.error || "Error", true);
+            };
+
+            async function saToggleSuperAdmin(email, newVal) {
+                const res = await fetch("/api/superadmin/users/" + encodeURIComponent(email), {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ superAdmin: newVal }),
+                });
+                const j = await res.json();
+                if (j.ok) saLoadUsers();
+                else saMsg("saUserResult", j.error || "Error", true);
+            }
+
+            async function saResetPassword(email) {
+                const pw = prompt("New password for " + email + ":");
+                if (!pw) return;
+                const res = await fetch("/api/superadmin/users/" + encodeURIComponent(email), {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ password: pw }),
+                });
+                const j = await res.json();
+                if (j.ok) saMsg("saUserResult", "Password reset", false);
+                else saMsg("saUserResult", j.error || "Error", true);
+            }
+
+            async function saDeleteUser(email) {
+                if (!confirm('Delete user "' + email + '"?\n\nThis removes them from all projects.')) return;
+                const res = await fetch("/api/superadmin/users/" + encodeURIComponent(email), { method: "DELETE" });
+                const j = await res.json();
+                if (j.ok) { saMsg("saUserResult", "Deleted", false); saLoadUsers(); }
+                else saMsg("saUserResult", j.error || "Error", true);
+            }
+
+            // -- Memberships sub-modal --
+            function saOpenMemberships(projectId, projectName) {
+                saCurrentProjectId = projectId;
+                document.getElementById("saMembershipTitle").textContent = projectName + " — Members";
+                document.getElementById("saMembershipModal").style.display = "flex";
+                saLoadMemberships();
+            }
+
+            function closeSaMemberships() {
+                document.getElementById("saMembershipModal").style.display = "none";
+                saCurrentProjectId = null;
+                saLoadProjects();
+            }
+
+            function saUpdateMemberEmailSelect() {
+                const sel = document.getElementById("saMemberEmailSelect");
+                if (!sel) return;
+                const currentEmails = new Set(saCurrentMembers.map((m) => m.email.toLowerCase()));
+                sel.innerHTML = '<option value="">-- Select user --</option>' +
+                    saUsers.map((u) => {
+                        const isMember = currentEmails.has(u.email.toLowerCase());
+                        return `<option value="${escapeHtml(u.email)}"${isMember ? ' style="color:#aaa"' : ""}>${escapeHtml(u.email)}${isMember ? " — already member" : ""}</option>`;
+                    }).join("");
+            }
+
+            async function saLoadMemberships() {
+                if (!saCurrentProjectId) return;
+                const pid = saCurrentProjectId;
+                try {
+                    saMembershipPositions = await fetch("/api/superadmin/projects/" + pid + "/positions").then((r) => r.json());
+                    document.getElementById("saMemberPosSelect").innerHTML =
+                        '<option value="">-- No position --</option>' +
+                        saMembershipPositions.map((p) => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join("");
+                    document.getElementById("saPositionBody").innerHTML = saMembershipPositions.map((p) => {
+                        const isMisc = p.name === "Misc";
+                        return `<tr>
+                            <td class="px-3 py-2.5 text-slate-800">${escapeHtml(p.name)}</td>
+                            <td class="px-3 py-2.5">${isMisc ? "" : `
+                                <button class="text-xs px-2.5 py-1 bg-slate-100 text-slate-700 rounded-md hover:bg-slate-200 border-none cursor-pointer" onclick="saRenamePosition(${p.id}, '${escapeHtml(p.name).replace(/'/g, "&#39;")}')">Rename</button>
+                                <button class="text-xs px-2.5 py-1 bg-rose-100 text-rose-700 rounded-md hover:bg-rose-200 border-none cursor-pointer" onclick="saDeletePosition(${p.id})">Delete</button>
+                            `}</td>
+                        </tr>`;
+                    }).join("");
+                } catch (e) { console.error("SA: Error loading positions", e); }
+
+                try {
+                    saCurrentMembers = await fetch("/api/superadmin/projects/" + pid + "/members").then((r) => r.json());
+                    const posOptions = '<option value="">-- None --</option>' +
+                        saMembershipPositions.map((p) => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join("");
+                    document.getElementById("saMemberBody").innerHTML = saCurrentMembers.map((m) => {
+                        const roleSelect = `<select onchange="saUpdateMemberRole(${m.id}, this.value)" class="px-2 py-1 rounded border border-slate-200 text-sm outline-none">
+                            <option value="user"${m.projectRole === "user" ? " selected" : ""}>User</option>
+                            <option value="admin"${m.projectRole === "admin" ? " selected" : ""}>Admin</option>
+                            <option value="owner"${m.projectRole === "owner" ? " selected" : ""}>Owner</option>
+                        </select>`;
+                        const posSelect = saMembershipPositions.length > 0
+                            ? `<select onchange="saUpdateMemberPosition(${m.id}, this.value)" class="px-2 py-1 rounded border border-slate-200 text-sm outline-none">` +
+                              posOptions.replace(`value="${m.positionId}"`, `value="${m.positionId}" selected`) + "</select>"
+                            : escapeHtml(m.positionName || "—");
+                        return `<tr>
+                            <td class="px-3 py-2.5 text-slate-800">${escapeHtml(m.email)}</td>
+                            <td class="px-3 py-2.5">${roleSelect}</td>
+                            <td class="px-3 py-2.5">${posSelect}</td>
+                            <td class="px-3 py-2.5"><button class="text-xs px-2.5 py-1 bg-rose-100 text-rose-700 rounded-md hover:bg-rose-200 border-none cursor-pointer" onclick="saRemoveMember(${m.id}, '${escapeHtml(m.email).replace(/'/g, "&#39;")}')">Remove</button></td>
+                        </tr>`;
+                    }).join("");
+                    saUpdateMemberEmailSelect();
+                } catch (e) { console.error("SA: Error loading members", e); }
+            }
+
+            async function saAddMember() {
+                if (!saCurrentProjectId) return;
+                const email = document.getElementById("saMemberEmailSelect").value;
+                const role = document.getElementById("saMemberRoleSelect").value;
+                const posId = document.getElementById("saMemberPosSelect").value;
+                if (!email) return saMsg("saMemberResult", "Select a user first", true);
+                const res = await fetch("/api/superadmin/projects/" + saCurrentProjectId + "/members", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ email, projectRole: role, positionId: posId ? parseInt(posId) : null }),
+                });
+                const j = await res.json();
+                if (j.ok) { saMsg("saMemberResult", "Member added", false); saLoadMemberships(); }
+                else saMsg("saMemberResult", j.error || "Error", true);
+            }
+
+            async function saUpdateMemberRole(memberId, role) {
+                const res = await fetch("/api/superadmin/projects/" + saCurrentProjectId + "/members/" + memberId, {
+                    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projectRole: role }),
+                });
+                const j = await res.json();
+                if (!j.ok) saMsg("saMemberResult", j.error || "Error", true);
+            }
+
+            async function saUpdateMemberPosition(memberId, positionId) {
+                const res = await fetch("/api/superadmin/projects/" + saCurrentProjectId + "/members/" + memberId, {
+                    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ positionId: positionId ? parseInt(positionId) : null }),
+                });
+                const j = await res.json();
+                if (!j.ok) saMsg("saMemberResult", j.error || "Error", true);
+            }
+
+            async function saRemoveMember(memberId, email) {
+                if (!confirm("Remove " + email + " from this project?")) return;
+                const res = await fetch("/api/superadmin/projects/" + saCurrentProjectId + "/members/" + memberId, { method: "DELETE" });
+                const j = await res.json();
+                if (j.ok) { saMsg("saMemberResult", "Removed", false); saLoadMemberships(); }
+                else saMsg("saMemberResult", j.error || "Error", true);
+            }
+
+            async function saAddPosition() {
+                const input = document.getElementById("saPositionNameInput");
+                const name = input.value.trim();
+                if (!name) return saMsg("saPositionResult", "Enter a name", true);
+                const res = await fetch("/api/superadmin/projects/" + saCurrentProjectId + "/positions", {
+                    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }),
+                });
+                const j = await res.json();
+                if (j.ok) { saMsg("saPositionResult", "Added", false); input.value = ""; saLoadMemberships(); }
+                else saMsg("saPositionResult", j.error || "Error", true);
+            }
+
+            async function saRenamePosition(posId, oldName) {
+                const newName = prompt('Rename "' + oldName + '" to:', oldName);
+                if (!newName || newName === oldName) return;
+                const res = await fetch("/api/superadmin/projects/" + saCurrentProjectId + "/positions/" + posId, {
+                    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: newName }),
+                });
+                const j = await res.json();
+                if (j.ok) { saMsg("saPositionResult", "Renamed", false); saLoadMemberships(); }
+                else saMsg("saPositionResult", j.error || "Error", true);
+            }
+
+            async function saDeletePosition(posId) {
+                if (!confirm("Delete this position?")) return;
+                const res = await fetch("/api/superadmin/projects/" + saCurrentProjectId + "/positions/" + posId, { method: "DELETE" });
+                const j = await res.json();
+                if (j.ok) { saMsg("saPositionResult", "Deleted", false); saLoadMemberships(); }
+                else saMsg("saPositionResult", j.error || "Error", true);
+            }
+
             init().catch((e) => console.error(e));
         </script>
 
@@ -5357,6 +5861,144 @@
                     Telegram verknüpfen
                 </h2>
                 <div id="telegramLinkBody"></div>
+            </div>
+        </div>
+        <!-- ==================== SUPER ADMIN MODAL ==================== -->
+        <div
+            id="superAdminModal"
+            class="fixed inset-0 bg-black/50 z-[3000] flex items-center justify-center p-4"
+            style="display: none"
+            onclick="if (event.target === this) closeSuperAdminModal();"
+        >
+            <div class="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+                <!-- Header -->
+                <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 shrink-0">
+                    <h2 class="text-lg font-bold text-slate-900">Super Admin</h2>
+                    <button
+                        onclick="closeSuperAdminModal()"
+                        class="text-slate-400 hover:text-slate-700 bg-transparent border-none text-xl cursor-pointer rounded-md px-2 py-1 hover:bg-slate-100"
+                    >&times;</button>
+                </div>
+                <!-- Tabs -->
+                <div class="flex border-b border-slate-200 px-6 shrink-0">
+                    <button class="sa-tab px-4 py-2.5 text-sm font-medium border-b-2 border-indigo-600 text-indigo-600" data-sa-tab="sa-projects" onclick="switchSaTab('sa-projects')">Projects</button>
+                    <button class="sa-tab px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700" data-sa-tab="sa-users" onclick="switchSaTab('sa-users')">Global Users</button>
+                </div>
+                <!-- Body -->
+                <div class="flex-1 overflow-y-auto p-6">
+                    <!-- Projects Tab -->
+                    <div id="sa-tab-sa-projects" class="sa-tab-content">
+                        <form id="saProjectForm" class="flex flex-row flex-wrap items-end gap-3 mb-4">
+                            <input type="text" name="name" placeholder="Project name" required class="flex-1 min-w-[180px] px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none" />
+                            <input type="text" name="subtitle" placeholder="Subtitle (optional)" class="flex-1 min-w-[140px] px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none" />
+                            <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors">Create Project</button>
+                        </form>
+                        <div id="saProjectResult"></div>
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b border-slate-200">
+                                    <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">ID</th>
+                                    <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Name</th>
+                                    <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Subtitle</th>
+                                    <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Created</th>
+                                    <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Members</th>
+                                    <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="saProjectBody" class="divide-y divide-slate-100"></tbody>
+                        </table>
+                    </div>
+                    <!-- Users Tab -->
+                    <div id="sa-tab-sa-users" class="sa-tab-content" style="display: none">
+                        <form id="saUserForm" class="flex flex-row flex-wrap items-end gap-3 mb-4">
+                            <input type="email" name="email" placeholder="Email" required class="flex-1 min-w-[180px] px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none" />
+                            <div class="relative">
+                                <input type="password" name="password" placeholder="Password" required class="px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none w-40" id="saUserPwInput" />
+                            </div>
+                            <label class="flex items-center gap-1.5 text-sm text-slate-600 cursor-pointer">
+                                <input type="checkbox" name="isSuperAdmin" class="rounded" /> Super Admin
+                            </label>
+                            <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors">Create User</button>
+                        </form>
+                        <p class="text-xs text-slate-400 mb-3">Password must be at least 6 characters.</p>
+                        <div id="saUserResult"></div>
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b border-slate-200">
+                                    <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Email</th>
+                                    <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Super Admin</th>
+                                    <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Projects</th>
+                                    <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="saUserBody" class="divide-y divide-slate-100"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Super Admin: Membership sub-modal -->
+        <div
+            id="saMembershipModal"
+            class="fixed inset-0 bg-black/60 z-[3100] flex items-center justify-center p-4"
+            style="display: none"
+            onclick="if (event.target === this) closeSaMemberships();"
+        >
+            <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden">
+                <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 shrink-0">
+                    <h2 id="saMembershipTitle" class="text-base font-bold text-slate-900">Members</h2>
+                    <button onclick="closeSaMemberships()" class="text-slate-400 hover:text-slate-700 bg-transparent border-none text-xl cursor-pointer rounded-md px-2 py-1 hover:bg-slate-100">&times;</button>
+                </div>
+                <div class="flex-1 overflow-y-auto p-6">
+                    <!-- Members section -->
+                    <div class="mb-6">
+                        <h3 class="text-sm font-semibold text-slate-800 mb-3">Members</h3>
+                        <div class="flex flex-row flex-wrap items-end gap-2 mb-3">
+                            <select id="saMemberEmailSelect" class="px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none flex-1 min-w-[140px]">
+                                <option value="">-- Select user --</option>
+                            </select>
+                            <select id="saMemberRoleSelect" class="px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none">
+                                <option value="user">User</option>
+                                <option value="admin">Admin</option>
+                            </select>
+                            <select id="saMemberPosSelect" class="px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none">
+                                <option value="">-- No position --</option>
+                            </select>
+                            <button type="button" onclick="saAddMember()" class="bg-indigo-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors">Add</button>
+                        </div>
+                        <div id="saMemberResult"></div>
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b border-slate-200">
+                                    <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Email</th>
+                                    <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Role</th>
+                                    <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Position</th>
+                                    <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="saMemberBody" class="divide-y divide-slate-100"></tbody>
+                        </table>
+                    </div>
+                    <!-- Positions section -->
+                    <div class="pt-5 border-t border-slate-200">
+                        <h3 class="text-sm font-semibold text-slate-800 mb-3">Positions</h3>
+                        <div class="flex flex-row flex-wrap items-end gap-2 mb-3">
+                            <input type="text" id="saPositionNameInput" placeholder="Position name" class="px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none flex-1 min-w-[140px]" />
+                            <button type="button" onclick="saAddPosition()" class="bg-indigo-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors">Add</button>
+                        </div>
+                        <div id="saPositionResult"></div>
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b border-slate-200">
+                                    <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Name</th>
+                                    <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="saPositionBody" class="divide-y divide-slate-100"></tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </div>
     </body>

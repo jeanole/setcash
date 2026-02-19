@@ -2,7 +2,7 @@
 
 > Living document. Update this file whenever features are added, changed, or planned.
 
-**Version:** 1.6.1
+**Version:** 1.7.0 (app version tracked in `package.json`)
 **Industry Context:** Film Production & Media Projects
 **Stack:** Node.js + Express + SQLite (better-sqlite3) + Vanilla HTML/JS + PDFKit + ExcelJS + Google Sheets API
 
@@ -27,15 +27,17 @@ vBudget is a multi-tenant, web-based expense tracking and budget management syst
 
 ## 2. Routing Architecture
 
-vBudget has exactly two application entry points:
+vBudget has one primary entry point:
 
 | Route | Purpose |
 |-------|---------|
 | `/` | Main project application (single integrated interface) |
-| `/superadmin` | Global system administration |
+| `/login` | Login page (inline HTML, no separate file) |
+| `/superadmin` | Legacy standalone page (kept for backward compatibility) |
 
 There is no separate `/admin` page.
 Project administration is integrated into the main app sidebar as role-gated sections.
+Super-admin is accessible as a fullscreen modal from within the main app (sidebar "Super Admin" button, visible only to `super_admin` users).
 
 ---
 
@@ -72,22 +74,41 @@ The sidebar is the command center for all non-super-admin tasks. It is **slide-o
 |   Members                 |
 |   Export                  |
 |   Telegram                |
+|   Projects Overview       |
 +---------------------------+
 | USER SETTINGS             |
 |   Profile / Password      |
 |   Link Telegram           |
 +---------------------------+
-| Logout             v1.6.1 |
+| SYSTEM (super-admin only) |
+|   Super Admin             |
++---------------------------+
+| Logout             v1.7.0 |
 +---------------------------+
 ```
 
 **Behavior:**
-- Desktop (md+ / 768px): Hidden by default (`translateX(-100%)`), slides in on burger menu tap, dark backdrop overlay, main content offset by sidebar width (288px).
-- Mobile: Hidden by default (`translateX(-100%)`), slides in on burger menu tap, dark backdrop overlay.
+- Hidden by default (`translateX(-100%)`) on all screen sizes (desktop and mobile).
+- Slides in as overlay on burger menu tap; dark backdrop overlay behind sidebar.
 - Active nav link highlighted with indigo background/text.
-- Switching projects updates: visible title/subtitle, all queries scoped to `project_id`, sidebar context, V-Geld balance.
+- On project switch, all sidebar content reloads: project title/subtitle, V-Geld balance, admin section visibility, and project list.
 
-### 3.2 Main Content Area
+### 3.2 Persistent Header Bar
+
+Always-visible top bar rendered above the main content area on all screen sizes.
+
+**Contents (left to right):**
+- Burger menu button (opens sidebar)
+- Current project name (with subtitle as secondary text if set)
+- Logged-in user's email
+- User's role in the current project (e.g. "Owner", "Admin", "Member")
+- Notification bell with unread badge
+
+**Behavior:**
+- Updates immediately when switching projects.
+- Visible on both mobile and desktop at all times.
+
+### 3.3 Main Content Area
 
 The main content area displays one **content pane** at a time, driven by sidebar navigation clicks.
 
@@ -95,6 +116,7 @@ The main content area displays one **content pane** at a time, driven by sidebar
 - Upload (default landing)
 - Bills
 - Spending
+- V-Geld
 - Budget Matrix
 - Reports
 
@@ -103,10 +125,11 @@ The main content area displays one **content pane** at a time, driven by sidebar
 - Members
 - Export
 - Telegram
+- Projects Overview
 
 All panes operate within the active `project_id`.
 
-### 3.3 Project Creation
+### 3.4 Project Creation
 
 Any authenticated user can create a new project:
 - "New Project" button in the sidebar project switcher section
@@ -175,7 +198,7 @@ Allowed values: `'user'`, `'admin'`, `'owner'`
 | Table | Purpose |
 |-------|---------|
 | `users` | Global accounts + `super_admin` flag |
-| `projects` | Project containers (title, subtitle, telegram_bot_token) |
+| `projects` | Project containers (`name`, `subtitle`) |
 | `project_members` | User <> project with role (`user`/`admin`/`owner`) + position |
 | `project_positions` | Project-specific positions |
 | `project_settings` | Per-project configuration (key/value JSON) |
@@ -191,6 +214,7 @@ Allowed values: `'user'`, `'admin'`, `'owner'`
 | `telegram_links` | Telegram user mapping |
 | `telegram_link_codes` | Short-lived link codes (10 min TTL) |
 | `settings` | Global fallback settings |
+| `notifications` | Per-user in-app notifications |
 
 There is no global `roles` table.
 
@@ -200,7 +224,7 @@ There is no global `roles` table.
 - `date`
 - `email`
 - `bill_number`
-- `status` (`'complete'` | `'draft'`)
+- `status` (`'confirmed'` | `'draft'`)
 - `type` (`'Kauf'` | `'Leih'` | `'Verbrauch'`)
 - `vendor`
 - `item`
@@ -344,8 +368,9 @@ User-based PDF generation. Includes:
 
 ### 7.6 Settings (Owner/Admin)
 
-- Project title, shows current project title
-- Project subtitle, shows current project subtitle
+- Project title field — pre-populated with current project title on load
+- Project subtitle field — pre-populated with current project subtitle on load
+- Save updates the active project; header bar and sidebar title reflect the change immediately
 
 ### 7.7 Members (Owner/Admin)
 
@@ -367,11 +392,31 @@ User-based PDF generation. Includes:
 - Bot status indicator
 - Linked accounts table with unlink function
 
+### 7.10 Projects Overview (Owner/Admin)
+
+Lists all projects the logged-in user is a member of.
+
+Columns:
+- Project name
+- Project subtitle
+- User's role in that project (User / Admin / Owner)
+- Quick-switch button to activate that project
+
+Accessible from the sidebar PROJECT MANAGEMENT section.
+
 ---
 
-## 8. Super-Admin (`/superadmin`)
+## 8. Super-Admin
 
 Only accessible if `users.super_admin = true`.
+
+**Access:** Fullscreen modal launched from the sidebar "Super Admin" button (visible only to super-admins). Legacy `/superadmin` standalone page kept for backward compatibility.
+
+**UI:** Two-tab modal:
+- **Projects tab:** CRUD table of all projects (name, subtitle, created, member count), "Members" button opens nested membership sub-modal
+- **Users tab:** CRUD table of all global users (email, super-admin badge, project count), grant/revoke super-admin, reset password, delete
+
+**Membership sub-modal:** Per-project member management (add/remove, role select, position select) + position management (add/rename/delete).
 
 Capabilities:
 - Global project CRUD
@@ -380,7 +425,7 @@ Capabilities:
 - Per-project position management
 - System oversight
 
-Operates outside project context. Separate standalone page.
+Operates outside project context.
 
 ---
 
@@ -468,7 +513,47 @@ Three worksheets:
 
 ---
 
-## 14. Dependencies
+## 14. Notifications
+
+In-app notification system for user-facing events.
+
+### 14.1 Trigger Events
+
+| Event | Recipient |
+|-------|-----------|
+| Invited to a project | Invited user |
+
+### 14.2 UI
+
+- Notification bell icon in the persistent header bar with unread badge count.
+- Dropdown panel lists notifications (newest first).
+- Each notification shows: event description, project name, timestamp.
+- Click navigates to / switches to the relevant project.
+- Mark as read individually or "mark all as read".
+
+### 14.3 Storage
+
+`notifications` table:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | INTEGER PK | |
+| `user_email` | TEXT FK → `users.email` | Recipient |
+| `type` | TEXT | e.g. `'project_invite'` |
+| `message` | TEXT | Human-readable message |
+| `project_id` | INTEGER FK → `projects.id` | Related project (nullable) |
+| `is_read` | INTEGER | 0 = unread, 1 = read |
+| `created_at` | TEXT | ISO timestamp (default: `datetime('now')`) |
+
+### 14.4 API
+
+- `GET /api/notifications` — list all notifications for current user (newest first, max 50)
+- `POST /api/notifications/:id/read` — mark one as read
+- `POST /api/notifications/read-all` — mark all as read
+
+---
+
+## 15. Dependencies
 
 | Package | Purpose |
 |---------|---------|

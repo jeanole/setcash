@@ -33,18 +33,7 @@
     pointer-events: all;
 }
 
-/* Desktop: persistent sidebar, no overlay */
-@media (min-width: 768px) {
-    .sidebar {
-        transform: translateX(0);
-    }
-    .sidebar-overlay {
-        display: none !important;
-    }
-    .main-content {
-        margin-left: 18rem; /* w-72 = 288px */
-    }
-}
+/* Sidebar is overlay on all screen sizes — no persistent desktop sidebar */
 
 /* Gallery carousel transform transition */
 .gallery-track {
