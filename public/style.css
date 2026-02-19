@@ -1,189 +1,218 @@
 /* ========== Residual CSS — things Tailwind CDN can't handle ========== */
 
 /* Tab content visibility (toggled by JS) */
-.tab-content { display: none; }
-.tab-content.active { display: block; }
+.tab-content {
+    display: none;
+}
+.tab-content.active {
+    display: block;
+}
 
 /* Admin-only elements (shown via JS when user is admin) */
-.admin-only { display: none; }
+.admin-only {
+    display: none;
+}
 
-/* Sidebar slide transition */
+/* Sidebar slide transition (mobile: slide-out overlay) */
 .sidebar {
-  transform: translateX(-100%);
-  transition: transform 0.25s ease;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
 }
 .sidebar.open {
-  transform: translateX(0);
+    transform: translateX(0);
 }
 
-/* Sidebar overlay fade */
+/* Sidebar overlay fade (mobile only) */
 .sidebar-overlay {
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.25s;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s;
 }
 .sidebar-overlay.open {
-  opacity: 1;
-  pointer-events: all;
+    opacity: 1;
+    pointer-events: all;
+}
+
+/* Desktop: persistent sidebar, no overlay */
+@media (min-width: 768px) {
+    .sidebar {
+        transform: translateX(0);
+    }
+    .sidebar-overlay {
+        display: none !important;
+    }
+    .main-content {
+        margin-left: 18rem; /* w-72 = 288px */
+    }
 }
 
 /* Gallery carousel transform transition */
 .gallery-track {
-  transition: transform 0.3s ease;
+    transition: transform 0.3s ease;
 }
 
 /* Progress bar width transition */
 .progress-fill {
-  transition: width 0.3s;
+    transition: width 0.3s;
 }
 
 /* Budget matrix sticky first column */
 .bm-corner,
 .bm-row-header,
 .bm-table tfoot tr > th:first-child {
-  position: sticky;
-  left: 0;
-  z-index: 2;
-  box-shadow: 3px 0 6px -2px rgba(0,0,0,0.1);
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    box-shadow: 3px 0 6px -2px rgba(0, 0, 0, 0.1);
 }
 
 /* Budget matrix sticky header row */
 .bm-table thead th {
-  position: sticky;
-  top: 0;
-  z-index: 3;
-  box-shadow: 0 3px 6px -2px rgba(0,0,0,0.1);
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    box-shadow: 0 3px 6px -2px rgba(0, 0, 0, 0.1);
 }
 
 /* Corner cell: sticky both directions */
 .bm-table thead .bm-corner {
-  z-index: 4;
+    z-index: 4;
 }
 
 /* Budget cell input: spreadsheet-like sizing */
 .budget-cell-input {
-  width: 100% !important;
-  max-width: none !important;
-  padding: 5px 7px;
-  font-size: 14px;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  border: 2px solid transparent;
-  border-radius: 0;
-  background: transparent;
-  transition: border-color 0.1s, background 0.1s;
-  cursor: cell;
-  -moz-appearance: textfield;
+    width: 100% !important;
+    max-width: none !important;
+    padding: 5px 7px;
+    font-size: 14px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    border: 2px solid transparent;
+    border-radius: 0;
+    background: transparent;
+    transition:
+        border-color 0.1s,
+        background 0.1s;
+    cursor: cell;
+    -moz-appearance: textfield;
 }
 .budget-cell-input:hover:not(:focus) {
-  background: rgba(99,102,241,0.04);
-  border-color: rgba(99,102,241,0.2);
+    background: rgba(99, 102, 241, 0.04);
+    border-color: rgba(99, 102, 241, 0.2);
 }
 .budget-cell-input:focus {
-  outline: none;
-  border-color: #6366f1;
-  background: #fff;
-  box-shadow: none;
+    outline: none;
+    border-color: #6366f1;
+    background: #fff;
+    box-shadow: none;
 }
 .budget-cell-input::-webkit-outer-spin-button,
 .budget-cell-input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
+    -webkit-appearance: none;
+    margin: 0;
 }
 
 /* Budget header inline edit input */
 .bm-header-input {
-  border: 2px solid #6366f1 !important;
-  border-radius: 4px;
-  padding: 4px 8px;
-  font-size: 14px;
-  font-weight: 600;
-  width: 120px;
-  max-width: 160px !important;
-  background: #fff;
-  outline: none;
+    border: 2px solid #6366f1 !important;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 14px;
+    font-weight: 600;
+    width: 120px;
+    max-width: 160px !important;
+    background: #fff;
+    outline: none;
 }
 
 /* Budget inline add input */
 .bm-inline-input {
-  border: 1px solid #cbd5e1 !important;
-  border-radius: 4px;
-  padding: 5px 8px;
-  font-size: 13px;
-  width: 120px;
-  max-width: 140px !important;
-  background: #fff;
-  outline: none;
-  transition: border-color 0.15s;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 4px;
+    padding: 5px 8px;
+    font-size: 13px;
+    width: 120px;
+    max-width: 140px !important;
+    background: #fff;
+    outline: none;
+    transition: border-color 0.15s;
 }
 .bm-inline-input:focus {
-  border-color: #6366f1 !important;
-  box-shadow: 0 0 0 2px rgba(99,102,241,0.15);
+    border-color: #6366f1 !important;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
 }
 .bm-inline-input::placeholder {
-  color: #94a3b8;
-  font-style: italic;
+    color: #94a3b8;
+    font-style: italic;
 }
 
 /* Sortable column headers */
 th.sortable {
-  cursor: pointer;
-  user-select: none;
-  position: relative;
-  padding-right: 20px !important;
+    cursor: pointer;
+    user-select: none;
+    position: relative;
+    padding-right: 20px !important;
 }
 th.sortable:hover {
-  background: #f1f5f9;
+    background: #f1f5f9;
 }
 th.sortable::after {
-  content: '\2195';
-  position: absolute;
-  right: 6px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 12px;
-  color: #cbd5e1;
+    content: "\2195";
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 12px;
+    color: #cbd5e1;
 }
 th.sortable.sort-asc::after {
-  content: '\25B2';
-  color: #6366f1;
+    content: "\25B2";
+    color: #6366f1;
 }
 th.sortable.sort-desc::after {
-  content: '\25BC';
-  color: #6366f1;
+    content: "\25BC";
+    color: #6366f1;
 }
 
 /* Full-size image modal navigation */
 .fullsize-nav {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
 }
-.fullsize-nav.gallery-prev { left: -50px; }
-.fullsize-nav.gallery-next { right: -50px; }
+.fullsize-nav.gallery-prev {
+    left: -50px;
+}
+.fullsize-nav.gallery-next {
+    right: -50px;
+}
 
 @media (max-width: 640px) {
-  .fullsize-nav.gallery-prev { left: 4px; }
-  .fullsize-nav.gallery-next { right: 4px; }
+    .fullsize-nav.gallery-prev {
+        left: 4px;
+    }
+    .fullsize-nav.gallery-next {
+        right: 4px;
+    }
 }
 
 /* Clickable row hover (needs !important to override stripe) */
 .clickable-row:hover {
-  background: #eef2ff !important;
+    background: #eef2ff !important;
 }
 .bill-draft-row {
-  background: #fef2f2 !important;
+    background: #fef2f2 !important;
 }
 .bill-draft-row:hover {
-  background: #fee2e2 !important;
+    background: #fee2e2 !important;
 }
 
 /* Budget header actions hover reveal */
 .bm-header-actions {
-  opacity: 0;
-  transition: opacity 0.15s;
+    opacity: 0;
+    transition: opacity 0.15s;
 }
 .bm-col-header:hover .bm-header-actions,
 .bm-row-header:hover .bm-header-actions {
-  opacity: 1;
+    opacity: 1;
 }

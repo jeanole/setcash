@@ -11,7 +11,8 @@
       "Bash(npm install:*)",
       "Bash(grep:*)",
       "mcp__acp__Bash",
-      "mcp__acp__Write"
+      "mcp__acp__Write",
+      "mcp__acp__Edit"
     ]
   }
 }
