@@ -10,12 +10,12 @@
 
 ## 1. System Overview
 
-vBudget is a multi-tenant, web-based expense tracking and budget management system designed for film productions and media projects.
+vBudget is a multi-tenant, web-based expense tracking and budget management system designed for film productions and media projects. goal is to have a easy to use interface to handle expenses and budgeting as well as v-geld tracking. the goal is transparency and overview. during running projects time is tight and keeping an overview is crucial.
 
 **Core principles:**
 
 - Strict project isolation
-- Sidebar-driven, context-aware UI
+- Sidebar and tab-driven, context-aware UI
 - Deterministic financial calculations
 - Multi-axis budget allocation (Motive x Category)
 - Advance payment tracking (V-Geld)
@@ -43,7 +43,7 @@ Project administration is integrated into the main app sidebar as role-gated sec
 
 ### 3.1 Sidebar (Primary Navigation Hub)
 
-The sidebar is the command center for all non-super-admin tasks. It is **persistent on desktop** (always visible, fixed left) and a **slide-out overlay on mobile** (triggered by burger menu).
+The sidebar is the command center for all non-super-admin tasks. It is **slide-out overlay** (triggered by burger menu).
 
 #### Sidebar Structure
 
@@ -56,7 +56,8 @@ The sidebar is the command center for all non-super-admin tasks. It is **persist
 | User Info                 |
 |   email                   |
 |   role label              |
-|   V-Geld balance (own)   |
+|   V-Geld balance (own project)
+|   spend money (own project)
 +---------------------------+
 | NAVIGATION                |
 |   Upload                  |
@@ -81,7 +82,7 @@ The sidebar is the command center for all non-super-admin tasks. It is **persist
 ```
 
 **Behavior:**
-- Desktop (md+ / 768px): Sidebar always visible (`position: fixed`), main content offset by sidebar width (288px).
+- Desktop (md+ / 768px): Hidden by default (`translateX(-100%)`), slides in on burger menu tap, dark backdrop overlay, main content offset by sidebar width (288px).
 - Mobile: Hidden by default (`translateX(-100%)`), slides in on burger menu tap, dark backdrop overlay.
 - Active nav link highlighted with indigo background/text.
 - Switching projects updates: visible title/subtitle, all queries scoped to `project_id`, sidebar context, V-Geld balance.
@@ -282,6 +283,7 @@ Current Balance = Total Advance - Total Expenses
 
 Features:
 - Multi-image upload (max 10)
+- image cropping after upload
 - Mobile camera capture
 - Bill type: Kauf / Leih / Verbrauch
 - Vendor, Item, Comment fields
@@ -342,8 +344,8 @@ User-based PDF generation. Includes:
 
 ### 7.6 Settings (Owner/Admin)
 
-- Project title
-- Project subtitle
+- Project title, shows current project title
+- Project subtitle, shows current project subtitle
 
 ### 7.7 Members (Owner/Admin)
 
@@ -462,7 +464,7 @@ Three worksheets:
 - Up to 10 images per bill, stored in `data/uploads/`
 - `bill_images` table with `sort_order`
 - Legacy fallback: `bills.file` single-image column
-- ZIP export organized by uploader/date
+- ZIP export organized by project/uploader/date
 
 ---
 
