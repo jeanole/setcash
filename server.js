@@ -290,6 +290,14 @@ try {
   console.log('Migrated: added super_admin column to users');
 }
 
+// Add default_project_id column to users if missing (migration)
+try {
+  db.prepare("SELECT default_project_id FROM users LIMIT 1").get();
+} catch (e) {
+  db.exec("ALTER TABLE users ADD COLUMN default_project_id INTEGER");
+  console.log('Migrated: added default_project_id column to users');
+}
+
 // Add project_id columns to data tables if missing (migration)
 const projectIdMigrations = [
   { table: 'bills', check: 'SELECT project_id FROM bills LIMIT 1' },
@@ -545,8 +553,6 @@ function initSettings() {
   const settingCount = db.prepare('SELECT COUNT(*) as count FROM settings').get().count;
   if (settingCount === 0) {
     const insert = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)');
-    insert.run('googleSheetId', JSON.stringify('1-cWxjP16kyAPpkNqn27bU1-k3zfyMwQvh-daBugUSqg'));
-    insert.run('googleSheetEnabled', JSON.stringify(true));
     console.log('Created default settings');
   }
 }
@@ -630,8 +636,6 @@ function initProjectDefaults(projectId) {
   }
   // Default project_settings
   const insertSetting = db.prepare('INSERT OR IGNORE INTO project_settings (project_id, key, value) VALUES (?, ?, ?)');
-  insertSetting.run(projectId, 'googleSheetEnabled', JSON.stringify(false));
-  insertSetting.run(projectId, 'googleSheetId', JSON.stringify(''));
 }
 
 // Run migrations and initialization
@@ -677,44 +681,6 @@ console.log('Database:', DB_PATH);
 const settings = getSettings();
 console.log('Settings loaded:', settings);
 initGoogleServices();
-
-async function appendBillToSheet(bill) {
-  const settings = getSettings();
-  console.log('appendBillToSheet called, sheets:', !!sheets, 'enabled:', settings?.googleSheetEnabled, 'sheetId:', settings?.googleSheetId);
-  if (!sheets || !settings.googleSheetEnabled || !settings.googleSheetId) {
-    console.log('Skipping sheet sync - not configured');
-    return;
-  }
-  try {
-    const typeMap = { 'Kauf': 'K', 'Leih': 'L', 'Verbrauch': 'V' };
-    const motiveCol = bill.motiveDisplay || bill.motive || '';
-    const row = [
-      bill.comment || '',           // A: Notiz
-      bill.item || '',              // B: WAS
-      motiveCol,                    // C: Fur
-      bill.vendor || '',            // D: WOHER
-      '',                           // E: Kalkulation (brutto)
-      '',                           // F: Angebot (brutto)
-      bill.brutto19 || 0,           // G: brutto 19%
-      bill.brutto7 || 0,            // H: brutto 7%
-      bill.brutto0 || 0,            // I: brutto 0%
-      new Date(bill.date).toLocaleDateString('de-DE'), // J: Datum
-      bill.email || '',             // K: Wer
-      typeMap[bill.type] || 'K',    // L: K/L/V
-      bill.bill_number || '',       // M: Beleg Nr
-      ''                            // N: V-Geld Abrechnungs Blatt
-    ];
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: settings.googleSheetId,
-      range: 'A5:N',
-      valueInputOption: 'USER_ENTERED',
-      requestBody: { values: [row] }
-    });
-    console.log('Bill synced to Google Sheet');
-  } catch (e) {
-    console.error('Sheet append error:', e.message);
-  }
-}
 
 // Middleware
 app.use(cookieParser());
@@ -828,9 +794,19 @@ app.post('/login', loginLimiter, async (req, res) => {
   let currentProjectName = null;
 
   if (superAdmin) {
-    // Super-admins: auto-select first project if only one exists
     const projects = db.prepare('SELECT * FROM projects ORDER BY id').all();
-    if (projects.length === 1) {
+    // Try default project first
+    if (user.default_project_id) {
+      const defProject = projects.find(p => p.id === user.default_project_id);
+      if (defProject) {
+        currentProjectId = defProject.id;
+        currentProjectName = defProject.name;
+        const membership = db.prepare('SELECT project_role FROM project_members WHERE project_id = ? AND LOWER(user_email) = LOWER(?)').get(currentProjectId, email);
+        currentProjectRole = membership ? membership.project_role : 'admin';
+      }
+    }
+    // Fall back: auto-select if only one project
+    if (!currentProjectId && projects.length === 1) {
       currentProjectId = projects[0].id;
       currentProjectName = projects[0].name;
       const membership = db.prepare('SELECT project_role FROM project_members WHERE project_id = ? AND LOWER(user_email) = LOWER(?)').get(currentProjectId, email);
@@ -842,7 +818,17 @@ app.post('/login', loginLimiter, async (req, res) => {
       FROM project_members pm JOIN projects p ON p.id = pm.project_id
       WHERE LOWER(pm.user_email) = LOWER(?)
     `).all(email);
-    if (memberships.length === 1) {
+    // Try default project first
+    if (user.default_project_id) {
+      const defMembership = memberships.find(m => m.project_id === user.default_project_id);
+      if (defMembership) {
+        currentProjectId = defMembership.project_id;
+        currentProjectRole = defMembership.project_role;
+        currentProjectName = defMembership.name;
+      }
+    }
+    // Fall back: auto-select if only one project
+    if (!currentProjectId && memberships.length === 1) {
       currentProjectId = memberships[0].project_id;
       currentProjectRole = memberships[0].project_role;
       currentProjectName = memberships[0].name;
@@ -859,6 +845,25 @@ app.post('/login', loginLimiter, async (req, res) => {
     currentProjectName
   };
   res.redirect('/');
+});
+
+// API: Set default project for current user
+app.put('/api/user/default-project', ensureAuth, (req, res) => {
+  const { projectId } = req.body;
+  const email = req.session.user.email;
+
+  if (projectId !== null) {
+    // Validate membership (or super admin)
+    if (!req.session.user.superAdmin) {
+      const membership = db.prepare('SELECT 1 FROM project_members WHERE project_id = ? AND LOWER(user_email) = LOWER(?)').get(projectId, email);
+      if (!membership) return res.status(403).json({ error: 'Not a member of this project' });
+    }
+    const project = db.prepare('SELECT id FROM projects WHERE id = ?').get(projectId);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+  }
+
+  db.prepare('UPDATE users SET default_project_id = ? WHERE LOWER(email) = LOWER(?)').run(projectId, email);
+  res.json({ ok: true, defaultProjectId: projectId });
 });
 
 // Password validation
@@ -880,7 +885,10 @@ app.use(express.static('public'));
 
 // API: Current user
 app.get('/api/user', (req, res) => {
-  res.json(req.session.user || null);
+  if (!req.session.user) return res.json(null);
+  // Include defaultProjectId from DB
+  const dbUser = findUser(req.session.user.email);
+  res.json({ ...req.session.user, defaultProjectId: dbUser ? dbUser.default_project_id : null });
 });
 
 // API: Projects — list accessible projects
@@ -1417,11 +1425,6 @@ app.post('/upload', ensureProjectAccess, upload.array('photos', 10), (req, res) 
 
   // Save allocations to junction tables
   saveAllocations(billId, motiveAllocations, categoryAllocations, projectId);
-
-  // Get the inserted bill for Google Sheets sync
-  const bill = db.prepare('SELECT * FROM bills WHERE id = ?').get(billId);
-  bill.motiveDisplay = getMotiveDisplayString(billId);
-  appendBillToSheet(bill);
 
   res.json({ ok: true, id: billId });
 });
@@ -2034,21 +2037,8 @@ app.put('/api/admin/settings', ensureProjectAdmin, (req, res) => {
   const projectId = req.user.currentProjectId;
   console.log('=== Settings update ===');
   console.log('Request body:', req.body);
-  const { googleSheetId, googleSheetEnabled, projectTitle, projectSubtitle, exportSheetId, telegramBotToken, telegramEnabled } = req.body;
+  const { exportSheetId, telegramBotToken, telegramEnabled } = req.body;
   const insert = db.prepare('INSERT OR REPLACE INTO project_settings (project_id, key, value) VALUES (?, ?, ?)');
-  // Also update global settings for project title/subtitle (for project-info endpoint)
-  const globalInsert = db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
-  if (googleSheetId !== undefined) insert.run(projectId, 'googleSheetId', JSON.stringify(googleSheetId));
-  if (googleSheetEnabled !== undefined) insert.run(projectId, 'googleSheetEnabled', JSON.stringify(googleSheetEnabled === true));
-  if (projectTitle !== undefined) {
-    insert.run(projectId, 'projectTitle', JSON.stringify(projectTitle));
-    // Update project name in projects table too
-    db.prepare('UPDATE projects SET name = ? WHERE id = ?').run(projectTitle, projectId);
-  }
-  if (projectSubtitle !== undefined) {
-    insert.run(projectId, 'projectSubtitle', JSON.stringify(projectSubtitle));
-    db.prepare('UPDATE projects SET subtitle = ? WHERE id = ?').run(projectSubtitle, projectId);
-  }
   if (exportSheetId !== undefined) insert.run(projectId, 'exportSheetId', JSON.stringify(exportSheetId));
   if (telegramBotToken !== undefined) insert.run(projectId, 'telegramBotToken', JSON.stringify(telegramBotToken));
   if (telegramEnabled !== undefined) {
@@ -2092,212 +2082,6 @@ app.get('/api/admin/google-credentials/status', ensureProjectAdmin, (req, res) =
     res.json({ configured: false });
   }
 });
-
-// Create unique key for duplicate detection
-function billKey(bill) {
-  // Primary: billNumber + email (should be unique per user)
-  const billNumber = bill.bill_number || bill.billNumber;
-  if (billNumber && bill.email) {
-    return `${billNumber.trim()}|${bill.email.trim().toLowerCase()}`;
-  }
-  // Fallback: date + email + total amount (rounded to avoid float issues)
-  const date = bill.date ? new Date(bill.date).toISOString().split('T')[0] : '';
-  const total = Math.round(((bill.brutto19 || 0) + (bill.brutto7 || 0) + (bill.brutto0 || 0)) * 100);
-  return `${date}|${(bill.email || '').trim().toLowerCase()}|${total}`;
-}
-
-function sheetRowKey(row) {
-  const billNumber = (row[12] || '').trim();
-  const email = (row[10] || '').trim().toLowerCase();
-  // Primary: billNumber + email
-  if (billNumber && email) {
-    return `${billNumber}|${email}`;
-  }
-  // Fallback: date + email + total
-  const dateStr = row[9] || '';
-  const date = parseGermanDate(dateStr)?.split('T')[0] || '';
-  const b19 = parseSheetNumber(row[6]);
-  const b7 = parseSheetNumber(row[7]);
-  const b0 = parseSheetNumber(row[8]);
-  const total = Math.round((b19 + b7 + b0) * 100);
-  return `${date}|${email}|${total}`;
-}
-
-// Sync all bills to Google Sheet (append only, no duplicates)
-app.post('/api/sync/to-sheet', ensureProjectAdmin, async (req, res) => {
-  const projectId = req.user.currentProjectId;
-  console.log('=== Sync to Sheet ===');
-  const settings = getSettings(projectId);
-  if (!sheets || !settings.googleSheetEnabled || !settings.googleSheetId) {
-    return res.status(400).json({ error: 'Google Sheets not configured' });
-  }
-  try {
-    // First, read existing data from sheet to check for duplicates
-    const existing = await sheets.spreadsheets.values.get({
-      spreadsheetId: settings.googleSheetId,
-      range: 'A5:N1000'
-    });
-    const existingRows = existing.data.values || [];
-
-    // Build set of existing keys from sheet
-    const existingKeys = new Set();
-    for (const row of existingRows) {
-      if (!row[1] && !row[6] && !row[7] && !row[8]) continue;
-      existingKeys.add(sheetRowKey(row));
-    }
-    console.log('Existing entries in sheet:', existingKeys.size);
-
-    const bills = db.prepare('SELECT * FROM bills WHERE project_id = ? ORDER BY id').all(projectId);
-    const typeMap = { 'Kauf': 'K', 'Leih': 'L', 'Verbrauch': 'V' };
-    const newRows = [];
-
-    for (const bill of bills) {
-      const key = billKey(bill);
-      if (existingKeys.has(key)) continue; // Skip duplicates
-
-      const motiveCol = getMotiveDisplayString(bill.id) || bill.motive || '';
-      newRows.push([
-        bill.comment || '',           // A: Notiz
-        bill.item || '',              // B: WAS
-        motiveCol,                    // C: Fur
-        bill.vendor || '',            // D: WOHER
-        '',                           // E: Kalkulation (brutto)
-        '',                           // F: Angebot (brutto)
-        bill.brutto19 || 0,           // G: brutto 19%
-        bill.brutto7 || 0,            // H: brutto 7%
-        bill.brutto0 || 0,            // I: brutto 0%
-        new Date(bill.date).toLocaleDateString('de-DE'), // J: Datum
-        bill.email || '',             // K: Wer
-        typeMap[bill.type] || 'K',    // L: K/L/V
-        bill.bill_number || '',       // M: Beleg Nr
-        ''                            // N: V-Geld Abrechnungs Blatt
-      ]);
-    }
-
-    // Append only new bills
-    if (newRows.length > 0) {
-      await sheets.spreadsheets.values.append({
-        spreadsheetId: settings.googleSheetId,
-        range: 'A5:N',
-        valueInputOption: 'USER_ENTERED',
-        requestBody: { values: newRows }
-      });
-    }
-    console.log('Added', newRows.length, 'new bills to sheet (skipped', bills.length - newRows.length, 'duplicates)');
-    res.json({ ok: true, added: newRows.length, skipped: bills.length - newRows.length });
-  } catch (e) {
-    console.error('Sync to sheet error:', e.message);
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// Sync from Google Sheet to local (append only, no duplicates)
-app.post('/api/sync/from-sheet', ensureProjectAdmin, async (req, res) => {
-  const projectId = req.user.currentProjectId;
-  console.log('=== Sync from Sheet ===');
-  const settings = getSettings(projectId);
-  if (!sheets || !settings.googleSheetEnabled || !settings.googleSheetId) {
-    return res.status(400).json({ error: 'Google Sheets not configured' });
-  }
-  try {
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: settings.googleSheetId,
-      range: 'A5:N1000'
-    });
-
-    const rows = response.data.values || [];
-    console.log('Read', rows.length, 'rows from sheet');
-
-    // Build set of existing local bill keys (scoped to project)
-    const bills = db.prepare('SELECT * FROM bills WHERE project_id = ?').all(projectId);
-    const existingKeys = new Set(bills.map(b => billKey(b)));
-    console.log('Existing local bills:', existingKeys.size);
-
-    const typeMap = { 'K': 'Kauf', 'L': 'Leih', 'V': 'Verbrauch' };
-    let added = 0;
-    let skipped = 0;
-
-    const insert = db.prepare(`INSERT INTO bills
-      (date, email, bill_number, type, vendor, item, comment, motive, brutto19, brutto7, brutto0, amount, filename, file, project_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', '', ?)`);
-
-    for (const row of rows) {
-      // Skip empty rows (check WAS and brutto columns)
-      if (!row[1] && !row[6] && !row[7] && !row[8]) continue;
-
-      console.log('Sheet row raw values - col6:', row[6], 'col7:', row[7], 'col8:', row[8]);
-
-      const bill = {
-        comment: row[0] || '',           // A: Notiz
-        item: row[1] || '',              // B: WAS
-        motive: row[2] || '',            // C: Fur
-        vendor: row[3] || '',            // D: WOHER
-        brutto19: parseSheetNumber(row[6]),  // G: brutto 19%
-        brutto7: parseSheetNumber(row[7]),   // H: brutto 7%
-        brutto0: parseSheetNumber(row[8]),   // I: brutto 0%
-        date: parseGermanDate(row[9]) || new Date().toISOString(),    // J: Datum
-        email: row[10] || 'imported@sheet',                           // K: Wer
-        type: typeMap[row[11]] || 'Kauf',                             // L: K/L/V
-        bill_number: row[12] || '',                                   // M: Beleg Nr
-        amount: 0
-      };
-      bill.amount = bill.brutto19 + bill.brutto7 + bill.brutto0;
-      console.log('Parsed bill brutto values:', bill.brutto19, bill.brutto7, bill.brutto0);
-
-      // Check duplicate using bill key
-      const key = billKey(bill);
-      if (existingKeys.has(key)) {
-        skipped++;
-        continue;
-      }
-
-      existingKeys.add(key);
-      insert.run(
-        bill.date, bill.email, bill.bill_number, bill.type,
-        bill.vendor, bill.item, bill.comment, bill.motive,
-        bill.brutto19, bill.brutto7, bill.brutto0, bill.amount, projectId
-      );
-      added++;
-    }
-
-    console.log('Added', added, 'bills from sheet (skipped', skipped, 'duplicates)');
-    res.json({ ok: true, added, skipped });
-  } catch (e) {
-    console.error('Sync from sheet error:', e.message);
-    res.status(500).json({ error: e.message });
-  }
-});
-
-function parseGermanDate(dateStr) {
-  if (!dateStr) return null;
-  const parts = dateStr.split('.');
-  if (parts.length === 3) {
-    return new Date(parts[2], parts[1] - 1, parts[0]).toISOString();
-  }
-  return new Date(dateStr).toISOString();
-}
-
-// Parse number from sheet (handles currency symbols, comma decimals, etc.)
-function parseSheetNumber(val) {
-  if (val === null || val === undefined || val === '') return 0;
-  // Convert to string and clean up
-  let str = String(val)
-    .replace(/[^\d,.\-]/g, '')      // Remove currency symbols and whitespace
-    .trim();
-
-  // Handle German format: 1.234,56 -> 1234.56
-  if (str.includes(',') && str.includes('.')) {
-    // Has both - assume German format (. is thousand sep, , is decimal)
-    str = str.replace(/\./g, '').replace(',', '.');
-  } else if (str.includes(',')) {
-    // Only comma - assume decimal separator
-    str = str.replace(',', '.');
-  }
-
-  const num = parseFloat(str);
-  console.log('parseSheetNumber:', val, '->', num);
-  return isNaN(num) ? 0 : num;
-}
 
 // PDF Report per user
 app.get('/api/report/:email', ensureProjectAccess, async (req, res) => {

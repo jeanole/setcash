@@ -4,217 +4,224 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>vBudget</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: { sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'] }
+          }
+        }
+      }
+    </script>
     <link rel="stylesheet" href="/style.css">
+    <script src="/js/utils.js"></script>
+    <script src="/js/allocation-widget.js"></script>
   </head>
-  <body>
+  <body class="bg-slate-50 text-slate-700 min-h-screen font-sans">
     <!-- Sidebar overlay -->
-    <div id="sidebarOverlay" class="sidebar-overlay" onclick="closeMenu()"></div>
+    <div id="sidebarOverlay" class="sidebar-overlay fixed inset-0 bg-black/40 z-[1100]" onclick="closeMenu()"></div>
 
     <!-- Sidebar -->
-    <nav id="sidebar" class="sidebar">
-      <div class="sidebar-header">
-        <span id="sidebarTitle" class="sidebar-app-title">vBudget</span>
-        <button class="sidebar-close" onclick="closeMenu()">&#x2715;</button>
+    <nav id="sidebar" class="sidebar fixed top-0 left-0 h-full w-72 bg-white border-r border-slate-200 z-[1200] flex flex-col overflow-y-auto">
+      <div class="flex items-center justify-between px-5 pt-5 pb-4 border-b border-slate-100">
+        <span id="sidebarTitle" class="text-lg font-bold text-slate-900 truncate">vBudget</span>
+        <button class="text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md px-2 py-1 text-xl leading-none" onclick="closeMenu()">&#x2715;</button>
       </div>
-      <div class="sidebar-user">
-        <span id="sidebarEmail" style="font-weight:600;font-size:0.95em"></span>
-        <span id="sidebarRole" style="font-size:0.8em;color:#7f8c8d;margin-top:2px"></span>
+      <div class="px-5 py-4 border-b border-slate-100 flex flex-col gap-0.5">
+        <span id="sidebarEmail" class="font-semibold text-sm text-slate-800"></span>
+        <span id="sidebarRole" class="text-xs text-slate-400 mt-0.5"></span>
       </div>
-      <div class="sidebar-section" id="sidebarProjectsSection" style="display:none">
-        <div class="sidebar-section-label">Projects</div>
+      <div class="py-3 border-b border-slate-100" id="sidebarProjectsSection" style="display:none">
+        <div class="px-5 pb-2 text-[0.7rem] font-bold tracking-wider uppercase text-slate-400">Projects</div>
         <div id="sidebarProjectList"></div>
       </div>
-      <div class="sidebar-section sidebar-links">
-        <a id="sidebarAdminLink" href="/admin" class="sidebar-link" style="display:none">Settings</a>
-        <a id="sidebarSuperAdminLink" href="/superadmin" class="sidebar-link sidebar-link-danger" style="display:none">Super Admin</a>
-        <button id="sidebarTelegramBtn" class="sidebar-link" style="display:none;background:none;border:none;cursor:pointer;text-align:left;padding:0;font:inherit;color:inherit;width:100%" onclick="openTelegramLinkModal()">Link Telegram</button>
+      <div class="py-3 border-b border-slate-100 flex flex-col">
+        <a href="/" class="block px-5 py-3 text-sm text-indigo-700 bg-indigo-50 font-semibold transition-colors">Dashboard</a>
+        <a id="sidebarAdminLink" href="/admin" class="block px-5 py-3 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors" style="display:none">Settings</a>
+        <button id="sidebarTelegramBtn" class="block w-full text-left px-5 py-3 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors bg-transparent border-none cursor-pointer" style="display:none" onclick="openTelegramLinkModal()">Link Telegram</button>
       </div>
-      <div class="sidebar-footer">
-        <a href="/logout" class="sidebar-link">Logout</a>
-        <span id="sidebarVersion" style="font-size:0.75em;color:#95a5a6;margin-top:4px"></span>
+      <div class="mt-auto py-3 border-t border-slate-100 flex flex-col">
+        <a href="/logout" class="block px-5 py-3 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors">Logout</a>
+        <span id="sidebarVersion" class="px-5 text-[0.7rem] text-slate-400 mt-1"></span>
       </div>
     </nav>
 
-    <div class="app-header">
-      <button class="burger-btn" onclick="openMenu()" aria-label="Menu">
-        <span></span><span></span><span></span>
+    <div class="flex items-center gap-3 px-4 py-4 md:px-6">
+      <button class="flex flex-col justify-center gap-[5px] w-10 h-10 p-1.5 bg-transparent border-none cursor-pointer rounded-lg hover:bg-slate-100 shrink-0" onclick="openMenu()" aria-label="Menu">
+        <span class="block w-full h-0.5 bg-slate-800 rounded"></span><span class="block w-full h-0.5 bg-slate-800 rounded"></span><span class="block w-full h-0.5 bg-slate-800 rounded"></span>
       </button>
-      <h1 id="appTitle">vBudget</h1>
+      <h1 id="appTitle" class="text-xl md:text-2xl font-bold text-slate-900 truncate flex-1 m-0">vBudget</h1>
     </div>
 
-    <!-- Project selector overlay (shown when user has multiple projects and none selected) -->
-    <div id="projectSelectorOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; display:none; align-items:center; justify-content:center;">
-      <div class="card" style="min-width:320px; max-width:500px; margin:0 auto; position:relative; top:auto; left:auto; transform:none;">
-        <h2>Select Project</h2>
-        <p style="color:#7f8c8d; margin-bottom:16px;">Choose a project to continue:</p>
-        <div id="projectList" style="display:flex; flex-direction:column; gap:8px;"></div>
+    <!-- Project selector overlay -->
+    <div id="projectSelectorOverlay" class="fixed inset-0 bg-black/50 z-[1000] flex items-center justify-center p-5" style="display:none">
+      <div class="bg-white rounded-2xl shadow-xl p-8 min-w-[320px] max-w-md w-full text-center">
+        <h2 class="text-lg font-bold text-slate-900 mb-6">Select Project</h2>
+        <p class="text-slate-400 mb-5 text-sm">Choose a project to continue:</p>
+        <div id="projectList" class="flex flex-col gap-2"></div>
       </div>
     </div>
 
-    <div id="app">
-      <div id="not-signed-in" class="card" style="display:none">
-        <p>Please log in to continue.</p>
-        <a href="/login"><button type="button">Login</button></a>
+    <div id="app" class="px-4 md:px-6 pb-8 max-w-7xl mx-auto">
+      <div id="not-signed-in" class="bg-white rounded-xl shadow-sm border border-slate-100 p-6 mb-5" style="display:none">
+        <p class="text-slate-600 mb-4">Please log in to continue.</p>
+        <a href="/login"><button type="button" class="bg-indigo-600 text-white px-5 py-2.5 rounded-lg font-medium hover:bg-indigo-700 transition-colors">Login</button></a>
       </div>
       <div id="signed-in" style="display:none">
         <p id="user" style="display:none"></p>
 
-        <div class="tabs">
-          <button class="tab active" data-tab="upload">Upload</button>
-          <button class="tab" data-tab="bills">Bills<span id="draftBadge" style="display:none;background:#e74c3c;color:#fff;border-radius:10px;font-size:0.7em;padding:1px 6px;margin-left:5px;vertical-align:middle"></span></button>
-          <button class="tab" data-tab="spending">Spending</button>
-          <button class="tab" data-tab="vgeld">V-Geld</button>
-          <button class="tab" data-tab="budget">Budget</button>
-          <button class="tab" data-tab="reports">Reports</button>
+        <div class="flex gap-1 mb-5 overflow-x-auto border-b border-slate-200 -mx-4 px-4 md:mx-0 md:px-0">
+          <button class="tab shrink-0 px-4 py-3 text-sm font-medium border-b-2 border-indigo-600 text-indigo-700 hover:text-slate-600 transition-colors bg-transparent cursor-pointer active" data-tab="upload">Upload</button>
+          <button class="tab shrink-0 px-4 py-3 text-sm font-medium text-slate-400 border-b-2 border-transparent hover:text-slate-600 transition-colors bg-transparent cursor-pointer" data-tab="bills">Bills<span id="draftBadge" class="bg-rose-500 text-white rounded-full text-[0.65rem] px-1.5 py-px ml-1.5 align-middle" style="display:none"></span></button>
+          <button class="tab shrink-0 px-4 py-3 text-sm font-medium text-slate-400 border-b-2 border-transparent hover:text-slate-600 transition-colors bg-transparent cursor-pointer" data-tab="spending">Spending</button>
+          <button class="tab shrink-0 px-4 py-3 text-sm font-medium text-slate-400 border-b-2 border-transparent hover:text-slate-600 transition-colors bg-transparent cursor-pointer" data-tab="vgeld">V-Geld</button>
+          <button class="tab shrink-0 px-4 py-3 text-sm font-medium text-slate-400 border-b-2 border-transparent hover:text-slate-600 transition-colors bg-transparent cursor-pointer" data-tab="budget">Budget</button>
+          <button class="tab shrink-0 px-4 py-3 text-sm font-medium text-slate-400 border-b-2 border-transparent hover:text-slate-600 transition-colors bg-transparent cursor-pointer" data-tab="reports">Reports</button>
         </div>
 
         <div id="tab-upload" class="tab-content active">
-          <div class="card">
-            <h2>Upload Bill</h2>
-            <form id="uploadForm">
+          <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-5 md:p-6 mb-5">
+            <h2 class="text-base font-semibold text-slate-900 mb-4">Upload Bill</h2>
+            <form id="uploadForm" class="flex flex-col gap-4">
               <div>
-                <label style="margin-bottom:8px">Photos (optional, max 10)</label>
-                <div class="photo-upload-area" id="uploadPhotoArea">
-                  <div class="photo-thumbnails" id="uploadThumbnails"></div>
-                  <div class="photo-upload-buttons">
-                    <label class="photo-upload-btn">
-                      <input type="file" accept="image/*" multiple id="uploadFileInput" style="display:none">
+                <label class="block text-sm font-medium text-slate-700 mb-2">Photos (optional, max 10)</label>
+                <div class="border-2 border-dashed border-slate-200 rounded-xl p-4 bg-slate-50/50" id="uploadPhotoArea">
+                  <div class="flex flex-wrap gap-2.5 mb-3 empty:mb-0" id="uploadThumbnails"></div>
+                  <div class="flex gap-2.5 flex-wrap">
+                    <label class="inline-flex items-center justify-center px-4 py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-medium cursor-pointer hover:bg-indigo-700 transition-colors min-h-[44px]">
+                      <input type="file" accept="image/*" multiple id="uploadFileInput" class="hidden">
                       Choose Files
                     </label>
-                    <label class="photo-upload-btn photo-camera-btn">
-                      <input type="file" accept="image/*" capture="environment" id="uploadCameraInput" style="display:none">
+                    <label class="inline-flex items-center justify-center px-4 py-2.5 bg-emerald-500 text-white rounded-lg text-sm font-medium cursor-pointer hover:bg-emerald-600 transition-colors min-h-[44px]">
+                      <input type="file" accept="image/*" capture="environment" id="uploadCameraInput" class="hidden">
                       Take Photo
                     </label>
                   </div>
                 </div>
               </div>
-              <label>Type <select name="type"><option>Kauf</option><option>Leih</option><option>Verbrauch</option></select></label>
-              <label>Brutto 19% (EUR) <input type="number" name="brutto19" step="0.01" min="0" value="0"></label>
-              <label>Brutto 7% (EUR) <input type="number" name="brutto7" step="0.01" min="0" value="0"></label>
-              <label>Brutto 0% (EUR) <input type="number" name="brutto0" step="0.01" min="0" value="0"></label>
-              <div style="background:#f8f9fa; padding:8px 12px; border-radius:6px; display:flex; gap:16px; flex-wrap:wrap; font-size:14px;">
+              <label class="flex flex-col gap-1.5 text-sm font-medium text-slate-700">Type <select name="type" class="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none max-w-md"><option>Kauf</option><option>Leih</option><option>Verbrauch</option></select></label>
+              <label class="flex flex-col gap-1.5 text-sm font-medium text-slate-700">Brutto 19% (EUR) <input type="number" name="brutto19" step="0.01" min="0" value="0" class="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none max-w-md"></label>
+              <label class="flex flex-col gap-1.5 text-sm font-medium text-slate-700">Brutto 7% (EUR) <input type="number" name="brutto7" step="0.01" min="0" value="0" class="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none max-w-md"></label>
+              <label class="flex flex-col gap-1.5 text-sm font-medium text-slate-700">Brutto 0% (EUR) <input type="number" name="brutto0" step="0.01" min="0" value="0" class="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none max-w-md"></label>
+              <div class="bg-slate-50 px-3 py-2 rounded-lg flex gap-4 flex-wrap text-sm">
                 <span>Netto 19%: <strong id="uploadNetto19">0,00 €</strong></span>
                 <span>Netto 7%: <strong id="uploadNetto7">0,00 €</strong></span>
                 <span>Netto 0%: <strong id="uploadNetto0">0,00 €</strong></span>
-                <span>Netto Total: <strong id="uploadNettoTotal" style="color:#2c3e50">0,00 €</strong></span>
+                <span>Netto Total: <strong id="uploadNettoTotal" class="text-slate-900">0,00 €</strong></span>
               </div>
-              <label>Vendor <input name="vendor"></label>
-              <label>Item <input name="item"></label>
-              <label>Comment <input name="comment"></label>
+              <label class="flex flex-col gap-1.5 text-sm font-medium text-slate-700">Vendor <input name="vendor" class="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none max-w-md"></label>
+              <label class="flex flex-col gap-1.5 text-sm font-medium text-slate-700">Item <input name="item" class="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none max-w-md"></label>
+              <label class="flex flex-col gap-1.5 text-sm font-medium text-slate-700">Comment <input name="comment" class="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none max-w-md"></label>
               <div>
-                <label style="margin-bottom:8px">Motive Allocations</label>
+                <label class="block text-sm font-medium text-slate-700 mb-2">Motive Allocations</label>
                 <div id="uploadMotiveAlloc" class="allocation-widget"></div>
               </div>
               <div>
-                <label style="margin-bottom:8px">Kategorie Allocations</label>
+                <label class="block text-sm font-medium text-slate-700 mb-2">Kategorie Allocations</label>
                 <div id="uploadCategoryAlloc" class="allocation-widget"></div>
               </div>
-              <button type="submit">Upload</button>
+              <button type="submit" class="bg-indigo-600 text-white px-5 py-2.5 rounded-lg font-medium hover:bg-indigo-700 transition-colors w-fit">Upload</button>
             </form>
             <div id="uploadResult"></div>
           </div>
         </div>
 
         <div id="tab-bills" class="tab-content">
-          <div class="card">
-            <h2>All Bills</h2>
-            <div class="admin-only" style="display:none; margin-bottom: 12px;">
-              <button onclick="deleteSelected()" class="small danger" id="deleteSelectedBtn" style="display:none">Delete Selected (<span id="selectedCount">0</span>)</button>
+          <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-5 md:p-6 mb-5 overflow-x-auto">
+            <h2 class="text-base font-semibold text-slate-900 mb-4">All Bills</h2>
+            <div class="admin-only" style="display:none">
+              <button onclick="deleteSelected()" class="text-sm px-3 py-1.5 bg-rose-500 text-white rounded-lg hover:bg-rose-600 transition-colors mb-3" id="deleteSelectedBtn" style="display:none">Delete Selected (<span id="selectedCount">0</span>)</button>
             </div>
             <div id="billsResult"></div>
-            <div class="bills-filter-bar" id="billsFilterBar">
-              <select id="filterPerson"><option value="">All Persons</option></select>
-              <select id="filterMotive"><option value="">All Motives</option></select>
-              <select id="filterCategory"><option value="">All Categories</option></select>
-              <select id="filterRole"><option value="">All Roles</option></select>
-              <select id="filterType">
+            <div class="flex flex-wrap gap-2 items-center mb-3 mt-3" id="billsFilterBar">
+              <select id="filterPerson" class="px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg max-w-[180px] focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"><option value="">All Persons</option></select>
+              <select id="filterMotive" class="px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg max-w-[180px] focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"><option value="">All Motives</option></select>
+              <select id="filterCategory" class="px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg max-w-[180px] focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"><option value="">All Categories</option></select>
+              <select id="filterRole" class="px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg max-w-[180px] focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"><option value="">All Roles</option></select>
+              <select id="filterType" class="px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg max-w-[180px] focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none">
                 <option value="">All Types</option>
                 <option value="Kauf">Kauf</option>
                 <option value="Leih">Leih</option>
                 <option value="Verbrauch">Verbrauch</option>
               </select>
-              <input type="date" id="filterDateFrom" title="Date from">
-              <input type="date" id="filterDateTo" title="Date to">
-              <input type="text" id="filterSearch" placeholder="Search vendor, item, comment...">
-              <button class="small secondary" onclick="resetBillFilters()">Reset</button>
-              <span id="billsCount" class="bills-count"></span>
+              <input type="date" id="filterDateFrom" title="Date from" class="px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none">
+              <input type="date" id="filterDateTo" title="Date to" class="px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none">
+              <input type="text" id="filterSearch" placeholder="Search vendor, item, comment..." class="px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg max-w-[220px] focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none">
+              <button class="text-sm px-3 py-1.5 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-colors" onclick="resetBillFilters()">Reset</button>
+              <span id="billsCount" class="text-xs text-slate-400 whitespace-nowrap"></span>
             </div>
-            <table id="billsTable" class="data-table">
+            <table id="billsTable" class="w-full text-sm">
               <thead>
-                <tr>
-                  <th class="admin-only" style="display:none"><input type="checkbox" id="selectAllBills" onchange="toggleSelectAll(this)"></th>
-                  <th class="sortable" data-sort="billNumber">Nr.</th>
-                  <th class="sortable" data-sort="date">Date</th>
-                  <th class="sortable" data-sort="email">Uploaded By</th>
-                  <th class="sortable" data-sort="role">Role</th>
-                  <th class="sortable" data-sort="type">Type</th>
-                  <th class="sortable" data-sort="vendor">Vendor</th>
-                  <th class="sortable" data-sort="item">Item</th>
-                  <th class="sortable" data-sort="brutto19">Brutto 19%</th>
-                  <th class="sortable" data-sort="brutto7">Brutto 7%</th>
-                  <th class="sortable" data-sort="brutto0">Brutto 0%</th>
-                  <th class="sortable" data-sort="total">Brutto</th>
-                  <th class="sortable" data-sort="netto">Netto</th>
-                  <th>Motive / Kategorie</th>
-                  <th>Actions</th>
+                <tr class="border-b border-slate-200">
+                  <th class="admin-only px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider" style="display:none"><input type="checkbox" id="selectAllBills" onchange="toggleSelectAll(this)"></th>
+                  <th class="sortable px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider" data-sort="billNumber">Nr.</th>
+                  <th class="sortable px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider" data-sort="date">Date</th>
+                  <th class="sortable px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider" data-sort="email">Uploaded By</th>
+                  <th class="sortable px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider" data-sort="role">Role</th>
+                  <th class="sortable px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider" data-sort="type">Type</th>
+                  <th class="sortable px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider" data-sort="vendor">Vendor</th>
+                  <th class="sortable px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider" data-sort="item">Item</th>
+                  <th class="sortable px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider" data-sort="brutto19">Brutto 19%</th>
+                  <th class="sortable px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider" data-sort="brutto7">Brutto 7%</th>
+                  <th class="sortable px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider" data-sort="brutto0">Brutto 0%</th>
+                  <th class="sortable px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider" data-sort="total">Brutto</th>
+                  <th class="sortable px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider" data-sort="netto">Netto</th>
+                  <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Motive / Kategorie</th>
+                  <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
-              <tbody id="billsBody"></tbody>
+              <tbody id="billsBody" class="divide-y divide-slate-100"></tbody>
             </table>
-            <div class="bills-pagination" id="billsPagination"></div>
-            <div class="sync-buttons admin-only" style="display:none; margin-top: 16px; padding-top: 16px; border-top: 1px solid #eee;">
-              <button onclick="syncToSheet()" class="small secondary">Up Push to Sheet</button>
-              <button onclick="syncFromSheet()" class="small secondary">Down Pull from Sheet</button>
-              <span id="syncResult" style="margin-left: 10px;"></span>
-            </div>
+            <div class="flex justify-center gap-1 mt-4 flex-wrap" id="billsPagination"></div>
           </div>
         </div>
 
         <div id="tab-spending" class="tab-content">
-          <div class="card">
-            <h2>Spending by Motive <span style="font-size:0.65em; font-weight:400; color:#7f8c8d">(netto)</span></h2>
-            <table id="spendingTable" class="data-table">
+          <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-5 md:p-6 mb-5 overflow-x-auto">
+            <h2 class="text-base font-semibold text-slate-900 mb-4">Spending by Motive <span class="text-xs font-normal text-slate-400">(netto)</span></h2>
+            <table id="spendingTable" class="w-full text-sm">
               <thead>
-                <tr>
-                  <th>Motive</th>
-                  <th>Budget (netto)</th>
-                  <th>Spent (netto)</th>
-                  <th>Remaining</th>
-                  <th>Used</th>
+                <tr class="border-b border-slate-200">
+                  <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Motive</th>
+                  <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Budget (netto)</th>
+                  <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Spent (netto)</th>
+                  <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Remaining</th>
+                  <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Used</th>
                 </tr>
               </thead>
-              <tbody id="spendingBody"></tbody>
+              <tbody id="spendingBody" class="divide-y divide-slate-100"></tbody>
               <tfoot>
-                <tr>
-                  <th>Grand Total</th>
-                  <th id="grandTotalBudget"></th>
-                  <th id="grandTotalSpent"></th>
-                  <th id="grandTotalRemaining"></th>
-                  <th id="grandTotalPercent"></th>
+                <tr class="border-t-2 border-slate-200 bg-slate-50">
+                  <th class="px-3 py-2.5 text-left text-sm font-semibold text-slate-900">Grand Total</th>
+                  <th id="grandTotalBudget" class="px-3 py-2.5 text-left text-sm font-semibold text-slate-900"></th>
+                  <th id="grandTotalSpent" class="px-3 py-2.5 text-left text-sm font-semibold text-slate-900"></th>
+                  <th id="grandTotalRemaining" class="px-3 py-2.5 text-left text-sm font-semibold text-slate-900"></th>
+                  <th id="grandTotalPercent" class="px-3 py-2.5 text-left text-sm font-semibold text-slate-900"></th>
                 </tr>
               </tfoot>
             </table>
           </div>
-          <div class="card">
-            <h2>Spending by Kategorie <span style="font-size:0.65em; font-weight:400; color:#7f8c8d">(netto)</span></h2>
-            <table id="categorySpendingTable" class="data-table">
+          <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-5 md:p-6 mb-5 overflow-x-auto">
+            <h2 class="text-base font-semibold text-slate-900 mb-4">Spending by Kategorie <span class="text-xs font-normal text-slate-400">(netto)</span></h2>
+            <table id="categorySpendingTable" class="w-full text-sm">
               <thead>
-                <tr>
-                  <th>Kategorie</th>
-                  <th>Budget (netto)</th>
-                  <th>Spent (netto)</th>
-                  <th>Remaining</th>
-                  <th>Used</th>
+                <tr class="border-b border-slate-200">
+                  <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Kategorie</th>
+                  <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Budget (netto)</th>
+                  <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Spent (netto)</th>
+                  <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Remaining</th>
+                  <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Used</th>
                 </tr>
               </thead>
-              <tbody id="categorySpendingBody"></tbody>
+              <tbody id="categorySpendingBody" class="divide-y divide-slate-100"></tbody>
               <tfoot>
-                <tr>
-                  <th>Grand Total</th>
-                  <th id="catGrandTotalBudget"></th>
-                  <th id="catGrandTotalSpent"></th>
-                  <th id="catGrandTotalRemaining"></th>
-                  <th id="catGrandTotalPercent"></th>
+                <tr class="border-t-2 border-slate-200 bg-slate-50">
+                  <th class="px-3 py-2.5 text-left text-sm font-semibold text-slate-900">Grand Total</th>
+                  <th id="catGrandTotalBudget" class="px-3 py-2.5 text-left text-sm font-semibold text-slate-900"></th>
+                  <th id="catGrandTotalSpent" class="px-3 py-2.5 text-left text-sm font-semibold text-slate-900"></th>
+                  <th id="catGrandTotalRemaining" class="px-3 py-2.5 text-left text-sm font-semibold text-slate-900"></th>
+                  <th id="catGrandTotalPercent" class="px-3 py-2.5 text-left text-sm font-semibold text-slate-900"></th>
                 </tr>
               </tfoot>
             </table>
@@ -222,197 +229,197 @@
         </div>
 
         <div id="tab-vgeld" class="tab-content">
-          <div class="card">
-            <h2>V-Geld Analysis by User</h2>
-            <table id="vgeldAnalysisTable" class="data-table">
+          <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-5 md:p-6 mb-5 overflow-x-auto">
+            <h2 class="text-base font-semibold text-slate-900 mb-4">V-Geld Analysis by User</h2>
+            <table id="vgeldAnalysisTable" class="w-full text-sm">
               <thead>
-                <tr>
-                  <th>User</th>
-                  <th>V-Geld Received</th>
-                  <th>Spent</th>
-                  <th>Remaining</th>
-                  <th>Used</th>
+                <tr class="border-b border-slate-200">
+                  <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">User</th>
+                  <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">V-Geld Received</th>
+                  <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Spent</th>
+                  <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Remaining</th>
+                  <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Used</th>
                 </tr>
               </thead>
-              <tbody id="vgeldAnalysisBody"></tbody>
+              <tbody id="vgeldAnalysisBody" class="divide-y divide-slate-100"></tbody>
               <tfoot>
-                <tr>
-                  <th>Total</th>
-                  <th id="vgeldTotalReceived"></th>
-                  <th id="vgeldTotalSpent"></th>
-                  <th id="vgeldTotalRemaining"></th>
-                  <th id="vgeldTotalPercent"></th>
+                <tr class="border-t-2 border-slate-200 bg-slate-50">
+                  <th class="px-3 py-2.5 text-left text-sm font-semibold text-slate-900">Total</th>
+                  <th id="vgeldTotalReceived" class="px-3 py-2.5 text-left text-sm font-semibold text-slate-900"></th>
+                  <th id="vgeldTotalSpent" class="px-3 py-2.5 text-left text-sm font-semibold text-slate-900"></th>
+                  <th id="vgeldTotalRemaining" class="px-3 py-2.5 text-left text-sm font-semibold text-slate-900"></th>
+                  <th id="vgeldTotalPercent" class="px-3 py-2.5 text-left text-sm font-semibold text-slate-900"></th>
                 </tr>
               </tfoot>
             </table>
           </div>
-          <div class="card">
-            <h2>V-Geld Transfers</h2>
+          <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-5 md:p-6 mb-5 overflow-x-auto">
+            <h2 class="text-base font-semibold text-slate-900 mb-4">V-Geld Transfers</h2>
             <div id="vgeldFormSection" style="display:none">
-              <h3>New Transfer (Admin only)</h3>
-              <form id="vgeldForm" class="inline-form">
-                <label>Amount (EUR) <input type="number" name="amount" step="0.01" min="0.01" required></label>
-                <label>From <input type="text" name="from" placeholder="External source or user"></label>
-                <label>To <select name="to" id="vgeldToSelect" required></select></label>
-                <button type="submit">Add Transfer</button>
+              <h3 class="text-sm font-semibold text-slate-800 mb-3">New Transfer (Admin only)</h3>
+              <form id="vgeldForm" class="flex flex-row flex-wrap items-end gap-3 mb-4">
+                <label class="flex flex-col gap-1 text-sm font-medium text-slate-700">Amount (EUR) <input type="number" name="amount" step="0.01" min="0.01" required class="px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"></label>
+                <label class="flex flex-col gap-1 text-sm font-medium text-slate-700">From <input type="text" name="from" placeholder="External source or user" class="px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"></label>
+                <label class="flex flex-col gap-1 text-sm font-medium text-slate-700">To <select name="to" id="vgeldToSelect" required class="px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"></select></label>
+                <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors">Add Transfer</button>
               </form>
               <div id="vgeldResult"></div>
             </div>
-            <h3>Transfer History</h3>
-            <table id="vgeldTable" class="data-table">
+            <h3 class="text-sm font-semibold text-slate-800 mb-3">Transfer History</h3>
+            <table id="vgeldTable" class="w-full text-sm">
               <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Amount</th>
-                  <th>From</th>
-                  <th>To</th>
-                  <th>Recorded By</th>
-                  <th class="admin-only" style="display:none">Action</th>
+                <tr class="border-b border-slate-200">
+                  <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Date</th>
+                  <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Amount</th>
+                  <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">From</th>
+                  <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">To</th>
+                  <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Recorded By</th>
+                  <th class="admin-only px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider" style="display:none">Action</th>
                 </tr>
               </thead>
-              <tbody id="vgeldBody"></tbody>
+              <tbody id="vgeldBody" class="divide-y divide-slate-100"></tbody>
             </table>
           </div>
         </div>
 
         <div id="tab-budget" class="tab-content">
-          <div class="card">
-            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:16px;">
-              <h2 style="margin:0">Budget Matrix <span style="font-size:0.65em; font-weight:400; color:#7f8c8d">(netto)</span></h2>
-              <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+          <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-5 md:p-6 mb-5">
+            <div class="flex justify-between items-center flex-wrap gap-3 mb-4">
+              <h2 class="text-base font-semibold text-slate-900 m-0">Budget Matrix <span class="text-xs font-normal text-slate-400">(netto)</span></h2>
+              <div class="flex items-center gap-3 flex-wrap">
                 <div id="budgetSaveWrap" class="admin-only" style="display:none;">
-                  <button id="budgetSaveBtn" onclick="saveBudgetMatrix()">Save All Changes</button>
-                  <span id="budgetSaveResult" style="margin-left:8px;"></span>
+                  <button id="budgetSaveBtn" onclick="saveBudgetMatrix()" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors">Save All Changes</button>
+                  <span id="budgetSaveResult" class="ml-2 text-sm"></span>
                 </div>
-                <div style="text-align:right;">
-                  <div id="budgetGrandTotal" style="font-size:1.1em; font-weight:600; color:#2c3e50;"></div>
-                  <div id="budgetGrandSpent" style="font-size:1.1em; font-weight:600;"></div>
+                <div class="text-right">
+                  <div id="budgetGrandTotal" class="text-sm font-semibold text-slate-900"></div>
+                  <div id="budgetGrandSpent" class="text-sm font-semibold"></div>
                 </div>
               </div>
             </div>
-            <div id="budgetMatrixContainer" style="overflow:auto; scroll-snap-type:x mandatory; max-height:70vh;"></div>
-            <div style="margin-top:16px; padding-top:16px; border-top:1px solid #eee;">
-              <button class="secondary" onclick="window.open('/api/budget-report','_blank')">Export Budget PDF</button>
+            <div id="budgetMatrixContainer" class="overflow-auto max-h-[70vh]" style="scroll-snap-type:x mandatory;"></div>
+            <div class="mt-4 pt-4 border-t border-slate-100">
+              <button class="bg-slate-100 text-slate-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-200 transition-colors" onclick="window.open('/api/budget-report','_blank')">Export Budget PDF</button>
             </div>
           </div>
         </div>
 
         <div id="tab-reports" class="tab-content">
-          <div class="card">
-            <h2>PDF Reports</h2>
-            <p>Download a PDF report with all bills and images for a user.</p>
-            <div style="margin: 20px 0;">
-              <label style="display: flex; flex-direction: column; gap: 8px; max-width: 400px;">
+          <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-5 md:p-6 mb-5">
+            <h2 class="text-base font-semibold text-slate-900 mb-2">PDF Reports</h2>
+            <p class="text-sm text-slate-500 mb-5">Download a PDF report with all bills and images for a user.</p>
+            <div class="mb-5">
+              <label class="flex flex-col gap-2 max-w-md text-sm font-medium text-slate-700">
                 <span>Select User:</span>
-                <select id="reportUserSelect" style="padding: 8px; font-size: 14px;"></select>
+                <select id="reportUserSelect" class="px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"></select>
               </label>
             </div>
-            <button onclick="downloadReport()" style="padding: 10px 20px;">Download PDF Report</button>
-            <div id="reportResult" style="margin-top: 12px;"></div>
+            <button onclick="downloadReport()" class="bg-indigo-600 text-white px-5 py-2.5 rounded-lg font-medium hover:bg-indigo-700 transition-colors text-sm">Download PDF Report</button>
+            <div id="reportResult" class="mt-3"></div>
           </div>
         </div>
 
-        <p id="footerLinks" style="font-size:0.85em;color:#999"><span id="appVersion"></span></p>
+        <p id="footerLinks" class="text-xs text-slate-400 mt-4"><span id="appVersion"></span></p>
       </div>
     </div>
 
     <!-- Bill Detail Modal -->
-    <div id="billModal" class="modal" style="display:none">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h2>Bill Details</h2>
-          <button class="modal-close" onclick="closeModal()">&times;</button>
+    <div id="billModal" class="fixed inset-0 bg-black/50 z-[1000] flex items-center justify-center p-4 md:p-5" style="display:none">
+      <div class="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+        <div class="flex justify-between items-center px-5 py-4 border-b border-slate-100 sticky top-0 bg-white z-10 rounded-t-2xl">
+          <h2 class="text-base font-semibold text-slate-900 m-0">Bill Details</h2>
+          <button class="text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full w-9 h-9 flex items-center justify-center text-2xl leading-none bg-transparent border-none cursor-pointer" onclick="closeModal()">&times;</button>
         </div>
-        <div class="modal-body">
-          <div class="bill-image-section">
-            <h3>Images <span id="imageCounter" style="font-weight:400; font-size:0.85em; color:#7f8c8d"></span></h3>
-            <div id="billGallery">
-              <p id="noImageText">No images uploaded</p>
-              <div id="galleryCarousel" class="gallery-carousel" style="display:none">
-                <div class="gallery-viewport">
-                  <div class="gallery-track" id="galleryTrack"></div>
+        <div class="p-5 md:p-6">
+          <div class="mb-6 pb-6 border-b border-slate-100">
+            <h3 class="text-sm font-semibold text-slate-800 mb-3">Images <span id="imageCounter" class="font-normal text-xs text-slate-400"></span></h3>
+            <div id="billGallery" class="mb-3">
+              <p id="noImageText" class="text-slate-400 text-center py-5 bg-slate-50 rounded-lg m-0 text-sm">No images uploaded</p>
+              <div id="galleryCarousel" class="relative bg-slate-50 rounded-lg overflow-hidden mb-3" style="display:none">
+                <div class="overflow-hidden rounded-lg">
+                  <div class="gallery-track flex" id="galleryTrack"></div>
                 </div>
-                <button class="gallery-nav gallery-prev" id="galleryPrev" onclick="galleryNav(-1)">&lsaquo;</button>
-                <button class="gallery-nav gallery-next" id="galleryNext" onclick="galleryNav(1)">&rsaquo;</button>
-                <div class="gallery-dots" id="galleryDots"></div>
+                <button class="gallery-nav absolute top-1/2 -translate-y-1/2 left-2 bg-black/40 text-white border-none w-9 h-9 rounded-full text-xl cursor-pointer flex items-center justify-center z-[2] hover:bg-black/70 p-0 leading-none" id="galleryPrev" onclick="galleryNav(-1)">&lsaquo;</button>
+                <button class="gallery-nav absolute top-1/2 -translate-y-1/2 right-2 bg-black/40 text-white border-none w-9 h-9 rounded-full text-xl cursor-pointer flex items-center justify-center z-[2] hover:bg-black/70 p-0 leading-none" id="galleryNext" onclick="galleryNav(1)">&rsaquo;</button>
+                <div class="flex justify-center gap-1.5 py-2 pb-3" id="galleryDots"></div>
               </div>
             </div>
-            <div class="bill-image-actions">
-              <a id="downloadLink" style="display:none"><button type="button" class="small">Download</button></a>
-              <button type="button" class="small danger" id="deleteImageBtn" style="display:none" onclick="deleteCurrentImage()">Delete Image</button>
-              <label class="photo-upload-btn small" style="display:none" id="addImageLabel">
-                <input type="file" accept="image/*" multiple id="addImageInput" style="display:none">
+            <div class="flex gap-3 items-center flex-wrap">
+              <a id="downloadLink" style="display:none"><button type="button" class="text-sm px-3 py-1.5 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-colors">Download</button></a>
+              <button type="button" class="text-sm px-3 py-1.5 bg-rose-500 text-white rounded-lg hover:bg-rose-600 transition-colors" id="deleteImageBtn" style="display:none" onclick="deleteCurrentImage()">Delete Image</button>
+              <label class="inline-flex items-center justify-center px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-sm font-medium cursor-pointer hover:bg-indigo-700 transition-colors" style="display:none" id="addImageLabel">
+                <input type="file" accept="image/*" multiple id="addImageInput" class="hidden">
                 Add Images
               </label>
-              <label class="photo-upload-btn photo-camera-btn small" style="display:none" id="addCameraLabel">
-                <input type="file" accept="image/*" capture="environment" id="addCameraInput" style="display:none">
+              <label class="inline-flex items-center justify-center px-3 py-1.5 bg-emerald-500 text-white rounded-lg text-sm font-medium cursor-pointer hover:bg-emerald-600 transition-colors" style="display:none" id="addCameraLabel">
+                <input type="file" accept="image/*" capture="environment" id="addCameraInput" class="hidden">
                 Take Photo
               </label>
             </div>
             <div id="imageResult"></div>
           </div>
 
-          <div class="bill-details-section">
-            <h3>Details</h3>
-            <form id="billDetailForm">
+          <div class="mb-6 pb-6 border-b border-slate-100">
+            <h3 class="text-sm font-semibold text-slate-800 mb-3">Details</h3>
+            <form id="billDetailForm" class="flex flex-col gap-4">
               <input type="hidden" id="detailBillId" name="id">
-              <div class="form-row">
-                <label>Bill Nr. <input type="text" id="detailBillNumber" readonly></label>
-                <label>Date <input type="text" id="detailDate" readonly></label>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <label class="flex flex-col gap-1.5 text-sm font-medium text-slate-700">Bill Nr. <input type="text" id="detailBillNumber" readonly class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm bg-slate-50 outline-none"></label>
+                <label class="flex flex-col gap-1.5 text-sm font-medium text-slate-700">Date <input type="text" id="detailDate" readonly class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm bg-slate-50 outline-none"></label>
               </div>
-              <div class="form-row">
-                <label>Uploaded By <select id="detailEmail" name="email"></select></label>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <label class="flex flex-col gap-1.5 text-sm font-medium text-slate-700">Uploaded By <select id="detailEmail" name="email" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"></select></label>
               </div>
-              <div class="form-row">
-                <label>Type <select id="detailType" name="type">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <label class="flex flex-col gap-1.5 text-sm font-medium text-slate-700">Type <select id="detailType" name="type" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none">
                   <option>Kauf</option><option>Leih</option><option>Verbrauch</option>
                 </select></label>
               </div>
-              <div class="form-row">
-                <label>Vendor <input type="text" id="detailVendor" name="vendor"></label>
-                <label>Item <input type="text" id="detailItem" name="item"></label>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <label class="flex flex-col gap-1.5 text-sm font-medium text-slate-700">Vendor <input type="text" id="detailVendor" name="vendor" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"></label>
+                <label class="flex flex-col gap-1.5 text-sm font-medium text-slate-700">Item <input type="text" id="detailItem" name="item" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"></label>
               </div>
-              <div class="form-row">
-                <label>Brutto 19% (EUR) <input type="number" id="detailBrutto19" name="brutto19" step="0.01" min="0"></label>
-                <label>Brutto 7% (EUR) <input type="number" id="detailBrutto7" name="brutto7" step="0.01" min="0"></label>
-                <label>Brutto 0% (EUR) <input type="number" id="detailBrutto0" name="brutto0" step="0.01" min="0"></label>
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <label class="flex flex-col gap-1.5 text-sm font-medium text-slate-700">Brutto 19% (EUR) <input type="number" id="detailBrutto19" name="brutto19" step="0.01" min="0" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"></label>
+                <label class="flex flex-col gap-1.5 text-sm font-medium text-slate-700">Brutto 7% (EUR) <input type="number" id="detailBrutto7" name="brutto7" step="0.01" min="0" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"></label>
+                <label class="flex flex-col gap-1.5 text-sm font-medium text-slate-700">Brutto 0% (EUR) <input type="number" id="detailBrutto0" name="brutto0" step="0.01" min="0" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"></label>
               </div>
-              <div class="form-row" style="background:#f8f9fa; padding:8px; border-radius:6px;">
-                <label>Netto 19% <span id="detailNetto19" style="font-weight:600"></span></label>
-                <label>Netto 7% <span id="detailNetto7" style="font-weight:600"></span></label>
-                <label>Netto 0% <span id="detailNetto0" style="font-weight:600"></span></label>
-                <label>Netto Total <span id="detailNettoTotal" style="font-weight:700; color:#2c3e50"></span></label>
+              <div class="grid grid-cols-2 md:grid-cols-4 gap-4 bg-slate-50 p-3 rounded-lg">
+                <label class="text-sm font-medium text-slate-700">Netto 19% <span id="detailNetto19" class="font-semibold block"></span></label>
+                <label class="text-sm font-medium text-slate-700">Netto 7% <span id="detailNetto7" class="font-semibold block"></span></label>
+                <label class="text-sm font-medium text-slate-700">Netto 0% <span id="detailNetto0" class="font-semibold block"></span></label>
+                <label class="text-sm font-medium text-slate-700">Netto Total <span id="detailNettoTotal" class="font-bold text-slate-900 block"></span></label>
               </div>
-              <div class="form-row">
-                <label>Comment <input type="text" id="detailComment" name="comment"></label>
+              <div class="grid grid-cols-1 gap-4">
+                <label class="flex flex-col gap-1.5 text-sm font-medium text-slate-700">Comment <input type="text" id="detailComment" name="comment" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"></label>
               </div>
               <div>
-                <label style="margin-bottom:8px">Motive Allocations</label>
+                <label class="block text-sm font-medium text-slate-700 mb-2">Motive Allocations</label>
                 <div id="detailMotiveAlloc" class="allocation-widget"></div>
               </div>
               <div>
-                <label style="margin-bottom:8px">Kategorie Allocations</label>
+                <label class="block text-sm font-medium text-slate-700 mb-2">Kategorie Allocations</label>
                 <div id="detailCategoryAlloc" class="allocation-widget"></div>
               </div>
-              <div class="form-actions">
-                <button type="submit">Save Changes</button>
-                <button type="button" class="danger admin-only" style="display:none" onclick="deleteBill()">Delete Bill</button>
+              <div class="flex gap-3 mt-2">
+                <button type="submit" class="bg-indigo-600 text-white px-5 py-2.5 rounded-lg font-medium hover:bg-indigo-700 transition-colors text-sm">Save Changes</button>
+                <button type="button" class="bg-rose-500 text-white px-5 py-2.5 rounded-lg font-medium hover:bg-rose-600 transition-colors text-sm admin-only" style="display:none" onclick="deleteBill()">Delete Bill</button>
               </div>
             </form>
             <div id="detailResult"></div>
           </div>
 
-          <div class="bill-log-section">
-            <h3>Edit History</h3>
-            <table class="data-table">
+          <div>
+            <h3 class="text-sm font-semibold text-slate-800 mb-3">Edit History</h3>
+            <table class="w-full text-sm">
               <thead>
-                <tr>
-                  <th>When</th>
-                  <th>Who</th>
-                  <th>Changes</th>
+                <tr class="border-b border-slate-200">
+                  <th class="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">When</th>
+                  <th class="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Who</th>
+                  <th class="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Changes</th>
                 </tr>
               </thead>
-              <tbody id="billLogBody"></tbody>
+              <tbody id="billLogBody" class="divide-y divide-slate-100"></tbody>
             </table>
           </div>
         </div>
@@ -420,13 +427,13 @@
     </div>
 
     <!-- Full Size Image Modal -->
-    <div id="imageModal" class="modal" style="display:none" onclick="closeImageModal()">
-      <div class="image-modal-content" onclick="event.stopPropagation()">
-        <button class="modal-close" onclick="closeImageModal()">&times;</button>
-        <button class="gallery-nav gallery-prev fullsize-nav" id="fullPrev" onclick="fullsizeNav(-1)">&lsaquo;</button>
-        <img id="fullSizeImage" />
-        <button class="gallery-nav gallery-next fullsize-nav" id="fullNext" onclick="fullsizeNav(1)">&rsaquo;</button>
-        <div class="fullsize-counter" id="fullsizeCounter"></div>
+    <div id="imageModal" class="fixed inset-0 bg-black/80 z-[1000] flex items-center justify-center" style="display:none" onclick="closeImageModal()">
+      <div class="relative max-w-[95vw] max-h-[95vh]" onclick="event.stopPropagation()">
+        <button class="absolute -top-10 right-0 text-white bg-black/50 hover:bg-black/70 rounded-full w-9 h-9 flex items-center justify-center text-2xl leading-none border-none cursor-pointer" onclick="closeImageModal()">&times;</button>
+        <button class="gallery-nav fullsize-nav bg-black/40 text-white border-none w-9 h-9 rounded-full text-xl cursor-pointer flex items-center justify-center hover:bg-black/70 p-0 leading-none gallery-prev" id="fullPrev" onclick="fullsizeNav(-1)">&lsaquo;</button>
+        <img id="fullSizeImage" class="max-w-[95vw] max-h-[90vh] block rounded-lg shadow-2xl" />
+        <button class="gallery-nav fullsize-nav bg-black/40 text-white border-none w-9 h-9 rounded-full text-xl cursor-pointer flex items-center justify-center hover:bg-black/70 p-0 leading-none gallery-next" id="fullNext" onclick="fullsizeNav(1)">&rsaquo;</button>
+        <div class="absolute -bottom-8 left-1/2 -translate-x-1/2 text-white text-sm font-medium bg-black/50 px-3 py-1 rounded-full" id="fullsizeCounter"></div>
       </div>
     </div>
 
@@ -451,198 +458,9 @@
       let galleryImages = [];
       let galleryIndex = 0;
 
-      function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text || '';
-        return div.innerHTML;
-      }
-
-      function formatDate(dateStr) {
-        if (!dateStr) return '';
-        const d = new Date(dateStr);
-        return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-      }
-
-      function formatCurrency(amount) {
-        return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(amount || 0);
-      }
-
-      // Parse number accepting both comma and dot as decimal separator
-      function parseNum(val) {
-        if (typeof val === 'number') return val;
-        if (!val) return 0;
-        // Remove thousands separators (dots when comma is decimal), then replace comma with dot
-        var s = String(val).trim();
-        // If both dot and comma exist, the last one is the decimal separator
-        var lastDot = s.lastIndexOf('.');
-        var lastComma = s.lastIndexOf(',');
-        if (lastComma > lastDot) {
-          // Comma is decimal separator: remove dots (thousands), replace comma with dot
-          s = s.replace(/\./g, '').replace(',', '.');
-        }
-        // else dot is decimal or no comma present — parseFloat handles it
-        return parseFloat(s) || 0;
-      }
-
-      function showMessage(elementId, text, isError) {
-        const el = document.getElementById(elementId);
-        el.textContent = text;
-        el.className = 'message ' + (isError ? 'error' : 'success');
-        setTimeout(() => { el.textContent = ''; el.className = ''; }, 3000);
-      }
-
-      // ========== Allocation Widget ==========
-      function createAllocationWidget(containerId, type, options, existing, totalAmount) {
-        const container = document.getElementById(containerId);
-        container.innerHTML = '';
-        const idField = type === 'motive' ? 'motiveId' : 'categoryId';
-        const label = type === 'motive' ? 'Motive' : 'Kategorie';
-        const defaultName = type === 'motive' ? 'Default' : 'Uncategorized';
-        const defaultOpt = options.find(o => o.name === defaultName);
-
-        let rows = [];
-        if (existing && existing.length > 0) {
-          rows = existing.filter(e => e.name !== defaultName).map(e => ({ id: e[idField], percentage: Math.round(e.percentage) }));
-        }
-
-        function render() {
-          container.innerHTML = '';
-          const totalPct = rows.reduce((s, r) => s + (parseInt(r.percentage) || 0), 0);
-          const remainingPct = Math.max(0, 100 - totalPct);
-          const amount = totalAmount || 0;
-
-          // Filter out the default option from selectable options
-          const selectableOptions = options.filter(o => o.name !== defaultName);
-
-          rows.forEach((row, idx) => {
-            const rowDiv = document.createElement('div');
-            rowDiv.className = 'alloc-row';
-
-            const sel = document.createElement('select');
-            sel.innerHTML = '<option value="">-- Select --</option>' +
-              selectableOptions.map(o => `<option value="${o.id}" ${o.id === row.id ? 'selected' : ''}>${escapeHtml(o.name)}</option>`).join('');
-            sel.addEventListener('change', () => { row.id = parseInt(sel.value) || 0; render(); });
-
-            const pctInput = document.createElement('input');
-            pctInput.type = 'number';
-            pctInput.min = '0';
-            pctInput.max = '100';
-            pctInput.step = '1';
-            pctInput.value = Math.round(row.percentage);
-            pctInput.style.width = '60px';
-            pctInput.addEventListener('change', () => { row.percentage = parseInt(pctInput.value) || 0; render(); });
-
-            const pctLabel = document.createElement('span');
-            pctLabel.textContent = '%';
-
-            const euroAmount = document.createElement('span');
-            euroAmount.style.marginLeft = '8px';
-            euroAmount.style.color = '#666';
-            euroAmount.textContent = formatCurrency(amount * (parseInt(row.percentage) || 0) / 100);
-
-            const removeBtn = document.createElement('button');
-            removeBtn.type = 'button';
-            removeBtn.className = 'small danger';
-            removeBtn.textContent = 'x';
-            removeBtn.addEventListener('click', () => { rows.splice(idx, 1); render(); });
-
-            rowDiv.appendChild(sel);
-            rowDiv.appendChild(pctInput);
-            rowDiv.appendChild(pctLabel);
-            rowDiv.appendChild(euroAmount);
-            rowDiv.appendChild(removeBtn);
-            container.appendChild(rowDiv);
-          });
-
-          // Show default row (read-only, styled like a regular allocation row)
-          if (remainingPct > 0 && defaultOpt) {
-            const uncatDiv = document.createElement('div');
-            uncatDiv.className = 'alloc-row';
-
-            const uncatSel = document.createElement('select');
-            uncatSel.innerHTML = `<option selected>${escapeHtml(defaultName)}</option>`;
-            uncatSel.disabled = true;
-            uncatSel.style.opacity = '0.7';
-
-            const uncatInput = document.createElement('input');
-            uncatInput.type = 'number';
-            uncatInput.value = remainingPct;
-            uncatInput.readOnly = true;
-            uncatInput.style.width = '60px';
-            uncatInput.style.opacity = '0.7';
-
-            const uncatPctLabel = document.createElement('span');
-            uncatPctLabel.textContent = '%';
-
-            const uncatEuro = document.createElement('span');
-            uncatEuro.style.marginLeft = '8px';
-            uncatEuro.style.color = '#666';
-            uncatEuro.textContent = formatCurrency(amount * remainingPct / 100);
-
-            uncatDiv.appendChild(uncatSel);
-            uncatDiv.appendChild(uncatInput);
-            uncatDiv.appendChild(uncatPctLabel);
-            uncatDiv.appendChild(uncatEuro);
-            container.appendChild(uncatDiv);
-          }
-
-          // Add button
-          const addBtn = document.createElement('button');
-          addBtn.type = 'button';
-          addBtn.className = 'small secondary';
-          addBtn.textContent = '+ Add ' + label;
-          addBtn.addEventListener('click', () => {
-            rows.push({ id: 0, percentage: 0 });
-            render();
-          });
-          container.appendChild(addBtn);
-
-          // Total indicator
-          if (rows.length > 0 || remainingPct < 100) {
-            const indicator = document.createElement('div');
-            indicator.style.marginTop = '8px';
-            indicator.style.fontSize = '0.9em';
-            if (totalPct > 100) {
-              indicator.style.color = '#e74c3c';
-              indicator.textContent = `Total: ${totalPct}% (${totalPct - 100}% over!)`;
-            } else {
-              indicator.style.color = '#27ae60';
-              indicator.textContent = `Total: 100% allocated`;
-            }
-            container.appendChild(indicator);
-          }
-        }
-
-        render();
-
-        // Methods attached to container element
-        container.getAllocations = function() {
-          const allocs = rows.filter(r => r.id > 0 && r.percentage > 0).map(r => {
-            const opt = options.find(o => o.id === r.id);
-            return { [idField]: r.id, name: opt ? opt.name : '', percentage: Math.round(r.percentage) };
-          });
-          // Include default remainder
-          const totalPct = allocs.reduce((s, a) => s + a.percentage, 0);
-          const remainingPct = Math.max(0, 100 - totalPct);
-          if (remainingPct > 0 && defaultOpt) {
-            allocs.push({ [idField]: defaultOpt.id, name: defaultName, percentage: remainingPct });
-          }
-          return allocs;
-        };
-        container.getTotalPercent = function() {
-          const allocs = container.getAllocations();
-          return allocs.reduce((s, a) => s + Math.round(a.percentage), 0);
-        };
-        container.updateAmount = function(newAmount) {
-          totalAmount = newAmount;
-          render();
-        };
-      }
-
-      // ========== Netto calculation helper ==========
-      function calcNetto(brutto, taxRate) {
-        return (parseFloat(brutto) || 0) / (1 + taxRate);
-      }
+      // Utilities loaded from /js/utils.js (escapeHtml, formatDate, formatCurrency, parseNum, showMessage, calcNetto)
+      // Allocation widget loaded from /js/allocation-widget.js
+      // calcNetto loaded from /js/utils.js
 
       function updateDetailNetto() {
         const b19 = parseFloat(document.getElementById('detailBrutto19').value) || 0;
@@ -675,9 +493,13 @@
       // ========== Tab switching ==========
       document.querySelectorAll('.tab').forEach(tab => {
         tab.addEventListener('click', () => {
-          document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+          document.querySelectorAll('.tab').forEach(t => {
+            t.classList.remove('active', 'border-indigo-600', 'text-indigo-700');
+            t.classList.add('border-transparent', 'text-slate-400');
+          });
           document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-          tab.classList.add('active');
+          tab.classList.add('active', 'border-indigo-600', 'text-indigo-700');
+          tab.classList.remove('border-transparent', 'text-slate-400');
           document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
 
           if (tab.dataset.tab === 'bills') loadBills();
@@ -866,22 +688,22 @@
             const motiveDisplay = formatAllocations(bill.motiveAllocations) || escapeHtml(bill.motive);
             const categoryDisplay = formatAllocations(bill.categoryAllocations);
             return `
-            <tr data-id="${bill.id}" class="clickable-row${bill.status === 'draft' ? ' bill-draft-row' : ''}" onclick="openBillDetail(${bill.id})">
-              <td class="admin-only" style="${isAdmin ? '' : 'display:none'}" onclick="event.stopPropagation()"><input type="checkbox" class="bill-checkbox" data-id="${bill.id}" onchange="updateSelectedCount()"></td>
-              <td><strong>${escapeHtml(bill.billNumber || '-')}</strong>${bill.status === 'draft' ? ' <span style="background:#e74c3c;color:#fff;border-radius:4px;font-size:0.7em;padding:1px 5px;vertical-align:middle">Entwurf</span>' : ''}</td>
-              <td>${escapeHtml(formatDate(bill.date))}</td>
-              <td>${escapeHtml(bill.email)}</td>
-              <td>${escapeHtml(bill.role || 'Misc')}</td>
-              <td>${escapeHtml(bill.type || 'Kauf')}</td>
-              <td>${escapeHtml(bill.vendor)}</td>
-              <td>${escapeHtml(bill.item)}</td>
-              <td>${b19 ? formatCurrency(b19) : '-'}</td>
-              <td>${b7 ? formatCurrency(b7) : '-'}</td>
-              <td>${b0 ? formatCurrency(b0) : '-'}</td>
-              <td><strong>${formatCurrency(total)}</strong></td>
-              <td><strong>${formatCurrency(nettoTotal)}</strong></td>
-              <td>${motiveDisplay}${categoryDisplay ? '<br><small>' + categoryDisplay + '</small>' : ''}</td>
-              <td><button class="small" onclick="event.stopPropagation(); openBillDetail(${bill.id})">View</button></td>
+            <tr data-id="${bill.id}" class="clickable-row cursor-pointer${bill.status === 'draft' ? ' bill-draft-row' : ''}" onclick="openBillDetail(${bill.id})">
+              <td class="admin-only px-3 py-2.5" style="${isAdmin ? '' : 'display:none'}" onclick="event.stopPropagation()"><input type="checkbox" class="bill-checkbox" data-id="${bill.id}" onchange="updateSelectedCount()"></td>
+              <td class="px-3 py-2.5"><strong class="text-slate-900">${escapeHtml(bill.billNumber || '-')}</strong>${bill.status === 'draft' ? ' <span class="bg-rose-500 text-white rounded text-[0.65rem] px-1.5 py-px align-middle">Entwurf</span>' : ''}</td>
+              <td class="px-3 py-2.5 text-slate-500">${escapeHtml(formatDate(bill.date))}</td>
+              <td class="px-3 py-2.5">${escapeHtml(bill.email)}</td>
+              <td class="px-3 py-2.5 text-slate-500">${escapeHtml(bill.role || 'Misc')}</td>
+              <td class="px-3 py-2.5 text-slate-500">${escapeHtml(bill.type || 'Kauf')}</td>
+              <td class="px-3 py-2.5">${escapeHtml(bill.vendor)}</td>
+              <td class="px-3 py-2.5">${escapeHtml(bill.item)}</td>
+              <td class="px-3 py-2.5 tabular-nums">${b19 ? formatCurrency(b19) : '-'}</td>
+              <td class="px-3 py-2.5 tabular-nums">${b7 ? formatCurrency(b7) : '-'}</td>
+              <td class="px-3 py-2.5 tabular-nums">${b0 ? formatCurrency(b0) : '-'}</td>
+              <td class="px-3 py-2.5 tabular-nums"><strong class="text-slate-900">${formatCurrency(total)}</strong></td>
+              <td class="px-3 py-2.5 tabular-nums"><strong class="text-slate-900">${formatCurrency(nettoTotal)}</strong></td>
+              <td class="px-3 py-2.5 text-slate-500 text-xs">${motiveDisplay}${categoryDisplay ? '<br><span class="text-slate-400">' + categoryDisplay + '</span>' : ''}</td>
+              <td class="px-3 py-2.5"><button class="text-xs px-2.5 py-1 bg-indigo-50 text-indigo-600 rounded-md hover:bg-indigo-100 transition-colors border-none cursor-pointer" onclick="event.stopPropagation(); openBillDetail(${bill.id})">View</button></td>
             </tr>`;
           }).join('');
         }
@@ -905,8 +727,13 @@
         const container = document.getElementById('billsPagination');
         if (totalPages <= 1) { container.innerHTML = ''; return; }
 
+        const pgBase = 'px-2.5 py-1 text-sm rounded-md min-w-[34px] text-center border cursor-pointer transition-colors';
+        const pgNormal = pgBase + ' bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300';
+        const pgActive = pgBase + ' bg-indigo-600 text-white border-indigo-600';
+        const pgDisabled = pgBase + ' bg-slate-50 text-slate-300 border-slate-200 cursor-default';
+
         let html = '';
-        html += `<button class="pg-btn" ${billPage <= 1 ? 'disabled' : ''} onclick="goToBillPage(${billPage - 1})">\u2039</button>`;
+        html += `<button class="${billPage <= 1 ? pgDisabled : pgNormal}" ${billPage <= 1 ? 'disabled' : ''} onclick="goToBillPage(${billPage - 1})">\u2039</button>`;
 
         const maxVisible = 7;
         let start = Math.max(1, billPage - Math.floor(maxVisible / 2));
@@ -914,18 +741,18 @@
         if (end - start < maxVisible - 1) start = Math.max(1, end - maxVisible + 1);
 
         if (start > 1) {
-          html += `<button class="pg-btn" onclick="goToBillPage(1)">1</button>`;
-          if (start > 2) html += '<span class="pg-ellipsis">\u2026</span>';
+          html += `<button class="${pgNormal}" onclick="goToBillPage(1)">1</button>`;
+          if (start > 2) html += '<span class="px-1 text-slate-400">\u2026</span>';
         }
         for (let i = start; i <= end; i++) {
-          html += `<button class="pg-btn${i === billPage ? ' pg-active' : ''}" onclick="goToBillPage(${i})">${i}</button>`;
+          html += `<button class="${i === billPage ? pgActive : pgNormal}" onclick="goToBillPage(${i})">${i}</button>`;
         }
         if (end < totalPages) {
-          if (end < totalPages - 1) html += '<span class="pg-ellipsis">\u2026</span>';
-          html += `<button class="pg-btn" onclick="goToBillPage(${totalPages})">${totalPages}</button>`;
+          if (end < totalPages - 1) html += '<span class="px-1 text-slate-400">\u2026</span>';
+          html += `<button class="${pgNormal}" onclick="goToBillPage(${totalPages})">${totalPages}</button>`;
         }
 
-        html += `<button class="pg-btn" ${billPage >= totalPages ? 'disabled' : ''} onclick="goToBillPage(${billPage + 1})">\u203A</button>`;
+        html += `<button class="${billPage >= totalPages ? pgDisabled : pgNormal}" ${billPage >= totalPages ? 'disabled' : ''} onclick="goToBillPage(${billPage + 1})">\u203A</button>`;
         container.innerHTML = html;
       }
 
@@ -994,17 +821,18 @@
           tbody.innerHTML = data.map(item => {
             totalBudget += item.budget;
             totalSpent += item.spent;
-            const percentClass = item.percent > 100 ? 'over-budget' : (item.percent > 80 ? 'warning' : '');
-            return `<tr class="${percentClass}">
-              <td>${escapeHtml(item.motive)}</td>
-              <td>${formatCurrency(item.budget)}</td>
-              <td>${formatCurrency(item.spent)}</td>
-              <td class="${item.remaining < 0 ? 'negative' : ''}">${formatCurrency(item.remaining)}</td>
-              <td>
-                <div class="progress-bar">
-                  <div class="progress-fill ${percentClass}" style="width: ${Math.min(item.percent, 100)}%"></div>
+            const bgClass = item.percent > 100 ? 'bg-rose-50' : (item.percent > 80 ? 'bg-amber-50' : '');
+            const barColor = item.percent > 100 ? 'bg-rose-500' : (item.percent > 80 ? 'bg-amber-500' : 'bg-emerald-500');
+            return `<tr class="${bgClass}">
+              <td class="px-3 py-2.5">${escapeHtml(item.motive)}</td>
+              <td class="px-3 py-2.5 tabular-nums">${formatCurrency(item.budget)}</td>
+              <td class="px-3 py-2.5 tabular-nums">${formatCurrency(item.spent)}</td>
+              <td class="px-3 py-2.5 tabular-nums ${item.remaining < 0 ? 'text-rose-600 font-semibold' : ''}">${formatCurrency(item.remaining)}</td>
+              <td class="px-3 py-2.5">
+                <div class="inline-block w-24 h-2 bg-slate-100 rounded-full mr-2 align-middle">
+                  <div class="progress-fill ${barColor} h-full rounded-full" style="width: ${Math.min(item.percent, 100)}%"></div>
                 </div>
-                <span>${item.percent.toFixed(2)}%</span>
+                <span class="text-xs text-slate-500">${item.percent.toFixed(2)}%</span>
               </td>
             </tr>`;
           }).join('');
@@ -1021,12 +849,12 @@
 
       async function loadCategorySpending() {
         const tbody = document.getElementById('categorySpendingBody');
-        tbody.innerHTML = '<tr><td colspan="5">Loading...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="px-3 py-4 text-slate-400 text-center">Loading...</td></tr>';
         try {
           const res = await fetch('/api/bills/by-category');
           const data = await res.json();
           if (data.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5">No category spending data.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" class="px-3 py-4 text-slate-400 text-center">No category spending data.</td></tr>';
             document.getElementById('catGrandTotalBudget').textContent = formatCurrency(0);
             document.getElementById('catGrandTotalSpent').textContent = formatCurrency(0);
             document.getElementById('catGrandTotalRemaining').textContent = formatCurrency(0);
@@ -1037,17 +865,18 @@
           tbody.innerHTML = data.map(item => {
             totalBudget += item.budget;
             totalSpent += item.spent;
-            const percentClass = item.percent > 100 ? 'over-budget' : (item.percent > 80 ? 'warning' : '');
-            return `<tr class="${percentClass}">
-              <td>${escapeHtml(item.category)}</td>
-              <td>${formatCurrency(item.budget)}</td>
-              <td>${formatCurrency(item.spent)}</td>
-              <td class="${item.remaining < 0 ? 'negative' : ''}">${formatCurrency(item.remaining)}</td>
-              <td>
-                <div class="progress-bar">
-                  <div class="progress-fill ${percentClass}" style="width: ${Math.min(item.percent, 100)}%"></div>
+            const bgClass = item.percent > 100 ? 'bg-rose-50' : (item.percent > 80 ? 'bg-amber-50' : '');
+            const barColor = item.percent > 100 ? 'bg-rose-500' : (item.percent > 80 ? 'bg-amber-500' : 'bg-emerald-500');
+            return `<tr class="${bgClass}">
+              <td class="px-3 py-2.5">${escapeHtml(item.category)}</td>
+              <td class="px-3 py-2.5 tabular-nums">${formatCurrency(item.budget)}</td>
+              <td class="px-3 py-2.5 tabular-nums">${formatCurrency(item.spent)}</td>
+              <td class="px-3 py-2.5 tabular-nums ${item.remaining < 0 ? 'text-rose-600 font-semibold' : ''}">${formatCurrency(item.remaining)}</td>
+              <td class="px-3 py-2.5">
+                <div class="inline-block w-24 h-2 bg-slate-100 rounded-full mr-2 align-middle">
+                  <div class="progress-fill ${barColor} h-full rounded-full" style="width: ${Math.min(item.percent, 100)}%"></div>
                 </div>
-                <span>${item.percent.toFixed(2)}%</span>
+                <span class="text-xs text-slate-500">${item.percent.toFixed(2)}%</span>
               </td>
             </tr>`;
           }).join('');
@@ -1079,13 +908,13 @@
             const isAdmin = currentUser && currentUser.admin;
             tbody.innerHTML = allVGeld.map((entry) => `
               <tr>
-                <td>${escapeHtml(formatDate(entry.date))}</td>
-                <td>${formatCurrency(entry.amount)}</td>
-                <td>${escapeHtml(entry.from || 'External')}</td>
-                <td>${escapeHtml(entry.to)}</td>
-                <td>${escapeHtml(entry.createdBy)}</td>
-                <td class="admin-only" style="${isAdmin ? '' : 'display:none'}">
-                  <button class="small danger" onclick="deleteVGeld(${entry.id})">Delete</button>
+                <td class="px-3 py-2.5 text-slate-500">${escapeHtml(formatDate(entry.date))}</td>
+                <td class="px-3 py-2.5 tabular-nums">${formatCurrency(entry.amount)}</td>
+                <td class="px-3 py-2.5">${escapeHtml(entry.from || 'External')}</td>
+                <td class="px-3 py-2.5">${escapeHtml(entry.to)}</td>
+                <td class="px-3 py-2.5 text-slate-500">${escapeHtml(entry.createdBy)}</td>
+                <td class="admin-only px-3 py-2.5" style="${isAdmin ? '' : 'display:none'}">
+                  <button class="text-xs px-2.5 py-1 bg-rose-500 text-white rounded-md hover:bg-rose-600 transition-colors border-none cursor-pointer" onclick="deleteVGeld(${entry.id})">Delete</button>
                 </td>
               </tr>
             `).join('');
@@ -1114,17 +943,18 @@
             analysisBody.innerHTML = analysis.map(item => {
               totalReceived += item.received;
               totalSpent += item.spent;
-              const percentClass = item.percentUsed > 100 ? 'over-budget' : (item.percentUsed > 80 ? 'warning' : '');
-              return `<tr class="${percentClass}">
-                <td>${escapeHtml(item.user)}</td>
-                <td>${formatCurrency(item.received)}</td>
-                <td>${formatCurrency(item.spent)}</td>
-                <td class="${item.remaining < 0 ? 'negative' : ''}">${formatCurrency(item.remaining)}</td>
-                <td>
-                  <div class="progress-bar">
-                    <div class="progress-fill ${percentClass}" style="width: ${Math.min(item.percentUsed, 100)}%"></div>
+              const bgClass = item.percentUsed > 100 ? 'bg-rose-50' : (item.percentUsed > 80 ? 'bg-amber-50' : '');
+              const barColor = item.percentUsed > 100 ? 'bg-rose-500' : (item.percentUsed > 80 ? 'bg-amber-500' : 'bg-emerald-500');
+              return `<tr class="${bgClass}">
+                <td class="px-3 py-2.5">${escapeHtml(item.user)}</td>
+                <td class="px-3 py-2.5 tabular-nums">${formatCurrency(item.received)}</td>
+                <td class="px-3 py-2.5 tabular-nums">${formatCurrency(item.spent)}</td>
+                <td class="px-3 py-2.5 tabular-nums ${item.remaining < 0 ? 'text-rose-600 font-semibold' : ''}">${formatCurrency(item.remaining)}</td>
+                <td class="px-3 py-2.5">
+                  <div class="inline-block w-24 h-2 bg-slate-100 rounded-full mr-2 align-middle">
+                    <div class="progress-fill ${barColor} h-full rounded-full" style="width: ${Math.min(item.percentUsed, 100)}%"></div>
                   </div>
-                  <span>${item.percentUsed.toFixed(2)}%</span>
+                  <span class="text-xs text-slate-500">${item.percentUsed.toFixed(2)}%</span>
                 </td>
               </tr>`;
             }).join('');
@@ -1229,9 +1059,9 @@
         } else {
           logBody.innerHTML = billLogs.map(entry => `
             <tr>
-              <td>${escapeHtml(formatDate(entry.timestamp))}</td>
-              <td>${escapeHtml(entry.user)}</td>
-              <td>${formatChanges(entry.changes)}</td>
+              <td class="px-3 py-2 text-slate-500 text-xs">${escapeHtml(formatDate(entry.timestamp))}</td>
+              <td class="px-3 py-2 text-sm">${escapeHtml(entry.user)}</td>
+              <td class="px-3 py-2">${formatChanges(entry.changes)}</td>
             </tr>
           `).join('');
         }
@@ -1243,7 +1073,7 @@
       function formatChanges(changes) {
         if (!changes) return '';
         return Object.entries(changes).map(([key, value]) =>
-          `<span class="change-item">${escapeHtml(key)}: ${escapeHtml(String(value))}</span>`
+          `<span class="bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded text-xs">${escapeHtml(key)}: ${escapeHtml(String(value))}</span>`
         ).join(', ');
       }
 
@@ -1285,12 +1115,12 @@
 
         // Build track slides
         track.innerHTML = galleryImages.map((img, i) =>
-          `<div class="gallery-slide"><img src="/uploads/${escapeHtml(img.file)}" onclick="openImageModal(${i})" title="Click to view full size" /></div>`
+          `<div class="min-w-full flex items-center justify-center p-4"><img src="/uploads/${escapeHtml(img.file)}" onclick="openImageModal(${i})" title="Click to view full size" class="max-w-full max-h-[300px] rounded cursor-pointer hover:opacity-90" /></div>`
         ).join('');
 
         // Dots
         dots.innerHTML = galleryImages.map((_, i) =>
-          `<span class="gallery-dot${i === galleryIndex ? ' active' : ''}" onclick="galleryGoTo(${i})"></span>`
+          `<span class="w-2 h-2 rounded-full cursor-pointer transition-colors ${i === galleryIndex ? 'bg-indigo-500' : 'bg-slate-300'}" onclick="galleryGoTo(${i})"></span>`
         ).join('');
 
         // Counter
@@ -1555,7 +1385,7 @@
         if (ids.length === 0) return;
         if (!confirm(`Delete ${ids.length} selected bill(s)? This cannot be undone.`)) return;
 
-        const resultEl = document.getElementById('syncResult');
+        const resultEl = document.getElementById('billsResult');
         resultEl.textContent = 'Deleting...';
 
         try {
@@ -1567,37 +1397,16 @@
           const j = await res.json();
           if (j.ok) {
             resultEl.textContent = 'Deleted ' + j.deleted + ' bills';
-            resultEl.className = 'message success';
+            resultEl.className = 'bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg px-4 py-3 text-sm mb-3';
             document.getElementById('selectAllBills').checked = false;
             loadBills();
           } else {
             resultEl.textContent = 'Error: ' + (j.error || 'Error');
-            resultEl.className = 'message error';
+            resultEl.className = 'bg-rose-50 text-rose-700 border border-rose-200 rounded-lg px-4 py-3 text-sm mb-3';
           }
         } catch (e) {
           resultEl.textContent = 'Error: ' + e.message;
-          resultEl.className = 'message error';
-        }
-        setTimeout(() => { resultEl.textContent = ''; resultEl.className = ''; }, 5000);
-      }
-
-      async function syncToSheet() {
-        const resultEl = document.getElementById('syncResult');
-        resultEl.textContent = 'Syncing...';
-        resultEl.className = '';
-        try {
-          const res = await fetch('/api/sync/to-sheet', { method: 'POST' });
-          const j = await res.json();
-          if (j.ok) {
-            resultEl.textContent = 'Added ' + j.added + ' to sheet (' + j.skipped + ' duplicates skipped)';
-            resultEl.className = 'message success';
-          } else {
-            resultEl.textContent = 'Error: ' + (j.error || 'Error');
-            resultEl.className = 'message error';
-          }
-        } catch (e) {
-          resultEl.textContent = 'Error: ' + e.message;
-          resultEl.className = 'message error';
+          resultEl.className = 'bg-rose-50 text-rose-700 border border-rose-200 rounded-lg px-4 py-3 text-sm mb-3';
         }
         setTimeout(() => { resultEl.textContent = ''; resultEl.className = ''; }, 5000);
       }
@@ -1623,29 +1432,6 @@
           return;
         }
         window.open('/api/report/' + encodeURIComponent(email), '_blank');
-      }
-
-      async function syncFromSheet() {
-        if (!confirm('This will import new bills from the Google Sheet (duplicates will be skipped). Continue?')) return;
-        const resultEl = document.getElementById('syncResult');
-        resultEl.textContent = 'Syncing...';
-        resultEl.className = '';
-        try {
-          const res = await fetch('/api/sync/from-sheet', { method: 'POST' });
-          const j = await res.json();
-          if (j.ok) {
-            resultEl.textContent = 'Added ' + j.added + ' bills (' + j.skipped + ' duplicates skipped)';
-            resultEl.className = 'message success';
-            loadBills();
-          } else {
-            resultEl.textContent = 'Error: ' + (j.error || 'Error');
-            resultEl.className = 'message error';
-          }
-        } catch (e) {
-          resultEl.textContent = 'Error: ' + e.message;
-          resultEl.className = 'message error';
-        }
-        setTimeout(() => { resultEl.textContent = ''; resultEl.className = ''; }, 5000);
       }
 
       // ========== Budget Matrix ==========
@@ -1726,40 +1512,40 @@
             + 'Verbraucht: ' + pct + '%';
         }
 
-        var html = '<table id="budgetMatrixTable" class="data-table bm-table"><thead><tr>';
-        html += '<th class="bm-corner">Kategorie \\ Motiv</th>';
+        var html = '<table id="budgetMatrixTable" class="w-full text-sm bm-table border border-slate-200 rounded-lg" style="border-collapse:separate;border-spacing:0"><thead><tr>';
+        html += '<th class="bm-corner bg-slate-800 text-white font-semibold text-xs min-w-[160px] px-3 py-2.5">Kategorie \\ Motiv</th>';
 
         // Column headers (motives)
         for (var mi = 0; mi < motives.length; mi++) {
           var m = motives[mi];
           var isDefault = m.name === 'Default';
           if (isAdmin && !isDefault) {
-            html += '<th class="bm-col-header" data-mot-id="' + m.id + '">'
+            html += '<th class="bm-col-header bg-slate-700 text-white min-w-[120px] px-3 py-2.5 text-xs font-semibold" data-mot-id="' + m.id + '">'
               + '<span class="bm-header-text">' + escapeHtml(m.name) + '</span>'
-              + '<span class="bm-header-actions">'
-              + '<button class="bm-edit-col" title="Rename" data-mot-id="' + m.id + '">&#9998;</button>'
-              + '<button class="bm-delete-col" title="Delete" data-mot-id="' + m.id + '">&times;</button>'
+              + '<span class="bm-header-actions inline-flex gap-0.5 ml-1.5 align-middle">'
+              + '<button class="bm-edit-col bg-transparent border-none text-sm cursor-pointer px-1 py-0.5 rounded text-white/50 hover:text-white hover:bg-white/15" title="Rename" data-mot-id="' + m.id + '">&#9998;</button>'
+              + '<button class="bm-delete-col bg-transparent border-none text-sm cursor-pointer px-1 py-0.5 rounded text-white/50 hover:text-rose-500 hover:bg-rose-500/15" title="Delete" data-mot-id="' + m.id + '">&times;</button>'
               + '</span>'
               + '</th>';
           } else {
-            html += '<th class="bm-col-header' + (isDefault ? ' bm-locked' : '') + '">'
-              + '<span class="bm-header-text">' + escapeHtml(m.name) + '</span>'
+            html += '<th class="bm-col-header bg-slate-700 text-white min-w-[120px] px-3 py-2.5 text-xs font-semibold' + (isDefault ? ' bm-locked' : '') + '">'
+              + '<span class="bm-header-text' + (isDefault ? ' opacity-70 italic' : '') + '">' + escapeHtml(m.name) + '</span>'
               + '</th>';
           }
         }
 
         // Inline add-column cell (admin only)
         if (isAdmin) {
-          html += '<th class="bm-add-col">'
-            + '<div class="bm-inline-add">'
+          html += '<th class="bm-add-col bg-slate-50 px-2 py-2 min-w-[160px]">'
+            + '<div class="flex items-center gap-1">'
             + '<input type="text" class="bm-inline-input" id="addMotiveInput" placeholder="Neues Motiv...">'
-            + '<button class="bm-inline-add-btn" id="addMotiveColBtn" title="Add">+</button>'
+            + '<button class="bg-emerald-500 text-white border-none rounded w-7 h-7 text-lg font-bold cursor-pointer flex items-center justify-center p-0 shrink-0 hover:bg-emerald-600" id="addMotiveColBtn" title="Add">+</button>'
             + '</div>'
             + '</th>';
         }
 
-        html += '<th class="bm-total-header">Budget (netto)</th>';
-        html += '<th class="bm-total-header bm-spent-header">Ausgaben (netto)</th>';
+        html += '<th class="bg-slate-50 font-semibold text-right text-slate-900 px-3 py-2.5 text-xs">Budget (netto)</th>';
+        html += '<th class="bg-slate-50 font-semibold text-right text-slate-500 px-3 py-2.5 text-xs bm-spent-header">Ausgaben (netto)</th>';
         html += '</tr></thead><tbody>';
 
         // Data rows
@@ -1771,16 +1557,16 @@
 
           // Row header
           if (isAdmin && !isDefaultCat) {
-            html += '<td class="bm-row-header" data-cat-id="' + cat.id + '">'
+            html += '<td class="bm-row-header bg-slate-100 font-semibold text-slate-800 px-3 py-2.5 text-xs" data-cat-id="' + cat.id + '">'
               + '<span class="bm-header-text">' + escapeHtml(cat.name) + '</span>'
-              + '<span class="bm-header-actions">'
-              + '<button class="bm-edit-row" title="Rename" data-cat-id="' + cat.id + '">&#9998;</button>'
-              + '<button class="bm-delete-row" title="Delete" data-cat-id="' + cat.id + '">&times;</button>'
+              + '<span class="bm-header-actions inline-flex gap-0.5 ml-1.5 align-middle">'
+              + '<button class="bm-edit-row bg-transparent border-none text-sm cursor-pointer px-1 py-0.5 rounded text-slate-400 hover:text-slate-800 hover:bg-slate-200" title="Rename" data-cat-id="' + cat.id + '">&#9998;</button>'
+              + '<button class="bm-delete-row bg-transparent border-none text-sm cursor-pointer px-1 py-0.5 rounded text-slate-400 hover:text-rose-500 hover:bg-rose-50" title="Delete" data-cat-id="' + cat.id + '">&times;</button>'
               + '</span>'
               + '</td>';
           } else {
-            html += '<td class="bm-row-header' + (isDefaultCat ? ' bm-locked' : '') + '">'
-              + '<span class="bm-header-text">' + escapeHtml(cat.name) + '</span></td>';
+            html += '<td class="bm-row-header bg-slate-100 font-semibold text-slate-800 px-3 py-2.5 text-xs' + (isDefaultCat ? ' bm-locked' : '') + '">'
+              + '<span class="bm-header-text' + (isDefaultCat ? ' opacity-70 italic' : '') + '">' + escapeHtml(cat.name) + '</span></td>';
           }
 
           // Value cells
@@ -1795,11 +1581,11 @@
             rowTotal += val;
             if (isAdmin) {
               var displayVal = val ? val.toFixed(2).replace('.', ',') : '0,00';
-              html += '<td class="bm-cell bm-cell-editable' + (cc ? ' ' + cc : '') + '"' + (ct ? ' title="' + escapeHtml(ct) + '"' : '') + '>'
+              html += '<td class="text-right tabular-nums p-px border border-slate-100' + (cc ? ' ' + cc : '') + '"' + (ct ? ' title="' + escapeHtml(ct) + '"' : '') + '>'
                 + '<input type="text" inputmode="decimal" class="budget-cell-input" value="' + displayVal + '" data-cat="' + cat.id + '" data-mot="' + mot.id + '">'
                 + '</td>';
             } else {
-              html += '<td class="bm-cell' + (cc ? ' ' + cc : '') + '"' + (ct ? ' title="' + escapeHtml(ct) + '"' : '') + '>'
+              html += '<td class="text-right tabular-nums px-3 py-2 border border-slate-100' + (cc ? ' ' + cc : '') + '"' + (ct ? ' title="' + escapeHtml(ct) + '"' : '') + '>'
                 + formatCurrency(val) + '</td>';
             }
           }
@@ -1807,12 +1593,12 @@
           if (isAdmin) html += '<td></td>'; // spacer under "+" column
 
           // Row budget total
-          html += '<td class="bm-row-total"><strong>' + formatCurrency(rowTotal) + '</strong></td>';
+          html += '<td class="bg-slate-50 font-semibold text-right text-slate-900 px-3 py-2 tabular-nums"><strong>' + formatCurrency(rowTotal) + '</strong></td>';
 
           // Row spent
           var catSpent = categorySpending[cat.id] || 0;
           totalSpentAll += catSpent;
-          html += '<td class="bm-row-spent ' + spentClass(catSpent, rowTotal) + '">' + formatCurrency(catSpent) + '</td>';
+          html += '<td class="bm-row-spent text-right font-semibold tabular-nums px-3 py-2 ' + spentClass(catSpent, rowTotal) + '">' + formatCurrency(catSpent) + '</td>';
 
           html += '</tr>';
         }
@@ -1820,17 +1606,17 @@
         // Inline add-row (admin only)
         if (isAdmin) {
           var addColspan = motives.length + (isAdmin ? 1 : 0) + 2;
-          html += '<tr class="bm-add-row-tr"><td class="bm-row-header">'
-            + '<div class="bm-inline-add">'
+          html += '<tr><td class="bm-row-header bg-slate-50 px-3 py-2 border-t-2 border-dashed border-slate-200" style="position:sticky;left:0;z-index:2">'
+            + '<div class="flex items-center gap-1">'
             + '<input type="text" class="bm-inline-input" id="addCategoryInput" placeholder="Neue Kategorie...">'
-            + '<button class="bm-inline-add-btn" id="addCategoryRowBtn" title="Add">+</button>'
+            + '<button class="bg-emerald-500 text-white border-none rounded w-7 h-7 text-lg font-bold cursor-pointer flex items-center justify-center p-0 shrink-0 hover:bg-emerald-600" id="addCategoryRowBtn" title="Add">+</button>'
             + '</div>'
             + '</td>'
-            + '<td colspan="' + addColspan + '"></td></tr>';
+            + '<td colspan="' + addColspan + '" class="bg-slate-50 border-t-2 border-dashed border-slate-200"></td></tr>';
         }
 
         // Footer: budget totals row
-        html += '</tbody><tfoot><tr><th class="bm-total-header">Budget (netto)</th>';
+        html += '</tbody><tfoot><tr><th class="bg-slate-50 font-semibold text-right text-slate-900 px-3 py-2.5 text-xs">Budget (netto)</th>';
         var footerGrand = 0;
         for (var mi3 = 0; mi3 < motives.length; mi3++) {
           var colTotal = 0;
@@ -1838,15 +1624,15 @@
             colTotal += budgetData.matrix[categories[ci2].id + '_' + motives[mi3].id] || 0;
           }
           footerGrand += colTotal;
-          html += '<th class="bm-col-total" data-mot="' + motives[mi3].id + '">' + formatCurrency(colTotal) + '</th>';
+          html += '<th class="bm-col-total bg-slate-50 font-semibold text-right tabular-nums px-3 py-2.5 text-xs" data-mot="' + motives[mi3].id + '">' + formatCurrency(colTotal) + '</th>';
         }
-        if (isAdmin) html += '<th></th>';
-        html += '<th class="bm-footer-grand"><strong>' + formatCurrency(footerGrand) + '</strong></th>';
-        html += '<th class="bm-footer-grand"></th>';
+        if (isAdmin) html += '<th class="bg-slate-50"></th>';
+        html += '<th class="bm-footer-grand bg-slate-100 font-semibold text-right text-slate-900 tabular-nums px-3 py-2.5"><strong>' + formatCurrency(footerGrand) + '</strong></th>';
+        html += '<th class="bg-slate-100"></th>';
         html += '</tr>';
 
         // Footer: spent totals row
-        html += '<tr><th class="bm-total-header bm-spent-header">Ausgaben (netto)</th>';
+        html += '<tr><th class="bg-slate-50 font-semibold text-right text-slate-500 px-3 py-2.5 text-xs bm-spent-header">Ausgaben (netto)</th>';
         var footerSpentGrand = 0;
         for (var mi4 = 0; mi4 < motives.length; mi4++) {
           var motSpent = motiveSpending[motives[mi4].id] || 0;
@@ -1855,11 +1641,11 @@
           for (var ci3 = 0; ci3 < categories.length; ci3++) {
             colBudget += budgetData.matrix[categories[ci3].id + '_' + motives[mi4].id] || 0;
           }
-          html += '<th class="bm-col-spent ' + spentClass(motSpent, colBudget) + '" data-mot="' + motives[mi4].id + '">' + formatCurrency(motSpent) + '</th>';
+          html += '<th class="bm-col-spent text-right font-semibold tabular-nums px-3 py-2.5 text-xs ' + spentClass(motSpent, colBudget) + '" data-mot="' + motives[mi4].id + '">' + formatCurrency(motSpent) + '</th>';
         }
-        if (isAdmin) html += '<th></th>';
-        html += '<th class="bm-footer-grand"></th>';
-        html += '<th class="bm-footer-spent-grand ' + spentClass(footerSpentGrand, footerGrand) + '"><strong>' + formatCurrency(footerSpentGrand) + '</strong></th>';
+        if (isAdmin) html += '<th class="bg-slate-50"></th>';
+        html += '<th class="bg-slate-100"></th>';
+        html += '<th class="text-right font-semibold tabular-nums px-3 py-2.5 ' + spentClass(footerSpentGrand, footerGrand) + '"><strong>' + formatCurrency(footerSpentGrand) + '</strong></th>';
         html += '</tr>';
 
         html += '</tfoot></table>';
@@ -2168,10 +1954,8 @@
         for (const p of projects) {
           const btn = document.createElement('button');
           btn.type = 'button';
-          btn.style.cssText = 'padding:12px 16px; text-align:left; background:#ecf0f1; border:1px solid #bdc3c7; border-radius:6px; cursor:pointer; font-size:1em;';
-          btn.innerHTML = `<strong>${escapeHtml(p.name)}</strong>${p.subtitle ? `<br><small style="color:#7f8c8d">${escapeHtml(p.subtitle)}</small>` : ''}`;
-          btn.addEventListener('mouseover', () => btn.style.background = '#d5e8f5');
-          btn.addEventListener('mouseout', () => btn.style.background = '#ecf0f1');
+          btn.className = 'block w-full px-4 py-3.5 text-left bg-slate-50 border-2 border-slate-200 rounded-xl cursor-pointer text-base font-medium text-slate-800 hover:border-indigo-500 hover:bg-indigo-50 transition-colors';
+          btn.innerHTML = `<strong>${escapeHtml(p.name)}</strong>${p.subtitle ? `<br><small class="text-sm font-normal text-slate-400 mt-0.5 block">${escapeHtml(p.subtitle)}</small>` : ''}`;
           btn.addEventListener('click', () => selectProject(p.id));
           listEl.appendChild(btn);
         }
@@ -2204,7 +1988,7 @@
         rolesData = positionsRes.ok ? await positionsRes.json() : [];
         const projectInfo = await projectRes.json();
         const projectName = projectInfo.projectName || currentUser.currentProjectName || 'vBudget';
-        const subtitle = projectInfo.projectSubtitle ? `<span class="project-subtitle">${escapeHtml(projectInfo.projectSubtitle)}</span>` : '';
+        const subtitle = projectInfo.projectSubtitle ? `<span class="block md:inline md:ml-2 text-sm font-normal text-slate-400">${escapeHtml(projectInfo.projectSubtitle)}</span>` : '';
         document.getElementById('appTitle').innerHTML = escapeHtml(projectName) + subtitle;
         document.title = projectName + ' - vBudget';
         // Keep currentUser in sync
@@ -2287,7 +2071,6 @@
         document.getElementById('sidebarTitle').textContent = projectTitle || 'vBudget';
         // Admin links
         document.getElementById('sidebarAdminLink').style.display = isAdmin ? '' : 'none';
-        document.getElementById('sidebarSuperAdminLink').style.display = currentUser.superAdmin ? '' : 'none';
         // Telegram link button: show if project has Telegram enabled
         try {
           const tgStatus = await (await fetch('/api/telegram/status')).json();
@@ -2308,7 +2091,8 @@
             section.style.display = '';
             document.getElementById('sidebarProjectList').innerHTML = projects.map(p => {
               const active = p.id === currentUser.currentProjectId;
-              return `<button class="sidebar-project-item${active ? ' active' : ''}" onclick="sidebarSelectProject(${p.id})">${escapeHtml(p.name)}</button>`;
+              const isDefault = p.id === currentUser.defaultProjectId;
+              return `<button class="block w-full text-left px-5 py-2.5 text-sm cursor-pointer transition-colors bg-transparent border-none ${active ? 'bg-indigo-50 text-indigo-700 font-semibold' : 'text-slate-600 hover:bg-slate-50'}" style="display:flex;align-items:center;justify-content:space-between" onclick="sidebarSelectProject(${p.id})"><span>${active ? '\u25B8 ' : ''}${escapeHtml(p.name)}</span><span class="sidebar-default-star" title="${isDefault ? 'Default project' : 'Set as default'}" onclick="event.stopPropagation();sidebarToggleDefault(${p.id},${isDefault})" style="opacity:${isDefault ? '1' : '0.3'};cursor:pointer;font-size:14px">${isDefault ? '\u2605' : '\u2606'}</span></button>`;
             }).join('');
           } else {
             section.style.display = 'none';
@@ -2327,6 +2111,20 @@
         currentUser.currentProjectName = data.projectName;
         document.title = data.projectName + ' - vBudget';
         await loadProjectData();
+      }
+
+      async function sidebarToggleDefault(projectId, isCurrentlyDefault) {
+        const newDefault = isCurrentlyDefault ? null : projectId;
+        const r = await fetch('/api/user/default-project', {
+          method: 'PUT',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ projectId: newDefault })
+        });
+        if (r.ok) {
+          currentUser.defaultProjectId = newDefault;
+          const isAdmin = currentUser.currentProjectRole === 'admin' || currentUser.superAdmin;
+          updateSidebar(isAdmin, '', currentUser.currentProjectName);
+        }
       }
 
       async function switchProject() {
@@ -2361,13 +2159,14 @@
           container.innerHTML = '';
           pendingFiles.forEach((f, i) => {
             const thumb = document.createElement('div');
-            thumb.className = 'photo-thumb';
+            thumb.className = 'relative w-[72px] h-[72px] rounded-lg overflow-hidden border border-slate-200';
             const img = document.createElement('img');
+            img.className = 'w-full h-full object-cover block';
             img.src = URL.createObjectURL(f);
             img.onload = function() { URL.revokeObjectURL(this.src); };
             const removeBtn = document.createElement('button');
             removeBtn.type = 'button';
-            removeBtn.className = 'photo-thumb-remove';
+            removeBtn.className = 'absolute top-0.5 right-0.5 bg-black/60 text-white border-none rounded-full w-5 h-5 text-sm leading-none cursor-pointer flex items-center justify-center p-0 hover:bg-rose-500';
             removeBtn.textContent = '\u00d7';
             removeBtn.onclick = function() {
               pendingFiles.splice(i, 1);
@@ -2538,10 +2337,10 @@
     </script>
 
     <!-- Telegram Link Modal -->
-    <div id="telegramLinkModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:2000;align-items:center;justify-content:center" onclick="if(event.target===this)this.style.display='none'">
-      <div class="card" style="min-width:300px;max-width:440px;width:90%;position:relative">
-        <button onclick="document.getElementById('telegramLinkModal').style.display='none'" style="position:absolute;top:10px;right:12px;background:none;border:none;font-size:1.2em;cursor:pointer;color:#999">&times;</button>
-        <h2 style="margin-top:0">Telegram verknüpfen</h2>
+    <div id="telegramLinkModal" class="fixed inset-0 bg-black/50 z-[2000] flex items-center justify-center" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+      <div class="bg-white rounded-2xl shadow-xl p-6 min-w-[300px] max-w-[440px] w-[90%] relative">
+        <button onclick="document.getElementById('telegramLinkModal').style.display='none'" class="absolute top-3 right-3 text-slate-400 hover:text-slate-700 bg-transparent border-none text-lg cursor-pointer">&times;</button>
+        <h2 class="text-base font-semibold text-slate-900 mt-0 mb-4">Telegram verknüpfen</h2>
         <div id="telegramLinkBody"></div>
       </div>
     </div>
