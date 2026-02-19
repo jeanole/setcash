@@ -9,7 +9,9 @@
       "Bash(python3:*)",
       "Bash(node:*)",
       "Bash(npm install:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "mcp__acp__Bash",
+      "mcp__acp__Write"
     ]
   }
 }

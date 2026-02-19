@@ -1,536 +1,483 @@
-vBudget Specification
+# vBudget Specification
 
-Living document. Update this file whenever features are added, changed, or planned.
+> Living document. Update this file whenever features are added, changed, or planned.
 
-Version: 1.6.1
-Industry Context: Film Production & Media Projects
-Stack: Node.js + Express + SQLite (better-sqlite3) + Vanilla HTML/JS + PDFKit + ExcelJS + Google Sheets API
+**Version:** 1.6.1
+**Industry Context:** Film Production & Media Projects
+**Stack:** Node.js + Express + SQLite (better-sqlite3) + Vanilla HTML/JS + PDFKit + ExcelJS + Google Sheets API
 
-1. System Overview
+---
+
+## 1. System Overview
 
 vBudget is a multi-tenant, web-based expense tracking and budget management system designed for film productions and media projects.
 
-Core principles:
+**Core principles:**
 
-Strict project isolation
+- Strict project isolation
+- Sidebar-driven, context-aware UI
+- Deterministic financial calculations
+- Multi-axis budget allocation (Motive x Category)
+- Advance payment tracking (V-Geld)
+- Full audit history
+- Telegram ingestion (per project)
+- Export-ready architecture
 
-Context-aware UI
+---
 
-Deterministic financial calculations
-
-Multi-axis budget allocation (Motive × Category)
-
-Advance payment tracking (V-Geld)
-
-Full audit history
-
-Telegram ingestion (per project)
-
-Export-ready architecture
-
-2. Routing Architecture
+## 2. Routing Architecture
 
 vBudget has exactly two application entry points:
 
-Route	Purpose
-/	Main project application (single integrated interface)
-/superadmin	Global system administration
+| Route | Purpose |
+|-------|---------|
+| `/` | Main project application (single integrated interface) |
+| `/superadmin` | Global system administration |
 
-There is no separate /admin page.
-Project administration is integrated into the main app as a role-gated tab.
+There is no separate `/admin` page.
+Project administration is integrated into the main app sidebar as role-gated sections.
 
-3. UI Architecture
-3.1 Context-Aware Header
+---
 
-Every project has:
+## 3. UI Architecture
 
-title
+### 3.1 Sidebar (Primary Navigation Hub)
 
-subtitle
+The sidebar is the command center for all non-super-admin tasks. It is **persistent on desktop** (always visible, fixed left) and a **slide-out overlay on mobile** (triggered by burger menu).
 
-Displayed permanently in the header.
+#### Sidebar Structure
 
-Switching projects updates:
+```
++---------------------------+
+| Project Title / Subtitle  |
+|   Project Switcher        |
+|   + New Project           |
++---------------------------+
+| User Info                 |
+|   email                   |
+|   role label              |
+|   V-Geld balance (own)   |
++---------------------------+
+| NAVIGATION                |
+|   Upload                  |
+|   Bills                   |
+|   Spending                |
+|   Budget Matrix           |
+|   Reports                 |
++---------------------------+
+| PROJECT MANAGEMENT        |
+| (owner/admin only)        |
+|   Settings                |
+|   Members                 |
+|   Export                  |
+|   Telegram                |
++---------------------------+
+| USER SETTINGS             |
+|   Profile / Password      |
+|   Link Telegram           |
++---------------------------+
+| Logout             v1.6.1 |
++---------------------------+
+```
 
-Visible title/subtitle
+**Behavior:**
+- Desktop (md+ / 768px): Sidebar always visible (`position: fixed`), main content offset by sidebar width (288px).
+- Mobile: Hidden by default (`translateX(-100%)`), slides in on burger menu tap, dark backdrop overlay.
+- Active nav link highlighted with indigo background/text.
+- Switching projects updates: visible title/subtitle, all queries scoped to `project_id`, sidebar context, V-Geld balance.
 
-All queries scoped to project_id
+### 3.2 Main Content Area
 
-Sidebar context
+The main content area displays one **content pane** at a time, driven by sidebar navigation clicks.
 
-3.2 Main App (/) — Single Integrated Interface
+**Content panes (all users):**
+- Upload (default landing)
+- Bills
+- Spending
+- Budget Matrix
+- Reports
 
-The main app behaves like a one-page application.
+**Content panes (owner/admin only):**
+- Settings
+- Members
+- Export
+- Telegram
 
-Tabs
+All panes operate within the active `project_id`.
 
-Upload (default landing)
+### 3.3 Project Creation
 
-Bills
+Any authenticated user can create a new project:
+- "New Project" button in the sidebar project switcher section
+- Simple form: project name + subtitle
+- Creator automatically becomes the project **owner**
+- New project auto-selected after creation
 
-Spending
+---
 
-V-Geld
+## 4. Roles & Access Control
 
-Budget
+All "higher" roles inherit the abilities of the roles below them.
 
-Reports
+### 4.1 Global Role
 
-Admin (visible only to Project Admins)
-
-All operate within the active project_id.
-
-4. Roles & Access Control
-4.1 Global Role
-
-Stored in users.super_admin (boolean).
+Stored in `users.super_admin` (boolean).
 
 If true:
+- Access to `/superadmin`
+- Full system control
+- Bypasses all project-level role checks
 
-Access to /superadmin
+### 4.2 Project Roles
 
-Full system control
+Stored in `project_members.project_role`.
 
-4.2 Project Roles
+Allowed values: `'user'`, `'admin'`, `'owner'`
 
-Stored in project_members.role.
+| Role | Access Level | Primary Responsibilities |
+|------|-------------|-------------------------|
+| Super-Admin | Platform page | Global system health, user/project deletion, security |
+| Owner | Main platform | Full control over their specific projects; can delete the project |
+| Admin | Main platform | Manage members, positions, budget matrix, and approve bills |
+| User | Main platform | Upload bills (Web/Telegram) and view personal V-Geld balance |
 
-Allowed values:
+#### Project User
+- Upload bills
+- View spending
+- View own V-Geld balance
+- Edit own draft bills
 
-'user'
-'admin'
+#### Project Admin (inherits User)
+- Manage members
+- Manage positions
+- Manage motives
+- Manage categories
+- Manage budget matrix
+- Manage V-Geld transfers
+- Delete bills
+- Access Project Management sections in sidebar
+- Configure exports and Telegram
 
-Project User
+#### Project Owner (inherits Admin)
+- All admin permissions
+- Delete the project
+- Promote/demote members to/from owner role
 
-Upload bills
+**Note on Positions:** A user's Position (e.g., "Gaffer") is metadata tied to their membership in a specific project, not their global account.
 
-View spending
+---
 
-View own V-Geld
+## 5. Database Schema
 
-Edit own draft bills
+### Core Tables
 
-Project Admin
+| Table | Purpose |
+|-------|---------|
+| `users` | Global accounts + `super_admin` flag |
+| `projects` | Project containers (title, subtitle, telegram_bot_token) |
+| `project_members` | User <> project with role (`user`/`admin`/`owner`) + position |
+| `project_positions` | Project-specific positions |
+| `project_settings` | Per-project configuration (key/value JSON) |
+| `motives` | First allocation axis (with budget) |
+| `categories` | Second allocation axis (with budget) |
+| `budget_matrix` | Budget per motive x category intersection |
+| `bills` | Expense records |
+| `bill_motives` | Bill -> motive percentage (junction) |
+| `bill_categories` | Bill -> category percentage (junction) |
+| `bill_images` | Multiple images per bill |
+| `vgeld` | Advance transfers |
+| `editlog` | Audit trail |
+| `telegram_links` | Telegram user mapping |
+| `telegram_link_codes` | Short-lived link codes (10 min TTL) |
+| `settings` | Global fallback settings |
 
-All user permissions
+There is no global `roles` table.
 
-Manage members
+### Bills -- Key Columns
 
-Manage positions
+- `id`
+- `date`
+- `email`
+- `bill_number`
+- `status` (`'complete'` | `'draft'`)
+- `type` (`'Kauf'` | `'Leih'` | `'Verbrauch'`)
+- `vendor`
+- `item`
+- `comment`
+- `telegram_caption`
+- `brutto19`
+- `brutto7`
+- `brutto0`
+- `netto_amount`
+- `project_id`
 
-Manage motives
-
-Manage categories
-
-Manage budget matrix
-
-Manage V-Geld transfers
-
-Delete bills
-
-Access Admin tab
-
-There is no Owner role.
-
-5. Database Schema
-Core Tables
-Table	Purpose
-users	Global accounts + super_admin flag
-projects	Project containers (title, subtitle, telegram_bot_token)
-project_members	User ↔ project with role + position
-project_positions	Project-specific positions
-project_settings	Per-project configuration
-motives	First allocation axis (with budget)
-categories	Second allocation axis (with budget)
-budget_matrix	Budget per motive × category
-bills	Expense records
-bill_motives	Bill → motive percentage
-bill_categories	Bill → category percentage
-bill_images	Multiple images per bill
-vgeld	Advance transfers
-editlog	Audit trail
-telegram_links	Telegram user mapping
-telegram_link_codes	Short-lived link codes
-settings	Global fallback settings
-
-There is no global roles table.
-
-Bills — Key Columns
-id
-date
-email
-bill_number
-status ('complete' | 'draft')
-type ('Kauf' | 'Leih' | 'Verbrauch')
-vendor
-item
-comment
-telegram_caption
-brutto19
-brutto7
-brutto0
-netto_amount
-project_id
-
-Protected Defaults
+### Protected Defaults
 
 The following cannot be renamed or deleted:
 
-Motive: "Default"
-
-Category: "Uncategorized"
-
-Position: "Misc"
+- Motive: **"Default"**
+- Category: **"Uncategorized"**
+- Position: **"Misc"**
 
 Default motive automatically receives remainder allocation to reach 100%.
 
-6. Financial Engine
-6.1 Tax System
+---
 
-Three VAT tiers:
+## 6. Financial Engine
 
-19%
+### 6.1 Tax System
 
-7%
-
-0%
+Three VAT tiers: **19%**, **7%**, **0%**
 
 User enters only gross values:
 
+```
 Netto = Brutto / (1 + rate)
-
+```
 
 System computes:
+- Netto per tier
+- Total Netto
+- Total Brutto
 
-Netto per tier
+Draft bills are excluded from all calculations.
 
-Total Netto
-
-Total Brutto
-
-Draft bills are excluded from calculations.
-
-6.2 Multi-Allocation Logic
+### 6.2 Multi-Allocation Logic
 
 Bills can be split across:
+- Multiple motives
+- Multiple categories
 
-Multiple motives
-
-Multiple categories
-
-Stored in junction tables.
+Stored in junction tables (`bill_motives`, `bill_categories`).
 
 Allocation formula:
 
-allocated_netto = bill_netto × percentage / 100
-
+```
+allocated_netto = bill_netto x percentage / 100
+```
 
 Rules:
+- Motive total must equal 100%
+- Category total must equal 100%
+- Default / Uncategorized auto-fill remainder if needed
 
-Motive total must equal 100%
+### 6.3 V-Geld (Advance Money)
 
-Category total must equal 100%
+A straightforward subtraction model for individual cash flow tracking within a project.
 
-Default / Uncategorized auto-fill remainder if needed
+```
+Current Balance = Total Advance - Total Expenses
+```
 
-7. Main App Tabs
-7.1 Upload (Default Landing)
+- Every bill uploaded by a user is automatically subtracted from their personal advance pool for that project.
+- Users see their own balance in the sidebar.
+- Admins/Owners see a summary of all user balances.
+- Draft bills excluded from balance calculations.
 
-Features:
+---
 
-Multi-image upload (max 10)
+## 7. Content Panes
 
-Mobile camera capture
-
-Bill type: Kauf / Leih / Verbrauch
-
-Vendor
-
-Item
-
-Comment
-
-Bill number (auto or custom)
-
-Motive allocation widget
-
-Category allocation widget
-
-Telegram drafts appear here for completion.
-
-7.2 Bills
+### 7.1 Upload (Default Landing)
 
 Features:
+- Multi-image upload (max 10)
+- Mobile camera capture
+- Bill type: Kauf / Leih / Verbrauch
+- Vendor, Item, Comment fields
+- Bill number (auto or custom)
+- Motive allocation widget
+- Category allocation widget
+- Telegram drafts appear here for completion
 
-Pagination (20 per page)
+### 7.2 Bills
 
-Sortable columns
-
-Filters:
-
-Person
-
-Motive
-
-Category
-
-Position
-
-Type
-
-Date range
-
-Text search
-
-Inline image gallery
-
-Carousel + fullscreen viewer
-
-Edit modal (all fields + allocations)
-
-Add/delete images
-
-Bulk delete (admin only)
-
-Edit history sidebar
-
-Draft badge (red "Entwurf")
-
-Warm-tinted draft rows
+Features:
+- Pagination (20 per page)
+- Sortable columns
+- Filters: Person, Motive, Category, Position, Type, Date range, Text search
+- Inline image gallery with carousel + fullscreen viewer
+- Edit modal (all fields + allocations + images)
+- Add/delete images to existing bills
+- Bulk delete (admin/owner only)
+- Edit history sidebar (timestamp, user, field changes)
+- Draft badge (red "Entwurf")
+- Warm-tinted draft rows
 
 Draft bills:
+- Excluded from spending & budget
+- Promoted to `complete` when any brutto > 0
 
-Excluded from spending & budget
-
-Promoted to complete when any brutto > 0
-
-7.3 Spending
+### 7.3 Spending
 
 Netto-based budget monitoring.
 
-By Motive
-
-Budget
-
-Spent
-
-Remaining
-
-% used
-
-By Category
-
-Same metrics.
+**By Motive:** Budget, Spent, Remaining, % used
+**By Category:** Same metrics
 
 Color coding:
-
-Red → Over budget
-
-Orange → >80%
-
-Green → OK
+- Red: Over budget
+- Orange: >80%
+- Green: OK
 
 Grand totals displayed.
 
-7.4 V-Geld
-
-Advance tracking per user.
-
-Formula:
-
-Current Balance = Total Advance - Total Expenses
-
-
-Features:
-
-Transfer history table
-
-Per-user breakdown
-
-Admin can add/delete transfers
-
-Draft bills excluded.
-
-7.5 Budget
+### 7.4 Budget Matrix
 
 Interactive matrix:
+- Columns: Motives
+- Rows: Categories
+- Editable cells (admin/owner only)
+- Spending overlay
+- Save all
+- PDF export (landscape)
 
-Columns: Motives
+### 7.5 Reports
 
-Rows: Categories
+User-based PDF generation. Includes:
+- V-Geld summary
+- Bills table
+- Individual bill pages with images
+- Final balance
 
-Editable cells
+### 7.6 Settings (Owner/Admin)
 
-Spending overlay
+- Project title
+- Project subtitle
 
-Save all
+### 7.7 Members (Owner/Admin)
 
-PDF export (landscape)
+- Add/edit/remove project members (invite by email)
+- Role assignment (User / Admin / Owner)
+- Position management (add/rename/delete)
+- Owner promotion restricted to current owners and super-admins
 
-7.6 Reports
+### 7.8 Export (Owner/Admin)
 
-User-based PDF generation.
+- Excel export (Bills with allocations / V-Geld / Budget Matrix)
+- ZIP image download
+- Google Sheets: service account credentials upload, Sheet ID config, status indicator, push to sheet
 
-Includes:
+### 7.9 Telegram (Owner/Admin)
 
-V-Geld summary
+- Bot token input
+- Enable/disable toggle
+- Bot status indicator
+- Linked accounts table with unlink function
 
-Bills table
+---
 
-Individual bill pages with images
+## 8. Super-Admin (`/superadmin`)
 
-Final balance
-
-7.7 Admin (Role-Gated Tab)
-
-Visible only to Project Admins.
-
-Sections:
-
-Members
-
-Add/edit/remove
-
-Role assignment
-
-Position management
-
-Settings
-
-Project title
-
-Subtitle
-
-Google Sheets
-
-Enable/disable sync
-
-Sheet IDs
-
-Service account upload
-
-Status indicator
-
-Export
-
-Excel export (Bills / V-Geld / Budget Matrix)
-
-ZIP image download
-
-Push to Google Sheet
-
-Telegram
-
-Bot token
-
-Enable toggle
-
-Bot status
-
-Linked accounts
-
-Unlink function
-
-8. Super-Admin (/superadmin)
-
-Only accessible if:
-
-users.super_admin = true
-
+Only accessible if `users.super_admin = true`.
 
 Capabilities:
+- Global project CRUD
+- Global user CRUD
+- Per-project member management
+- Per-project position management
+- System oversight
 
-Global project CRUD
+Operates outside project context. Separate standalone page.
 
-Global user CRUD
+---
 
-Per-project member management
-
-Per-project position management
-
-System oversight
-
-Operates outside project context.
-
-9. Telegram Integration
+## 9. Telegram Integration
 
 Each project may configure one bot.
 
-Flow:
+**Setup flow:**
+1. Owner/Admin creates a bot via @BotFather, copies the token
+2. Owner/Admin pastes token in Settings > Telegram, enables it, saves
+3. Bot starts polling automatically; restarts on settings change
 
-Admin adds bot token
+**User linking flow:**
+1. User clicks "Link Telegram" in sidebar user settings
+2. User sees a 6-char code
+3. User sends `/link <code>` to the project bot
+4. Bot stores `telegram_user_id` -> `user_email` mapping
 
-User links account via 6-char code
+**Bill submission flow:**
+1. User sends photo(s) to bot
+2. If album (`media_group_id`): buffered for 1.5s, then processed as one bill
+3. Bot downloads photo(s), creates a `draft` bill with all images attached
+4. Caption stored raw in `telegram_caption`
+5. Bot sends confirmation reply
+6. Draft badge appears in Bills pane; draft rows shown with warm-tinted background
 
-User sends photo(s)
+**Draft lifecycle:**
+- Status = `'draft'`
+- Excluded from all spending/budget calculations
+- Auto-promoted to `complete` when any brutto amount > 0 is saved via edit modal
 
-Bot groups album (1.5s buffer)
+**Future:** `telegram_caption` column holds raw user text for LLM extraction. Receipt images available via `bill_images` for vision model OCR.
 
-Draft bill created
+---
 
-Caption stored raw
+## 10. Exports
 
-Confirmation sent
+### PDF
+- User Bill Report (summary, bills table, individual bill pages with images, V-Geld balance)
+- Budget Matrix Report (landscape, color-coded grid, row/col totals)
 
-Draft lifecycle:
+### Excel
+Three worksheets:
+- Bills (all fields + allocations)
+- V-Geld
+- Budget Matrix
 
-Status = 'draft'
+### Google Sheets
+- Service account credentials stored per project
+- Push all bills to sheet (append)
+- Pull bills from sheet (import)
+- Configurable Sheet ID + Export Sheet ID
 
-Excluded from calculations
+---
 
-Promoted on brutto entry
+## 11. Security
 
-Future-ready for LLM extraction.
+- bcrypt password hashing (8+ chars, uppercase + lowercase + digit)
+- Session-based auth (24h TTL, HTTPOnly cookies)
+- Rate limiting: 5 login attempts / 15 min
+- Role-based middleware: `ensureAuth`, `ensureProjectAdmin`, `ensureProjectOwner`, `ensureSuperAdmin`
+- XSS: all user content escaped with `escapeHtml()`
+- Security headers: X-Content-Type-Options, X-Frame-Options, X-XSS-Protection
+- `/data` path blocked from direct access
 
-10. Exports
-PDF
+---
 
-User Bill Report
+## 12. Multi-Tenant Principles
 
-Budget Matrix Report
+- All queries scoped by `project_id`
+- Strict project isolation
+- No cross-project data leakage
+- Super-admin bypass only at global level
+- Any user can create projects (becomes owner)
+- Owner controls project lifecycle (including deletion)
 
-Excel
+---
 
-Sheets:
+## 13. Image Management
 
-Bills (with allocations)
+- Up to 10 images per bill, stored in `data/uploads/`
+- `bill_images` table with `sort_order`
+- Legacy fallback: `bills.file` single-image column
+- ZIP export organized by uploader/date
 
-V-Geld
+---
 
-Budget Matrix
+## 14. Dependencies
 
-Google Sheets
-
-Push bills
-
-Pull bills
-
-Configurable per project
-
-11. Security
-
-bcrypt hashing
-
-8+ character password rule
-
-Session-based auth (24h TTL)
-
-Rate limit: 5 login attempts / 15 min
-
-Role-based middleware
-
-Escaped user content
-
-Security headers
-
-/data path blocked
-
-12. Multi-Tenant Principles
-
-All queries scoped by project_id
-
-Strict project isolation
-
-No cross-project data leakage
-
-Super-admin bypass only at global level
+| Package | Purpose |
+|---------|---------|
+| express | Web framework |
+| better-sqlite3 | SQLite driver |
+| bcryptjs | Password hashing |
+| express-session + session-file-store | Sessions |
+| express-rate-limit | Login rate limiting |
+| multer | File uploads |
+| pdfkit | PDF generation |
+| exceljs | Excel export |
+| archiver | ZIP creation |
+| googleapis | Google Sheets API |
+| dotenv | Environment config |
