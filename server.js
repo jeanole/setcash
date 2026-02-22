@@ -1690,10 +1690,10 @@ app.get("/api/bills", ensureProjectAccess, (req, res) => {
     )
     .all(projectId);
 
-  // Bulk-fetch all images
+  // Bulk-fetch all images for this project
   const allImages = db
-    .prepare("SELECT * FROM bill_images ORDER BY sort_order, id")
-    .all();
+    .prepare("SELECT bi.* FROM bill_images bi JOIN bills b ON b.id = bi.bill_id WHERE b.project_id = ? ORDER BY bi.sort_order, bi.id")
+    .all(projectId);
   const imagesByBill = {};
   for (const img of allImages) {
     if (!imagesByBill[img.bill_id]) imagesByBill[img.bill_id] = [];

@@ -22,6 +22,7 @@
             };
         </script>
         <link rel="stylesheet" href="/style.css" />
+        <script src="/js/state.js"></script>
         <script src="/js/utils.js"></script>
         <script src="/js/allocation-widget.js"></script>
     </head>
@@ -1585,7 +1586,7 @@
         <!-- Bill Detail Modal -->
         <div
             id="billModal"
-            class="fixed inset-0 bg-black/50 z-[1000] flex items-center justify-center p-4 md:p-5"
+            class="fixed inset-0 bg-black/50 z-[1300] flex items-center justify-center p-4 md:p-5"
             style="display: none"
         >
             <div
@@ -1932,7 +1933,7 @@
         <!-- Full Size Image Modal -->
         <div
             id="imageModal"
-            class="fixed inset-0 bg-black/80 z-[1000] flex items-center justify-center"
+            class="fixed inset-0 bg-black/80 z-[1400] flex items-center justify-center"
             style="display: none"
             onclick="closeImageModal()"
         >
@@ -1972,34 +1973,10 @@
         </div>
 
         <script>
-            let motivesData = [];
-            let categoriesData = [];
-            let rolesData = [];
-            let allBills = [];
-            let allLogs = [];
-            let currentBillId = null;
-
-            // Bills filter, sort & pagination state
-            let billFilters = {
-                person: "",
-                motive: "",
-                category: "",
-                role: "",
-                type: "",
-                dateFrom: "",
-                dateTo: "",
-                search: "",
-            };
-            let billSort = { column: null, dir: "asc" };
-            let billPage = 1;
-            const BILLS_PER_PAGE = 20;
-
-            // Multi-image upload state
-            let pendingFiles = [];
-
-            // Gallery state
-            let galleryImages = [];
-            let galleryIndex = 0;
+            // Global state loaded from /js/state.js
+            // (motivesData, categoriesData, rolesData, allBills, allLogs, currentBillId,
+            //  billFilters, billSort, billPage, BILLS_PER_PAGE, pendingFiles,
+            //  galleryImages, galleryIndex, allVGeld, budgetData, positionsCache, etc.)
 
             // Utilities loaded from /js/utils.js (escapeHtml, formatDate, formatCurrency, parseNum, showMessage, calcNetto)
             // Allocation widget loaded from /js/allocation-widget.js
@@ -2697,9 +2674,6 @@
                 }
             }
 
-            let allVGeld = [];
-            let currentUser = null;
-
             async function loadVGeld() {
                 const tbody = document.getElementById("vgeldBody");
                 tbody.innerHTML = '<tr><td colspan="6">Loading...</td></tr>';
@@ -2926,20 +2900,21 @@
                     "detailBrutto7",
                     "detailBrutto0",
                 ].map((id) => document.getElementById(id));
+                const _detailBruttoHandler = () => {
+                    const total = detailBruttoInputs.reduce(
+                        (sum, inp) => sum + (parseFloat(inp.value) || 0),
+                        0,
+                    );
+                    document
+                        .getElementById("detailMotiveAlloc")
+                        .updateAmount(total);
+                    document
+                        .getElementById("detailCategoryAlloc")
+                        .updateAmount(total);
+                    updateDetailNetto();
+                };
                 detailBruttoInputs.forEach((input) => {
-                    input.addEventListener("input", () => {
-                        const total = detailBruttoInputs.reduce(
-                            (sum, inp) => sum + (parseFloat(inp.value) || 0),
-                            0,
-                        );
-                        document
-                            .getElementById("detailMotiveAlloc")
-                            .updateAmount(total);
-                        document
-                            .getElementById("detailCategoryAlloc")
-                            .updateAmount(total);
-                        updateDetailNetto();
-                    });
+                    input.oninput = _detailBruttoHandler;
                 });
 
                 // Handle images (gallery)
@@ -3466,7 +3441,6 @@
             }
 
             // ========== Budget Matrix ==========
-            let budgetData = null;
 
             async function loadBudgetMatrix() {
                 try {
@@ -4375,40 +4349,44 @@
                 );
 
                 // Update allocation amounts and netto display when brutto values change
-                const bruttoInputs = ["brutto19", "brutto7", "brutto0"].map(
-                    (name) =>
-                        document.querySelector(
-                            `#uploadForm input[name="${name}"]`,
-                        ),
-                );
-                function updateUploadNetto() {
-                    const b19 = parseFloat(bruttoInputs[0].value) || 0;
-                    const b7 = parseFloat(bruttoInputs[1].value) || 0;
-                    const b0 = parseFloat(bruttoInputs[2].value) || 0;
-                    document.getElementById("uploadNetto19").textContent =
-                        formatCurrency(b19 / 1.19);
-                    document.getElementById("uploadNetto7").textContent =
-                        formatCurrency(b7 / 1.07);
-                    document.getElementById("uploadNetto0").textContent =
-                        formatCurrency(b0);
-                    document.getElementById("uploadNettoTotal").textContent =
-                        formatCurrency(b19 / 1.19 + b7 / 1.07 + b0);
-                }
-                bruttoInputs.forEach((input) => {
-                    input.addEventListener("input", () => {
-                        const total = bruttoInputs.reduce(
-                            (sum, inp) => sum + (parseFloat(inp.value) || 0),
-                            0,
-                        );
-                        document
-                            .getElementById("uploadMotiveAlloc")
-                            .updateAmount(total);
-                        document
-                            .getElementById("uploadCategoryAlloc")
-                            .updateAmount(total);
-                        updateUploadNetto();
+                // (listeners only attached once — guard against repeated loadProjectData calls)
+                if (!window._uploadBruttoListenersAttached) {
+                    window._uploadBruttoListenersAttached = true;
+                    const bruttoInputs = ["brutto19", "brutto7", "brutto0"].map(
+                        (name) =>
+                            document.querySelector(
+                                `#uploadForm input[name="${name}"]`,
+                            ),
+                    );
+                    function updateUploadNetto() {
+                        const b19 = parseFloat(bruttoInputs[0].value) || 0;
+                        const b7 = parseFloat(bruttoInputs[1].value) || 0;
+                        const b0 = parseFloat(bruttoInputs[2].value) || 0;
+                        document.getElementById("uploadNetto19").textContent =
+                            formatCurrency(b19 / 1.19);
+                        document.getElementById("uploadNetto7").textContent =
+                            formatCurrency(b7 / 1.07);
+                        document.getElementById("uploadNetto0").textContent =
+                            formatCurrency(b0);
+                        document.getElementById("uploadNettoTotal").textContent =
+                            formatCurrency(b19 / 1.19 + b7 / 1.07 + b0);
+                    }
+                    bruttoInputs.forEach((input) => {
+                        input.addEventListener("input", () => {
+                            const total = bruttoInputs.reduce(
+                                (sum, inp) => sum + (parseFloat(inp.value) || 0),
+                                0,
+                            );
+                            document
+                                .getElementById("uploadMotiveAlloc")
+                                .updateAmount(total);
+                            document
+                                .getElementById("uploadCategoryAlloc")
+                                .updateAmount(total);
+                            updateUploadNetto();
+                        });
                     });
-                });
+                }
 
                 // Show/hide admin-only and owner-only elements
                 if (isAdmin) {
@@ -4845,10 +4823,8 @@
                             body: data,
                         });
                         const json = await resp.json();
-                        const result = document.getElementById("uploadResult");
                         if (json.ok) {
-                            result.className = "message success";
-                            result.textContent = "Bill uploaded successfully!";
+                            showMessage("uploadResult", "Bill uploaded successfully!", false);
                             form.reset();
                             pendingFiles = [];
                             renderUploadThumbnails();
@@ -4868,9 +4844,7 @@
                                 0,
                             );
                         } else {
-                            result.className = "message error";
-                            result.textContent =
-                                "Error: " + (json.error || "unknown");
+                            showMessage("uploadResult", "Error: " + (json.error || "unknown"), true);
                         }
                     });
 
@@ -5536,9 +5510,6 @@
             // ========== Super Admin Modal ==========
             let saProjects = [];
             let saUsers = [];
-            let saMembershipPositions = [];
-            let saCurrentMembers = [];
-            let saCurrentProjectId = null;
 
             function openSuperAdminModal() {
                 document.getElementById("superAdminModal").style.display = "flex";
@@ -5590,18 +5561,32 @@
                 } catch (e) { console.error("SA: Error loading projects", e); }
             }
 
-            document.getElementById("saProjectForm").onsubmit = async (e) => {
-                e.preventDefault();
-                const f = e.target;
-                const res = await fetch("/api/superadmin/projects", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ name: f.name.value, subtitle: f.subtitle.value }),
-                });
-                const j = await res.json();
-                if (j.ok) { saMsg("saProjectResult", "Project created (ID: " + j.id + ")", false); f.reset(); saLoadProjects(); }
-                else saMsg("saProjectResult", j.error || "Error", true);
-            };
+            document.addEventListener("DOMContentLoaded", () => {
+                document.getElementById("saProjectForm").onsubmit = async (e) => {
+                    e.preventDefault();
+                    const f = e.target;
+                    const res = await fetch("/api/superadmin/projects", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ name: f.name.value, subtitle: f.subtitle.value }),
+                    });
+                    const j = await res.json();
+                    if (j.ok) { saMsg("saProjectResult", "Project created (ID: " + j.id + ")", false); f.reset(); saLoadProjects(); }
+                    else saMsg("saProjectResult", j.error || "Error", true);
+                };
+                document.getElementById("saUserForm").onsubmit = async (e) => {
+                    e.preventDefault();
+                    const f = e.target;
+                    const res = await fetch("/api/superadmin/users", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ email: f.email.value, password: f.password.value, superAdmin: f.isSuperAdmin.checked }),
+                    });
+                    const j = await res.json();
+                    if (j.ok) { saMsg("saUserResult", "User created", false); f.reset(); saLoadUsers(); }
+                    else saMsg("saUserResult", j.error || "Error", true);
+                };
+            });
 
             async function saEditProject(id, name, subtitle) {
                 const newName = prompt("Project name:", name);
@@ -5648,18 +5633,6 @@
                 } catch (e) { console.error("SA: Error loading users", e); }
             }
 
-            document.getElementById("saUserForm").onsubmit = async (e) => {
-                e.preventDefault();
-                const f = e.target;
-                const res = await fetch("/api/superadmin/users", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ email: f.email.value, password: f.password.value, superAdmin: f.isSuperAdmin.checked }),
-                });
-                const j = await res.json();
-                if (j.ok) { saMsg("saUserResult", "User created", false); f.reset(); saLoadUsers(); }
-                else saMsg("saUserResult", j.error || "Error", true);
-            };
 
             async function saToggleSuperAdmin(email, newVal) {
                 const res = await fetch("/api/superadmin/users/" + encodeURIComponent(email), {
