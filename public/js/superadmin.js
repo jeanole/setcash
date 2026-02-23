@@ -2,9 +2,6 @@
 
 let saProjects = [];
 let saUsers = [];
-let saCurrentProjectId = null;
-let saCurrentMembers = [];
-let saMembershipPositions = [];
 
 function openSuperAdminModal() {
     document.getElementById("superAdminModal").style.display = "flex";
