@@ -2,9 +2,10 @@
 
 > Living document. Update this file whenever features are added, changed, or planned.
 
-**Version:** 1.7.0 (app version tracked in `package.json`)
+**Version:** 1.7.1 (app version tracked in `package.json`)
 **Industry Context:** Film Production & Media Projects
 **Stack:** Node.js + Express + SQLite (better-sqlite3) + Vanilla HTML/JS + PDFKit + ExcelJS + Google Sheets API
+**Structure:** Backend routes in `routes/` (one file per domain); DB/migrations in `db.js`; frontend JS in `public/js/` modules
 
 ---
 
@@ -141,8 +142,9 @@ Any authenticated user can create a new project:
 
 ## 4. Roles & Access Control
 
-All "higher" roles inherit the abilities of the roles below them. 
-Default admin and pw in .env-file. User is forced to change pw if still same as in .env. 
+All "higher" roles inherit the abilities of the roles below them.
+
+**Default admin credentials:** Set via `ADMIN_EMAIL` and `ADMIN_PASSWORD` in `.env` (falls back to `admin@example.com` / `admin123` if not set). The initial admin user is created automatically on first run when the database is empty. User is forced to change pw if still same as in .env.
 
 ### 4.1 Global Role
 
