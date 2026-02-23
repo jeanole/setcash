@@ -399,14 +399,15 @@ function initUsers() {
     .prepare("SELECT COUNT(*) as count FROM users")
     .get().count;
   if (userCount === 0) {
-    const defaultPassword = "admin123";
-    const hash = bcrypt.hashSync(defaultPassword, 10);
+    const email = process.env.ADMIN_EMAIL || "admin@example.com";
+    const password = process.env.ADMIN_PASSWORD || "admin123";
+    const hash = bcrypt.hashSync(password, 10);
     db.prepare("INSERT INTO users (email, hash, admin) VALUES (?, ?, ?)").run(
-      "admin@example.com",
+      email,
       hash,
       1,
     );
-    console.log("Created default admin: admin@example.com / admin123");
+    console.log(`Created default admin: ${email} / ${password}`);
     console.log("CHANGE THIS PASSWORD IMMEDIATELY!");
   }
 }
