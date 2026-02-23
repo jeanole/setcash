@@ -75,13 +75,17 @@ async function updateSidebar(
     // User info
     document.getElementById("sidebarEmail").textContent =
         currentUser.email || "";
-    const roleLabel = currentUser.superAdmin
-        ? "Super Admin"
-        : currentUser.currentProjectRole === "owner"
-          ? "Owner"
-          : isAdmin
-            ? "Admin"
-            : "Member";
+    const projectRole = currentUser.currentProjectRole === "owner"
+        ? "Owner"
+        : currentUser.currentProjectRole === "admin"
+          ? "Admin"
+          : currentUser.currentProjectRole
+            ? "Member"
+            : "";
+    const roleLabel = projectRole
+        + (currentUser.superAdmin
+            ? (projectRole ? " / Super Admin" : "Super Admin")
+            : "");
     document.getElementById("sidebarRole").textContent = roleLabel;
     // Version
     if (version)

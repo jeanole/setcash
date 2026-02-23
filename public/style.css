@@ -9,6 +9,17 @@
 }
 
 
+/* Cropper.js container — must fill parent and not clip the crop UI */
+#cropperContainer img {
+    display: block;
+    max-width: 100%;
+    max-height: 100%;
+}
+#cropperContainer .cropper-container {
+    max-height: 100% !important;
+    max-width: 100% !important;
+}
+
 /* Sidebar slide transition (mobile: slide-out overlay) */
 .sidebar {
     transform: translateX(-100%);

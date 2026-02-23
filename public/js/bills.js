@@ -675,6 +675,9 @@ function downloadReport() {
 
 // ========== Bill modal event handlers ==========
 document.addEventListener("DOMContentLoaded", () => {
+    // Wire add-image inputs with crop flow
+    initAddImageInputs();
+
     // Close modal when clicking outside
     document.getElementById("billModal").addEventListener("click", (e) => {
         if (e.target.id === "billModal") closeModal();

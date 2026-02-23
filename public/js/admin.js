@@ -270,18 +270,61 @@ async function admLoadProjects() {
         }
         tbody.innerHTML = projects.map((p) => {
             const isActive = p.id === currentUser?.currentProjectId;
-            const roleLabel = currentUser?.superAdmin ? "Super Admin" : p.project_role === "owner" ? "Owner" : p.project_role === "admin" ? "Admin" : "Member";
+            const role = currentUser?.superAdmin ? "owner" : p.project_role;
+            const roleLabel = role === "owner" ? "Owner" : role === "admin" ? "Admin" : "Member";
+            const isOwner = role === "owner";
+            const canDelete = isOwner && p.member_count <= 1;
+            const safeName = escapeHtml(p.name).replace(/'/g, "\\'");
             return `<tr class="${isActive ? "bg-indigo-50/50" : ""}">
                 <td class="px-3 py-3 font-medium text-slate-800">${escapeHtml(p.name)}${isActive ? ' <span class="text-[0.65rem] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full font-semibold">Active</span>' : ""}</td>
                 <td class="px-3 py-3 text-slate-500">${escapeHtml(p.subtitle || "—")}</td>
                 <td class="px-3 py-3 text-slate-600">${escapeHtml(roleLabel)}</td>
-                <td class="px-3 py-3">
+                <td class="px-3 py-3 flex gap-2 flex-wrap">
                     ${!isActive ? `<button class="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 transition-colors border-none cursor-pointer" onclick="sidebarSelectProject(${p.id})">Switch</button>` : ""}
+                    ${!isOwner ? `<button class="text-xs bg-amber-500 text-white px-3 py-1.5 rounded-lg hover:bg-amber-600 transition-colors border-none cursor-pointer" onclick="admResignProject(${p.id})">Resign</button>` : ""}
+                    ${canDelete ? `<button class="text-xs bg-rose-600 text-white px-3 py-1.5 rounded-lg hover:bg-rose-700 transition-colors border-none cursor-pointer" onclick="admDeleteProjectById(${p.id}, '${safeName}')">Delete</button>` : ""}
                 </td>
             </tr>`;
         }).join("");
     } catch (e) {
         console.error("Error loading projects overview", e);
+    }
+}
+
+async function admResignProject(projectId) {
+    if (!confirm("Leave this project? You will lose access.")) return;
+    const res = await fetch(`/api/projects/${projectId}/resign`, { method: "DELETE" });
+    const j = await res.json();
+    if (j.ok) {
+        // If we resigned from the active project, reload the page to show project selector
+        if (projectId === currentUser?.currentProjectId) {
+            window.location.reload();
+        } else {
+            admLoadProjects();
+        }
+    } else {
+        alert(j.error || "Error resigning from project");
+    }
+}
+
+async function admDeleteProjectById(projectId, projectName) {
+    if (!confirm(`Delete project "${projectName}"?\n\nThis will permanently delete ALL project data. This cannot be undone.`)) return;
+    const typed = prompt(`Type "${projectName}" to confirm deletion:`);
+    if (typed !== projectName) {
+        alert("Project name did not match. Deletion cancelled.");
+        return;
+    }
+    const res = await fetch(`/api/projects/${projectId}`, { method: "DELETE" });
+    const j = await res.json();
+    if (j.ok) {
+        alert("Project deleted.");
+        if (projectId === currentUser?.currentProjectId) {
+            window.location.reload();
+        } else {
+            admLoadProjects();
+        }
+    } else {
+        alert(j.error || "Failed to delete project");
     }
 }
 

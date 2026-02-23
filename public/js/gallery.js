@@ -1,3 +1,133 @@
+// ========== Crop Modal ==========
+
+function openCropModal(file, onDone) {
+    // onDone(resultFile) — resultFile is cropped Blob or original File (skip), or null (cancel)
+    var modal = document.getElementById("cropModal");
+    var img = document.getElementById("cropperTarget");
+
+    // Destroy previous Cropper instance if any
+    if (cropperInstance) {
+        cropperInstance.destroy();
+        cropperInstance = null;
+    }
+
+    // Show modal first so the image is laid out in visible DOM
+    modal.style.display = "flex";
+    cropCallback = onDone;
+
+    // Reset img src to avoid stale image flash
+    img.src = "";
+
+    var url = URL.createObjectURL(file);
+    img.onload = function () {
+        // Don't revoke yet — Cropper.js reads the src internally
+        cropperInstance = new Cropper(img, {
+            viewMode: 1,
+            autoCropArea: 0.8,
+            responsive: true,
+            dragMode: "move",
+            checkCrossOrigin: false,
+            background: true,
+            modal: true,
+            guides: true,
+            center: true,
+            highlight: true,
+            cropBoxMovable: true,
+            cropBoxResizable: true,
+            toggleDragModeOnDblclick: true,
+        });
+    };
+    img.src = url;
+}
+
+function cleanupCropper() {
+    var img = document.getElementById("cropperTarget");
+    if (cropperInstance) { cropperInstance.destroy(); cropperInstance = null; }
+    // Revoke object URL to free memory
+    if (img.src && img.src.startsWith("blob:")) URL.revokeObjectURL(img.src);
+    img.src = "";
+    document.getElementById("cropModal").style.display = "none";
+}
+
+function cropModalSave() {
+    if (!cropperInstance || !cropCallback) return;
+    cropperInstance.getCroppedCanvas({ maxWidth: 4096, maxHeight: 4096 }).toBlob(function (blob) {
+        var cb = cropCallback;
+        cropCallback = null;
+        cleanupCropper();
+        cb(blob);
+    }, "image/jpeg", 0.92);
+}
+
+function cropModalSkip() {
+    if (!cropCallback) return;
+    var cb = cropCallback;
+    cropCallback = null;
+    cleanupCropper();
+    cb(null); // null = use original
+}
+
+function cropModalCancel() {
+    if (!cropCallback) return;
+    var cb = cropCallback;
+    cropCallback = null;
+    cleanupCropper();
+    cb(undefined); // undefined = cancelled (discard)
+}
+
+// Process an array of File objects through crop modal sequentially.
+// Returns a Promise that resolves with an array of processed Files/Blobs.
+function processThroughCropModal(files) {
+    return new Promise((resolve) => {
+        const results = [];
+        let index = 0;
+
+        function next() {
+            if (index >= files.length) {
+                resolve(results);
+                return;
+            }
+            const file = files[index++];
+            const counter = document.getElementById("cropModalCounter");
+            if (counter) counter.textContent = files.length > 1 ? `${index} / ${files.length}` : "";
+            openCropModal(file, function (result) {
+                if (result === undefined) {
+                    // Cancelled — discard this file, continue
+                } else if (result === null) {
+                    // Skipped — use original
+                    results.push(file);
+                } else {
+                    // Cropped blob — use it (preserve filename)
+                    const named = new File([result], file.name || "image.jpg", { type: result.type });
+                    results.push(named);
+                }
+                next();
+            });
+        }
+
+        next();
+    });
+}
+
+// Add image input wiring for edit modal (called once on DOMContentLoaded)
+function initAddImageInputs() {
+    document.getElementById("addImageInput").addEventListener("change", async function () {
+        const files = Array.from(this.files);
+        this.value = "";
+        if (!files.length) return;
+        const processed = await processThroughCropModal(files);
+        if (processed.length > 0) addImagesToCurrentBill(processed);
+    });
+
+    document.getElementById("addCameraInput").addEventListener("change", async function () {
+        const files = Array.from(this.files);
+        this.value = "";
+        if (!files.length) return;
+        const processed = await processThroughCropModal(files);
+        if (processed.length > 0) addImagesToCurrentBill(processed);
+    });
+}
+
 // ========== Gallery ==========
 
 function renderGallery() {

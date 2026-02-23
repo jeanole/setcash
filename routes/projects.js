@@ -18,12 +18,16 @@ router.get("/api/user", (req, res) => {
 router.get("/api/projects", ensureAuth, (req, res) => {
   let projects;
   if (req.session.user.superAdmin) {
-    projects = db.prepare("SELECT * FROM projects ORDER BY id").all();
+    projects = db.prepare(`
+      SELECT p.*, (SELECT COUNT(*) FROM project_members WHERE project_id = p.id) AS member_count
+      FROM projects p ORDER BY p.id
+    `).all();
   } else {
     projects = db
       .prepare(
         `
-      SELECT p.*, pm.project_role
+      SELECT p.*, pm.project_role,
+        (SELECT COUNT(*) FROM project_members WHERE project_id = p.id) AS member_count
       FROM projects p
       JOIN project_members pm ON pm.project_id = p.id
       WHERE LOWER(pm.user_email) = LOWER(?)
@@ -167,6 +171,91 @@ router.delete("/api/project", ensureProjectOwner, (req, res) => {
   req.session.user.currentProjectId = null;
   req.session.user.currentProjectRole = null;
   req.session.user.currentProjectName = null;
+  res.json({ ok: true });
+});
+
+// API: Resign from a project (non-owner members only)
+router.delete("/api/projects/:id/resign", ensureAuth, (req, res) => {
+  const projectId = parseInt(req.params.id);
+  const email = req.session.user.email;
+
+  const membership = db
+    .prepare("SELECT project_role FROM project_members WHERE project_id = ? AND LOWER(user_email) = LOWER(?)")
+    .get(projectId, email);
+  if (!membership) return res.status(404).json({ error: "Not a member of this project" });
+  if (membership.project_role === "owner") {
+    return res.status(403).json({ error: "Owners cannot resign. Transfer ownership first." });
+  }
+
+  db.prepare("DELETE FROM project_members WHERE project_id = ? AND LOWER(user_email) = LOWER(?)").run(projectId, email);
+
+  // Clear session if this was the active project
+  if (req.session.user.currentProjectId === projectId) {
+    req.session.user.currentProjectId = null;
+    req.session.user.currentProjectRole = null;
+    req.session.user.currentProjectName = null;
+  }
+  res.json({ ok: true });
+});
+
+// API: Delete a specific project by ID (owner only, no other members)
+router.delete("/api/projects/:id", ensureAuth, (req, res) => {
+  const projectId = parseInt(req.params.id);
+  const email = req.session.user.email;
+
+  // Check ownership
+  const membership = db
+    .prepare("SELECT project_role FROM project_members WHERE project_id = ? AND LOWER(user_email) = LOWER(?)")
+    .get(projectId, email);
+  const isSuperAdmin = req.session.user.superAdmin;
+  if (!isSuperAdmin && (!membership || membership.project_role !== "owner")) {
+    return res.status(403).json({ error: "Only the project owner can delete it" });
+  }
+
+  // Check no other members exist
+  const memberCount = db
+    .prepare("SELECT COUNT(*) AS cnt FROM project_members WHERE project_id = ?")
+    .get(projectId).cnt;
+  if (memberCount > 1) {
+    return res.status(400).json({ error: "Remove all other members before deleting the project" });
+  }
+
+  const DATA_DIR = db.DATA_DIR;
+  const fs = require("fs");
+  const path = require("path");
+
+  const tables = [
+    "bill_images", "bill_motives", "bill_categories", "editlog",
+    "budget_matrix", "vgeld", "motives", "categories",
+    "project_positions", "project_members", "project_settings",
+    "telegram_links", "telegram_link_codes",
+  ];
+  const images = db
+    .prepare("SELECT bi.file FROM bill_images bi JOIN bills b ON b.id = bi.bill_id WHERE b.project_id = ?")
+    .all(projectId);
+  for (const img of images) {
+    if (img.file) {
+      const filePath = path.join(DATA_DIR, "uploads", img.file);
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    }
+  }
+  for (const table of tables) {
+    if (table === "editlog" || table === "vgeld") {
+      db.prepare(`DELETE FROM ${table} WHERE project_id = ?`).run(projectId);
+    } else if (table === "bill_images" || table === "bill_motives" || table === "bill_categories") {
+      db.prepare(`DELETE FROM ${table} WHERE bill_id IN (SELECT id FROM bills WHERE project_id = ?)`).run(projectId);
+    } else {
+      db.prepare(`DELETE FROM ${table} WHERE project_id = ?`).run(projectId);
+    }
+  }
+  db.prepare("DELETE FROM bills WHERE project_id = ?").run(projectId);
+  db.prepare("DELETE FROM projects WHERE id = ?").run(projectId);
+
+  if (req.session.user.currentProjectId === projectId) {
+    req.session.user.currentProjectId = null;
+    req.session.user.currentProjectRole = null;
+    req.session.user.currentProjectName = null;
+  }
   res.json({ ok: true });
 });
 

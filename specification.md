@@ -96,6 +96,7 @@ Always-visible top bar rendered above the main content area on all screen sizes.
 - Current project name (with subtitle as secondary text if set)
 - Logged-in user's email
 - User's role in the current project (e.g. "Owner", "Admin", "Member")
+- if user is superadmin then show additional eg "/Super Admin"
 - Notification bell with unread badge
 
 **Behavior:**
@@ -310,7 +311,7 @@ Current Balance = Total Advance - Total Expenses
 
 Features:
 - Multi-image upload (max 10)
-- image cropping after upload
+- possibity to image cropping after upload
 - Mobile camera capture
 - Bill type: Kauf / Leih / Verbrauch
 - Vendor, Item, Comment fields
@@ -318,6 +319,15 @@ Features:
 - Motive allocation widget
 - Category allocation widget
 - Telegram drafts appear here for completion
+
+#### 7.1.1 Image Upload
+
+Features:
+- Multi-image upload (max 10)
+- possibility to image cropping after upload
+- Mobile camera capture
+- Possibility to upload delete/add/crop already uploaded images
+- Possibility to upload images from the gallery
 
 ### 7.2 Bills
 

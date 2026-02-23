@@ -27,6 +27,11 @@ var allVGeld = [];
 // Budget state
 var budgetData = null;
 
+// Crop modal state
+var cropQueue = [];
+var cropCallback = null;
+var cropperInstance = null;
+
 // Admin state
 var positionsCache = [];
 

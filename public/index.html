@@ -22,6 +22,8 @@
             };
         </script>
         <link rel="stylesheet" href="/style.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css" />
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js"></script>
         <script src="/js/state.js"></script>
         <script src="/js/utils.js"></script>
         <script src="/js/allocation-widget.js"></script>
@@ -1511,6 +1513,42 @@
                 </div>
 
                 <!-- ==================== USER SETTINGS PANE ==================== -->
+                <!-- ==================== CROP MODAL ==================== -->
+                <div
+                    id="cropModal"
+                    class="fixed inset-0 bg-black/80 z-[3000] flex flex-col items-center justify-center p-4"
+                    style="display: none"
+                >
+                    <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl flex flex-col">
+                        <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+                            <h2 class="text-base font-semibold text-slate-900">Crop Image</h2>
+                            <span id="cropModalCounter" class="text-xs text-slate-400"></span>
+                        </div>
+                        <div id="cropperContainer" style="width: 100%; height: 60vh; background: #0f172a; position: relative">
+                            <img id="cropperTarget" />
+                        </div>
+                        <div class="flex items-center justify-between gap-3 px-5 py-4">
+                            <button
+                                type="button"
+                                onclick="cropModalCancel()"
+                                class="px-4 py-2 text-sm text-slate-500 hover:text-slate-700 bg-transparent border-none cursor-pointer"
+                            >Cancel</button>
+                            <div class="flex gap-3">
+                                <button
+                                    type="button"
+                                    onclick="cropModalSkip()"
+                                    class="px-4 py-2 text-sm rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 bg-white cursor-pointer"
+                                >Skip (use original)</button>
+                                <button
+                                    type="button"
+                                    onclick="cropModalSave()"
+                                    class="px-4 py-2 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 border-none cursor-pointer font-medium"
+                                >Crop & Save</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- ==================== NEW PROJECT MODAL ==================== -->
                 <div
                     id="newProjectModal"

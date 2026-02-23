@@ -347,22 +347,26 @@ async function init() {
 
     document
         .getElementById("uploadFileInput")
-        .addEventListener("change", function () {
+        .addEventListener("change", async function () {
             const newFiles = Array.from(this.files);
-            const space = 10 - pendingFiles.length;
-            pendingFiles.push(...newFiles.slice(0, space));
-            renderUploadThumbnails();
             this.value = "";
+            if (!newFiles.length) return;
+            const space = 10 - pendingFiles.length;
+            const toProcess = newFiles.slice(0, space);
+            const processed = await processThroughCropModal(toProcess);
+            pendingFiles.push(...processed);
+            renderUploadThumbnails();
         });
 
     document
         .getElementById("uploadCameraInput")
-        .addEventListener("change", function () {
-            if (this.files[0] && pendingFiles.length < 10) {
-                pendingFiles.push(this.files[0]);
-                renderUploadThumbnails();
-            }
+        .addEventListener("change", async function () {
+            const files = Array.from(this.files);
             this.value = "";
+            if (!files.length || pendingFiles.length >= 10) return;
+            const processed = await processThroughCropModal(files.slice(0, 1));
+            pendingFiles.push(...processed);
+            renderUploadThumbnails();
         });
 
     document
