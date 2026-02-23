@@ -585,6 +585,49 @@ router.post(
   },
 );
 
+// Replace single image (crop)
+router.put(
+  "/api/bills/:id/images/:imageId",
+  ensureProjectAccess,
+  (req, res, next) => {
+    const upload = req.app.locals.upload;
+    upload.single("photo")(req, res, next);
+  },
+  (req, res) => {
+    const projectId = req.user.currentProjectId;
+    const billId = parseInt(req.params.id);
+    const imageId = parseInt(req.params.imageId);
+    const bill = db
+      .prepare("SELECT * FROM bills WHERE id = ? AND project_id = ?")
+      .get(billId, projectId);
+    if (!bill) return res.status(404).json({ error: "Bill not found" });
+
+    const image = db
+      .prepare("SELECT * FROM bill_images WHERE id = ? AND bill_id = ?")
+      .get(imageId, billId);
+    if (!image) return res.status(404).json({ error: "Image not found" });
+    if (!req.file) return res.status(400).json({ error: "No file" });
+
+    // Overwrite the existing file on disk
+    const imgPath = path.join(DATA_DIR, "uploads", image.file);
+    const dir = path.dirname(imgPath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(imgPath, req.file.buffer);
+
+    db.prepare(
+      "INSERT INTO editlog (timestamp, user, bill_id, changes, project_id) VALUES (?, ?, ?, ?, ?)",
+    ).run(
+      new Date().toISOString(),
+      req.user.email,
+      billId,
+      JSON.stringify({ image: "cropped" }),
+      projectId,
+    );
+
+    res.json({ ok: true });
+  },
+);
+
 // Delete single image from bill
 router.delete(
   "/api/bills/:id/images/:imageId",

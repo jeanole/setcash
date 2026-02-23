@@ -128,6 +128,45 @@ function initAddImageInputs() {
     });
 }
 
+// Crop an existing gallery image in-place
+async function cropCurrentImage() {
+    if (currentBillId === null || galleryImages.length === 0) return;
+    var img = galleryImages[galleryIndex];
+    // Fetch the current image as a blob
+    var resp = await fetch("/uploads/" + img.file);
+    if (!resp.ok) { alert("Could not load image"); return; }
+    var blob = await resp.blob();
+    var file = new File([blob], img.filename || "image.jpg", { type: blob.type });
+
+    openCropModal(file, async function (result) {
+        if (result === undefined || result === null) return; // cancelled or skipped
+        // Upload cropped image to replace endpoint
+        var formData = new FormData();
+        formData.append("photo", result, file.name);
+        try {
+            var res = await fetch("/api/bills/" + currentBillId + "/images/" + img.id, {
+                method: "PUT",
+                body: formData,
+            });
+            var j = await res.json();
+            if (j.ok) {
+                showMessage("imageResult", "Image cropped", false);
+                await loadBills();
+                var bill = allBills.find(function (b) { return b.id === currentBillId; });
+                if (bill) {
+                    galleryImages = bill.images || [];
+                    if (galleryIndex >= galleryImages.length) galleryIndex = Math.max(0, galleryImages.length - 1);
+                    renderGallery();
+                }
+            } else {
+                showMessage("imageResult", "Error: " + (j.error || "unknown"), true);
+            }
+        } catch (err) {
+            showMessage("imageResult", "Error: " + err.message, true);
+        }
+    });
+}
+
 // ========== Gallery ==========
 
 function renderGallery() {
@@ -137,6 +176,7 @@ function renderGallery() {
     const dots = document.getElementById("galleryDots");
     const downloadLink = document.getElementById("downloadLink");
     const deleteBtn = document.getElementById("deleteImageBtn");
+    const cropBtn = document.getElementById("cropImageBtn");
     const addLabel = document.getElementById("addImageLabel");
     const addCamera = document.getElementById("addCameraLabel");
     const counter = document.getElementById("imageCounter");
@@ -150,6 +190,7 @@ function renderGallery() {
         carousel.style.display = "none";
         downloadLink.style.display = "none";
         deleteBtn.style.display = "none";
+        cropBtn.style.display = "none";
         counter.textContent = "";
         return;
     }
@@ -157,6 +198,7 @@ function renderGallery() {
     noImageText.style.display = "none";
     carousel.style.display = "block";
     deleteBtn.style.display = "inline-block";
+    cropBtn.style.display = "inline-block";
 
     // Build track slides
     track.innerHTML = galleryImages
