@@ -14,7 +14,8 @@ RUN npm ci --omit=dev
 # Remove build dependencies to reduce image size
 RUN apk del python3 make g++
 
-COPY server.js ./
+COPY server.js db.js middleware.js google.js ./
+COPY routes ./routes
 COPY public ./public
 
 # Create data directory with restricted permissions
