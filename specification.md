@@ -6,6 +6,7 @@
 **Industry Context:** Film Production & Media Projects
 **Stack:** Node.js + Express + SQLite (better-sqlite3) + Vanilla HTML/JS + PDFKit + ExcelJS + Google Sheets API
 **Structure:** Backend routes in `routes/` (one file per domain); DB/migrations in `db.js`; frontend JS in `public/js/` modules
+**Deployment:** Push to `production` branch triggers CI/CD pipeline
 
 ---
 
