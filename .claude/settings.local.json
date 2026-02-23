@@ -23,7 +23,10 @@
       "Skill(commit-commands:commit-push-pr:*)",
       "Bash(git -C \"C:/Users/jensmoeller/code/vbudget\" remote -v)",
       "Bash(git -C \"C:/Users/jensmoeller/code/vbudget\" add public/index.html server.js)",
-      "Bash(git -C:*)"
+      "Bash(git -C:*)",
+      "Bash(git checkout:*)",
+      "Bash(git merge:*)",
+      "Bash(git push:*)"
     ]
   }
 }
