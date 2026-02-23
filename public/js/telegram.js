@@ -53,11 +53,4 @@ async function unlinkTelegramSelf() {
     await fetch("/api/telegram/links/me", { method: "DELETE" });
     document.getElementById("telegramLinkModal").style.display =
         "none";
-    // Refresh sidebar button
-    const tgStatus = await (
-        await fetch("/api/telegram/status")
-    ).json();
-    const tgBtn = document.getElementById("sidebarTelegramBtn");
-    tgBtn.textContent = "Telegram verknüpfen";
-    tgBtn.style.color = "";
 }

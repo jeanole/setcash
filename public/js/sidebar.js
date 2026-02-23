@@ -117,26 +117,6 @@ async function updateSidebar(
         document.getElementById("sidebarVGeld").style.display =
             "none";
     }
-    // Telegram link button: show if project has Telegram enabled
-    try {
-        const tgStatus = await (
-            await fetch("/api/telegram/status")
-        ).json();
-        const tgBtn = document.getElementById("sidebarTelegramBtn");
-        if (tgStatus.enabled) {
-            tgBtn.style.display = "";
-            tgBtn.textContent = tgStatus.linked
-                ? "Telegram: verknüpft \u2713"
-                : "Telegram verknüpfen";
-            tgBtn.style.color = tgStatus.linked ? "#27ae60" : "";
-        } else {
-            tgBtn.style.display = "none";
-        }
-    } catch (e) {
-        document.getElementById(
-            "sidebarTelegramBtn",
-        ).style.display = "none";
-    }
     // Project list — always show if user has projects
     try {
         const projects = await (

@@ -87,15 +87,41 @@ function switchPane(pane) {
     }
     if (pane === "budget") loadBudgetMatrix();
     if (pane === "reports") loadReportUsers();
-    if (pane === "adm-settings") admLoadSettings();
-    if (pane === "adm-members") {
-        admLoadPositions().then(() => admLoadMembers());
+    if (pane === "settings") {
+        // Activate the first visible tab button if none is currently active (indigo)
+        const activeBtn = document.querySelector(".settings-tab.text-indigo-600");
+        if (!activeBtn) {
+            const firstVisible = document.querySelector(".settings-tab:not([style*='display: none'])");
+            if (firstVisible) switchSettingsTab(firstVisible.dataset.settingsTab);
+        } else {
+            const tabId = activeBtn.dataset.settingsTab;
+            loadSettingsTab(tabId);
+        }
     }
-    if (pane === "adm-export") admLoadCredStatus();
-    if (pane === "adm-telegram") admLoadTelegramSettings();
-    if (pane === "adm-projects") admLoadProjects();
     // Close sidebar (always overlay now)
     closeMenu();
+}
+
+function switchSettingsTab(tab) {
+    document.querySelectorAll(".settings-tab").forEach((t) => {
+        const isActive = t.dataset.settingsTab === tab;
+        t.className = `settings-tab${t.classList.contains("admin-only") ? " admin-only" : ""} px-4 py-2.5 text-sm font-medium border-b-2 whitespace-nowrap bg-transparent cursor-pointer ${
+            isActive ? "border-indigo-600 text-indigo-600" : "border-transparent text-slate-500 hover:text-slate-700"
+        }`;
+    });
+    document.querySelectorAll(".settings-tab-content").forEach((c) => (c.style.display = "none"));
+    const el = document.getElementById("settings-tab-" + tab);
+    if (el) el.style.display = "";
+    loadSettingsTab(tab);
+}
+
+function loadSettingsTab(tab) {
+    const isAdmin = currentUser && (currentUser.superAdmin || ["admin", "owner"].includes(currentUser.currentProjectRole));
+    if (tab === "adm-settings" && isAdmin) admLoadSettings();
+    if (tab === "adm-members" && isAdmin) admLoadPositions().then(() => admLoadMembers());
+    if (tab === "adm-export" && isAdmin) admLoadCredStatus();
+    if (tab === "adm-telegram" && isAdmin) admLoadTelegramSettings();
+    if (tab === "adm-projects") admLoadProjects();
 }
 
 // ========== Format allocation display ==========

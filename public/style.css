@@ -8,10 +8,6 @@
     display: block;
 }
 
-/* Admin-only elements (shown via JS when user is admin) */
-.admin-only {
-    display: none;
-}
 
 /* Sidebar slide transition (mobile: slide-out overlay) */
 .sidebar {

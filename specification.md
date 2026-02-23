@@ -34,7 +34,7 @@ vBudget has one primary entry point:
 | Route | Purpose |
 |-------|---------|
 | `/` | Main project application (single integrated interface) |
-| `/login` | Login page (inline HTML, no separate file) |
+| `/login` | Styled landing page — dark indigo gradient, centered card, brand icon, tagline, eye-icon password toggle, error state; rendered as inline HTML template in `routes/auth.js` using Tailwind CDN |
 | `/superadmin` | Legacy standalone page (kept for backward compatibility) |
 
 There is no separate `/admin` page.
@@ -54,14 +54,12 @@ The sidebar is the command center for all non-super-admin tasks. It is **slide-o
 ```
 +---------------------------+
 | Project Title / Subtitle  |
-|   Project Switcher        |
-|   + New Project           |
 +---------------------------+
 | User Info                 |
 |   email                   |
 |   role label              |
-|   V-Geld balance (own project)
-|   spend money (own project)
+|   V-Geld balance (current project)
+|   spend money (current project)
 +---------------------------+
 | NAVIGATION                |
 |   Upload                  |
@@ -69,23 +67,17 @@ The sidebar is the command center for all non-super-admin tasks. It is **slide-o
 |   Spending                |
 |   Budget Matrix           |
 |   Reports                 |
+|   V-Geld                 |
 +---------------------------+
-| PROJECT MANAGEMENT        |
-| (owner/admin only)        |
+| SETTINGS                  |
 |   Settings                |
-|   Members                 |
-|   Export                  |
-|   Telegram                |
-|   Projects Overview       |
+|   System                  |
+|   (super-admin only)      |
 +---------------------------+
-| USER SETTINGS             |
-|   Profile / Password      |
-|   Link Telegram           |
+|   Project Switcher        |
+|   + New Project           |
 +---------------------------+
-| SYSTEM (super-admin only) |
-|   Super Admin             |
-+---------------------------+
-| Logout             v1.7.0 |
+| Logout            version |
 +---------------------------+
 ```
 
@@ -121,13 +113,20 @@ The main content area displays one **content pane** at a time, driven by sidebar
 - V-Geld
 - Budget Matrix
 - Reports
-
-**Content panes (owner/admin only):**
 - Settings
-- Members
-- Export
-- Telegram
+
+**Settings pane(all users):**
+Settings consists on tabs that are accesible/shown depending on user role(user/owner/admin/superadmin). These tabs are the following:
+
+- Settings (all settings that have no dedicated space)
+- Members (project members, admin/owner only)
+- Export (depends on role)
+- Telegram (shows, edits, manage connection, owner/admin only)
 - Projects Overview
+  - possibitiy to make project current (star)
+  - switch project
+  - resign from a project you are not the owner
+  - delete a project if you are owner and project has no members anymore
 
 All panes operate within the active `project_id`.
 
