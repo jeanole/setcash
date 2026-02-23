@@ -174,9 +174,8 @@ function renderGallery() {
     const carousel = document.getElementById("galleryCarousel");
     const track = document.getElementById("galleryTrack");
     const dots = document.getElementById("galleryDots");
+    const actions = document.getElementById("galleryImageActions");
     const downloadLink = document.getElementById("downloadLink");
-    const deleteBtn = document.getElementById("deleteImageBtn");
-    const cropBtn = document.getElementById("cropImageBtn");
     const addLabel = document.getElementById("addImageLabel");
     const addCamera = document.getElementById("addCameraLabel");
     const counter = document.getElementById("imageCounter");
@@ -188,17 +187,14 @@ function renderGallery() {
     if (galleryImages.length === 0) {
         noImageText.style.display = "block";
         carousel.style.display = "none";
-        downloadLink.style.display = "none";
-        deleteBtn.style.display = "none";
-        cropBtn.style.display = "none";
+        actions.style.setProperty("display", "none", "important");
         counter.textContent = "";
         return;
     }
 
     noImageText.style.display = "none";
     carousel.style.display = "block";
-    deleteBtn.style.display = "inline-block";
-    cropBtn.style.display = "inline-block";
+    actions.style.setProperty("display", "flex", "important");
 
     // Build track slides
     track.innerHTML = galleryImages
@@ -219,12 +215,11 @@ function renderGallery() {
     // Counter
     counter.textContent = `(${galleryIndex + 1} / ${galleryImages.length})`;
 
-    // Download link
+    // Download link for current image
     const current = galleryImages[galleryIndex];
     if (current) {
         downloadLink.href = "/uploads/" + current.file;
         downloadLink.download = current.filename || "image";
-        downloadLink.style.display = "inline-block";
     }
 
     // Nav visibility
@@ -248,8 +243,7 @@ function updateGalleryPosition() {
     if (galleryImages.length > 0) {
         counter.textContent = `(${galleryIndex + 1} / ${galleryImages.length})`;
         const current = galleryImages[galleryIndex];
-        const downloadLink =
-            document.getElementById("downloadLink");
+        const downloadLink = document.getElementById("downloadLink");
         downloadLink.href = "/uploads/" + current.file;
         downloadLink.download = current.filename || "image";
     }
