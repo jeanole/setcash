@@ -1,1 +1,2 @@
-
+- ended here: Still running. I'll wait for the completion notifications rather than polling.admin.js done. Still waiting on bills.js, budget.js, superadmin.js, and core.js.Still waiting on bills.js (ae988b0), budget.js (a6b7aad), superadmin.js (a153303), and core.js (a9e0137). I'll continue waiting for completion notifications.superadmin.js done. Still waiting on bills.js, budget.js, and core.js.bills.js done. Waiting on budget.js and core.js.
+- some issue with login to freshly deployed instances

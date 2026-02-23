@@ -141,7 +141,8 @@ Any authenticated user can create a new project:
 
 ## 4. Roles & Access Control
 
-All "higher" roles inherit the abilities of the roles below them.
+All "higher" roles inherit the abilities of the roles below them. 
+Default admin and pw in .env-file. User is forced to change pw if still same as in .env. 
 
 ### 4.1 Global Role
 
@@ -363,7 +364,7 @@ Interactive matrix:
 User-based PDF generation. Includes:
 - V-Geld summary
 - Bills table
-- Individual bill pages with images
+- Individual bill pages with images. Each bill starts on a new page with a details about this bill in the corner.
 - Final balance
 
 ### 7.6 Settings (Owner/Admin)

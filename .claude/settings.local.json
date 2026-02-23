@@ -12,7 +12,18 @@
       "Bash(grep:*)",
       "mcp__acp__Bash",
       "mcp__acp__Write",
-      "mcp__acp__Edit"
+      "mcp__acp__Edit",
+      "Bash(git stash:*)",
+      "Bash(git -C \"C:/Users/jensmoeller/code/vbudget\" status)",
+      "Bash(git -C \"C:/Users/jensmoeller/code/vbudget\" diff -- \"public/index.html\")",
+      "Bash(git -C \"C:/Users/jensmoeller/code/vbudget\" diff)",
+      "Bash(git -C \"C:/Users/jensmoeller/code/vbudget\" diff HEAD)",
+      "Bash(echo:*)",
+      "Skill(commit-commands:commit-push-pr)",
+      "Skill(commit-commands:commit-push-pr:*)",
+      "Bash(git -C \"C:/Users/jensmoeller/code/vbudget\" remote -v)",
+      "Bash(git -C \"C:/Users/jensmoeller/code/vbudget\" add public/index.html server.js)",
+      "Bash(git -C:*)"
     ]
   }
 }
