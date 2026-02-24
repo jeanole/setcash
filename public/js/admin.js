@@ -1,5 +1,7 @@
 // ========== Admin ==========
 
+var admPositionsCache = [];
+
 async function admLoadPositions() {
     try {
         admPositionsCache = await (
