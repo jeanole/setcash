@@ -34,11 +34,9 @@ Read these files to understand where the project stands:
    - `git ls-files src/ 2>/dev/null | head -30` → Overview of source files
    - Look for components, API routes, and pages based on project structure
 
-5. **Check Bug Reports:** Read `bugs/INDEX.md` if it exists
-   - Count Open bugs with Critical or High severity
-
-6. **Check Change Requests:** Read `changes/INDEX.md` if it exists
-   - Count Open or Pending Review items
+5. **Check Bug Reports and Change Requests:** In `features/INDEX.md`, filter the unified table:
+   - Count rows where Type=Bug and Status=Open with Priority Critical or High
+   - Count rows where Type=CR and Status=Pending
 
 ### Step 2: Determine Next Action
 
@@ -76,10 +74,10 @@ Based on the state analysis, determine what the user should do next:
 > - Check `docs/PRD.md` for planned features not yet specified
 
 **If open Critical/High bug reports exist:**
-> ⚠ [N] Critical/High bug(s) are open — see `bugs/INDEX.md`. Run `/frontend` or `/backend` to fix them.
+> ⚠ [N] Critical/High bug(s) are open — see `features/INDEX.md` (Type=Bug). Run `/frontend` or `/backend` to fix them.
 
 **If pending change requests exist:**
-> [N] change request(s) are pending review — see `changes/INDEX.md`. Accept or reject them, then run `/architecture` for accepted ones.
+> [N] change request(s) are pending review — see `features/INDEX.md` (Type=CR). Accept or reject them, then run `/architecture` for accepted ones.
 
 ### Step 3: Answer User Questions
 

@@ -20,9 +20,7 @@ You are an intelligent triage analyst and documentation writer. The user describ
 ## Before Starting
 **Announce:** "Loading project context..."
 
-1. Read `features/INDEX.md` — get the full feature list and next PROJ-X ID
-2. Read `bugs/INDEX.md` if it exists → find next BUG-N (default BUG-1)
-3. Read `changes/INDEX.md` if it exists → find next CR-N (default CR-1)
+1. Read `features/INDEX.md` — get the full feature list, next PROJ-X ID, next BUG-N, and next CR-N all from the same file's "Next Available IDs" line
 
 **Announce:** "Context loaded. Analyzing your report..."
 
@@ -95,8 +93,8 @@ Ask only what's missing:
 ### Bug Path
 
 1. Derive kebab-case filename from title (~5 words)
-2. Write `bugs/BUG-N-filename.md` using the Bug template below
-3. Create `bugs/INDEX.md` if missing; append row; increment Next ID
+2. Write `features/BUG-N-filename.md` using the Bug template below
+3. Append a row to `features/INDEX.md` unified table (Type=Bug); increment BUG-N in the "Next Available IDs" line
 4. If a specific PROJ-X was identified:
    - Read the feature spec
    - Find or create `## Open Bug Reports` section at the bottom
@@ -109,27 +107,24 @@ Ask only what's missing:
 
 ### Change Request Path — Path A (types A, B, C: modify existing spec)
 
-1. Write `changes/CR-N-filename.md` using the CR template below
-2. Create `changes/INDEX.md` if missing; append row; increment Next ID
-3. Read the linked feature spec
-4. Find or create `## Change Requests` section at the bottom; append CR block
-5. **Update the `**Status:**` line** in the feature spec:
+1. Read the linked feature spec
+2. Find or create `## Change Requests` section at the bottom; append CR block using the CR block template below
+3. Add a CR-N row to `features/INDEX.md` unified table (Type=CR); increment CR-N in the "Next Available IDs" line
+4. **Update the `**Status:**` line** in the feature spec:
    - If status is `Deployed` → change to `Change Requested`
    - If status is `Planned` or `In Progress` → change to `Change Requested`
    - If status is `In Review` → change to `Change Requested`
 
-**Announce:** "CR-N created. Feature spec updated to 'Change Requested'."
+**Announce:** "CR-N logged. Feature spec updated to 'Change Requested'."
 
 ### Change Request Path — Path B (type D: new feature spec)
 
-1. Write `changes/CR-N-filename.md`
-2. Create/update `changes/INDEX.md`; increment Next ID
-3. Determine next PROJ-X from `features/INDEX.md`
-4. Create `features/PROJ-X-name.md` using requirements template, pre-filling user stories and AC from CR details
-5. Update `features/INDEX.md`: add PROJ-X at status `Planned`; increment Next Available ID
-6. Update CR file's Resolution section to reference new PROJ-X
+1. Determine next PROJ-X from `features/INDEX.md`
+2. Create `features/PROJ-X-name.md` using requirements template, pre-filling user stories and AC from CR details
+3. Append the CR block to the new feature spec under `## Change Requests`
+4. Add two rows to `features/INDEX.md` unified table: PROJ-X (Type=Feature, Status=Planned) and CR-N (Type=CR); increment both PROJ-N and CR-N in the "Next Available IDs" line
 
-**Announce:** "CR-N created. New feature spec PROJ-X added to features/INDEX.md."
+**Announce:** "CR-N logged. New feature spec PROJ-X added to features/INDEX.md."
 
 ---
 
@@ -155,7 +150,7 @@ feat(PROJ-X): New feature spec from CR-N - [title]
 ```
 
 **Bug handoff:**
-> "BUG-N logged at `bugs/BUG-N-filename.md`. Feature PROJ-X status updated to **In Progress**.
+> "BUG-N logged at `features/BUG-N-filename.md`. Feature PROJ-X status updated to **In Progress**.
 > To fix: run `/[frontend|backend]`. After fixing, update the bug's **Status** to `Resolved` and fill in **Fixed In**."
 
 **CR handoff (Path A):**
@@ -170,7 +165,7 @@ feat(PROJ-X): New feature spec from CR-N - [title]
 
 ## Document Templates
 
-### `bugs/BUG-N-title.md`
+### `features/BUG-N-title.md`
 ```markdown
 # BUG-N: [Bug Title]
 
@@ -209,16 +204,14 @@ feat(PROJ-X): New feature spec from CR-N - [title]
 **Fix Description:** —
 ```
 
-### `bugs/INDEX.md`
+### `features/INDEX.md` unified table format
 ```markdown
-# Bug Reports
+# Feature Index
 
-> Bugs discovered during real usage. For QA test results, see individual feature specs.
+**Next Available IDs:** PROJ-N · BUG-N · CR-N
 
-**Next Available ID:** BUG-N
-
-| ID | Severity | Status | Feature | Title | Skill | Reported |
-|----|----------|--------|---------|-------|-------|----------|
+| ID | Type | Title | Status | Priority | Feature | Date |
+|----|------|-------|--------|----------|---------|------|
 ```
 
 ### `## Open Bug Reports` block in feature spec
@@ -227,57 +220,10 @@ feat(PROJ-X): New feature spec from CR-N - [title]
 
 | ID | Severity | Title | Status |
 |----|----------|-------|--------|
-| [BUG-N](../bugs/BUG-N-filename.md) | High | Title | Open |
+| [BUG-N](BUG-N-filename.md) | High | Title | Open |
 ```
 
-### `changes/CR-N-title.md`
-```markdown
-# CR-N: [Change Title]
-
-**Status:** Open
-**Requested:** YYYY-MM-DD
-**Priority:** Critical | High | Medium | Low
-**Type:** Enhancement | Behavior Fix | New Feature (existing scope) | New Feature (new spec)
-
-## Related Feature
-**Feature:** [PROJ-X: Feature Name] | N/A (new capability)
-**Feature Spec:** [features/PROJ-X-name.md](../features/PROJ-X-name.md)
-
-## Change Description
-
-### Current Behavior / Limitation
-[What exists today]
-
-### Desired Behavior / New Capability
-[What the user wants]
-
-### Rationale
-[Why this change is needed]
-
-## Proposed Acceptance Criteria
-- [ ] [Criterion — if provided]
-
-## Resolution
-**Decision:** Pending | Accepted | Rejected | Deferred
-**Decided:** —
-**Notes:** —
-**Outcome:** Path A (feature spec updated) | Path B (new PROJ-X created)
-
-## Additional Context
-[Mockups, related bugs, or N/A]
-```
-
-### `changes/INDEX.md`
-```markdown
-# Change Requests
-
-**Next Available ID:** CR-N
-
-| ID | Status | Priority | Type | Feature | Title | Requested |
-|----|--------|----------|------|---------|-------|-----------|
-```
-
-### CR block appended to feature spec (Path A)
+### CR block appended to feature spec
 ```markdown
 ## Change Requests
 
@@ -313,11 +259,11 @@ The `Change Requested` status signals the feature needs review before the next b
 ---
 
 ## Checklist
-- [ ] Context loaded (features list, next BUG-N, next CR-N)
+- [ ] Context loaded (features list, next BUG-N, next CR-N — all from `features/INDEX.md`)
 - [ ] Classification made (Bug or CR) — stated to user
 - [ ] Only missing details asked for (no redundant questions)
-- [ ] Document written (`bugs/` or `changes/`)
-- [ ] INDEX.md created/updated with new row and incremented Next ID
+- [ ] Document written to `features/` directory
+- [ ] `features/INDEX.md` updated with new row and incremented ID in Next Available IDs
 - [ ] Feature spec updated: document cross-reference added + status updated
 - [ ] Git committed
 - [ ] User informed of next steps and status change

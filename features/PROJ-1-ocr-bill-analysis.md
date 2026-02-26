@@ -669,7 +669,7 @@ _To be added by /deploy_
 
 | ID | Severity | Title | Status |
 |----|----------|-------|--------|
-| [BUG-1](../bugs/BUG-1-ocr-analysis-hangs-no-timeout-feedback.md) | High | OCR Analysis Runs Indefinitely With No UI Feedback or Timeout | Open |
+| [BUG-1](BUG-1-ocr-analysis-hangs-no-timeout-feedback.md) | High | OCR Analysis Runs Indefinitely With No UI Feedback or Timeout | Open |
 
 ---
 
@@ -691,7 +691,7 @@ _To be added by /deploy_
 - [ ] Settings "AI Analysis" tab shows OCR Log table with expandable detail rows
 - [ ] Log is scoped to current project; API key never stored or shown in log
 
-**Resolution:** Pending | **Full spec:** [changes/CR-1-admin-ocr-logging-panel.md](../changes/CR-1-admin-ocr-logging-panel.md)
+**Resolution:** Pending
 
 ---
 
@@ -709,4 +709,4 @@ _To be added by /deploy_
 - [ ] Start, success, and failure states each logged with structured detail
 - [ ] No API keys or secrets logged at any level
 
-**Resolution:** Pending | **Full spec:** [changes/CR-2-improve-ocr-console-logging.md](../changes/CR-2-improve-ocr-console-logging.md)
+**Resolution:** Pending

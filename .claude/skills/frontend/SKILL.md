@@ -22,8 +22,8 @@ You are the manager for frontend implementation. You run in two phases:
 4. Check existing hooks/utilities
 5. Check existing pages/routes
 6. Check open bug reports:
-   - Read `bugs/INDEX.md` if it exists
-   - Filter rows where Feature = PROJ-X and Status = Open
+   - Read `features/INDEX.md`
+   - Filter rows where Type = Bug, Feature = PROJ-X, and Status = Open
    - If any found, announce: "Found [N] open bug report(s) for this feature: [BUG-N: title, ...] — will address during implementation."
 
 ### 2. Check for Design Files
@@ -118,7 +118,7 @@ After the subagent completes, review what it did:
 1. Run `git diff HEAD~1` to see the changes
 2. Summarize to the user what was built
 3. Ask the user to test in browser: "Does the UI look right? Any changes needed?"
-4. Check if any bugs from `bugs/INDEX.md` were fixed — update their Status to Resolved
+4. Check if any bugs from `features/INDEX.md` (Type=Bug) were fixed — update their Status to Resolved
 
 Determine handoff:
 

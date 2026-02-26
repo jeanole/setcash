@@ -24,15 +24,20 @@ NEVER write code or show implementation details:
 2. Check existing components: `git ls-files` filtered to your project's components directory
 3. Check existing APIs: `git ls-files` filtered to your project's API directory
 4. Read the feature spec the user references
+5. Check for open bugs and pending CRs:
+   - In `features/INDEX.md`, filter rows where Feature = PROJ-X and either (Type=Bug, Status=Open) or (Type=CR, Status=Pending)
+   - If any found, announce: "Found [N] open bug(s) and [M] pending change request(s) for this feature — will evaluate architecture impact."
+   - Read the `## Open Bug Reports` and `## Change Requests` sections in the feature spec for full details
 
 ## Workflow
 
 ### 1. Read Feature Spec
 - Read `/features/PROJ-X.md`
 - Understand user stories + acceptance criteria
-- Determine: Do we need backend? Or frontend-only? launch a backend-dev agentsand a frontend-dev agent to determine the architecture and the needs for backend and frontend development
-- once agents are return read the files from agents to get deeper understanding of the architecture
-- 
+- Review any `## Change Requests` sections — accepted CRs may require architecture changes
+- Review any `## Open Bug Reports` — bugs may reveal design flaws needing architectural fixes
+- Determine: Do we need backend? Or frontend-only? Launch a backend-dev agent and a frontend-dev agent to determine the architecture and the needs for backend and frontend development
+- Once agents return, read the files from agents to get deeper understanding of the architecture
 ### 2. Ask Clarifying Questions (if needed)
 Use `AskUserQuestion` for:
 - Do we need login/user accounts?
@@ -41,6 +46,8 @@ Use `AskUserQuestion` for:
 - Any third-party integrations?
 
 ### 3. Create High-Level Design
+
+**If re-running after CRs or bugs:** Compare the existing `## Tech Design` section against the new CRs/bugs. If the current architecture still holds, state so. If changes are needed, clearly mark what is new or revised with a `### Design Revision (CR-N / BUG-N)` sub-section.
 
 #### A) Component Structure (Visual Tree)
 Show which UI parts are needed:
@@ -83,7 +90,8 @@ Add a "Tech Design (Solution Architect)" section to `/features/PROJ-X.md`
 
 ## Checklist Before Completion
 - [ ] Checked existing architecture via git
-- [ ] Feature spec read and understood
+- [ ] Feature spec read and understood (including `## Change Requests` and `## Open Bug Reports` sections)
+- [ ] Open bugs and pending CRs evaluated for architecture impact
 - [ ] Component structure documented (visual tree, PM-readable)
 - [ ] Data model described (plain language, no code)
 - [ ] Backend need clarified (localStorage vs database)

@@ -1,10 +1,11 @@
 # General Project Rules
 
 ## Feature Tracking
-- All features are tracked in `features/INDEX.md` - read it before starting any work
-- Feature specs live in `features/PROJ-X-feature-name.md`
-- Feature IDs are sequential: check INDEX.md for the next available number
-- One feature per spec file (Single Responsibility)
+- All work items (features, bugs, change requests) are tracked in a single unified table in `features/INDEX.md` — read it before starting any work
+- Feature specs live in `features/PROJ-X-feature-name.md` (one file per feature, Single Responsibility)
+- Bug reports live in `features/BUG-N-description.md`
+- Change requests are appended inline to the relevant feature spec under `## Change Requests` — no separate CR files
+- IDs are sequential per type: `features/INDEX.md` has a "Next Available IDs" line with format `PROJ-N · BUG-N · CR-N`
 - Never combine multiple independent functionalities in one spec
 
 ## Git Conventions

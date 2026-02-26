@@ -1,8 +1,11 @@
-# vBudget — Feature Index
+# vBudget — Project Index
 
-**Next Available ID:** PROJ-3
+**Next Available IDs:** PROJ-3 · BUG-2 · CR-3
 
-| ID | Feature | Status | Spec File |
-|----|---------|--------|-----------|
-| PROJ-1 | OCR / AI Bill Analysis | Change Requested | [PROJ-1-ocr-bill-analysis.md](PROJ-1-ocr-bill-analysis.md) |
-| PROJ-2 | Security & Multi-tenant Hardening | In Review | [PROJ-2-security-hardening.md](PROJ-2-security-hardening.md) |
+| ID | Type | Title | Status | Priority | Feature | Date |
+|----|------|-------|--------|----------|---------|------|
+| [PROJ-1](PROJ-1-ocr-bill-analysis.md) | Feature | OCR / AI Bill Analysis | Change Requested | — | — | 2026-02-24 |
+| [PROJ-2](PROJ-2-security-hardening.md) | Feature | Security & Multi-tenant Hardening | In Review | — | — | 2026-02-24 |
+| [BUG-1](BUG-1-ocr-analysis-hangs-no-timeout-feedback.md) | Bug | OCR Analysis Runs Indefinitely With No UI Feedback or Timeout | Open | High | PROJ-1 | 2026-02-26 |
+| CR-1 | CR | Admin OCR/AI Logging Panel in Settings | Pending | High | PROJ-1 | 2026-02-26 |
+| CR-2 | CR | Improve Console Logging Clarity for OCR Field Writes | Pending | Low | PROJ-1 | 2026-02-26 |
