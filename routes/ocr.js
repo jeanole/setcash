@@ -115,6 +115,8 @@ Return ONLY a valid JSON object with exactly these keys (use null for unknown/mi
 }
 Return nothing except the JSON object.`;
 
+const OCR_FETCH_TIMEOUT_MS = 60_000;
+
 async function analyseImage(provider, apiKey, base64, mimeType, baseUrl) {
   const dataUrl = `data:${mimeType};base64,${base64}`;
 
@@ -122,29 +124,44 @@ async function analyseImage(provider, apiKey, base64, mimeType, baseUrl) {
     const url = provider === "custom"
       ? `${baseUrl}/chat/completions`
       : "https://api.openai.com/v1/chat/completions";
-    const resp = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-4o",
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "text", text: OCR_PROMPT },
-              { type: "image_url", image_url: { url: dataUrl } },
-            ],
-          },
-        ],
-        max_tokens: 512,
-      }),
-    });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), OCR_FETCH_TIMEOUT_MS);
+    let resp;
+    try {
+      resp = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: "gpt-4o",
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: OCR_PROMPT },
+                { type: "image_url", image_url: { url: dataUrl } },
+              ],
+            },
+          ],
+          max_tokens: 512,
+        }),
+        signal: controller.signal,
+      });
+    } catch (e) {
+      if (e.name === "AbortError") throw new Error("Request timed out after 60s");
+      throw e;
+    } finally {
+      clearTimeout(timer);
+    }
     if (!resp.ok) {
-      const err = await resp.json().catch(() => ({}));
-      const msg = err.error?.message || resp.statusText;
+      const rawBody = await resp.text().catch(() => "");
+      const truncated = rawBody.slice(0, 500);
+      let msg;
+      try { msg = JSON.parse(rawBody)?.error?.message; } catch {}
+      msg = msg || resp.statusText;
+      console.error(`[OCR] Provider HTTP ${resp.status} (openai/custom): ${truncated}`);
       if (resp.status === 401) throw new Error("Invalid API key");
       if (resp.status === 429) throw new Error("Rate limit exceeded");
       throw new Error(msg || `Provider error ${resp.status}`);
@@ -157,23 +174,38 @@ async function analyseImage(provider, apiKey, base64, mimeType, baseUrl) {
   if (provider === "gemini") {
     // BUG-5: Use header-based auth to avoid API key appearing in server logs/URLs
     const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
-    const resp = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              { text: OCR_PROMPT },
-              { inline_data: { mime_type: mimeType, data: base64 } },
-            ],
-          },
-        ],
-      }),
-    });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), OCR_FETCH_TIMEOUT_MS);
+    let resp;
+    try {
+      resp = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                { text: OCR_PROMPT },
+                { inline_data: { mime_type: mimeType, data: base64 } },
+              ],
+            },
+          ],
+        }),
+        signal: controller.signal,
+      });
+    } catch (e) {
+      if (e.name === "AbortError") throw new Error("Request timed out after 60s");
+      throw e;
+    } finally {
+      clearTimeout(timer);
+    }
     if (!resp.ok) {
-      const err = await resp.json().catch(() => ({}));
-      const msg = err.error?.message || resp.statusText;
+      const rawBody = await resp.text().catch(() => "");
+      const truncated = rawBody.slice(0, 500);
+      let msg;
+      try { msg = JSON.parse(rawBody)?.error?.message; } catch {}
+      msg = msg || resp.statusText;
+      console.error(`[OCR] Provider HTTP ${resp.status} (gemini): ${truncated}`);
       if (resp.status === 400 && msg.includes("API_KEY")) throw new Error("Invalid API key");
       if (resp.status === 429) throw new Error("Rate limit exceeded");
       throw new Error(msg || `Provider error ${resp.status}`);
@@ -184,33 +216,48 @@ async function analyseImage(provider, apiKey, base64, mimeType, baseUrl) {
   }
 
   if (provider === "claude") {
-    const resp = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-3-5-haiku-20241022",
-        max_tokens: 512,
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "image",
-                source: { type: "base64", media_type: mimeType, data: base64 },
-              },
-              { type: "text", text: OCR_PROMPT },
-            ],
-          },
-        ],
-      }),
-    });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), OCR_FETCH_TIMEOUT_MS);
+    let resp;
+    try {
+      resp = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: "claude-3-5-haiku-20241022",
+          max_tokens: 512,
+          messages: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "image",
+                  source: { type: "base64", media_type: mimeType, data: base64 },
+                },
+                { type: "text", text: OCR_PROMPT },
+              ],
+            },
+          ],
+        }),
+        signal: controller.signal,
+      });
+    } catch (e) {
+      if (e.name === "AbortError") throw new Error("Request timed out after 60s");
+      throw e;
+    } finally {
+      clearTimeout(timer);
+    }
     if (!resp.ok) {
-      const err = await resp.json().catch(() => ({}));
-      const msg = err.error?.message || resp.statusText;
+      const rawBody = await resp.text().catch(() => "");
+      const truncated = rawBody.slice(0, 500);
+      let msg;
+      try { msg = JSON.parse(rawBody)?.error?.message; } catch {}
+      msg = msg || resp.statusText;
+      console.error(`[OCR] Provider HTTP ${resp.status} (claude): ${truncated}`);
       if (resp.status === 401) throw new Error("Invalid API key");
       if (resp.status === 429) throw new Error("Rate limit exceeded");
       throw new Error(msg || `Provider error ${resp.status}`);
@@ -246,11 +293,13 @@ function parseOcrResponse(text) {
 // ── Background job ────────────────────────────────────────────────────────────
 
 async function runOcrJob(billId, projectId) {
+  const jobStart = Date.now();
+
   // 1. Mark pending
   db.prepare("UPDATE bills SET ocr_status = 'pending' WHERE id = ?").run(billId);
 
   // Helper: mark failed and notify
-  const fail = (reason) => {
+  const fail = (reason, errorType) => {
     db.prepare("UPDATE bills SET ocr_status = 'failed' WHERE id = ?").run(billId);
     const bill = db.prepare("SELECT email FROM bills WHERE id = ?").get(billId);
     if (bill) {
@@ -258,7 +307,8 @@ async function runOcrJob(billId, projectId) {
         "INSERT INTO notifications (user_email, type, message, project_id) VALUES (?, 'ocr_failed', ?, ?)"
       ).run(bill.email, `Bill analysis failed: ${reason}`, projectId);
     }
-    console.error(`[OCR] Bill #${billId} failed: ${reason}`);
+    const label = errorType ? `${errorType}: ` : "";
+    console.error(`[OCR] Bill ${billId}: FAILED — ${label}${reason}`);
   };
 
   try {
@@ -271,22 +321,24 @@ async function runOcrJob(billId, projectId) {
       try { settings[r.key] = JSON.parse(r.value); } catch { settings[r.key] = r.value; }
     }
 
-    if (!settings.ocrEnabled) return fail("OCR not enabled for this project");
-    if (!settings.ocrApiKey) return fail("OCR not configured for this project");
+    if (!settings.ocrEnabled) return fail("OCR not enabled for this project", "ConfigError");
+    if (!settings.ocrApiKey) return fail("OCR not configured for this project", "ConfigError");
 
     const provider = settings.ocrProvider || "openai";
     const apiKey = decryptApiKey(settings.ocrApiKey);
-    if (!apiKey) return fail("Could not read API key");
+    if (!apiKey) return fail("Could not read API key", "ConfigError");
 
     const baseUrl = settings.ocrBaseUrl || null;
+
+    console.log(`[OCR] Bill ${billId} (project ${projectId}): analysis started — provider: ${provider}`);
 
     // BUG-3: Validate custom base URL — must be https:// and not a private/reserved address
     if (provider === "custom") {
       if (!baseUrl || !baseUrl.startsWith("https://")) {
-        return fail("Custom provider base URL must start with https://");
+        return fail("Custom provider base URL must start with https://", "ConfigError");
       }
       if (isPrivateUrl(baseUrl)) {
-        return fail("Custom provider base URL must not point to a private or reserved address");
+        return fail("Custom provider base URL must not point to a private or reserved address", "SSRFError");
       }
     }
 
@@ -296,10 +348,10 @@ async function runOcrJob(billId, projectId) {
         "SELECT file FROM bill_images WHERE bill_id = ? ORDER BY sort_order, id LIMIT 1"
       )
       .get(billId);
-    if (!img || !img.file) return fail("No image attached to this bill");
+    if (!img || !img.file) return fail("No image attached to this bill", "InputError");
 
     const imgPath = path.join(DATA_DIR, "uploads", img.file);
-    if (!fs.existsSync(imgPath)) return fail("Image file not found on disk");
+    if (!fs.existsSync(imgPath)) return fail("Image file not found on disk", "InputError");
 
     // 4. Read and encode image
     const imgBuffer = fs.readFileSync(imgPath);
@@ -316,7 +368,7 @@ async function runOcrJob(billId, projectId) {
 
     // 6. Get current bill values to avoid overwriting user data
     const bill = db.prepare("SELECT * FROM bills WHERE id = ?").get(billId);
-    if (!bill) return fail("Bill not found");
+    if (!bill) return fail("Bill not found", "DBError");
 
     // Fields eligible for OCR writing (only write if currently empty/zero)
     const fieldChecks = {
@@ -331,6 +383,7 @@ async function runOcrJob(billId, projectId) {
     };
 
     const writtenFields = [];
+    const skippedFields = [];
     const updates = [];
     const params = [];
 
@@ -339,6 +392,8 @@ async function runOcrJob(billId, projectId) {
         updates.push(`${field} = ?`);
         params.push(extracted[field]);
         writtenFields.push(field);
+      } else if (extracted[field] != null) {
+        skippedFields.push(field);
       }
     }
 
@@ -365,21 +420,51 @@ async function runOcrJob(billId, projectId) {
     }
 
     // 8. Set ocr_status and ocr_fields
+    const finalFields = writtenFields.length > 0 ? writtenFields : null;
     db.prepare("UPDATE bills SET ocr_status = 'done', ocr_fields = ? WHERE id = ?").run(
-      writtenFields.length > 0 ? JSON.stringify(writtenFields) : null,
+      finalFields ? JSON.stringify(finalFields) : null,
       billId
     );
 
+    const elapsed = Date.now() - jobStart;
+    const writtenList = writtenFields.length > 0 ? writtenFields.join(", ") : "none";
+    const skippedList = skippedFields.length > 0 ? skippedFields.join(", ") : "none";
     console.log(
-      `[OCR] Bill #${billId} done. Fields written: ${writtenFields.join(", ") || "none"}`
+      `[OCR] Bill ${billId}: wrote ${writtenFields.length} fields [${writtenList}] — ${skippedFields.length} skipped (already filled) [${skippedList}]`
+    );
+    console.log(
+      `[OCR] Bill ${billId}: done in ${elapsed}ms — ocr_status=done, ocr_fields=[${finalFields ? finalFields.join(", ") : ""}]`
     );
   } catch (e) {
-    fail(e.message || "Unknown error");
+    const errorType = e.name || "Error";
+    fail(e.message || "Unknown error", errorType);
   }
 }
 
 
 // ── HTTP trigger endpoint ─────────────────────────────────────────────────────
+
+// GET /api/bills/:id/ocr-status — poll the OCR status for a bill
+router.get("/api/bills/:id/ocr-status", ensureAuth, ensureProjectAccess, (req, res) => {
+  const projectId = req.user.currentProjectId;
+
+  const billId = parseInt(req.params.id, 10);
+  if (!billId || isNaN(billId) || billId <= 0) {
+    return res.status(400).json({ error: "Invalid bill ID" });
+  }
+
+  const bill = db
+    .prepare("SELECT ocr_status, ocr_fields FROM bills WHERE id = ? AND project_id = ?")
+    .get(billId, projectId);
+  if (!bill) return res.status(404).json({ error: "Bill not found" });
+
+  let ocrFields = null;
+  if (bill.ocr_fields) {
+    try { ocrFields = JSON.parse(bill.ocr_fields); } catch {}
+  }
+
+  return res.json({ ocrStatus: bill.ocr_status || null, ocrFields });
+});
 
 // BUG-6: Add ensureAuth before ensureProjectAccess per spec (defence-in-depth)
 router.post("/api/bills/:id/analyse", ensureAuth, ensureProjectAccess, (req, res) => {
