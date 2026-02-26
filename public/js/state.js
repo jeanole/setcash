@@ -32,6 +32,9 @@ var cropQueue = [];
 var cropCallback = null;
 var cropperInstance = null;
 
+// OCR / AI Analysis state
+var projectOcrEnabled = false;
+
 // Admin state
 var positionsCache = [];
 

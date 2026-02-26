@@ -147,6 +147,8 @@ router.get("/api/bills", ensureProjectAccess, (req, res) => {
     motiveAllocations: motivesByBill[b.id] || [],
     categoryAllocations: categoriesByBill[b.id] || [],
     status: b.status || "confirmed",
+    ocrStatus: b.ocr_status || null,
+    ocrFields: b.ocr_fields ? JSON.parse(b.ocr_fields) : null,
   }));
   res.json(mapped);
 });
@@ -390,6 +392,26 @@ router.put("/api/bills/:id", ensureProjectAccess, (req, res) => {
     params.push((newB19 || 0) + (newB7 || 0) + (newB0 || 0));
     updates.push("netto_amount = ?");
     params.push((newB19 || 0) / 1.19 + (newB7 || 0) / 1.07 + (newB0 || 0));
+
+    // Strip OCR-suggested fields that the user has now explicitly edited
+    if (bill.ocr_fields) {
+      let ocrFields = JSON.parse(bill.ocr_fields);
+      const editedFields = Object.keys(changes);
+      // BUG-8: When a brutto field is edited, also strip "amount" since it gets recalculated
+      const bruttoFields = ["brutto19", "brutto7", "brutto0"];
+      const anyBruttoEdited = bruttoFields.some((f) => editedFields.includes(f));
+      const fieldsToRemove = anyBruttoEdited ? [...editedFields, "amount"] : editedFields;
+      ocrFields = ocrFields.filter((f) => !fieldsToRemove.includes(f));
+      if (ocrFields.length === 0) {
+        updates.push("ocr_fields = ?");
+        params.push(null);
+        updates.push("ocr_status = ?");
+        params.push(null);
+      } else {
+        updates.push("ocr_fields = ?");
+        params.push(JSON.stringify(ocrFields));
+      }
+    }
 
     params.push(id);
     db.prepare(`UPDATE bills SET ${updates.join(", ")} WHERE id = ?`).run(

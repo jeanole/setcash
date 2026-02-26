@@ -5,18 +5,26 @@ const db = require("../db");
 const DATA_DIR = db.DATA_DIR;
 const { ensureProjectAdmin } = require("../middleware");
 const { getSettings } = require("./helpers");
+const { encryptApiKey, maskApiKey } = require("./ocr");
 
 // These are imported lazily in the route to avoid circular deps
 // startProjectBot comes from telegram module
 
 router.get("/api/admin/settings", ensureProjectAdmin, (req, res) => {
   const projectId = req.user.currentProjectId;
-  res.json(getSettings(projectId));
+  const settings = getSettings(projectId);
+  // Never expose the raw encrypted API key — send masked version only
+  if (settings.ocrApiKey) {
+    settings.ocrApiKeyMasked = maskApiKey(settings.ocrApiKey);
+    delete settings.ocrApiKey;
+  }
+  res.json(settings);
 });
 
 router.put("/api/admin/settings", ensureProjectAdmin, (req, res) => {
   const projectId = req.user.currentProjectId;
-  const { projectTitle, projectSubtitle, exportSheetId, telegramBotToken, telegramEnabled } = req.body;
+  const { projectTitle, projectSubtitle, exportSheetId, telegramBotToken, telegramEnabled,
+          ocrEnabled, ocrProvider, ocrApiKey, ocrBaseUrl } = req.body;
   // Save project name/subtitle directly to projects table (source of truth)
   if (projectTitle !== undefined || projectSubtitle !== undefined) {
     const updates = [];
@@ -46,6 +54,38 @@ router.put("/api/admin/settings", ensureProjectAdmin, (req, res) => {
     // Restart bot to pick up changes
     const { startProjectBot } = require("./telegram");
     startProjectBot(projectId);
+  }
+  if (ocrEnabled !== undefined)
+    insert.run(projectId, "ocrEnabled", JSON.stringify(ocrEnabled === true));
+  if (ocrProvider !== undefined) {
+    // BUG-10: Validate provider is a known value
+    const validProviders = ["openai", "gemini", "claude", "custom"];
+    if (!validProviders.includes(ocrProvider)) {
+      return res.status(400).json({ error: `Invalid ocrProvider. Must be one of: ${validProviders.join(", ")}` });
+    }
+    insert.run(projectId, "ocrProvider", JSON.stringify(ocrProvider));
+  }
+  if (ocrApiKey !== undefined && ocrApiKey !== "") {
+    // BUG-10: Validate custom base URL when provider is custom
+    const effectiveProvider = ocrProvider !== undefined ? ocrProvider : "openai";
+    if (effectiveProvider === "custom") {
+      if (!ocrBaseUrl || !ocrBaseUrl.startsWith("https://")) {
+        return res.status(400).json({ error: "Custom provider base URL must start with https://" });
+      }
+      // BUG-3: Reject private/reserved IP ranges at save time too
+      const { isPrivateUrl } = require("./ocr");
+      if (isPrivateUrl(ocrBaseUrl)) {
+        return res.status(400).json({ error: "Custom provider base URL must not point to a private or reserved address" });
+      }
+    }
+    insert.run(projectId, "ocrApiKey", JSON.stringify(encryptApiKey(ocrApiKey)));
+  }
+  if (ocrBaseUrl !== undefined) {
+    // BUG-10: Validate base URL format when provided
+    if (ocrBaseUrl !== "" && !ocrBaseUrl.startsWith("https://")) {
+      return res.status(400).json({ error: "ocrBaseUrl must start with https://" });
+    }
+    insert.run(projectId, "ocrBaseUrl", JSON.stringify(ocrBaseUrl));
   }
   res.json({ ok: true });
 });

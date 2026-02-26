@@ -176,6 +176,20 @@ db.exec(`
   );
 `);
 
+// Add OCR columns to bills if missing (migration)
+try {
+  db.prepare("SELECT ocr_status FROM bills LIMIT 1").get();
+} catch (e) {
+  db.exec("ALTER TABLE bills ADD COLUMN ocr_status TEXT DEFAULT NULL");
+  console.log("Migrated: added ocr_status column to bills");
+}
+try {
+  db.prepare("SELECT ocr_fields FROM bills LIMIT 1").get();
+} catch (e) {
+  db.exec("ALTER TABLE bills ADD COLUMN ocr_fields TEXT DEFAULT NULL");
+  console.log("Migrated: added ocr_fields column to bills");
+}
+
 // Add bills.status column if missing (migration)
 try {
   db.prepare("SELECT status FROM bills LIMIT 1").get();

@@ -121,6 +121,7 @@ function loadSettingsTab(tab) {
     if (tab === "adm-members" && isAdmin) admLoadPositions().then(() => admLoadMembers());
     if (tab === "adm-export" && isAdmin) admLoadCredStatus();
     if (tab === "adm-telegram" && isAdmin) admLoadTelegramSettings();
+    if (tab === "adm-ai" && isAdmin) admLoadOcrSettings();
     if (tab === "adm-projects") admLoadProjects();
 }
 
@@ -142,16 +143,19 @@ function closeModal() {
     currentBillId = null;
     galleryImages = [];
     galleryIndex = 0;
+    // Clear OCR highlights
+    if (typeof clearOcrFieldHighlights === "function") clearOcrFieldHighlights();
 }
 
 async function loadProjectData() {
-    // Load motives, categories, positions, and project info for current project
-    const [motivesRes, categoriesRes, positionsRes, projectRes] =
+    // Load motives, categories, positions, project info, and settings for current project
+    const [motivesRes, categoriesRes, positionsRes, projectRes, settingsRes] =
         await Promise.all([
             fetch("/api/motives"),
             fetch("/api/categories"),
             fetch("/api/positions"),
             fetch("/api/project-info"),
+            fetch("/api/admin/settings"),
         ]);
     if (motivesRes.status === 403) {
         await showProjectSelector();
@@ -161,6 +165,11 @@ async function loadProjectData() {
     categoriesData = await categoriesRes.json();
     rolesData = positionsRes.ok ? await positionsRes.json() : [];
     const projectInfo = await projectRes.json();
+    // Load OCR enabled state from settings
+    try {
+        const settingsData = settingsRes.ok ? await settingsRes.json() : {};
+        projectOcrEnabled = !!settingsData.ocrEnabled;
+    } catch (e) { projectOcrEnabled = false; }
     const projectName =
         projectInfo.projectName ||
         currentUser.currentProjectName ||

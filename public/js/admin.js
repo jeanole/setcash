@@ -330,6 +330,47 @@ async function admDeleteProjectById(projectId, projectName) {
     }
 }
 
+// ========== Admin: AI Analysis (OCR) ==========
+
+async function admLoadOcrSettings() {
+    try {
+        const settings = await (await fetch("/api/admin/settings")).json();
+        document.getElementById("admOcrEnabled").checked = !!settings.ocrEnabled;
+        document.getElementById("admOcrProvider").value = settings.ocrProvider || "openai";
+        document.getElementById("admOcrBaseUrl").value = settings.ocrBaseUrl || "";
+        document.getElementById("admOcrApiKey").value = "";
+
+        // Show masked key if configured
+        const maskedEl = document.getElementById("admOcrApiKeyMasked");
+        if (settings.ocrApiKeyMasked) {
+            maskedEl.textContent = "Current key: ..." + escapeHtml(settings.ocrApiKeyMasked);
+        } else {
+            maskedEl.textContent = "";
+        }
+
+        // Toggle base URL visibility
+        admToggleOcrBaseUrl();
+
+        // Status indicator
+        const statusEl = document.getElementById("admOcrStatus");
+        if (settings.ocrEnabled && settings.ocrApiKeyMasked) {
+            statusEl.innerHTML = '<span class="text-emerald-600 font-medium">AI Analysis is configured and enabled</span>';
+        } else if (settings.ocrEnabled) {
+            statusEl.innerHTML = '<span class="text-amber-500 font-medium">Enabled but no API key configured</span>';
+        } else {
+            statusEl.innerHTML = '<span class="text-slate-400">AI Analysis is disabled</span>';
+        }
+    } catch (e) {
+        console.error("Error loading OCR settings", e);
+    }
+}
+
+function admToggleOcrBaseUrl() {
+    const provider = document.getElementById("admOcrProvider").value;
+    document.getElementById("admOcrBaseUrlLabel").style.display =
+        provider === "custom" ? "" : "none";
+}
+
 // ========== Admin: Telegram ==========
 
 async function admLoadTelegramSettings() {
@@ -504,6 +545,36 @@ document.addEventListener("DOMContentLoaded", () => {
             j.ok ? "Export Sheet ID saved" : j.error || "Error",
             !j.ok,
         );
+    };
+
+    // AI Analysis provider change
+    document.getElementById("admOcrProvider").addEventListener("change", admToggleOcrBaseUrl);
+
+    // AI Analysis form
+    document.getElementById("admOcrForm").onsubmit = async (e) => {
+        e.preventDefault();
+        const payload = {
+            ocrEnabled: document.getElementById("admOcrEnabled").checked,
+            ocrProvider: document.getElementById("admOcrProvider").value,
+            ocrBaseUrl: document.getElementById("admOcrBaseUrl").value,
+        };
+        // Only send API key if user typed a new one
+        const keyVal = document.getElementById("admOcrApiKey").value;
+        if (keyVal) {
+            payload.ocrApiKey = keyVal;
+        }
+        const res = await fetch("/api/admin/settings", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+        });
+        const j = await res.json();
+        if (j.ok) {
+            msg("admOcrResult", "AI Analysis settings saved", false);
+            admLoadOcrSettings();
+        } else {
+            msg("admOcrResult", j.error || "Error", true);
+        }
     };
 
     document.getElementById("admTelegramForm").onsubmit = async (e) => {

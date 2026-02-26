@@ -1097,6 +1097,12 @@
                             style="display: none"
                         >Telegram</button>
                         <button
+                            class="settings-tab admin-only px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 whitespace-nowrap bg-transparent cursor-pointer"
+                            data-settings-tab="adm-ai"
+                            onclick="switchSettingsTab('adm-ai')"
+                            style="display: none"
+                        >AI Analysis</button>
+                        <button
                             class="settings-tab px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 whitespace-nowrap bg-transparent cursor-pointer"
                             data-settings-tab="adm-projects"
                             onclick="switchSettingsTab('adm-projects')"
@@ -1485,6 +1491,77 @@
                                 ></tbody>
                             </table>
                             <div id="admTgLinksResult"></div>
+                        </div>
+                    </div>
+
+                    <!-- AI Analysis sub-tab -->
+                    <div id="settings-tab-adm-ai" class="settings-tab-content" style="display: none">
+                        <div
+                            class="bg-white rounded-xl shadow-sm border border-slate-100 p-5 md:p-6 mb-5"
+                        >
+                            <h2 class="text-base font-semibold text-slate-900 mb-4">
+                                AI Bill Analysis
+                            </h2>
+                            <div id="admOcrStatus" class="mb-4 text-sm"></div>
+                            <form id="admOcrForm" class="flex flex-col gap-4 max-w-lg">
+                                <label
+                                    class="flex items-center gap-2 text-sm font-medium text-slate-700"
+                                >
+                                    <input
+                                        type="checkbox"
+                                        id="admOcrEnabled"
+                                        class="rounded"
+                                    />
+                                    Enable AI Analysis for this project
+                                </label>
+                                <label
+                                    class="flex flex-col gap-1.5 text-sm font-medium text-slate-700"
+                                    >Provider
+                                    <select
+                                        id="admOcrProvider"
+                                        class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                                    >
+                                        <option value="openai">OpenAI (GPT-4o)</option>
+                                        <option value="gemini">Google Gemini</option>
+                                        <option value="claude">Anthropic Claude</option>
+                                        <option value="custom">Custom (OpenAI-compatible)</option>
+                                    </select>
+                                </label>
+                                <label
+                                    class="flex flex-col gap-1.5 text-sm font-medium text-slate-700"
+                                    >API Key
+                                    <input
+                                        type="password"
+                                        id="admOcrApiKey"
+                                        placeholder="Enter API key"
+                                        class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                                    />
+                                    <span id="admOcrApiKeyMasked" class="text-xs text-slate-400"></span>
+                                </label>
+                                <label
+                                    id="admOcrBaseUrlLabel"
+                                    class="flex flex-col gap-1.5 text-sm font-medium text-slate-700"
+                                    style="display: none"
+                                    >Base URL
+                                    <input
+                                        type="url"
+                                        id="admOcrBaseUrl"
+                                        placeholder="https://your-endpoint.example.com/v1"
+                                        class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                                    />
+                                </label>
+                                <button
+                                    type="submit"
+                                    class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors w-fit"
+                                >
+                                    Save
+                                </button>
+                            </form>
+                            <div id="admOcrResult" class="mt-2"></div>
+                            <p class="text-xs text-slate-400 mt-3">
+                                When enabled, uploaded bill images can be analysed by an AI vision model to extract fields like date, vendor, item, and amounts.
+                                Extracted fields are marked "to be checked" so users know to verify them.
+                            </p>
                         </div>
                     </div>
 
@@ -1893,12 +1970,22 @@
                                     class="allocation-widget"
                                 ></div>
                             </div>
+                            <div id="ocrStatusBar" class="hidden px-3 py-2 rounded-lg text-sm flex items-center gap-2"></div>
                             <div class="flex gap-3 mt-2">
                                 <button
                                     type="submit"
                                     class="bg-indigo-600 text-white px-5 py-2.5 rounded-lg font-medium hover:bg-indigo-700 transition-colors text-sm"
                                 >
                                     Save Changes
+                                </button>
+                                <button
+                                    type="button"
+                                    id="analyseBillBtn"
+                                    class="bg-amber-500 text-white px-5 py-2.5 rounded-lg font-medium hover:bg-amber-600 transition-colors text-sm"
+                                    style="display: none"
+                                    onclick="triggerBillAnalysis()"
+                                >
+                                    Analyse Bill
                                 </button>
                                 <button
                                     type="button"

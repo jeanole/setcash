@@ -28,6 +28,7 @@ const reportingRouter = require("./routes/reporting");
 const exportsRouter = require("./routes/exports");
 const telegramRouter = require("./routes/telegram");
 const superadminRouter = require("./routes/superadmin");
+const ocrRouter = require("./routes/ocr");
 
 const PORT = process.env.PORT || 3000;
 const DEV_MODE = process.env.DEV_MODE === "true";
@@ -53,6 +54,8 @@ app.use((req, res, next) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "DENY");
   res.setHeader("X-XSS-Protection", "1; mode=block");
+  res.setHeader("Referrer-Policy", "origin-when-cross-origin");
+  res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   next();
 });
 
@@ -95,6 +98,7 @@ app.use(reportingRouter);
 app.use(exportsRouter);
 app.use(telegramRouter);
 app.use(superadminRouter);
+app.use(ocrRouter);
 
 // Start server
 app.listen(PORT, () => {
