@@ -773,7 +773,7 @@ router.get("/api/bills/by-motive", ensureProjectAccess, (req, res) => {
     FROM bill_motives bm
     JOIN bills b ON b.id = bm.bill_id
     JOIN motives m ON m.id = bm.motive_id
-    WHERE b.project_id = ? AND (b.status IS NULL OR b.status = 'complete')
+    WHERE b.project_id = ? AND (b.status IS NULL OR b.status = 'confirmed')
     GROUP BY bm.motive_id
   `,
     )
@@ -783,7 +783,7 @@ router.get("/api/bills/by-motive", ensureProjectAccess, (req, res) => {
     .prepare(
       `
     SELECT SUM(b.netto_amount) as spent FROM bills b
-    WHERE b.project_id = ? AND (b.status IS NULL OR b.status = 'complete')
+    WHERE b.project_id = ? AND (b.status IS NULL OR b.status = 'confirmed')
     AND b.id NOT IN (SELECT DISTINCT bill_id FROM bill_motives)
   `,
     )
@@ -829,7 +829,7 @@ router.get("/api/bills/by-category", ensureProjectAccess, (req, res) => {
     FROM bill_categories bc
     JOIN bills b ON b.id = bc.bill_id
     JOIN categories c ON c.id = bc.category_id
-    WHERE b.project_id = ? AND (b.status IS NULL OR b.status = 'complete')
+    WHERE b.project_id = ? AND (b.status IS NULL OR b.status = 'confirmed')
     GROUP BY bc.category_id
   `,
     )
@@ -839,7 +839,7 @@ router.get("/api/bills/by-category", ensureProjectAccess, (req, res) => {
     .prepare(
       `
     SELECT SUM(b.netto_amount) as spent FROM bills b
-    WHERE b.project_id = ? AND (b.status IS NULL OR b.status = 'complete')
+    WHERE b.project_id = ? AND (b.status IS NULL OR b.status = 'confirmed')
     AND b.id NOT IN (SELECT DISTINCT bill_id FROM bill_categories)
   `,
     )
@@ -877,11 +877,47 @@ router.get("/api/bills/by-category", ensureProjectAccess, (req, res) => {
 });
 
 // Serve uploaded files (supports subdirectories like /uploads/user/file.jpg)
-router.get("/uploads/*", ensureAuth, (req, res) => {
-  const filePath = req.params[0];
-  const file = path.join(DATA_DIR, "uploads", filePath);
-  if (fs.existsSync(file)) return res.sendFile(file);
-  res.status(404).send("Not found");
+// Security: enforce project membership/authorization and prevent cross-project access
+router.get("/uploads/*", ensureProjectAccess, (req, res) => {
+  const relPath = req.params[0];
+  if (!relPath) return res.status(404).send("Not found");
+
+  // Look up image by file path in bill_images first
+  let row = db
+    .prepare(
+      `
+      SELECT bi.file, b.project_id
+      FROM bill_images bi
+      JOIN bills b ON b.id = bi.bill_id
+      WHERE bi.file = ?
+    `,
+    )
+    .get(relPath);
+
+  // Fallback to legacy bills.file column
+  if (!row) {
+    row = db
+      .prepare("SELECT file, project_id FROM bills WHERE file = ?")
+      .get(relPath);
+  }
+
+  if (!row || !row.file) {
+    return res.status(404).send("Not found");
+  }
+
+  const targetProjectId = row.project_id;
+  const user = req.user;
+
+  // Super-admins can access any project; regular users are bound to currentProjectId
+  if (!user.superAdmin && user.currentProjectId !== targetProjectId) {
+    return res.status(403).send("Forbidden");
+  }
+
+  const file = path.join(DATA_DIR, "uploads", row.file);
+  if (!fs.existsSync(file)) {
+    return res.status(404).send("Not found");
+  }
+  return res.sendFile(file);
 });
 
 module.exports = router;

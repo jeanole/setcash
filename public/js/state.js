@@ -45,3 +45,6 @@ var saCurrentUserEmail = '';
 var saMembershipPositions = [];
 var saCurrentMembers = [];
 var saCurrentProjectId = null;
+
+// CSRF
+var csrfToken = null;

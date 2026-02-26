@@ -502,7 +502,7 @@ router.get("/api/budget-report", ensureProjectAccess, (req, res) => {
     `
     SELECT bm.motive_id, SUM(b.netto_amount * bm.percentage / 100) as spent
     FROM bill_motives bm JOIN bills b ON b.id = bm.bill_id
-    WHERE b.project_id = ? AND (b.status IS NULL OR b.status = 'complete')
+    WHERE b.project_id = ? AND (b.status IS NULL OR b.status = 'confirmed')
     GROUP BY bm.motive_id
   `,
   )
@@ -516,7 +516,7 @@ router.get("/api/budget-report", ensureProjectAccess, (req, res) => {
     `
     SELECT bc.category_id, SUM(b.netto_amount * bc.percentage / 100) as spent
     FROM bill_categories bc JOIN bills b ON b.id = bc.bill_id
-    WHERE b.project_id = ? AND (b.status IS NULL OR b.status = 'complete')
+    WHERE b.project_id = ? AND (b.status IS NULL OR b.status = 'confirmed')
     GROUP BY bc.category_id
   `,
   )

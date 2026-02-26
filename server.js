@@ -12,6 +12,7 @@ require("./db");
 
 const { initGoogleServices } = require("./google");
 const { getSettings } = require("./routes/helpers");
+const { ensureCsrf } = require("./middleware");
 // Route modules
 const authRouter = require("./routes/auth");
 const projectsRouter = require("./routes/projects");
@@ -26,6 +27,7 @@ const notificationsRouter = require("./routes/notifications");
 const settingsRouter = require("./routes/settings");
 const reportingRouter = require("./routes/reporting");
 const exportsRouter = require("./routes/exports");
+const securityRouter = require("./routes/security");
 const telegramRouter = require("./routes/telegram");
 const superadminRouter = require("./routes/superadmin");
 const ocrRouter = require("./routes/ocr");
@@ -33,6 +35,18 @@ const ocrRouter = require("./routes/ocr");
 const PORT = process.env.PORT || 3000;
 const DEV_MODE = process.env.DEV_MODE === "true";
 const DATA_DIR = path.join(__dirname, "data");
+
+// Hardened secrets: refuse to start in production with weak session secret
+const DEFAULT_SESSION_SECRET = "change-this-in-production";
+if (process.env.NODE_ENV === "production") {
+  const secret = process.env.SESSION_SECRET;
+  if (!secret || secret === DEFAULT_SESSION_SECRET || secret.length < 16) {
+    console.error(
+      "[Startup] SESSION_SECRET is missing, too short, or using a default/weak value. Refusing to start in production.",
+    );
+    process.exit(1);
+  }
+}
 
 const app = express();
 
@@ -72,12 +86,15 @@ app.use(
       ttl: 86400,
       retries: 0,
     }),
-    secret: process.env.SESSION_SECRET || "change-this-in-production",
+    secret: process.env.SESSION_SECRET || DEFAULT_SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     cookie: { httpOnly: true, maxAge: 24 * 60 * 60 * 1000 },
   }),
 );
+
+// CSRF protection for state-changing requests
+app.use(ensureCsrf);
 
 // Static files
 app.use(express.static("public"));
@@ -99,6 +116,7 @@ app.use(exportsRouter);
 app.use(telegramRouter);
 app.use(superadminRouter);
 app.use(ocrRouter);
+app.use(securityRouter);
 
 // Start server
 app.listen(PORT, () => {

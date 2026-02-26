@@ -304,6 +304,7 @@ async function loadProjectData() {
 }
 
 async function init() {
+    await initCsrfToken();
     const res = await fetch("/api/user");
     const user = await res.json();
     if (!user) {
@@ -447,7 +448,7 @@ async function init() {
                 JSON.stringify(categoryAllocs),
             );
 
-            const resp = await fetch("/upload", {
+            const resp = await apiFetch("/upload", {
                 method: "POST",
                 body: data,
             });
@@ -491,7 +492,7 @@ async function init() {
             };
 
             try {
-                const resp = await fetch("/api/vgeld", {
+                const resp = await apiFetch("/api/vgeld", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(data),

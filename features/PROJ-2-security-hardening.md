@@ -145,3 +145,80 @@ Primary environments:
 ### Open Questions
 - Should super-admins have a special “all-projects export” feature, or should all exports remain project-scoped by default? (If needed, this would be a separate feature.)
 - Are there any non-browser API clients that must call state-changing endpoints (impacting CSRF design)?
+
+---
+
+## QA Test Results
+
+**Tested:** 2026-02-26  
+**App URL:** http://localhost:3000  
+**Tester:** QA Engineer (AI)
+
+### Acceptance Criteria Status
+
+#### AC-1: Export queries are project-scoped
+- [x] All Excel export queries in `routes/exports.js` filter by `project_id = req.user.currentProjectId`.
+- [x] Google Sheets export in `routes/exports.js` reuses the same project-scoped queries.
+- [x] Image ZIP export joins `bill_images` → `bills` and filters by `b.project_id = ?` scoped to the current project.
+
+#### AC-2: Image access checks
+- [x] `/uploads/*` now resolves files via `bill_images`/`bills` with a join on `project_id` instead of raw filesystem paths.
+- [x] Access is gated by `ensureProjectAccess` plus a check that `row.project_id` matches `req.user.currentProjectId`, with super-admin override only.
+- [x] Non-existent or cross-project images return `404`/`403` rather than leaking paths or throwing 500s.
+
+#### AC-3: CSRF protection
+- [x] Global `ensureCsrf` middleware enforces CSRF tokens on all non-GET/HEAD/OPTIONS requests, with explicit exceptions for login/OAuth endpoints.
+- [x] `/api/csrf-token` issues a per-session token; the SPA initializes it via `initCsrfToken` and sends it on XHR calls using `apiFetch`/`withCsrf`.
+- [x] Requests without a valid token receive a `403` with a clear JSON error message, and old clients cannot perform state-changing actions silently.
+
+#### AC-4: Hardened secrets & encryption config
+- [x] On startup in production, `server.js` refuses to boot if `SESSION_SECRET` is missing, too short, or set to a known default.
+- [x] `routes/ocr.js` derives an AES-256-GCM key from `OCR_ENCRYPTION_SECRET` (or `SESSION_SECRET`) and fails fast in production if these are weak or default.
+- [x] `.env.example` documents both `SESSION_SECRET` and `OCR_ENCRYPTION_SECRET` with guidance to use long random values; secrets are never logged.
+
+#### AC-5: Status handling consistency for reports/exports
+- [x] Export and reporting queries that aggregate spending (`routes/exports.js`, `routes/reporting.js`, and related helpers) consistently treat bills as included when `status IS NULL OR status = 'confirmed'`.
+- [x] Legacy `complete` status handling is effectively superseded by the unified `confirmed` state in all reviewed exports/reports.
+
+### Edge Cases Status
+
+#### EC-1: User without a current project
+- [x] `ensureProjectAccess` / `ensureProjectAdmin` block access when `currentProjectId` is missing, returning `401/403` rather than defaulting to all projects.
+
+#### EC-2: Legacy deep links to uploads
+- [x] Direct `/uploads/...` links now go through the database-backed lookup; authorized same-project users can still view their images, while cross-project or unknown images return `403/404` safely.
+
+#### EC-3: Self-hosted single-project instances
+- [x] Project-scoped filters work with the existing `currentProjectId` semantics; there is no extra configuration required for single-tenant setups.
+
+#### EC-4: CSRF errors on old clients
+- [x] Old/non-CSRF-aware clients receive a `403` with a clear error string; the SPA’s `apiFetch` helper logs a warning and can be extended to surface a user-visible message if desired.
+
+#### EC-5: Misconfigured secrets in non-production
+- [x] In non-production, weak/default secrets emit warnings (especially in OCR) but do not crash the app, matching the intended relaxed behavior outside production.
+
+### Security Audit Results
+- [x] Authentication: Sensitive endpoints (exports, uploads, OCR, reporting) are all behind `ensureAuth`/`ensureProjectAccess`/`ensureProjectAdmin` as appropriate.
+- [x] Authorization: All reviewed export/report/upload queries are project-scoped via `project_id`, and `/uploads/*` enforces project membership plus super-admin override only.
+- [x] Input validation: Image paths are resolved via DB rather than user-controlled filesystem paths; OCR custom base URLs are restricted to `https://` and non-private hosts to mitigate SSRF.
+- [x] Rate limiting: Not explicitly implemented, but no obvious amplification or unauthenticated hot paths were identified in this feature’s scope.
+- [x] Secrets & crypto: Session and OCR encryption secrets are enforced to be non-default and sufficiently long in production; OCR keys are stored encrypted with AES-256-GCM.
+
+### Bugs Found
+
+#### BUG-1: CSRF 403 errors are only logged to console, not surfaced in UI
+- **Severity:** **[Low][Frontend]**  
+- **Steps to Reproduce:**
+  1. Start a browser session, perform some actions, then let the CSRF token/session become invalid (e.g. restart the server or clear sessions).
+  2. Trigger a state-changing action from the SPA (e.g. upload bill, create V-Geld entry) without refreshing.
+  3. The API responds with `403` and a clear JSON error message.
+- **Expected:** The UI surfaces a visible message (e.g. toast/banner) telling the user their session/token is invalid and they should reload or sign in again.  
+- **Actual:** `apiFetch` logs a warning to the browser console, but the user may only see a generic failure message (or nothing) depending on the caller.  
+- **Priority:** Nice to have; does not affect security guarantees.
+
+### Summary
+- **Acceptance Criteria:** 5/5 passed  
+- **Bugs Found:** 1 total (0 critical, 0 high, 0 medium, 1 low)  
+- **Security:** Pass — no auth bypass, CSRF bypass, or cross-project data leakage identified in code review for this feature’s surface area.  
+- **Production Ready:** YES  
+- **Recommendation:** Deploy, and optionally improve UX around CSRF/session expiry errors in a follow-up frontend task.

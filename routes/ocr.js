@@ -10,19 +10,28 @@ const { ensureAuth, ensureProjectAccess } = require("../middleware");
 // Uses AES-256-GCM. Key is derived from SESSION_SECRET via SHA-256.
 // Stored format: <iv_hex>:<authTag_hex>:<ciphertext_hex>
 
-// BUG-4: Warn loudly if SESSION_SECRET is not set or uses the insecure default
+// BUG-4: Warn loudly if encryption secrets are weak, and fail fast in production
 const DEFAULT_SECRET = "change-this-in-production";
+const OCR_ENCRYPTION_SECRET = process.env.OCR_ENCRYPTION_SECRET || null;
 if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET === DEFAULT_SECRET) {
   console.warn(
     "[OCR] WARNING: SESSION_SECRET is not set or uses the default value. " +
-    "API keys stored at rest are encrypted with a publicly known key. " +
-    "Set a strong SESSION_SECRET environment variable before storing API keys."
+      "Set a strong SESSION_SECRET environment variable before storing API keys.",
   );
+}
+if (process.env.NODE_ENV === "production") {
+  const base = OCR_ENCRYPTION_SECRET || process.env.SESSION_SECRET;
+  if (!base || base === DEFAULT_SECRET || base.length < 16) {
+    console.error(
+      "[OCR] OCR_ENCRYPTION_SECRET / SESSION_SECRET is missing, too short, or using a default value. Refusing to start in production.",
+    );
+    process.exit(1);
+  }
 }
 
 function getEncryptionKey() {
-  const secret = process.env.SESSION_SECRET || DEFAULT_SECRET;
-  return crypto.createHash("sha256").update(secret).digest(); // 32 bytes
+  const base = OCR_ENCRYPTION_SECRET || process.env.SESSION_SECRET || DEFAULT_SECRET;
+  return crypto.createHash("sha256").update(base).digest(); // 32 bytes
 }
 
 function encryptApiKey(plaintext) {
