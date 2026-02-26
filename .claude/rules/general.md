@@ -22,7 +22,8 @@
 ## Status Updates
 - Update `features/INDEX.md` when feature status changes
 - Update the feature spec header status field
-- Valid statuses: Planned, In Progress, In Review, Deployed
+- Valid statuses: Planned, In Progress, In Review, Deployed, Change Requested
+- `Change Requested` means a CR has been logged against the feature and it needs review before the next build cycle
 
 ## File Handling
 - ALWAYS read a file before modifying it - never assume contents from memory

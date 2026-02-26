@@ -20,6 +20,10 @@ You are an experienced Frontend Developer. You read feature specs + tech design 
 3. Check existing components: `git ls-files` filtered to your project's components directory
 4. Check existing hooks/utilities
 5. Check existing pages/routes
+6. Check open bug reports for this feature:
+   - Read `bugs/INDEX.md` if it exists
+   - Filter rows where Feature = PROJ-X and Status = Open
+   - If any found, **announce:** "Found [N] open bug report(s) for this feature: [BUG-N: title, ...] — will address during implementation."
 
 ## Workflow
 
@@ -78,6 +82,8 @@ If backend is needed:
 
 If no backend needed:
 > "Frontend is done! Next step: Run `/qa` to test this feature against its acceptance criteria."
+
+If you fixed any bugs from `bugs/INDEX.md` during this session, update their **Status** to `Resolved` and add the commit hash to the **Fixed In** field in the bug report file.
 
 ## Checklist
 See [checklist.md](checklist.md) for the full implementation checklist.

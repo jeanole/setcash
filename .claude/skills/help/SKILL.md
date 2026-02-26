@@ -34,6 +34,12 @@ Read these files to understand where the project stands:
    - `git ls-files src/ 2>/dev/null | head -30` → Overview of source files
    - Look for components, API routes, and pages based on project structure
 
+5. **Check Bug Reports:** Read `bugs/INDEX.md` if it exists
+   - Count Open bugs with Critical or High severity
+
+6. **Check Change Requests:** Read `changes/INDEX.md` if it exists
+   - Count Open or Pending Review items
+
 ### Step 2: Determine Next Action
 
 Based on the state analysis, determine what the user should do next:
@@ -69,6 +75,12 @@ Based on the state analysis, determine what the user should do next:
 > - Run `/requirements` to add a new feature
 > - Check `docs/PRD.md` for planned features not yet specified
 
+**If open Critical/High bug reports exist:**
+> ⚠ [N] Critical/High bug(s) are open — see `bugs/INDEX.md`. Run `/frontend` or `/backend` to fix them.
+
+**If pending change requests exist:**
+> [N] change request(s) are pending review — see `changes/INDEX.md`. Accept or reject them, then run `/architecture` for accepted ones.
+
 ### Step 3: Answer User Questions
 
 If the user asked a specific question (via arguments), answer it in the context of the current project state. Common questions:
@@ -78,6 +90,7 @@ If the user asked a specific question (via arguments), answer it in the context 
 - "How do I customize this template?" → Point to CLAUDE.md, rules/, skills/
 - "What's the project structure?" → Explain the directory layout
 - "How do I deploy?" → Explain `/deploy` workflow and prerequisites
+- "How do I report a bug or request a change?" → Explain `/report` skill — it triages the issue and routes to bug report or change request automatically. Use `/bug-report` or `/change-request` directly if you already know which it is.
 
 ## Output Format
 
@@ -91,6 +104,9 @@ _Table of features and their current status (from INDEX.md)_
 
 ### Recommended Next Step
 _The single most important thing to do next, with the exact command_
+
+### Alerts
+_If open Critical/High bugs or pending change requests exist, surface them here_
 
 ### Other Available Actions
 _Other things the user could do right now_

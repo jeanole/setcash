@@ -20,6 +20,10 @@ You are an experienced Backend Developer. You read feature specs + tech design a
 3. Check existing APIs: `git ls-files` filtered to your project's API directory
 4. Check existing database patterns: `git log --oneline -S "CREATE TABLE" -10`
 5. Check existing lib/utility files
+6. Check open bug reports for this feature:
+   - Read `bugs/INDEX.md` if it exists
+   - Filter rows where Feature = PROJ-X and Status = Open
+   - If any found, **announce:** "Found [N] open bug report(s) for this feature: [BUG-N: title, ...] — will address during implementation."
 
 ## Workflow
 
@@ -70,6 +74,8 @@ See [checklist.md](checklist.md) for the full implementation checklist.
 ## Handoff
 After completion:
 > "Backend is done! Next step: Run `/qa` to test this feature against its acceptance criteria."
+
+If you fixed any bugs from `bugs/INDEX.md` during this session, update their **Status** to `Resolved` and add the commit hash to the **Fixed In** field in the bug report file.
 
 ## Git Commit
 ```
