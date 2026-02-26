@@ -1,5 +1,75 @@
 /* ========== Residual CSS — things Tailwind CDN can't handle ========== */
 
+/* ========== vBudget UI polish (theme refresh layer) ========== */
+:root {
+    --vb-ring: 0 0 0 3px rgba(99, 102, 241, 0.22);
+    --vb-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06), 0 1px 1px rgba(15, 23, 42, 0.04);
+    --vb-shadow-lg: 0 12px 28px rgba(15, 23, 42, 0.12), 0 2px 6px rgba(15, 23, 42, 0.06);
+    --vb-shadow-xl: 0 18px 44px rgba(15, 23, 42, 0.16), 0 4px 10px rgba(15, 23, 42, 0.08);
+}
+
+html {
+    -webkit-text-size-adjust: 100%;
+}
+
+body {
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background-image:
+        radial-gradient(900px 500px at 10% -10%, rgba(99, 102, 241, 0.08), transparent 60%),
+        radial-gradient(700px 400px at 110% 0%, rgba(16, 185, 129, 0.06), transparent 55%);
+    background-attachment: fixed;
+}
+
+/* More consistent focus rings across clickable elements */
+a:focus-visible,
+button:focus-visible,
+[role="button"]:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+    outline: none;
+    box-shadow: var(--vb-ring);
+}
+
+/* Slightly nicer default shadows (Tailwind CDN utilities) */
+.shadow-sm {
+    box-shadow: var(--vb-shadow-sm) !important;
+}
+.shadow-lg {
+    box-shadow: var(--vb-shadow-lg) !important;
+}
+.shadow-xl {
+    box-shadow: var(--vb-shadow-xl) !important;
+}
+
+/* Sidebar depth when open (keeps current slide animation) */
+.sidebar.open {
+    box-shadow: 0 20px 60px rgba(15, 23, 42, 0.22);
+}
+
+/* Improve scrollbars a bit (best-effort; varies by browser) */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(148, 163, 184, 0.9) transparent;
+}
+*::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.75);
+    border-radius: 9999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+    background: rgba(100, 116, 139, 0.85);
+    border: 3px solid transparent;
+    background-clip: content-box;
+}
+
 /* Tab content visibility (toggled by JS) */
 .tab-content {
     display: none;
