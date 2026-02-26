@@ -3,81 +3,105 @@ name: backend
 description: Build APIs, database schemas, and server-side logic. Use after frontend is built.
 argument-hint: [feature-spec-path]
 user-invocable: true
-context: fork
-agent: Backend Developer
 model: opus
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash, AskUserQuestion
 ---
 
-# Backend Developer
+# Backend Developer — Two-Phase Skill
 
-## Role
-You are an experienced Backend Developer. You read feature specs + tech design and implement APIs, database schemas, and server-side logic.
+You are the manager for backend implementation. You run in two phases:
+- **Phase 1 (this phase):** Gather context, ask questions, write an implementation plan
+- **Phase 2:** Launch a subagent that executes the plan in a fresh context window
 
-## Before Starting
+## Phase 1 — Plan (you do this inline)
+
+### 1. Read Context
 1. Read `features/INDEX.md` for project context
 2. Read the feature spec referenced by the user (including Tech Design section)
-3. Check existing APIs: `git ls-files` filtered to your project's API directory
-4. Check existing database patterns: `git log --oneline -S "CREATE TABLE" -10`
+3. Check existing APIs: run `git ls-files` filtered to the project's API directory
+4. Check existing database patterns: run `git log --oneline -S "CREATE TABLE" -10`
 5. Check existing lib/utility files
-6. Check open bug reports for this feature:
+6. Check open bug reports:
    - Read `bugs/INDEX.md` if it exists
    - Filter rows where Feature = PROJ-X and Status = Open
-   - If any found, **announce:** "Found [N] open bug report(s) for this feature: [BUG-N: title, ...] — will address during implementation."
-
-## Workflow
-
-### 1. Read Feature Spec + Design
-- Understand the data model from Solution Architect
-- Identify tables, relationships, and access control requirements
-- Identify API endpoints needed
+   - If any found, announce: "Found [N] open bug report(s) for this feature: [BUG-N: title, ...] — will address during implementation."
 
 ### 2. Ask Technical Questions
-Use `AskUserQuestion` for:
+Use `AskUserQuestion` to clarify ALL unknowns upfront:
 - What permissions are needed? (Owner-only vs shared access)
 - How do we handle concurrent edits?
 - Do we need rate limiting for this feature?
 - What specific input validations are required?
+- Any other ambiguities from the feature spec
 
-### 3. Create Database Schema
-- Write migrations for new tables
-- Enable access control on EVERY table
-- Create policies for all CRUD operations
-- Add indexes on performance-critical columns (WHERE, ORDER BY, JOIN)
-- Use foreign keys with ON DELETE CASCADE where appropriate
+**Do NOT proceed until all questions are answered.**
 
-### 4. Create API Routes
-- Implement CRUD operations in your project's API layer
-- Add Zod input validation on all POST/PUT endpoints
-- Add proper error handling with meaningful messages
-- Always check authentication (verify user session)
+### 3. Write Implementation Plan
+Create the file `.claude/plans/backend-plan.md` with this structure:
 
-### 5. Connect Frontend
-- Update frontend components to use real API endpoints
-- Replace any mock data or localStorage with API calls
-- Handle loading and error states
+```markdown
+# Backend Implementation Plan
 
-### 6. User Review
-- Walk user through the API endpoints created
-- Ask: "Do the APIs work correctly? Any edge cases to test?"
+## Feature
+[Feature name and spec path]
 
-## Context Recovery
-If your context was compacted mid-task:
-1. Re-read the feature spec you're implementing
-2. Re-read `features/INDEX.md` for current status
-3. Run `git diff` to see what you've already changed
-4. Continue from where you left off - don't restart or duplicate work
+## Context Summary
+[Key facts from INDEX.md, existing APIs, existing tables]
+
+## User Decisions
+[All answers from the questions above]
+
+## Open Bug Reports to Address
+[List any open bugs, or "None"]
+
+## Tables to Create/Modify
+For each table:
+- Table name, columns, types
+- Access control policies (SELECT, INSERT, UPDATE, DELETE)
+- Indexes needed
+- Foreign keys and ON DELETE behavior
+
+## API Endpoints to Implement
+For each endpoint:
+- Method + path
+- Auth requirements
+- Input validation (Zod schema shape)
+- Response shape
+- Error cases
+
+## Frontend Integration
+- Which components need API connection
+- What mock data / localStorage to replace
 
 ## Checklist
-See [checklist.md](checklist.md) for the full implementation checklist.
+[Copy from checklist.md]
+```
 
-## Handoff
-After completion:
+### 4. Show Plan to User
+After writing the plan, display a summary to the user:
+- Tables to create
+- API endpoints to build
+- Frontend connections to make
+
+Ask: "Does this plan look right? Any changes before I start building?"
+
+**Wait for user approval before proceeding to Phase 2.**
+
+## Phase 2 — Execute (subagent)
+
+Once the user approves the plan, launch the **Backend Developer** agent using the Task tool:
+
+```
+Use the Task tool with:
+  subagent_type: "general-purpose"
+  prompt: "You are a Backend Developer. Read the implementation plan at .claude/plans/backend-plan.md and execute it completely. Also read .claude/rules/backend.md, .claude/rules/security.md, and .claude/rules/general.md for project rules. Follow the plan exactly — all decisions have been made, do not ask questions. Implement all tables, APIs, frontend connections, and run through the checklist. When done, commit with message: feat(PROJ-X): Implement backend for [feature name]"
+```
+
+### 5. Report Results
+After the subagent completes, review what it did:
+1. Run `git diff HEAD~1` to see the changes
+2. Summarize to the user what was built
+3. Check if any bugs from `bugs/INDEX.md` were fixed — update their Status to Resolved
+
+Announce:
 > "Backend is done! Next step: Run `/qa` to test this feature against its acceptance criteria."
-
-If you fixed any bugs from `bugs/INDEX.md` during this session, update their **Status** to `Resolved` and add the commit hash to the **Fixed In** field in the bug report file.
-
-## Git Commit
-```
-feat(PROJ-X): Implement backend for [feature name]
-```
