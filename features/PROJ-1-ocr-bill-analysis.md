@@ -1,6 +1,6 @@
 # PROJ-1: OCR / AI Bill Analysis
 
-## Status: In Review
+## Status: Change Requested
 **Created:** 2026-02-24
 **Last Updated:** 2026-02-26
 
@@ -662,3 +662,51 @@ Both must be fixed before deployment.
 
 ## Deployment
 _To be added by /deploy_
+
+---
+
+## Open Bug Reports
+
+| ID | Severity | Title | Status |
+|----|----------|-------|--------|
+| [BUG-1](../bugs/BUG-1-ocr-analysis-hangs-no-timeout-feedback.md) | High | OCR Analysis Runs Indefinitely With No UI Feedback or Timeout | Open |
+
+---
+
+## Change Requests
+
+### CR-1: Admin OCR/AI Logging Panel in Settings
+**Requested:** 2026-02-26 | **Priority:** High | **Status:** Pending Review
+
+**Current Behavior:** When OCR analysis runs, the result is only surfaced as a notification (on failure) or a badge (on success). Admins cannot see raw AI responses, error details, HTTP status codes, or a history of analysis runs from within the UI.
+
+**Desired Behavior:** A new "OCR Log" section in the Settings "AI Analysis" tab shows a paginated list of recent analysis runs for the project, including timestamp, bill reference, status, provider, fields written, raw AI response preview, and full error details on failure. Backed by a new `ocr_log` DB table populated by `runOcrJob`.
+
+**Rationale:** Makes OCR integration self-serviceable — admins can diagnose API key errors, bad model output, and extraction failures without needing server log access.
+
+**Proposed Acceptance Criteria:**
+- [ ] New `ocr_log` table: `id`, `project_id`, `bill_id`, `timestamp`, `provider`, `status`, `fields_written`, `ai_response` (truncated 2000 chars), `error_detail`
+- [ ] `runOcrJob` writes one log row on every run (success and failure)
+- [ ] `GET /api/admin/ocr-log` returns last 50 entries for the project (admin-only)
+- [ ] Settings "AI Analysis" tab shows OCR Log table with expandable detail rows
+- [ ] Log is scoped to current project; API key never stored or shown in log
+
+**Resolution:** Pending | **Full spec:** [changes/CR-1-admin-ocr-logging-panel.md](../changes/CR-1-admin-ocr-logging-panel.md)
+
+---
+
+### CR-2: Improve Console Logging Clarity for OCR Field Writes
+**Requested:** 2026-02-26 | **Priority:** Low | **Status:** Pending Review
+
+**Current Behavior:** Console output from `runOcrJob` logs field writes in a way that looks identical to user edits (e.g. `Bill 42 edited: vendor, date`), making server logs confusing and hard to use for debugging.
+
+**Desired Behavior:** All OCR-related console output is prefixed with `[OCR]` and structured to show: job start (with provider), fields written vs. skipped (and why), elapsed time, and detailed failure info (HTTP status, truncated response body, error type).
+
+**Rationale:** Low-effort, high-value improvement for diagnosing OCR issues before the full admin logging panel (CR-1) is built.
+
+**Proposed Acceptance Criteria:**
+- [ ] All `runOcrJob` / `analyseImage` console calls prefixed with `[OCR]`
+- [ ] Start, success, and failure states each logged with structured detail
+- [ ] No API keys or secrets logged at any level
+
+**Resolution:** Pending | **Full spec:** [changes/CR-2-improve-ocr-console-logging.md](../changes/CR-2-improve-ocr-console-logging.md)
