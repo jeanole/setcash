@@ -955,3 +955,336 @@ public/style.css
 - [ ] If no prior analysis exists, button shows "Analyse" and behaves as before (no confirmation needed)
 
 **Resolution:** Pending
+
+---
+
+## QA Test Results -- Round 3
+
+**Tested:** 2026-02-27
+**App URL:** http://localhost:3000 (code-level review; no running instance)
+**Tester:** QA Engineer (AI)
+**Scope:** Re-check Round 2 bugs (NEW-BUG-1 through NEW-BUG-6); CR-4 ACs (13); CR-5 ACs (6); BUG-6 fix verification (4 checks); BUG-7 fix verification (3 checks); Regression of original PROJ-1 ACs; Security audit.
+
+---
+
+### Part 1: Re-check Round 2 Bugs
+
+#### NEW-BUG-1 (Critical): Property name mismatch `bill.ocr_status` vs `bill.ocrStatus`
+- [x] **FIXED.** Search of `public/js/bills.js` finds zero occurrences of `bill.ocr_status` or `bill.ocr_fields`. All references now correctly use `bill.ocrStatus` and `bill.ocrFields` (camelCase) matching the API response shape. No erroneous `JSON.parse()` calls found — `ocrFields` is consumed directly as the array returned by the API.
+- **Verdict: PASS**
+
+#### NEW-BUG-2 (High): Non-admin users cannot see OCR features (`projectOcrEnabled` always false)
+- [x] **FIXED.** `loadProjectData()` in `public/js/core.js` (line 170) now reads `projectOcrEnabled = !!projectInfo.ocrEnabled` from the `/api/project-info` response, which is a public endpoint accessible to all authenticated users. `routes/projects.js` line 281 confirms that `ocrEnabled: !!settings.ocrEnabled` is included in the project-info response with no admin guard.
+- **Verdict: PASS**
+
+#### NEW-BUG-3 (Medium): PUT `/api/bills/:id` does not process `date` field changes
+- [x] **FIXED.** `routes/bills.js` lines 316-320 now handle `date` in the PUT handler — if `date` differs from `bill.date`, it is added to `changes` and `updates`. The OCR-fields stripping logic (line 416-431) will therefore also remove `"date"` from `ocr_fields` when the user edits the date field.
+- **Verdict: PASS**
+
+#### NEW-BUG-4 (Low): "Analyse" button shown for already-analysed bills
+- [x] **FIXED (consequential).** Now that NEW-BUG-1 is fixed, `bill.ocrStatus` is correctly populated. The list-level button correctly shows "Re-analyse" for bills with `ocrStatus === "done"` (line 301 in bills.js). The modal's `showAnalyseButton()` hides the button for `ocrStatus === "pending"` and shows it otherwise, with the correct label.
+- **Verdict: PASS**
+
+#### NEW-BUG-5 (Medium): Form field name mismatches (date field not sent to backend)
+- [x] **FIXED.** The bill detail form submit handler in `public/js/bills.js` lines 1281-1291 explicitly includes `date: form.date.value` in the PUT payload, along with all other fields (vendor, item, brutto19/7/0, comment, allocations).
+- **Verdict: PASS**
+
+#### NEW-BUG-6 (Low): SESSION_SECRET warning only in ocr.js, not at app startup
+- [x] **FIXED.** `server.js` lines 42-51 now emit the startup warning (dev) or `process.exit(1)` (production) for a weak/missing SESSION_SECRET. The check runs at bootstrap before any route handlers are registered.
+- **Verdict: PASS**
+
+**Round 2 Re-check Summary: 6/6 bugs verified fixed. All PASS.**
+
+---
+
+### Part 2: CR-4 Acceptance Criteria (Analyse in Upload Modal)
+
+#### CR-4 AC-1: Analyse button appears when photos are attached AND OCR is enabled
+- [x] `renderUploadThumbnails()` in `public/js/core.js` lines 355-358 sets `analyseSection.style.display` based on `pendingFiles.length > 0 && window.projectOcrEnabled`. Button is hidden by default (`style="display:none"` in HTML, line 339 of `index.html`). OCR-enabled state comes from the public `/api/project-info` endpoint.
+- **Verdict: PASS**
+
+#### CR-4 AC-2: Clicking "Analyse" saves draft bill and triggers OCR
+- [x] `triggerUploadAnalysis()` in `public/js/bills.js` lines 1124-1183 performs two sequential steps: (1) POST to `/upload` with FormData including all pending images, capturing the returned `billId`; (2) POST to `/api/bills/:id/analyse`. Both use `apiFetch()` (CSRF-aware).
+- **Verdict: PASS**
+
+#### CR-4 AC-3: Loading spinner shown during save + analysis
+- [x] Lines 1131-1135: button is disabled immediately (`btn.disabled = true`), text changed to `"Saving & Analysing..."`, and `uploadAnalyseStatus` div shows `"Saving bill draft and starting AI analysis..."` during the async operation.
+- **Verdict: PASS**
+
+#### CR-4 AC-4: On OCR success, form fields pre-filled with extracted values
+- [x] `pollUploadOcr()` success path (lines 1203-1227) fetches full bill data via `/api/bills`, finds the bill by ID, and assigns `form.vendor.value`, `form.item.value`, `form.comment.value`, `form.type.value`, `form.brutto19.value`, `form.brutto7.value`, `form.brutto0.value` from the bill object. Also triggers a netto recalculation event.
+- [ ] **PARTIAL FAIL -- NEW-BUG-R3-1 identified.** The upload form has no `date` input field (confirmed from `public/index.html` lines 297-473). `applyUploadOcrHighlights()` fieldMap (lines 1056-1068) explicitly skips `date` and `amount`. If the AI extracts a date, it is written to the DB but never shown or pre-filled in the upload form. The user cannot verify or correct it before saving. The field persists in `ocr_fields`, causing an unexpected amber highlight when the bill detail is opened later.
+- **Verdict: PARTIAL PASS**
+
+#### CR-4 AC-5: OCR-filled fields show amber highlight + "AI - please verify" + verify button
+- [x] `applyUploadOcrHighlights()` (lines 1056-1101) iterates `uploadOcrFields`, applies `ocr-field-highlight` CSS class, injects a `<span class="ocr-field-label">AI - please verify</span>` badge and a `<button class="ocr-verify-btn">✓ Verified</button>` into the parent `<label>` element. Uses `textContent` not `innerHTML` — XSS safe.
+- **Verdict: PASS** (for the fields included in the upload form's fieldMap)
+
+#### CR-4 AC-6: Verify button clears highlight client-side
+- [x] `clearUploadOcrField(fieldName, el)` (lines 1103-1113) removes `ocr-field-highlight` class, removes `.ocr-field-label` badge, removes `.ocr-verify-btn` button, and filters the field out of `window.uploadOcrFields`.
+- **Verdict: PASS**
+
+#### CR-4 AC-7: Submit button changes to "Save Changes" after analysis
+- [x] `pollUploadOcr()` success path line 1226: `if (submitBtn) submitBtn.textContent = "Save Changes";`
+- **Verdict: PASS**
+
+#### CR-4 AC-8: Submitting after analysis calls PUT (not POST /upload)
+- [x] `core.js` upload form submit handler lines 392-395: `if (window.uploadEditBillId) { await saveUploadEditBill(form); return; }`. When `uploadEditBillId` is set by `triggerUploadAnalysis()` (line 1162), the handler routes to `saveUploadEditBill()` which calls `PUT /api/bills/:id`.
+- **Verdict: PASS**
+
+#### CR-4 AC-9: Unverified fields tracked in ocr_fields on save
+- [x] `saveUploadEditBill()` PUT payload does not resend `ocrFields` — this is correct. `runOcrJob` already wrote `ocr_fields` to the DB. The PUT handler strips only fields the user explicitly changed. Unchanged OCR-filled fields remain in `ocr_fields`. Unverified fields persist correctly via backend state.
+- [ ] **CAVEAT (NEW-BUG-R3-1):** `date` will always remain in `ocr_fields` after upload-modal save because there is no date field in the upload form to edit or verify.
+- **Verdict: PASS (by backend invariant; caveat see NEW-BUG-R3-1)**
+
+#### CR-4 AC-10: OCR failure shows inline error in upload form
+- [x] `triggerUploadAnalysis()` catch block (lines 1175-1181) sets `statusDiv.className` to a red style and displays `"Error: " + escapeHtml(err.message)`. `pollUploadOcr()` failure path (lines 1230-1234) sets a red status with `"Analysis failed. You can still save the bill manually or try re-analysing."`.
+- **Verdict: PASS**
+
+#### CR-4 AC-11: Normal upload (without Analyse) works unchanged
+- [x] `window.uploadEditBillId` is `null` by default. When the form is submitted without analysis, `window.uploadEditBillId` is falsy and the submit handler falls through to the standard POST `/upload` flow.
+- **Verdict: PASS**
+
+#### CR-4 AC-12: Form resets cleanly after successful save
+- [x] `saveUploadEditBill()` success path (lines 569-585): `form.reset()`, `pendingFiles = []`, `clearAllUploadOcrHighlights()`, `window.uploadEditBillId = null`, `window.uploadOcrFields = []`, `analyseSection.style.display = "none"`, `statusDiv.classList.add("hidden")`, submit button text reset to `"Upload"`, allocation widgets re-initialised, `loadProjectData()` called.
+- **Verdict: PASS**
+
+#### CR-4 AC-13: All dynamic content uses escapeHtml() for XSS safety
+- [x] `applyUploadOcrHighlights()` uses `document.createElement()` + `textContent` for badge and button — no innerHTML injection. Error messages in `triggerUploadAnalysis()` and `saveUploadEditBill()` are wrapped with `escapeHtml()` before display. OCR status messages use hardcoded strings.
+- **Verdict: PASS**
+
+**CR-4 Summary: 12/13 PASS. 1 partial pass (AC-4/AC-9: date field absent from upload form; see NEW-BUG-R3-1).**
+
+---
+
+### Part 3: CR-5 Acceptance Criteria (Re-Analyse with Confirmation)
+
+#### CR-5 AC-1: Analyse button shows "Re-analyse" when bill has existing OCR results
+- [x] `showAnalyseButton(bill)` lines 910-922: `hasPriorResults = bill.ocrStatus === "done" || (bill.ocrFields && bill.ocrFields.length > 0)`. When true, `btn.textContent = "Re-analyse"`. Logic uses camelCase properties (fixed from NEW-BUG-1).
+- **Verdict: PASS**
+
+#### CR-5 AC-2: Clicking "Re-analyse" shows confirmation dialog
+- [x] `triggerBillAnalysis()` lines 929-933: `if (hasPriorResults) { var confirmed = confirm("This will re-analyse the bill and overwrite all AI-filled fields. Continue?"); if (!confirmed) return; }`. Confirmation shown before any network request.
+- **Verdict: PASS**
+
+#### CR-5 AC-3: Cancelling confirmation does nothing
+- [x] `if (!confirmed) return;` — early return before the `apiFetch` call; no state changes made, button state unchanged.
+- **Verdict: PASS**
+
+#### CR-5 AC-4: Confirming triggers re-analysis normally
+- [x] After `if (!confirmed)` guard, code falls through to `apiFetch("/api/bills/" + currentBillId + "/analyse", { method: "POST" })`.
+- **Verdict: PASS**
+
+#### CR-5 AC-5: List-level button also shows "Re-analyse" and has confirmation
+- [x] `renderFilteredBills()` line 301: button label is `bill.ocrStatus === "done" ? "Re-analyse" : "Analyse"`. `triggerBillAnalysisFromList()` lines 966-975: same `hasPriorResults` check and `confirm()` before the POST.
+- [ ] **MINOR INCONSISTENCY -- NEW-BUG-R3-2 noted.** List label condition (`ocrStatus === "done"`) is slightly narrower than the confirm condition (`ocrStatus === "done" || ocrFields.length > 0`). Functionally consistent for all normal data states.
+- **Verdict: PASS**
+
+#### CR-5 AC-6: First-time "Analyse" has no confirmation
+- [x] When `hasPriorResults === false`, the `if (hasPriorResults)` block is skipped entirely and the POST proceeds immediately.
+- **Verdict: PASS**
+
+**CR-5 Summary: 6/6 PASS. One minor cosmetic inconsistency noted (NEW-BUG-R3-2, Low).**
+
+---
+
+### Part 4: BUG-6 Fix Verification
+
+#### BUG-6 Check-1: Backend detects re-analysis correctly
+- [x] `runOcrJob()` lines 322-323: reads `ocr_status` BEFORE setting it to `"pending"` (line 326). Since the HTTP handler rejects requests when `ocr_status === "pending"` (lines 557-559), values at read time can only be `null`, `"done"`, or `"failed"`.
+- [ ] **EDGE CASE -- NEW-BUG-R3-3 identified.** `isReanalysis = true` when `ocr_status = "failed"`, causing fieldChecks to bypass zero/empty guards and overwrite user-entered data on retry after failure.
+- **Verdict: PASS** (core re-analysis detection correct); **EDGE CASE FAIL** (see NEW-BUG-R3-3)
+
+#### BUG-6 Check-2: All OCR-extracted fields overwritten on re-analysis
+- [x] All 8 `fieldChecks` entries (date, vendor, item, type, brutto19, brutto7, brutto0, amount) include `isReanalysis ||` bypass condition (ocr.js lines 417-424).
+- **Verdict: PASS**
+
+#### BUG-6 Check-3: Frontend shows amber highlights after re-analysis
+- [x] `pollOcrStatus()` done+ocrFields path calls `loadBills()` then `openBillDetail(billId)`. `openBillDetail()` calls `clearOcrFieldHighlights()` then `applyOcrFieldHighlights(bill)` with 50ms delay. `loadBills()` refreshes `allBills` and `allLogs` from server — updated `ocrFields` is used.
+- **Verdict: PASS**
+
+#### BUG-6 Check-4: First-time analysis unaffected
+- [x] When `isReanalysis === false` (first-time, `ocr_status` was `null`), the `isReanalysis ||` bypass does not fire. Existing user data is preserved; only empty/zero fields are written.
+- **Verdict: PASS**
+
+**BUG-6 Summary: 3/4 checks PASS. 1 edge-case fail (failed→re-analyse overwrites user data; NEW-BUG-R3-3).**
+
+---
+
+### Part 5: BUG-7 Fix Verification
+
+#### BUG-7 Check-1: Success case — editlog entry written
+- [x] `runOcrJob()` lines 479-497: `if (writtenFields.length > 0)` inserts into `editlog` with `source = 'ai'`, `user = "AI / ${provider}"`, and `changes = JSON.stringify(extractedChanges)`. History entry is written on every successful analysis that writes at least one field.
+- **NOTE (minor gap):** If `writtenFields.length === 0` (OCR ran but no new fields extracted because all existing values matched), no editlog entry is written. This is silent — no history record for the analysis run in this edge case.
+- **Verdict: PASS** (normal success-with-fields case)
+
+#### BUG-7 Check-2: Failure case — editlog entry written
+- [x] `fail()` helper lines 341-352: inserts into `editlog` with `source = 'ai'`, `user = resolvedProvider ? "AI / ${resolvedProvider}" : "AI"`, and `changes = JSON.stringify({ _event: "analysis_failed", reason })`. Covers all failure exit points.
+- **Verdict: PASS**
+
+#### BUG-7 Check-3: Frontend history panel reloads after failure
+- [x] `pollOcrStatus()` lines 1032-1039: when `ocrStatus !== "done"` or `ocrStatus === "done"` with no fields, fetches `/api/bills/log`, updates `allLogs`, calls `refreshBillLogBody()`. For the done+fields path, `loadBills()` → `openBillDetail()` re-renders history from fresh `allLogs`. All reachable paths result in a history reload.
+- **Verdict: PASS**
+
+**BUG-7 Summary: 3/3 checks PASS.**
+
+---
+
+### Part 6: Regression of Original PROJ-1 Acceptance Criteria
+
+#### Settings: AI Analysis sub-tab, toggle, provider dropdown, API key masking, base URL for Custom
+- [x] `GET /api/admin/settings`: strips `ocrApiKey`, returns `ocrApiKeyMasked` only (`settings.js` lines 17-20). Provider validated as enum on PUT (lines 62-66). `ocrBaseUrl` must start with `"https://"` (line 85).
+- **Verdict: PASS**
+
+#### API key never in GET response
+- [x] `delete settings.ocrApiKey` after masking. No code path returns the raw encrypted key.
+- **Verdict: PASS**
+
+#### `POST /api/bills/:id/analyse` returns 202
+- [x] `ocr.js` line 566: `res.status(202).json({ ok: true, message: "Analysis started" })`.
+- **Verdict: PASS**
+
+#### `runOcrJob` sets pending immediately, handles no-image, handles no OCR config
+- [x] `pending` set at line 326. No-image fails at line 393. No `ocrEnabled` fails at line 365. No `ocrApiKey` fails at line 366.
+- **Verdict: PASS**
+
+#### SSRF guard on custom base URL
+- [x] `isPrivateUrl()` blocks localhost, `127.0.0.1`, `::1`, `.local`, `169.254.x.x`, `10.x.x.x`, `192.168.x.x`, `172.16-31.x.x`, `0.0.0.0`, `[::]`.
+- [ ] **PARTIAL FAIL -- NEW-BUG-R3-4 identified.** Only `127.0.0.1` is blocked exactly; the full `127.0.0.0/8` range is not covered. Addresses like `127.0.0.2` bypass the guard.
+- **Verdict: PARTIAL PASS**
+
+#### `ocr_status`/`ocrFields` in `GET /api/bills` response
+- [x] `routes/bills.js` lines 150-151: `ocrStatus: b.ocr_status || null`, `ocrFields: b.ocr_fields ? JSON.parse(b.ocr_fields) : null`.
+- **Verdict: PASS**
+
+#### Bill list badges: pending (spinner), done (amber), failed (red)
+- [x] `renderOcrBadge()` lines 717-732: all three states render correct CSS classes and text. No XSS risk — badge content is hardcoded.
+- **Verdict: PASS**
+
+#### Bill detail: amber highlights + "AI — please verify" + "✓ Verified" button
+- [x] `applyOcrFieldHighlights()` lines 735-790: applies highlight, badge (via `textContent`), and verify button. `clearOcrFieldHighlights()` clears on modal close.
+- **Verdict: PASS**
+
+#### Verify button: PATCH `/api/bills/:id/verify-field`, optimistic UI, editlog entry
+- [x] `verifyOcrField()` lines 810-848: removes highlight immediately (optimistic), uses `apiFetch()` for CSRF. On failure, `restoreOcrHighlightOnField()` restores state. Backend writes editlog.
+- **Verdict: PASS**
+
+#### PUT bill save: removes edited fields from ocr_fields, clears ocr_status when empty
+- [x] `routes/bills.js` lines 414-431: strips edited fields including `date` (fixed NEW-BUG-3). Sets both `ocr_fields = NULL` and `ocr_status = NULL` when array becomes empty.
+- **Verdict: PASS**
+
+#### Failure notification in notifications table
+- [x] `fail()` in ocr.js lines 330-337: inserts into `notifications` with `type = 'ocr_failed'`.
+- **Verdict: PASS**
+
+#### Duplicate prevention: 409 when bill is already pending
+- [x] `ocr.js` lines 557-559: returns 409 when `bill.ocr_status === "pending"`.
+- **Verdict: PASS**
+
+**Regression Summary: 11/12 PASS. 1 partial pass (SSRF loopback range incomplete; NEW-BUG-R3-4).**
+
+---
+
+### Part 7: Security Audit
+
+| Risk | Status | Notes |
+|------|--------|-------|
+| API key leaked to client | PASS | GET masks key; raw encrypted key never in response |
+| CSRF on analyse endpoint | PASS | `apiFetch()` sends `X-CSRF-Token` on all non-GET requests |
+| CSRF on verify-field endpoint | PASS | `apiFetch()` used in `verifyOcrField()` |
+| Authorization on analyse | PASS | `ensureAuth` + `ensureProjectAccess` + `AND project_id = ?` bill ownership |
+| SSRF via custom base URL | PARTIAL FAIL | 127.0.0.1 blocked; full 127.0.0.0/8 range not blocked (NEW-BUG-R3-4) |
+| XSS in OCR output | PASS | Form field values via `.value` (safe); status bar uses hardcoded strings or numeric `.length`; badges use `textContent` |
+| SQL injection | PASS | All queries parameterized; dynamic column names in UPDATE are hardcoded strings only |
+| Duplicate analysis prevention | PASS | 409 on pending status |
+| API key encrypted at rest | PASS | AES-256-GCM with SHA-256 derived key |
+| SESSION_SECRET startup enforcement | PASS | server.js warns/exits on weak secret (fixed NEW-BUG-6) |
+| Cross-project data access | PASS | All OCR queries scope by `project_id` |
+| ocrEnabled info leak to unauthenticated users | LOW RISK | `/api/project-info` has no auth guard; boolean flag only |
+
+---
+
+### Bugs Found (Round 3 -- NEW)
+
+#### NEW-BUG-R3-1: Upload form has no date field — OCR-extracted date cannot be reviewed during upload flow [Medium]
+
+**Severity:** Medium
+**Priority:** P2
+**Tag:** [Frontend]
+
+**File:** `C:/Users/jensmoeller/code/vbudget/public/index.html` (upload form), `C:/Users/jensmoeller/code/vbudget/public/js/bills.js` lines 1056-1101 (`applyUploadOcrHighlights`), lines 1184-1235 (`pollUploadOcr`)
+
+**Description:**
+The upload form (`#uploadForm`) has no `name="date"` input field. When `runOcrJob` extracts a date, it writes it to the DB and includes `"date"` in `ocr_fields`. However, `applyUploadOcrHighlights()` explicitly skips `date` (and `amount`) in its fieldMap. The `pollUploadOcr()` success path does not pre-fill a date field. Result: (1) the date is silently written to the bill without user review, (2) the user cannot verify or correct the date during the upload flow, (3) `"date"` remains in `ocr_fields` after save, causing an unexpected amber highlight when the bill detail is opened later.
+
+**Expected:** Either (a) add a date input to the upload form so the date can be reviewed/verified inline, or (b) display an informational notice that the date was extracted and can be reviewed in the bill detail view.
+
+---
+
+#### NEW-BUG-R3-2: List-level button label condition inconsistent with confirmation trigger condition [Low]
+
+**Severity:** Low
+**Priority:** P3
+**Tag:** [Frontend]
+
+**File:** `C:/Users/jensmoeller/code/vbudget/public/js/bills.js` line 301 and lines 966-975
+
+**Description:**
+The list-level button label uses `bill.ocrStatus === "done" ? "Re-analyse" : "Analyse"` (checks only `ocrStatus`). `triggerBillAnalysisFromList()` uses `hasPriorResults = bill.ocrStatus === "done" || (bill.ocrFields && bill.ocrFields.length > 0)` for the confirm dialog — a slightly broader condition. In an abnormal state (e.g. `ocrStatus = null`, `ocrFields` non-empty), the button label would show "Analyse" but the confirmation dialog would still appear, creating confusing UX. Only affects abnormal data states; no impact in normal operation.
+
+---
+
+#### NEW-BUG-R3-3: Re-analysis after a failed analysis overwrites user-entered data [Medium]
+
+**Severity:** Medium
+**Priority:** P2
+**Tag:** [Backend]
+
+**File:** `C:/Users/jensmoeller/code/vbudget/routes/ocr.js` lines 322-323
+
+**Description:**
+`isReanalysis` is `true` when `priorBill.ocr_status !== null`. This includes `ocr_status = "failed"`. When a bill previously failed analysis, any subsequent analysis attempt runs with `isReanalysis = true`, causing all `fieldChecks` to bypass the zero/empty guard — potentially overwriting user-entered data with AI-extracted values. No confirmation dialog is shown for `"failed"` bills since `hasPriorResults` in the frontend only checks `ocrStatus === "done" || ocrFields.length > 0`, and failed bills typically have `ocrFields = null`.
+
+**Expected:** `isReanalysis` should be `true` only when `ocr_status = "done"`. Failed bills should be treated as first-time analysis (`isReanalysis = false`), preserving zero/empty guards on all fields.
+
+---
+
+#### NEW-BUG-R3-4: SSRF guard does not block full 127.0.0.0/8 loopback range [Medium]
+
+**Severity:** Medium
+**Priority:** P2
+**Tag:** [Backend]
+
+**File:** `C:/Users/jensmoeller/code/vbudget/routes/ocr.js` line 88
+
+**Description:**
+`isPrivateUrl()` blocks `hostname === "127.0.0.1"` as a string equality check. The full `127.0.0.0/8` subnet (RFC 1122 §3.2.1.3) routes to localhost on most OS. Addresses like `127.0.0.2` through `127.255.255.255` pass the SSRF guard. An attacker who can supply a custom base URL could use `https://127.0.0.2/...` to reach localhost services on the application host.
+
+**Expected:** Block the full `127.0.0.0/8` range using `/^127\./` regex, consistent with how RFC1918 ranges are handled.
+
+---
+
+### Round 3 Summary
+
+**Round 2 bugs re-checked: 6/6 FIXED**
+
+**CR-4 ACs: 12/13 PASS** (1 partial: date field absent from upload form)
+
+**CR-5 ACs: 6/6 PASS** (1 minor cosmetic inconsistency)
+
+**BUG-6 fix: 3/4 PASS** (1 edge case: failed→re-analyse overwrites user data)
+
+**BUG-7 fix: 3/3 PASS**
+
+**Regression: 11/12 PASS** (1 partial: SSRF loopback range incomplete)
+
+**New bugs found: 4**
+
+| ID | Severity | Priority | Tag | Title |
+|----|----------|----------|-----|-------|
+| NEW-BUG-R3-1 | Medium | P2 | [Frontend] | Upload form has no date field — OCR date cannot be reviewed during upload flow |
+| NEW-BUG-R3-2 | Low | P3 | [Frontend] | List button label condition inconsistent with confirmation trigger condition |
+| NEW-BUG-R3-3 | Medium | P2 | [Backend] | Re-analysis after failed analysis overwrites user-entered data (isReanalysis triggers on "failed") |
+| NEW-BUG-R3-4 | Medium | P2 | [Backend] | SSRF guard does not block full 127.0.0.0/8 loopback range |
+
+**Production Readiness:** NOT READY. NEW-BUG-R3-3 (data loss risk) and NEW-BUG-R3-4 (SSRF security) must be fixed first. NEW-BUG-R3-1 (UX/date field) should be addressed before user-facing release. NEW-BUG-R3-2 is cosmetic and non-blocking.
