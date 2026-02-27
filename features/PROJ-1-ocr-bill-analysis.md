@@ -676,7 +676,26 @@ _To be added by /deploy_
 ## Change Requests
 
 ### CR-1: Admin OCR/AI Logging Panel in Settings
-**Requested:** 2026-02-26 | **Priority:** High | **Status:** Pending Review
+**Requested:** 2026-02-26 | **Priority:** High | **Status:** In Progress
+
+#### Tech Design (Solution Architect)
+
+**New table: `ocr_log`**
+One row per `runOcrJob` execution (success, failure, or skipped). Columns: `id`, `project_id` (FK → projects, ON DELETE SET NULL), `bill_id` (FK → bills, ON DELETE SET NULL), `timestamp`, `provider`, `status` (`done`/`failed`/`skipped`), `fields_written` (JSON array or null), `ai_response` (truncated 2000 chars, null for config/input failures), `error_detail` (null on success). API key never stored.
+
+**Modified: `routes/ocr.js`**
+`runOcrJob()` extended — at every exit point (the `fail()` helper and the success path), inserts one row into `ocr_log`. Raw AI response text captured before `parseOcrResponse()` so it can be stored even when JSON parsing fails.
+
+**New endpoint: `GET /api/admin/ocr-log`** (in `routes/settings.js`)
+Auth: `ensureProjectAdmin`. Returns last 50 rows for the current project ordered newest-first. Joins `bills.bill_number` for display. Response per row: `{ id, billId, billNumber, timestamp, provider, status, fieldsWritten, aiResponsePreview (200 chars), errorDetail }`.
+
+**Modified: `public/index.html`**
+Second card appended inside the existing `settings-tab-adm-ai` div, below the settings form card. Contains: heading "Recent Analysis Runs", Refresh button, table (Time / Bill / Provider / Status / Fields Written / Detail), empty state. Each row has an expandable Detail cell showing full `ai_response` + `error_detail`.
+
+**Modified: `public/js/admin.js`**
+New function `admLoadOcrLog()` — fetches `/api/admin/ocr-log`, renders table. Called from `admLoadOcrSettings()` so both load together when the tab opens.
+
+**Files changed:** `db.js`, `routes/ocr.js`, `routes/settings.js`, `public/index.html`, `public/js/admin.js`. No new packages.
 
 **Current Behavior:** When OCR analysis runs, the result is only surfaced as a notification (on failure) or a badge (on success). Admins cannot see raw AI responses, error details, HTTP status codes, or a history of analysis runs from within the UI.
 
@@ -685,13 +704,13 @@ _To be added by /deploy_
 **Rationale:** Makes OCR integration self-serviceable — admins can diagnose API key errors, bad model output, and extraction failures without needing server log access.
 
 **Proposed Acceptance Criteria:**
-- [ ] New `ocr_log` table: `id`, `project_id`, `bill_id`, `timestamp`, `provider`, `status`, `fields_written`, `ai_response` (truncated 2000 chars), `error_detail`
-- [ ] `runOcrJob` writes one log row on every run (success and failure)
-- [ ] `GET /api/admin/ocr-log` returns last 50 entries for the project (admin-only)
-- [ ] Settings "AI Analysis" tab shows OCR Log table with expandable detail rows
-- [ ] Log is scoped to current project; API key never stored or shown in log
+- [x] New `ocr_log` table: `id`, `project_id`, `bill_id`, `timestamp`, `provider`, `status`, `fields_written`, `ai_response` (truncated 2000 chars), `error_detail`
+- [x] `runOcrJob` writes one log row on every run (success and failure)
+- [x] `GET /api/admin/ocr-log` returns last 50 entries for the project (admin-only)
+- [ ] Settings "AI Analysis" tab shows OCR Log table with expandable detail rows (frontend — deferred)
+- [x] Log is scoped to current project; API key never stored or shown in log
 
-**Resolution:** Pending
+**Resolution:** Backend implemented — `ocr_log` table, index, `runOcrJob` logging, and `GET /api/admin/ocr-log` endpoint deployed. Frontend UI deferred to `/frontend`.
 
 ---
 

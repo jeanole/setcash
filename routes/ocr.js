@@ -168,7 +168,7 @@ async function analyseImage(provider, apiKey, base64, mimeType, baseUrl) {
     }
     const data = await resp.json();
     const text = data.choices?.[0]?.message?.content || "";
-    return parseOcrResponse(text);
+    return { parsed: parseOcrResponse(text), rawText: text };
   }
 
   if (provider === "gemini") {
@@ -212,7 +212,7 @@ async function analyseImage(provider, apiKey, base64, mimeType, baseUrl) {
     }
     const data = await resp.json();
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-    return parseOcrResponse(text);
+    return { parsed: parseOcrResponse(text), rawText: text };
   }
 
   if (provider === "claude") {
@@ -264,7 +264,7 @@ async function analyseImage(provider, apiKey, base64, mimeType, baseUrl) {
     }
     const data = await resp.json();
     const text = data.content?.[0]?.text || "";
-    return parseOcrResponse(text);
+    return { parsed: parseOcrResponse(text), rawText: text };
   }
 
   throw new Error(`Unknown provider: ${provider}`);
@@ -295,10 +295,33 @@ function parseOcrResponse(text) {
 async function runOcrJob(billId, projectId) {
   const jobStart = Date.now();
 
+  // Track the provider used so it can be included in the log row even at early fail points
+  let resolvedProvider = null;
+
+  // Helper: insert a row into ocr_log
+  const writeLog = (status, { fieldsWritten = null, aiResponse = null, errorDetail = null } = {}) => {
+    try {
+      db.prepare(
+        `INSERT INTO ocr_log (project_id, bill_id, provider, status, fields_written, ai_response, error_detail)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      ).run(
+        projectId,
+        billId,
+        resolvedProvider,
+        status,
+        fieldsWritten !== null ? JSON.stringify(fieldsWritten) : null,
+        aiResponse !== null ? String(aiResponse).slice(0, 2000) : null,
+        errorDetail !== null ? String(errorDetail) : null
+      );
+    } catch (logErr) {
+      console.error(`[OCR] Failed to write ocr_log for bill ${billId}:`, logErr.message);
+    }
+  };
+
   // 1. Mark pending
   db.prepare("UPDATE bills SET ocr_status = 'pending' WHERE id = ?").run(billId);
 
-  // Helper: mark failed and notify
+  // Helper: mark failed, notify, and log
   const fail = (reason, errorType) => {
     db.prepare("UPDATE bills SET ocr_status = 'failed' WHERE id = ?").run(billId);
     const bill = db.prepare("SELECT email FROM bills WHERE id = ?").get(billId);
@@ -309,6 +332,7 @@ async function runOcrJob(billId, projectId) {
     }
     const label = errorType ? `${errorType}: ` : "";
     console.error(`[OCR] Bill ${billId}: FAILED — ${label}${reason}`);
+    writeLog("failed", { errorDetail: reason });
   };
 
   try {
@@ -325,6 +349,7 @@ async function runOcrJob(billId, projectId) {
     if (!settings.ocrApiKey) return fail("OCR not configured for this project", "ConfigError");
 
     const provider = settings.ocrProvider || "openai";
+    resolvedProvider = provider;
     const apiKey = decryptApiKey(settings.ocrApiKey);
     if (!apiKey) return fail("Could not read API key", "ConfigError");
 
@@ -364,7 +389,7 @@ async function runOcrJob(billId, projectId) {
       "image/jpeg";
 
     // 5. Call AI provider
-    const extracted = await analyseImage(provider, apiKey, base64, mimeType, baseUrl);
+    const { parsed: extracted, rawText } = await analyseImage(provider, apiKey, base64, mimeType, baseUrl);
 
     // 6. Get current bill values to avoid overwriting user data
     const bill = db.prepare("SELECT * FROM bills WHERE id = ?").get(billId);
@@ -425,6 +450,13 @@ async function runOcrJob(billId, projectId) {
       finalFields ? JSON.stringify(finalFields) : null,
       billId
     );
+
+    // 9. Write success log row
+    writeLog("done", {
+      fieldsWritten: finalFields,
+      aiResponse: rawText,
+      errorDetail: null,
+    });
 
     const elapsed = Date.now() - jobStart;
     const writtenList = writtenFields.length > 0 ? writtenFields.join(", ") : "none";

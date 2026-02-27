@@ -176,6 +176,23 @@ db.exec(`
   );
 `);
 
+// Create ocr_log table if it does not exist
+db.exec(`
+  CREATE TABLE IF NOT EXISTS ocr_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL,
+    bill_id INTEGER REFERENCES bills(id) ON DELETE SET NULL,
+    timestamp TEXT DEFAULT (datetime('now')),
+    provider TEXT,
+    status TEXT,
+    fields_written TEXT,
+    ai_response TEXT,
+    error_detail TEXT
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_ocr_log_project ON ocr_log(project_id, timestamp);
+`);
+
 // Add OCR columns to bills if missing (migration)
 try {
   db.prepare("SELECT ocr_status FROM bills LIMIT 1").get();

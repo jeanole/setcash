@@ -90,6 +90,55 @@ router.put("/api/admin/settings", ensureProjectAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
+router.get("/api/admin/ocr-log", ensureProjectAdmin, (req, res) => {
+  const projectId = req.user.currentProjectId;
+  try {
+    const rows = db.prepare(`
+      SELECT
+        ocr_log.id,
+        ocr_log.bill_id,
+        bills.bill_number,
+        ocr_log.timestamp,
+        ocr_log.provider,
+        ocr_log.status,
+        ocr_log.fields_written,
+        ocr_log.ai_response,
+        ocr_log.error_detail
+      FROM ocr_log
+      LEFT JOIN bills ON bills.id = ocr_log.bill_id
+      WHERE ocr_log.project_id = ?
+      ORDER BY ocr_log.timestamp DESC
+      LIMIT 50
+    `).all(projectId);
+
+    const result = rows.map((row) => {
+      let fieldsWritten = null;
+      if (row.fields_written) {
+        try { fieldsWritten = JSON.parse(row.fields_written); } catch {}
+      }
+      const aiResponsePreview = row.ai_response
+        ? String(row.ai_response).slice(0, 200)
+        : null;
+      return {
+        id: row.id,
+        billId: row.bill_id,
+        billNumber: row.bill_number || null,
+        timestamp: row.timestamp,
+        provider: row.provider,
+        status: row.status,
+        fieldsWritten,
+        aiResponsePreview,
+        errorDetail: row.error_detail || null,
+      };
+    });
+
+    res.json(result);
+  } catch (e) {
+    console.error("[OCR-LOG] Error fetching ocr_log:", e.message);
+    res.status(500).json({ error: "Failed to fetch OCR log" });
+  }
+});
+
 function getCredentialsPath() {
   const dataPath = path.join(DATA_DIR, "google-credentials.json");
   const rootPath = path.join(__dirname, "..", "google-credentials.json");
