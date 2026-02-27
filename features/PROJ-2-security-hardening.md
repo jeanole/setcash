@@ -1,5 +1,7 @@
 ## PROJ-2: Security & Multi-tenant Hardening
 
+**Status:** In Progress
+
 ### Summary
 Strengthen vBudget’s security and tenant isolation so that each project’s data and uploads are fully isolated, sensitive operations are protected against CSRF, and secrets/crypto use safe defaults suitable for both self-hosted and multi-tenant deployments.
 
@@ -222,3 +224,11 @@ Primary environments:
 - **Security:** Pass — no auth bypass, CSRF bypass, or cross-project data leakage identified in code review for this feature’s surface area.  
 - **Production Ready:** YES  
 - **Recommendation:** Deploy, and optionally improve UX around CSRF/session expiry errors in a follow-up frontend task.
+
+---
+
+## Open Bug Reports
+
+| ID | Severity | Title | Status |
+|----|----------|-------|--------|
+| [BUG-5](BUG-5-project-delete-csrf-token-error.md) | Critical | Project Delete Button Fails with CSRF Token Error | Open |
