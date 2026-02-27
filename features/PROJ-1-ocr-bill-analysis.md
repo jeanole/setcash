@@ -735,7 +735,7 @@ New function `admLoadOcrLog()` — fetches `/api/admin/ocr-log`, renders table. 
 ---
 
 ### CR-3: AI Field Verification UX + Bill History/Audit Log
-**Requested:** 2026-02-27 | **Priority:** High | **Status:** Pending Review
+**Requested:** 2026-02-27 | **Priority:** High | **Status:** Deployed
 
 **Current Behavior:**
 - Fields filled by AI have an amber border and a static "AI — please verify" text label, but no way for the user to explicitly confirm a field has been reviewed without editing it
