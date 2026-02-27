@@ -487,7 +487,11 @@ router.patch("/api/bills/:id/verify-field", ensureAuth, ensureProjectAccess, (re
     return res.status(400).json({ error: "Field is not in ocr_fields" });
   }
 
-  const remaining = ocrFields.filter((f) => f !== field);
+  let remaining = ocrFields.filter((f) => f !== field);
+  // "amount" is a computed field not shown in the UI — auto-clear it if it's the only one left
+  if (remaining.length === 1 && remaining[0] === "amount") {
+    remaining = [];
+  }
 
   if (remaining.length === 0) {
     db.prepare("UPDATE bills SET ocr_fields = NULL, ocr_status = NULL WHERE id = ?").run(id);

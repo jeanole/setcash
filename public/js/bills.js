@@ -738,6 +738,7 @@ function applyOcrFieldHighlights(bill) {
     if (ocrFields.length === 0) return;
 
     // Map OCR field names to detail form element IDs
+    // "amount" is excluded — it's a computed field (sum of brutto fields), not directly editable
     var fieldMap = {
         date: "detailDate",
         vendor: "detailVendor",
@@ -746,11 +747,11 @@ function applyOcrFieldHighlights(bill) {
         brutto19: "detailBrutto19",
         brutto7: "detailBrutto7",
         brutto0: "detailBrutto0",
-        amount: "detailBrutto19", // amount maps to brutto19 as primary
         comment: "detailComment",
     };
 
     ocrFields.forEach(function (fieldName) {
+        if (fieldName === "amount") return; // skip computed field
         var elId = fieldMap[fieldName];
         if (!elId) return;
         var el = document.getElementById(elId);
@@ -821,27 +822,47 @@ async function verifyOcrField(fieldName, el) {
             body: JSON.stringify({ field: fieldName }),
         });
         var j = await res.json();
-        if (j.ok) {
-            // Update local bill state
-            var bill = allBills.find(function (b) { return b.id === currentBillId; });
-            if (bill) {
-                bill.ocrFields = j.ocrFields;
-                bill.ocrStatus = j.ocrStatus;
-                updateOcrStatusBar(bill);
-                showAnalyseButton(bill);
-            }
-            // Re-render bills list to update badge
-            renderFilteredBills();
-            // Reload logs to show the verified entry
-            var logsRes = await fetch("/api/bills/log");
-            if (logsRes.ok) {
-                allLogs = await logsRes.json();
-                refreshBillLogBody();
-            }
+        if (!j.ok) {
+            restoreOcrHighlightOnField(fieldName, el);
+            return;
+        }
+        // Update local bill state
+        var bill = allBills.find(function (b) { return b.id === currentBillId; });
+        if (bill) {
+            bill.ocrFields = j.ocrFields;
+            bill.ocrStatus = j.ocrStatus;
+            updateOcrStatusBar(bill);
+            showAnalyseButton(bill);
+        }
+        // Re-render bills list to update badge
+        renderFilteredBills();
+        // Reload logs to show the verified entry
+        var logsRes = await fetch("/api/bills/log");
+        if (logsRes.ok) {
+            allLogs = await logsRes.json();
+            refreshBillLogBody();
         }
     } catch (e) {
-        // Revert optimistic removal on error
         console.error("Error verifying field:", e);
+        restoreOcrHighlightOnField(fieldName, el);
+    }
+}
+
+function restoreOcrHighlightOnField(fieldName, el) {
+    el.classList.add("ocr-field-highlight");
+    var parentLabel = el.closest("label");
+    if (parentLabel && !parentLabel.querySelector(".ocr-field-label")) {
+        var badge = document.createElement("span");
+        badge.className = "ocr-field-label";
+        badge.textContent = "AI - please verify";
+        parentLabel.appendChild(badge);
+        var verifyBtn = document.createElement("button");
+        verifyBtn.type = "button";
+        verifyBtn.className = "ocr-verify-btn";
+        verifyBtn.textContent = "\u2713 Verified";
+        verifyBtn.setAttribute("data-field", fieldName);
+        verifyBtn.onclick = function () { verifyOcrField(fieldName, el); };
+        parentLabel.appendChild(verifyBtn);
     }
 }
 
