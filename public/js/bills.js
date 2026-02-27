@@ -1057,6 +1057,7 @@ function applyUploadOcrHighlights(ocrFields) {
     window.uploadOcrFields = ocrFields ? ocrFields.slice() : [];
     // fieldMap: OCR field name → upload form input name attribute
     var uploadFieldMap = {
+        date: "date",
         vendor: "vendor",
         item: "item",
         comment: "comment",
@@ -1064,10 +1065,10 @@ function applyUploadOcrHighlights(ocrFields) {
         brutto19: "brutto19",
         brutto7: "brutto7",
         brutto0: "brutto0",
-        // date and amount: skip (no date field in upload form; amount is computed)
+        // amount: skip (computed from brutto fields)
     };
     window.uploadOcrFields.forEach(function (fieldName) {
-        if (fieldName === "amount" || fieldName === "date") return;
+        if (fieldName === "amount") return;
         var inputName = uploadFieldMap[fieldName];
         if (!inputName) return;
         var el = document.querySelector("#uploadForm [name='" + inputName + "']");
@@ -1207,6 +1208,7 @@ function pollUploadOcr(billId, btn, statusDiv, form) {
                 var bill = bills.find(function (b) { return b.id === billId; });
                 if (bill) {
                     // Pre-fill form fields with OCR-extracted values
+                    if (bill.date) form.date.value = bill.date;
                     if (bill.vendor) form.vendor.value = bill.vendor;
                     if (bill.item) form.item.value = bill.item;
                     if (bill.comment) form.comment.value = bill.comment;
