@@ -1,6 +1,6 @@
 # PROJ-1: OCR / AI Bill Analysis
 
-## Status: In Review
+## Status: Change Requested
 **Created:** 2026-02-24
 **Last Updated:** 2026-02-26
 
@@ -731,3 +731,49 @@ New function `admLoadOcrLog()` — fetches `/api/admin/ocr-log`, renders table. 
 - [x] No API keys or secrets logged at any level
 
 **Resolution:** Already implemented as part of BUG-1 fix and CR-1 work. All OCR console output in `routes/ocr.js` uses `[OCR]` prefix with structured detail (provider, fields written, errors, HTTP status).
+
+---
+
+### CR-3: AI Field Verification UX + Bill History/Audit Log
+**Requested:** 2026-02-27 | **Priority:** High | **Status:** Pending Review
+
+**Current Behavior:**
+- Fields filled by AI have an amber border and a static "AI — please verify" text label, but no way for the user to explicitly confirm a field has been reviewed without editing it
+- There is no per-bill history visible to the user — no record of when the bill was scanned, what values AI extracted, or what the user later changed
+
+**Desired Behavior:**
+
+**Part A — Per-field verification UX:**
+- Each AI-filled field has a clear, prominent visual indicator (amber border + badge is good, but should be more visible)
+- A small inline "✓ Mark as checked" button (or checkmark icon) appears inside or beside each AI-filled field
+- Clicking it marks that field as human-verified without requiring the user to edit the value
+- The field's amber styling clears immediately on click; the field name is removed from `ocr_fields` on the backend
+
+**Part B — Bill history/audit log:**
+- Each bill has a "History" section in its detail view showing a chronological list of events:
+  - When the bill was created
+  - When AI analysis ran, which provider was used, and which fields were extracted
+  - When any field value was changed by a user (which field, old→new value, timestamp, who changed it)
+- History is read-only and append-only — no editing or deleting entries
+
+**Rationale:**
+- The current "edit to verify" UX is unintuitive — users have to modify a correct value just to clear the amber indicator. A dedicated verify button makes the flow explicit and friction-free.
+- Bill history gives users confidence that values are traceable and trustworthy, and helps admins audit changes made by users or AI.
+
+**Proposed Acceptance Criteria:**
+
+Part A — Field Verification:
+- [ ] Each AI-filled field shows a small "✓ Verified" / checkmark button alongside the "AI — please verify" label
+- [ ] Clicking the button immediately removes amber styling from that field (client-side)
+- [ ] Backend: `PUT /api/bills/:id/verify-field` (or extend save handler) removes the field from `ocr_fields` without requiring a full form save
+- [ ] When all fields in `ocr_fields` are verified, `ocr_status` is set to `null` and the "AI - check" badge disappears
+- [ ] Keyboard-accessible (button is focusable and activatable with Enter/Space)
+
+Part B — Bill History:
+- [ ] New `bill_history` table: `id`, `bill_id` (FK), `timestamp`, `event_type` (`created`, `ocr_scanned`, `field_changed`), `actor` (`user:<email>` or `ai:<provider>`), `field` (nullable), `old_value` (nullable), `new_value` (nullable)
+- [ ] History entry written on: bill creation, every `runOcrJob` completion (one entry per field written), every user save that changes a field value
+- [ ] Bill detail view shows a "History" tab or collapsible section with events listed newest-first
+- [ ] History is read-only; no edit/delete UI
+- [ ] History scoped to the current project (no cross-project access)
+
+**Resolution:** Pending
