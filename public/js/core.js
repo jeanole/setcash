@@ -143,8 +143,9 @@ function closeModal() {
     currentBillId = null;
     galleryImages = [];
     galleryIndex = 0;
-    // Clear OCR highlights
+    // Clear OCR highlights and stop polling
     if (typeof clearOcrFieldHighlights === "function") clearOcrFieldHighlights();
+    if (typeof stopOcrPolling === "function") stopOcrPolling();
 }
 
 async function loadProjectData() {
@@ -165,11 +166,8 @@ async function loadProjectData() {
     categoriesData = await categoriesRes.json();
     rolesData = positionsRes.ok ? await positionsRes.json() : [];
     const projectInfo = await projectRes.json();
-    // Load OCR enabled state from settings
-    try {
-        const settingsData = settingsRes.ok ? await settingsRes.json() : {};
-        projectOcrEnabled = !!settingsData.ocrEnabled;
-    } catch (e) { projectOcrEnabled = false; }
+    // Load OCR enabled state from project-info (accessible to all users)
+    projectOcrEnabled = !!projectInfo.ocrEnabled;
     const projectName =
         projectInfo.projectName ||
         currentUser.currentProjectName ||

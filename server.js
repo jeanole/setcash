@@ -38,14 +38,18 @@ const DATA_DIR = path.join(__dirname, "data");
 
 // Hardened secrets: refuse to start in production with weak session secret
 const DEFAULT_SESSION_SECRET = "change-this-in-production";
+const sessionSecret = process.env.SESSION_SECRET;
 if (process.env.NODE_ENV === "production") {
-  const secret = process.env.SESSION_SECRET;
-  if (!secret || secret === DEFAULT_SESSION_SECRET || secret.length < 16) {
+  if (!sessionSecret || sessionSecret === DEFAULT_SESSION_SECRET || sessionSecret.length < 16) {
     console.error(
       "[Startup] SESSION_SECRET is missing, too short, or using a default/weak value. Refusing to start in production.",
     );
     process.exit(1);
   }
+} else if (!sessionSecret || sessionSecret === DEFAULT_SESSION_SECRET) {
+  console.warn(
+    "[Startup] WARNING: SESSION_SECRET is not set or uses the default value. Set a strong SESSION_SECRET before storing API keys.",
+  );
 }
 
 const app = express();
