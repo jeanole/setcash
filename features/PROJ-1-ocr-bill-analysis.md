@@ -1288,3 +1288,174 @@ The list-level button label uses `bill.ocrStatus === "done" ? "Re-analyse" : "An
 | NEW-BUG-R3-4 | Medium | P2 | [Backend] | SSRF guard does not block full 127.0.0.0/8 loopback range |
 
 **Production Readiness:** NOT READY. NEW-BUG-R3-3 (data loss risk) and NEW-BUG-R3-4 (SSRF security) must be fixed first. NEW-BUG-R3-1 (UX/date field) should be addressed before user-facing release. NEW-BUG-R3-2 is cosmetic and non-blocking.
+
+---
+
+## QA Test Results -- Round 4
+
+**Tested:** 2026-02-27
+**App URL:** http://localhost:3000
+**Tester:** QA Engineer (AI)
+
+**Scope:** Verification of Round 3 bug fixes (commits `eb33ce6`, `4aca3ca`) plus security and regression spot-checks.
+
+---
+
+### Test 1: R3-1 -- Date field in upload form
+
+#### HTML markup
+- [x] `public/index.html` upload form (`#uploadForm`) now contains `<input type="date" name="date">` at lines 443-450
+
+#### applyUploadOcrHighlights fieldMap
+- [x] `public/js/bills.js` line 1060: `uploadFieldMap` includes `date: "date"` -- date is no longer excluded
+
+#### pollUploadOcr pre-fill
+- [x] `public/js/bills.js` line 1211: `if (bill.date) form.date.value = bill.date;` -- date is pre-filled from OCR result
+
+#### Upload POST payload (normal upload)
+- [ ] BUG: `public/js/core.js` lines 437-446: The FormData construction does NOT include `data.append("date", form.date.value)`. Date is never sent to backend on initial upload.
+
+#### Upload POST backend
+- [ ] BUG: `routes/bills.js` line 167: The upload route does NOT destructure `date` from `req.body`. Line 211 always inserts `new Date().toISOString()` as the date. Even if the frontend sent a date value, the backend would ignore it.
+
+#### saveUploadEditBill PUT payload (save-after-OCR)
+- [ ] BUG: `public/js/core.js` lines 550-559: The PUT payload does NOT include a `date` property. The backend PUT route (`routes/bills.js` line 310, 316-320) does accept and process `date`, but it is never sent.
+
+**R3-1 Verdict: PARTIAL PASS** -- The date input field was correctly added to the form, the OCR fieldMap includes date, and OCR pre-fill works. However, the date value is never transmitted to the backend in either flow, making the field decorative only during save operations.
+
+---
+
+### Test 2: R3-3 -- isReanalysis condition fix
+
+- [x] `routes/ocr.js` line 323: `isReanalysis` reads `ocr_status === "done"` (not `!== null`). Correct.
+- [x] When `ocr_status = "failed"`, `isReanalysis` is `false` -- field write guards (zero/empty checks) remain active
+- [x] When `ocr_status = "done"`, `isReanalysis` is `true` -- field write guards bypassed (correct for re-analyse)
+- [x] Edge case: bill with `ocr_status = "failed"` + user data -- re-analysis does NOT overwrite non-empty fields
+- [x] Edge case: bill with `ocr_status = "done"` + user data -- re-analysis DOES overwrite (per CR-5 design)
+- [x] Frontend: failed bills show "Analyse" button (not "Re-analyse"), no confirmation dialog
+- [x] Frontend: done bills show "Re-analyse" button with confirmation dialog
+
+**R3-3 Verdict: PASS**
+
+---
+
+### Test 3: R3-4 -- SSRF full 127.0.0.0/8 loopback block
+
+- [x] `routes/ocr.js` line 88: `/^127\./.test(hostname)` blocks entire 127.0.0.0/8 range (not just 127.0.0.1)
+- [x] `0.0.0.0` still blocked (line 98)
+- [x] `::1` (IPv6 loopback) still blocked (line 88)
+- [x] `10.x.x.x` still blocked (line 94)
+- [x] `192.168.x.x` still blocked (line 95)
+- [x] `172.16-31.x.x` still blocked (line 96)
+- [x] Legitimate `https://` URLs pass (e.g. `https://api.openai.com`)
+
+**R3-4 Verdict: PASS**
+
+---
+
+### Test 4: R3-2 -- Cosmetic label inconsistency
+
+- [ ] STILL PRESENT: List button label at `public/js/bills.js` line 301 uses only `ocrStatus === "done"` for "Re-analyse" text, while the confirmation dialog conditions (lines 918, 929, 969) use the broader `ocrStatus === "done" || (ocrFields && ocrFields.length > 0)`. A bill with leftover `ocrFields` but non-"done" status would show "Analyse" label but still trigger the confirmation dialog.
+
+**R3-2 Verdict: STILL PRESENT (Low severity, non-blocking)**
+
+---
+
+### Security Spot-Check
+
+#### SSRF validation at settings save time
+- [ ] BUG: `routes/settings.js` lines 83-89: When `ocrBaseUrl` is saved independently (without `ocrApiKey` in the same request), only `startsWith("https://")` is validated -- `isPrivateUrl()` is NOT called. An admin could save a private-range URL (e.g. `https://127.0.0.2/evil`) via a standalone base URL update. Mitigated by the runtime SSRF check in `routes/ocr.js` lines 378-384, which always fires before making an outbound request. Defense-in-depth gap only.
+- [ ] BUG: `routes/settings.js` line 70: `effectiveProvider` defaults to `"openai"` instead of reading the currently-saved provider from the database. If provider is already set to `"custom"` in DB but `ocrProvider` is not sent in the current request body, the SSRF check is skipped entirely when saving a new API key. Same runtime mitigation applies.
+
+#### Date field XSS
+- [x] `public/js/bills.js` line 1211: `form.date.value = bill.date;` uses `.value` property assignment, not `innerHTML`. No XSS risk.
+
+**Security Verdict: PARTIAL PASS** -- Two defense-in-depth gaps in settings save path (mitigated by runtime check in OCR job).
+
+---
+
+### Regression Spot-Check
+
+- [x] Normal upload flow (POST /upload without OCR) still works -- form submit handler at `core.js` lines 387-488 fires correctly when `!window.uploadEditBillId`
+- [x] Bill detail amber highlights still work for non-upload-modal analysis -- `applyOcrFieldHighlights`, `updateOcrStatusBar`, `showAnalyseButton` all intact
+- [x] PUT /api/bills/:id strips "date" from `ocr_fields` when date is edited -- `routes/bills.js` lines 413-431 correctly removes edited fields from the OCR fields array
+
+**Regression Verdict: PASS**
+
+---
+
+### Bugs Found
+
+#### NEW-BUG-R4-1: Date field value never sent to backend in upload or save-after-OCR flows [MEDIUM]
+
+- **Severity:** Medium
+- **Priority:** P2 -- Fix before deployment
+- **Tag:** **[Frontend]** + **[Backend]**
+- **Files:**
+  - `public/js/core.js` lines 437-446 (upload POST -- missing `data.append("date", ...)`)
+  - `public/js/core.js` lines 550-559 (saveUploadEditBill PUT -- missing `date` property in payload)
+  - `routes/bills.js` line 167 (upload route -- does not destructure `date` from `req.body`)
+  - `routes/bills.js` line 211 (always inserts `new Date().toISOString()` instead of user/OCR-provided date)
+- **Steps to Reproduce:**
+  1. Open the Upload Bill form
+  2. Add a photo, click "Analyse with AI"
+  3. OCR fills the date field with the receipt date (e.g. 2026-01-15)
+  4. User reviews and clicks "Save Changes"
+  5. Expected: Bill is saved with date 2026-01-15
+  6. Actual: Bill is saved with the current timestamp (the date input value is never sent)
+- **Impact:** The R3-1 fix is incomplete. The date field was added to the HTML form and OCR pre-fill works visually, but the value is discarded on save. Users see a date, verify it, but it is silently replaced with the current date.
+
+#### NEW-BUG-R4-2: Settings save path missing isPrivateUrl check on standalone ocrBaseUrl update [LOW]
+
+- **Severity:** Low
+- **Priority:** P3 -- Nice to have (defense-in-depth)
+- **Tag:** **[Backend]**
+- **File:** `routes/settings.js` lines 83-89
+- **Steps to Reproduce:**
+  1. As admin, configure OCR with provider=custom, valid API key, and a legitimate base URL
+  2. Send a separate PUT to `/api/admin/settings` with only `{ "ocrBaseUrl": "https://127.0.0.2/evil" }`
+  3. Expected: Request rejected by SSRF check
+  4. Actual: Base URL is saved (only `startsWith("https://")` is checked, `isPrivateUrl()` is not called)
+- **Mitigation:** Runtime SSRF check in `routes/ocr.js` lines 378-384 blocks the request at analysis time. This is a defense-in-depth gap, not directly exploitable.
+
+#### NEW-BUG-R4-3: effectiveProvider defaults to "openai" instead of reading saved provider from DB [LOW]
+
+- **Severity:** Low
+- **Priority:** P3 -- Nice to have (defense-in-depth)
+- **Tag:** **[Backend]**
+- **File:** `routes/settings.js` line 70
+- **Steps to Reproduce:**
+  1. As admin, set provider to "custom" with a valid base URL and API key
+  2. Later, send a PUT to `/api/admin/settings` with only `{ "ocrApiKey": "new-key" }` (no `ocrProvider` in body)
+  3. Expected: SSRF check fires because saved provider is "custom"
+  4. Actual: `effectiveProvider` falls back to `"openai"`, SSRF validation on `ocrBaseUrl` is skipped entirely
+- **Mitigation:** Same runtime mitigation as NEW-BUG-R4-2.
+
+---
+
+### Summary
+
+| Test | Scope | Verdict |
+|------|-------|---------|
+| R3-1 | Date field in upload form | **PARTIAL PASS** -- HTML/fieldMap/pre-fill correct; date never sent to backend |
+| R3-3 | isReanalysis condition fix | **PASS** |
+| R3-4 | SSRF full 127.0.0.0/8 block | **PASS** |
+| R3-2 | Cosmetic label inconsistency | **STILL PRESENT** (Low, non-blocking) |
+| Security | SSRF + XSS spot-check | **PARTIAL PASS** -- defense-in-depth gaps in settings save path |
+| Regression | Upload, highlights, field stripping | **PASS** |
+
+**Round 3 Fix Verification: 2/3 PASS, 1 PARTIAL**
+
+- R3-3 (isReanalysis condition): Fully fixed
+- R3-4 (SSRF loopback range): Fully fixed
+- R3-1 (Date field): Partially fixed -- field added but value discarded on save
+
+**New bugs found: 3**
+
+| ID | Severity | Priority | Tag | Title |
+|----|----------|----------|-----|-------|
+| NEW-BUG-R4-1 | Medium | P2 | [Frontend] + [Backend] | Date field value never sent to backend in upload or save-after-OCR flows |
+| NEW-BUG-R4-2 | Low | P3 | [Backend] | Settings save path missing isPrivateUrl check on standalone ocrBaseUrl update |
+| NEW-BUG-R4-3 | Low | P3 | [Backend] | effectiveProvider defaults to "openai" instead of reading saved provider from DB |
+
+**Production Readiness:** NOT READY. NEW-BUG-R4-1 (date field save failure) must be fixed -- users will see OCR-extracted dates that are silently discarded. R3-2 (cosmetic) remains open but non-blocking. NEW-BUG-R4-2 and NEW-BUG-R4-3 are defense-in-depth improvements that are mitigated by the runtime SSRF check and are non-blocking.
