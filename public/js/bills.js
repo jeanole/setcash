@@ -311,7 +311,7 @@ function renderFilteredBills() {
       <td class="px-3 py-2.5 tabular-nums"><strong class="text-slate-900">${formatCurrency(total)}</strong></td>
       <td class="px-3 py-2.5 tabular-nums"><strong class="text-slate-900">${formatCurrency(nettoTotal)}</strong></td>
       <td class="px-3 py-2.5 text-slate-500 text-xs">${motiveDisplay}${categoryDisplay ? '<br><span class="text-slate-400">' + categoryDisplay + "</span>" : ""}</td>
-      <td class="px-3 py-2.5 flex items-center gap-1.5 flex-wrap">${renderOcrBadge(bill)}${projectOcrEnabled && bill.images && bill.images.length && !bill.ocr_status ? `<button class="text-xs px-2 py-1 bg-amber-50 text-amber-700 rounded-md hover:bg-amber-100 transition-colors border border-amber-200 cursor-pointer whitespace-nowrap" onclick="event.stopPropagation(); triggerBillAnalysisFromList(${bill.id})">Analyse</button>` : ""}<button class="text-xs px-2.5 py-1 bg-indigo-50 text-indigo-600 rounded-md hover:bg-indigo-100 transition-colors border-none cursor-pointer" onclick="event.stopPropagation(); openBillDetail(${bill.id})">View</button></td>
+      <td class="px-3 py-2.5 flex items-center gap-1.5 flex-wrap">${renderOcrBadge(bill)}${projectOcrEnabled && bill.images && bill.images.length && (!bill.ocrStatus || bill.ocrStatus === "failed") ? `<button class="text-xs px-2 py-1 bg-amber-50 text-amber-700 rounded-md hover:bg-amber-100 transition-colors border border-amber-200 cursor-pointer whitespace-nowrap" onclick="event.stopPropagation(); triggerBillAnalysisFromList(${bill.id})">Analyse</button>` : ""}<button class="text-xs px-2.5 py-1 bg-indigo-50 text-indigo-600 rounded-md hover:bg-indigo-100 transition-colors border-none cursor-pointer" onclick="event.stopPropagation(); openBillDetail(${bill.id})">View</button></td>
     </tr>`;
             })
             .join("");
@@ -447,9 +447,9 @@ function openBillDetail(id) {
     // Populate form fields
     document.getElementById("detailBillNumber").value =
         bill.billNumber || "-";
-    document.getElementById("detailDate").value = formatDate(
-        bill.date,
-    );
+    document.getElementById("detailDate").value = bill.date
+        ? bill.date.substring(0, 10)
+        : "";
     document.getElementById("detailType").value =
         bill.type || "Kauf";
 
@@ -683,28 +683,26 @@ function downloadReport() {
 // ========== OCR / AI Analysis ==========
 
 function renderOcrBadge(bill) {
-    if (!bill.ocr_status) return "";
-    if (bill.ocr_status === "pending") {
+    if (!bill.ocrStatus) return "";
+    if (bill.ocrStatus === "pending") {
         return '<span class="ocr-badge ocr-badge-pending"><span class="ocr-spinner"></span> Analysing</span>';
     }
-    if (bill.ocr_status === "done") {
-        var fields = [];
-        try { fields = JSON.parse(bill.ocr_fields || "[]"); } catch (e) {}
+    if (bill.ocrStatus === "done") {
+        var fields = bill.ocrFields || [];
         if (fields.length > 0) {
             return '<span class="ocr-badge ocr-badge-done">AI - check</span>';
         }
         return "";
     }
-    if (bill.ocr_status === "failed") {
+    if (bill.ocrStatus === "failed") {
         return '<span class="ocr-badge ocr-badge-failed">Analysis failed</span>';
     }
     return "";
 }
 
 function applyOcrFieldHighlights(bill) {
-    if (!bill || !bill.ocr_fields) return;
-    var ocrFields = [];
-    try { ocrFields = JSON.parse(bill.ocr_fields || "[]"); } catch (e) {}
+    if (!bill || !bill.ocrFields) return;
+    var ocrFields = bill.ocrFields || [];
     if (ocrFields.length === 0) return;
 
     // Map OCR field names to detail form element IDs
@@ -767,19 +765,18 @@ function updateOcrStatusBar(bill) {
     var bar = document.getElementById("ocrStatusBar");
     if (!bar) return;
 
-    if (!bill.ocr_status) {
+    if (!bill.ocrStatus) {
         bar.className = "hidden";
         bar.innerHTML = "";
         return;
     }
 
     bar.classList.remove("hidden");
-    if (bill.ocr_status === "pending") {
+    if (bill.ocrStatus === "pending") {
         bar.className = "px-3 py-2 rounded-lg text-sm flex items-center gap-2 bg-indigo-50 text-indigo-700 border border-indigo-200";
         bar.innerHTML = '<span class="ocr-spinner"></span> AI analysis in progress...';
-    } else if (bill.ocr_status === "done") {
-        var fields = [];
-        try { fields = JSON.parse(bill.ocr_fields || "[]"); } catch (e) {}
+    } else if (bill.ocrStatus === "done") {
+        var fields = bill.ocrFields || [];
         if (fields.length > 0) {
             bar.className = "px-3 py-2 rounded-lg text-sm flex items-center gap-2 bg-amber-50 text-amber-700 border border-amber-200";
             bar.innerHTML = 'AI extracted ' + fields.length + ' field(s) - please verify highlighted fields below';
@@ -787,7 +784,7 @@ function updateOcrStatusBar(bill) {
             bar.className = "hidden";
             bar.innerHTML = "";
         }
-    } else if (bill.ocr_status === "failed") {
+    } else if (bill.ocrStatus === "failed") {
         bar.className = "px-3 py-2 rounded-lg text-sm flex items-center gap-2 bg-rose-50 text-rose-700 border border-rose-200";
         bar.innerHTML = 'AI analysis failed. You can try again using the Analyse button.';
     }
@@ -798,7 +795,7 @@ function showAnalyseButton(bill) {
     if (!btn) return;
     // Show if: OCR enabled for project, bill has images, and status is not pending
     var hasImages = bill.images && bill.images.length > 0;
-    if (projectOcrEnabled && hasImages && bill.ocr_status !== "pending") {
+    if (projectOcrEnabled && hasImages && bill.ocrStatus !== "pending") {
         btn.style.display = "";
     } else {
         btn.style.display = "none";
@@ -813,13 +810,13 @@ async function triggerBillAnalysis() {
         btn.textContent = "Starting...";
     }
     try {
-        var res = await fetch("/api/bills/" + currentBillId + "/analyse", { method: "POST" });
+        var res = await apiFetch("/api/bills/" + currentBillId + "/analyse", { method: "POST" });
         var j = await res.json();
         if (j.ok) {
             showMessage("detailResult", "Analysis started - fields will be filled shortly", false);
             // Update local bill state
             var bill = allBills.find(function (b) { return b.id === currentBillId; });
-            if (bill) bill.ocr_status = "pending";
+            if (bill) bill.ocrStatus = "pending";
             var bar = document.getElementById("ocrStatusBar");
             if (bar) {
                 bar.classList.remove("hidden");
@@ -827,6 +824,7 @@ async function triggerBillAnalysis() {
                 bar.innerHTML = '<span class="ocr-spinner"></span> AI analysis in progress...';
             }
             if (btn) btn.style.display = "none";
+            startOcrPolling(currentBillId);
         } else {
             showMessage("detailResult", "Error: " + (j.error || "unknown"), true);
         }
@@ -841,16 +839,70 @@ async function triggerBillAnalysis() {
 
 async function triggerBillAnalysisFromList(billId) {
     try {
-        var res = await fetch("/api/bills/" + billId + "/analyse", { method: "POST" });
+        var res = await apiFetch("/api/bills/" + billId + "/analyse", { method: "POST" });
         var j = await res.json();
         if (j.ok) {
             // Update local bill state and re-render
             var bill = allBills.find(function (b) { return b.id === billId; });
-            if (bill) bill.ocr_status = "pending";
+            if (bill) bill.ocrStatus = "pending";
             renderFilteredBills();
+            startOcrPolling(billId);
         }
     } catch (e) {
         console.error("Error triggering analysis", e);
+    }
+}
+
+// ========== OCR status polling ==========
+var ocrPollTimer = null;
+
+function startOcrPolling(billId) {
+    stopOcrPolling();
+    ocrPollTimer = setInterval(function () {
+        pollOcrStatus(billId);
+    }, 3000);
+}
+
+function stopOcrPolling() {
+    if (ocrPollTimer) {
+        clearInterval(ocrPollTimer);
+        ocrPollTimer = null;
+    }
+}
+
+async function pollOcrStatus(billId) {
+    try {
+        var res = await fetch("/api/bills/" + billId + "/ocr-status");
+        if (!res.ok) return;
+        var data = await res.json();
+        if (data.ocrStatus !== "pending") {
+            stopOcrPolling();
+            // Update local bill state
+            var bill = allBills.find(function (b) { return b.id === billId; });
+            if (bill) {
+                bill.ocrStatus = data.ocrStatus;
+                bill.ocrFields = data.ocrFields;
+            }
+            // If modal is open for this bill, update it
+            if (currentBillId === billId) {
+                updateOcrStatusBar(bill || { ocrStatus: data.ocrStatus, ocrFields: data.ocrFields });
+                showAnalyseButton(bill || { ocrStatus: data.ocrStatus, ocrFields: data.ocrFields, images: [] });
+                if (data.ocrStatus === "done" && data.ocrFields && data.ocrFields.length > 0) {
+                    // Reload bill data to get updated field values
+                    loadBills().then(function () {
+                        var updated = allBills.find(function (b) { return b.id === billId; });
+                        if (updated && currentBillId === billId) {
+                            openBillDetail(billId);
+                        }
+                    });
+                }
+            } else {
+                // Just re-render the bills list to update badges
+                renderFilteredBills();
+            }
+        }
+    } catch (e) {
+        // Silently ignore polling errors
     }
 }
 
@@ -892,12 +944,12 @@ document.addEventListener("DOMContentLoaded", () => {
         const form = e.target;
         const data = {
             vendor: form.vendor.value,
-            description: form.description.value,
+            item: form.item.value,
             brutto19: parseNum(form.brutto19.value),
             brutto7: parseNum(form.brutto7.value),
             brutto0: parseNum(form.brutto0.value),
             date: form.date.value,
-            isDraft: form.isDraft ? form.isDraft.checked : false,
+            comment: form.comment.value,
             motiveAllocations: motiveAllocs,
             categoryAllocations: categoryAllocs,
         };

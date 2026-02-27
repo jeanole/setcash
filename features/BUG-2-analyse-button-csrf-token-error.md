@@ -1,6 +1,6 @@
 # BUG-2: Analyse Button Fails with CSRF Token Error
 
-**Status:** Open
+**Status:** Resolved
 **Reported:** 2026-02-27
 **Severity:** High
 **Skill Tag:** [Frontend]
@@ -36,7 +36,7 @@ The POST request is rejected by the server's CSRF middleware with a 403 error be
 ---
 
 ## Resolution
-**Status:** Open
-**Resolved Date:** —
-**Fixed In:** —
-**Fix Description:** —
+**Status:** Resolved
+**Resolved Date:** 2026-02-27
+**Fixed In:** fix(BUG-2) commit
+**Fix Description:** Replaced raw `fetch()` with `apiFetch()` in `triggerBillAnalysis()` and `triggerBillAnalysisFromList()` so the X-CSRF-Token header is included.
