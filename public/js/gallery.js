@@ -144,7 +144,7 @@ async function cropCurrentImage() {
         var formData = new FormData();
         formData.append("photo", result, file.name);
         try {
-            var res = await fetch("/api/bills/" + currentBillId + "/images/" + img.id, {
+            var res = await apiFetch("/api/bills/" + currentBillId + "/images/" + img.id, {
                 method: "PUT",
                 body: formData,
             });
@@ -314,7 +314,7 @@ async function deleteCurrentImage() {
     const img = galleryImages[galleryIndex];
     if (!confirm("Delete this image?")) return;
     try {
-        const res = await fetch(
+        const res = await apiFetch(
             `/api/bills/${currentBillId}/images/${img.id}`,
             { method: "DELETE" },
         );
@@ -352,7 +352,7 @@ async function addImagesToCurrentBill(files) {
     const formData = new FormData();
     for (const f of files) formData.append("photos", f);
     try {
-        const res = await fetch(
+        const res = await apiFetch(
             `/api/bills/${currentBillId}/images`,
             { method: "POST", body: formData },
         );

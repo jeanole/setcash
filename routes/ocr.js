@@ -15,7 +15,7 @@ const DEFAULT_SECRET = "change-this-in-production";
 const OCR_ENCRYPTION_SECRET = process.env.OCR_ENCRYPTION_SECRET || null;
 if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET === DEFAULT_SECRET) {
   console.warn(
-    "[OCR] WARNING: SESSION_SECRET is not set or uses the default value. " +
+    "[Startup] WARNING: SESSION_SECRET is not set or uses the default value. " +
       "Set a strong SESSION_SECRET environment variable before storing API keys.",
   );
 }
@@ -23,7 +23,7 @@ if (process.env.NODE_ENV === "production") {
   const base = OCR_ENCRYPTION_SECRET || process.env.SESSION_SECRET;
   if (!base || base === DEFAULT_SECRET || base.length < 16) {
     console.error(
-      "[OCR] OCR_ENCRYPTION_SECRET / SESSION_SECRET is missing, too short, or using a default value. Refusing to start in production.",
+      "[Startup] OCR_ENCRYPTION_SECRET / SESSION_SECRET is missing, too short, or using a default value. Refusing to start in production.",
     );
     process.exit(1);
   }

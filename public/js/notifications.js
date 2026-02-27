@@ -41,7 +41,7 @@ function renderNotificationList() {
 
 async function handleNotificationClick(id, projectId) {
     // Mark as read
-    await fetch(`/api/notifications/${id}/read`, { method: "POST" });
+    await apiFetch(`/api/notifications/${id}/read`, { method: "POST" });
     const n = notificationsData.find((x) => x.id === id);
     if (n) n.is_read = 1;
     renderNotificationList();
@@ -59,7 +59,7 @@ async function handleNotificationClick(id, projectId) {
 }
 
 async function markAllNotificationsRead() {
-    await fetch("/api/notifications/read-all", { method: "POST" });
+    await apiFetch("/api/notifications/read-all", { method: "POST" });
     notificationsData.forEach((n) => (n.is_read = 1));
     renderNotificationList();
     const badge = document.getElementById("notificationBadge");

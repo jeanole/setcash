@@ -57,7 +57,7 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("saProjectForm").onsubmit = async (e) => {
         e.preventDefault();
         const f = e.target;
-        const res = await fetch("/api/superadmin/projects", {
+        const res = await apiFetch("/api/superadmin/projects", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ name: f.name.value, subtitle: f.subtitle.value }),
@@ -69,7 +69,7 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("saUserForm").onsubmit = async (e) => {
         e.preventDefault();
         const f = e.target;
-        const res = await fetch("/api/superadmin/users", {
+        const res = await apiFetch("/api/superadmin/users", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ email: f.email.value, password: f.password.value, superAdmin: f.isSuperAdmin.checked }),
@@ -85,7 +85,7 @@ async function saEditProject(id, name, subtitle) {
     if (newName === null) return;
     const newSub = prompt("Subtitle:", subtitle);
     if (newSub === null) return;
-    const res = await fetch("/api/superadmin/projects/" + id, {
+    const res = await apiFetch("/api/superadmin/projects/" + id, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: newName, subtitle: newSub }),
@@ -97,7 +97,7 @@ async function saEditProject(id, name, subtitle) {
 
 async function saDeleteProject(id, name) {
     if (!confirm('Delete project "' + name + '"?\n\nThis permanently deletes ALL project data.')) return;
-    const res = await fetch("/api/superadmin/projects/" + id, { method: "DELETE" });
+    const res = await apiFetch("/api/superadmin/projects/" + id, { method: "DELETE" });
     const j = await res.json();
     if (j.ok) { saMsg("saProjectResult", "Deleted", false); saLoadProjects(); }
     else saMsg("saProjectResult", j.error || "Error", true);
@@ -126,7 +126,7 @@ async function saLoadUsers() {
 }
 
 async function saToggleSuperAdmin(email, newVal) {
-    const res = await fetch("/api/superadmin/users/" + encodeURIComponent(email), {
+    const res = await apiFetch("/api/superadmin/users/" + encodeURIComponent(email), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ superAdmin: newVal }),
@@ -139,7 +139,7 @@ async function saToggleSuperAdmin(email, newVal) {
 async function saResetPassword(email) {
     const pw = prompt("New password for " + email + ":");
     if (!pw) return;
-    const res = await fetch("/api/superadmin/users/" + encodeURIComponent(email), {
+    const res = await apiFetch("/api/superadmin/users/" + encodeURIComponent(email), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password: pw }),
@@ -151,7 +151,7 @@ async function saResetPassword(email) {
 
 async function saDeleteUser(email) {
     if (!confirm('Delete user "' + email + '"?\n\nThis removes them from all projects.')) return;
-    const res = await fetch("/api/superadmin/users/" + encodeURIComponent(email), { method: "DELETE" });
+    const res = await apiFetch("/api/superadmin/users/" + encodeURIComponent(email), { method: "DELETE" });
     const j = await res.json();
     if (j.ok) { saMsg("saUserResult", "Deleted", false); saLoadUsers(); }
     else saMsg("saUserResult", j.error || "Error", true);
@@ -233,7 +233,7 @@ async function saAddMember() {
     const role = document.getElementById("saMemberRoleSelect").value;
     const posId = document.getElementById("saMemberPosSelect").value;
     if (!email) return saMsg("saMemberResult", "Select a user first", true);
-    const res = await fetch("/api/superadmin/projects/" + saCurrentProjectId + "/members", {
+    const res = await apiFetch("/api/superadmin/projects/" + saCurrentProjectId + "/members", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, projectRole: role, positionId: posId ? parseInt(posId) : null }),
@@ -244,7 +244,7 @@ async function saAddMember() {
 }
 
 async function saUpdateMemberRole(memberId, role) {
-    const res = await fetch("/api/superadmin/projects/" + saCurrentProjectId + "/members/" + memberId, {
+    const res = await apiFetch("/api/superadmin/projects/" + saCurrentProjectId + "/members/" + memberId, {
         method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projectRole: role }),
     });
     const j = await res.json();
@@ -252,7 +252,7 @@ async function saUpdateMemberRole(memberId, role) {
 }
 
 async function saUpdateMemberPosition(memberId, positionId) {
-    const res = await fetch("/api/superadmin/projects/" + saCurrentProjectId + "/members/" + memberId, {
+    const res = await apiFetch("/api/superadmin/projects/" + saCurrentProjectId + "/members/" + memberId, {
         method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ positionId: positionId ? parseInt(positionId) : null }),
     });
     const j = await res.json();
@@ -261,7 +261,7 @@ async function saUpdateMemberPosition(memberId, positionId) {
 
 async function saRemoveMember(memberId, email) {
     if (!confirm("Remove " + email + " from this project?")) return;
-    const res = await fetch("/api/superadmin/projects/" + saCurrentProjectId + "/members/" + memberId, { method: "DELETE" });
+    const res = await apiFetch("/api/superadmin/projects/" + saCurrentProjectId + "/members/" + memberId, { method: "DELETE" });
     const j = await res.json();
     if (j.ok) { saMsg("saMemberResult", "Removed", false); saLoadMemberships(); }
     else saMsg("saMemberResult", j.error || "Error", true);
@@ -271,7 +271,7 @@ async function saAddPosition() {
     const input = document.getElementById("saPositionNameInput");
     const name = input.value.trim();
     if (!name) return saMsg("saPositionResult", "Enter a name", true);
-    const res = await fetch("/api/superadmin/projects/" + saCurrentProjectId + "/positions", {
+    const res = await apiFetch("/api/superadmin/projects/" + saCurrentProjectId + "/positions", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }),
     });
     const j = await res.json();
@@ -282,7 +282,7 @@ async function saAddPosition() {
 async function saRenamePosition(posId, oldName) {
     const newName = prompt('Rename "' + oldName + '" to:', oldName);
     if (!newName || newName === oldName) return;
-    const res = await fetch("/api/superadmin/projects/" + saCurrentProjectId + "/positions/" + posId, {
+    const res = await apiFetch("/api/superadmin/projects/" + saCurrentProjectId + "/positions/" + posId, {
         method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: newName }),
     });
     const j = await res.json();
@@ -292,7 +292,7 @@ async function saRenamePosition(posId, oldName) {
 
 async function saDeletePosition(posId) {
     if (!confirm("Delete this position?")) return;
-    const res = await fetch("/api/superadmin/projects/" + saCurrentProjectId + "/positions/" + posId, { method: "DELETE" });
+    const res = await apiFetch("/api/superadmin/projects/" + saCurrentProjectId + "/positions/" + posId, { method: "DELETE" });
     const j = await res.json();
     if (j.ok) { saMsg("saPositionResult", "Deleted", false); saLoadMemberships(); }
     else saMsg("saPositionResult", j.error || "Error", true);

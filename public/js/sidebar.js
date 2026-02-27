@@ -34,7 +34,7 @@ async function showProjectSelector() {
 }
 
 async function selectProject(projectId) {
-    const r = await fetch(`/api/projects/select/${projectId}`, {
+    const r = await apiFetch(`/api/projects/select/${projectId}`, {
         method: "POST",
     });
     if (!r.ok) {
@@ -148,7 +148,7 @@ async function updateSidebar(
 async function sidebarSelectProject(projectId) {
     closeMenu();
     if (projectId === currentUser.currentProjectId) return;
-    const r = await fetch("/api/projects/select/" + projectId, {
+    const r = await apiFetch("/api/projects/select/" + projectId, {
         method: "POST",
     });
     if (!r.ok) {
@@ -165,7 +165,7 @@ async function sidebarSelectProject(projectId) {
 
 async function sidebarToggleDefault(projectId, isCurrentlyDefault) {
     const newDefault = isCurrentlyDefault ? null : projectId;
-    const r = await fetch("/api/user/default-project", {
+    const r = await apiFetch("/api/user/default-project", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ projectId: newDefault }),
@@ -191,7 +191,7 @@ async function sidebarToggleDefault(projectId, isCurrentlyDefault) {
 
 async function switchProject() {
     closeMenu();
-    await fetch("/api/projects/clear", { method: "POST" });
+    await apiFetch("/api/projects/clear", { method: "POST" });
     currentUser.currentProjectId = null;
     currentUser.currentProjectRole = null;
     currentUser.currentProjectName = null;

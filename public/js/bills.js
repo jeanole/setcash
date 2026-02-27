@@ -298,6 +298,7 @@ function renderFilteredBills() {
                 return `
     <tr data-id="${bill.id}" class="clickable-row cursor-pointer${bill.status === "draft" ? " bill-draft-row" : ""}" onclick="openBillDetail(${bill.id})">
       <td class="admin-only px-3 py-2.5" style="${isAdmin ? "" : "display:none"}" onclick="event.stopPropagation()"><input type="checkbox" class="bill-checkbox" data-id="${bill.id}" onchange="updateSelectedCount()"></td>
+      <td class="px-3 py-2.5 flex items-center gap-1.5 flex-wrap">${renderOcrBadge(bill)}${projectOcrEnabled && bill.images && bill.images.length && (!bill.ocrStatus || bill.ocrStatus === "failed") ? `<button class="text-xs px-2 py-1 bg-amber-50 text-amber-700 rounded-md hover:bg-amber-100 transition-colors border border-amber-200 cursor-pointer whitespace-nowrap" onclick="event.stopPropagation(); triggerBillAnalysisFromList(${bill.id})">Analyse</button>` : ""}<button class="text-xs px-2.5 py-1 bg-indigo-50 text-indigo-600 rounded-md hover:bg-indigo-100 transition-colors border-none cursor-pointer" onclick="event.stopPropagation(); openBillDetail(${bill.id})">View</button></td>
       <td class="px-3 py-2.5"><strong class="text-slate-900">${escapeHtml(bill.billNumber || "-")}</strong>${bill.status === "draft" ? ' <span class="bg-rose-500 text-white rounded text-[0.65rem] px-1.5 py-px align-middle">Entwurf</span>' : ""}</td>
       <td class="px-3 py-2.5 text-slate-500">${escapeHtml(formatDate(bill.date))}</td>
       <td class="px-3 py-2.5">${escapeHtml(bill.email)}</td>
@@ -311,7 +312,6 @@ function renderFilteredBills() {
       <td class="px-3 py-2.5 tabular-nums"><strong class="text-slate-900">${formatCurrency(total)}</strong></td>
       <td class="px-3 py-2.5 tabular-nums"><strong class="text-slate-900">${formatCurrency(nettoTotal)}</strong></td>
       <td class="px-3 py-2.5 text-slate-500 text-xs">${motiveDisplay}${categoryDisplay ? '<br><span class="text-slate-400">' + categoryDisplay + "</span>" : ""}</td>
-      <td class="px-3 py-2.5 flex items-center gap-1.5 flex-wrap">${renderOcrBadge(bill)}${projectOcrEnabled && bill.images && bill.images.length && (!bill.ocrStatus || bill.ocrStatus === "failed") ? `<button class="text-xs px-2 py-1 bg-amber-50 text-amber-700 rounded-md hover:bg-amber-100 transition-colors border border-amber-200 cursor-pointer whitespace-nowrap" onclick="event.stopPropagation(); triggerBillAnalysisFromList(${bill.id})">Analyse</button>` : ""}<button class="text-xs px-2.5 py-1 bg-indigo-50 text-indigo-600 rounded-md hover:bg-indigo-100 transition-colors border-none cursor-pointer" onclick="event.stopPropagation(); openBillDetail(${bill.id})">View</button></td>
     </tr>`;
             })
             .join("");
