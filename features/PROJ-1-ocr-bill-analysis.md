@@ -925,3 +925,31 @@ public/style.css
 - [ ] If user submits without analysing, behaviour is unchanged (normal upload flow)
 
 **Resolution:** Pending
+
+---
+
+### CR-5: Re-Analyse Button for Already-Analysed Bills
+**Requested:** 2026-02-27 | **Priority:** Medium | **Status:** Pending Review
+
+**Current Behavior:**
+- Once a bill has been analysed by AI, the "Analyse" button still appears but its behaviour is undefined/inconsistent for already-analysed bills. Re-clicking it may silently overwrite fields without warning or user confirmation.
+- There is no visual distinction between "never analysed" and "previously analysed" states on the Analyse button.
+
+**Desired Behavior:**
+- When a bill has already been analysed (`ocr_status` is non-null or `ocr_fields` is non-empty), the button label changes to "Re-analyse" (or similar, e.g. "Re-scan").
+- Clicking "Re-analyse" triggers a confirmation dialog: e.g. "This will overwrite all AI-filled fields with new values. Are you sure?"
+- On confirmation, re-analysis runs and all previously extracted fields are overwritten with the new results.
+- After re-analysis, the standard field verification flow applies (amber badges + "✓ Verified" buttons) so the user reviews the new values.
+
+**Rationale:**
+- Re-scanning an already-processed bill is a destructive action (overwrites verified field values). Surfacing this intent clearly prevents accidental data loss and sets the right expectation that all prior AI values will be replaced.
+
+**Proposed Acceptance Criteria:**
+- [ ] Analyse button label changes to "Re-analyse" when `ocr_status` is non-null or `ocr_fields` is non-empty
+- [ ] Clicking "Re-analyse" shows a confirmation prompt before running analysis
+- [ ] On confirmation, re-analysis overwrites all previously extracted fields with new AI results
+- [ ] After re-analysis, all overwritten fields are marked unverified (amber badge + verify button) regardless of prior verification state
+- [ ] If user cancels the confirmation, no analysis runs and no data changes
+- [ ] If no prior analysis exists, button shows "Analyse" and behaves as before (no confirmation needed)
+
+**Resolution:** Pending

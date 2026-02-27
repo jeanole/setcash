@@ -1,6 +1,6 @@
 # vBudget — Project Index
 
-**Next Available IDs:** PROJ-3 · BUG-6 · CR-5
+**Next Available IDs:** PROJ-3 · BUG-6 · CR-6
 
 | ID | Type | Title | Status | Priority | Feature | Date |
 |----|------|-------|--------|----------|---------|------|
@@ -15,3 +15,4 @@
 | CR-4 | CR | Analyse Button + Field Verification in Upload Modal | Pending Review | Medium | PROJ-1 | 2026-02-27 |
 | [BUG-4](BUG-4-production-startup-fails-ocr-encryption-secret.md) | Bug | Production Startup Fails — OCR_ENCRYPTION_SECRET Not Set | Resolved | High | PROJ-1 | 2026-02-27 |
 | [BUG-5](BUG-5-project-delete-csrf-token-error.md) | Bug | Project Delete Button Fails with CSRF Token Error | Resolved | Critical | PROJ-2 | 2026-02-27 |
+| CR-5 | CR | Re-Analyse Button for Already-Analysed Bills | Pending Review | Medium | PROJ-1 | 2026-02-27 |
