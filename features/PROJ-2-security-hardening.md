@@ -1,6 +1,7 @@
 ## PROJ-2: Security & Multi-tenant Hardening
 
-**Status:** In Progress
+**Status:** Deployed
+**Deployed:** 2026-02-27
 
 ### Summary
 Strengthen vBudget’s security and tenant isolation so that each project’s data and uploads are fully isolated, sensitive operations are protected against CSRF, and secrets/crypto use safe defaults suitable for both self-hosted and multi-tenant deployments.
