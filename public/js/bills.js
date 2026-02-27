@@ -587,7 +587,7 @@ async function deleteBill() {
     )
         return;
     try {
-        const res = await fetch("/api/bills/" + currentBillId, {
+        const res = await apiFetch("/api/bills/" + currentBillId, {
             method: "DELETE",
         });
         const j = await res.json();
@@ -638,7 +638,7 @@ async function deleteSelected() {
     resultEl.textContent = "Deleting...";
 
     try {
-        const res = await fetch("/api/bills/bulk-delete", {
+        const res = await apiFetch("/api/bills/bulk-delete", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ ids }),
@@ -955,7 +955,7 @@ document.addEventListener("DOMContentLoaded", () => {
         };
 
         try {
-            const res = await fetch("/api/bills/" + currentBillId, {
+            const res = await apiFetch("/api/bills/" + currentBillId, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(data),

@@ -671,6 +671,7 @@ _To be added by /deploy_
 |----|----------|-------|--------|
 | [BUG-1](BUG-1-ocr-analysis-hangs-no-timeout-feedback.md) | High | OCR Analysis Runs Indefinitely With No UI Feedback or Timeout | Open |
 | [BUG-2](BUG-2-analyse-button-csrf-token-error.md) | High | Analyse Button Fails with CSRF Token Error | Resolved |
+| [BUG-3](BUG-3-bill-actions-csrf-token-error.md) | High | Bill Actions Fail with CSRF Token Error | Resolved |
 
 ---
 
