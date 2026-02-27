@@ -673,6 +673,8 @@ _To be added by /deploy_
 | [BUG-1](BUG-1-ocr-analysis-hangs-no-timeout-feedback.md) | High | OCR Analysis Runs Indefinitely With No UI Feedback or Timeout | Resolved |
 | [BUG-2](BUG-2-analyse-button-csrf-token-error.md) | High | Analyse Button Fails with CSRF Token Error | Resolved |
 | [BUG-3](BUG-3-bill-actions-csrf-token-error.md) | High | Bill Actions Fail with CSRF Token Error | Resolved |
+| [BUG-6](BUG-6-reanalyse-fields-not-reset-to-unverified.md) | High | Re-analyse Does Not Reset Fields to Unverified State | Open |
+| [BUG-7](BUG-7-reanalyse-no-history-log-entry.md) | Medium | Re-analysis Produces No Bill History Log Entry | Open |
 
 ---
 
