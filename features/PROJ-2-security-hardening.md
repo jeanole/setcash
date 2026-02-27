@@ -231,4 +231,4 @@ Primary environments:
 
 | ID | Severity | Title | Status |
 |----|----------|-------|--------|
-| [BUG-5](BUG-5-project-delete-csrf-token-error.md) | Critical | Project Delete Button Fails with CSRF Token Error | Open |
+| [BUG-5](BUG-5-project-delete-csrf-token-error.md) | Critical | Project Delete Button Fails with CSRF Token Error | Resolved |

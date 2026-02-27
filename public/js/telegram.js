@@ -50,7 +50,7 @@ async function openTelegramLinkModal() {
 
 async function unlinkTelegramSelf() {
     if (!confirm("Telegram-Verknüpfung aufheben?")) return;
-    await fetch("/api/telegram/links/me", { method: "DELETE" });
+    await apiFetch("/api/telegram/links/me", { method: "DELETE" });
     document.getElementById("telegramLinkModal").style.display =
         "none";
 }

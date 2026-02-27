@@ -124,7 +124,7 @@ async function loadVGeldAnalysis() {
 async function deleteVGeld(id) {
     if (!confirm("Delete this V-Geld transfer?")) return;
     try {
-        const res = await fetch("/api/vgeld/" + id, {
+        const res = await apiFetch("/api/vgeld/" + id, {
             method: "DELETE",
         });
         const j = await res.json();

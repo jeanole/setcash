@@ -422,7 +422,7 @@ function renderBudgetMatrix() {
                         th,
                         oldName,
                         function (newName) {
-                            fetch("/api/admin/motive/" + motId, {
+                            apiFetch("/api/admin/motive/" + motId, {
                                 method: "PUT",
                                 headers: {
                                     "Content-Type":
@@ -462,7 +462,7 @@ function renderBudgetMatrix() {
                         td,
                         oldName,
                         function (newName) {
-                            fetch("/api/admin/category/" + catId, {
+                            apiFetch("/api/admin/category/" + catId, {
                                 method: "PUT",
                                 headers: {
                                     "Content-Type":
@@ -499,7 +499,7 @@ function renderBudgetMatrix() {
                         )
                     )
                         return;
-                    fetch("/api/admin/motive/" + motId, {
+                    apiFetch("/api/admin/motive/" + motId, {
                         method: "DELETE",
                     })
                         .then(function (r) {
@@ -524,7 +524,7 @@ function renderBudgetMatrix() {
                         )
                     )
                         return;
-                    fetch("/api/admin/category/" + catId, {
+                    apiFetch("/api/admin/category/" + catId, {
                         method: "DELETE",
                     })
                         .then(function (r) {
@@ -546,7 +546,7 @@ function renderBudgetMatrix() {
                 return;
             }
             input.disabled = true;
-            fetch("/api/admin/motive", {
+            apiFetch("/api/admin/motive", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ motive: name, budget: 0 }),
@@ -583,7 +583,7 @@ function renderBudgetMatrix() {
                 return;
             }
             input.disabled = true;
-            fetch("/api/admin/category", {
+            apiFetch("/api/admin/category", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ category: name, budget: 0 }),
@@ -763,7 +763,7 @@ async function saveBudgetMatrix() {
         });
     });
     try {
-        var res = await fetch("/api/admin/budget-matrix", {
+        var res = await apiFetch("/api/admin/budget-matrix", {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ cells: cells }),

@@ -37,7 +37,7 @@ async function admRenamePosition(id, oldName) {
         oldName,
     );
     if (!newName || newName === oldName) return;
-    const res = await fetch("/api/admin/position/" + id, {
+    const res = await apiFetch("/api/admin/position/" + id, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: newName }),
@@ -56,7 +56,7 @@ async function admDeletePosition(id) {
         )
     )
         return;
-    const res = await fetch("/api/admin/position/" + id, {
+    const res = await apiFetch("/api/admin/position/" + id, {
         method: "DELETE",
     });
     const j = await res.json();
@@ -67,7 +67,7 @@ async function admDeletePosition(id) {
 }
 
 async function admSetMemberPosition(memberId, positionId) {
-    const res = await fetch(
+    const res = await apiFetch(
         "/api/admin/project/members/" + memberId,
         {
             method: "PUT",
@@ -84,7 +84,7 @@ async function admSetMemberPosition(memberId, positionId) {
 }
 
 async function admSetMemberRole(memberId, projectRole) {
-    const res = await fetch(
+    const res = await apiFetch(
         "/api/admin/project/members/" + memberId,
         {
             method: "PUT",
@@ -140,7 +140,7 @@ async function admLoadMembers() {
 
 async function admRemoveMember(id, email) {
     if (!confirm("Remove " + email + " from this project?")) return;
-    const res = await fetch("/api/admin/project/members/" + id, {
+    const res = await apiFetch("/api/admin/project/members/" + id, {
         method: "DELETE",
     });
     const j = await res.json();
@@ -186,7 +186,7 @@ async function admDeleteProject() {
         alert("Project name did not match. Deletion cancelled.");
         return;
     }
-    const res = await fetch("/api/project", { method: "DELETE" });
+    const res = await apiFetch("/api/project", { method: "DELETE" });
     const j = await res.json();
     if (j.ok) {
         alert("Project deleted.");
@@ -234,7 +234,7 @@ async function admExportGoogleSheet(btn) {
     );
     resultEl.innerHTML = "";
     try {
-        const res = await fetch("/api/admin/export/google-sheet", {
+        const res = await apiFetch("/api/admin/export/google-sheet", {
             method: "POST",
         });
         const j = await res.json();
@@ -295,7 +295,7 @@ async function admLoadProjects() {
 
 async function admResignProject(projectId) {
     if (!confirm("Leave this project? You will lose access.")) return;
-    const res = await fetch(`/api/projects/${projectId}/resign`, { method: "DELETE" });
+    const res = await apiFetch(`/api/projects/${projectId}/resign`, { method: "DELETE" });
     const j = await res.json();
     if (j.ok) {
         // If we resigned from the active project, reload the page to show project selector
@@ -316,7 +316,7 @@ async function admDeleteProjectById(projectId, projectName) {
         alert("Project name did not match. Deletion cancelled.");
         return;
     }
-    const res = await fetch(`/api/projects/${projectId}`, { method: "DELETE" });
+    const res = await apiFetch(`/api/projects/${projectId}`, { method: "DELETE" });
     const j = await res.json();
     if (j.ok) {
         alert("Project deleted.");
@@ -475,7 +475,7 @@ async function admLoadTgLinks() {
 
 async function admUnlinkTg(id) {
     if (!confirm("Unlink this Telegram account?")) return;
-    const res = await fetch("/api/admin/telegram/links/" + id, {
+    const res = await apiFetch("/api/admin/telegram/links/" + id, {
         method: "DELETE",
     });
     const j = await res.json();
@@ -498,7 +498,7 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("admPositionForm").onsubmit = async (e) => {
         e.preventDefault();
         const f = e.target;
-        const res = await fetch("/api/admin/position", {
+        const res = await apiFetch("/api/admin/position", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ name: f.name.value }),
@@ -514,7 +514,7 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("admMemberForm").onsubmit = async (e) => {
         e.preventDefault();
         const f = e.target;
-        const res = await fetch("/api/admin/project/members", {
+        const res = await apiFetch("/api/admin/project/members", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -532,7 +532,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     document.getElementById("admProjectForm").onsubmit = async (e) => {
         e.preventDefault();
-        const res = await fetch("/api/admin/settings", {
+        const res = await apiFetch("/api/admin/settings", {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -553,7 +553,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     document.getElementById("admCredForm").onsubmit = async (e) => {
         e.preventDefault();
-        const res = await fetch("/api/admin/google-credentials", {
+        const res = await apiFetch("/api/admin/google-credentials", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -577,7 +577,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     document.getElementById("admExportSheetForm").onsubmit = async (e) => {
         e.preventDefault();
-        const res = await fetch("/api/admin/settings", {
+        const res = await apiFetch("/api/admin/settings", {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -609,7 +609,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (keyVal) {
             payload.ocrApiKey = keyVal;
         }
-        const res = await fetch("/api/admin/settings", {
+        const res = await apiFetch("/api/admin/settings", {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
@@ -625,7 +625,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     document.getElementById("admTelegramForm").onsubmit = async (e) => {
         e.preventDefault();
-        const res = await fetch("/api/admin/settings", {
+        const res = await apiFetch("/api/admin/settings", {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -662,7 +662,7 @@ document.addEventListener("DOMContentLoaded", () => {
             );
             return;
         }
-        const res = await fetch("/api/user/password", {
+        const res = await apiFetch("/api/user/password", {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -695,7 +695,7 @@ document.addEventListener("DOMContentLoaded", () => {
             msg("newProjectResult", "Project name required", true);
             return;
         }
-        const res = await fetch("/api/projects", {
+        const res = await apiFetch("/api/projects", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ name, subtitle: subtitle || null }),

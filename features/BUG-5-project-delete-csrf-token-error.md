@@ -1,6 +1,6 @@
 # BUG-5: Project Delete Button Fails with CSRF Token Error
 
-**Status:** Open
+**Status:** Resolved
 **Reported:** 2026-02-27
 **Severity:** Critical
 **Skill Tag:** [Backend] / [Frontend] — root cause unknown
@@ -45,7 +45,7 @@ Known buttons/flows to check:
 ---
 
 ## Resolution
-**Status:** Open
-**Resolved Date:** —
-**Fixed In:** — *(commit hash or PR)*
-**Fix Description:** —
+**Status:** Resolved
+**Resolved Date:** 2026-02-27
+**Fixed In:** — *(see commit)*
+**Fix Description:** Audited all frontend JS modules — 37 state-changing raw `fetch()` calls replaced with `apiFetch()` across 8 files (admin.js, superadmin.js, budget.js, gallery.js, sidebar.js, notifications.js, vgeld.js, telegram.js). CSRF token is now sent on every POST/PUT/DELETE/PATCH request.
