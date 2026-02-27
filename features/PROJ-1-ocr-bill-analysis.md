@@ -777,3 +777,121 @@ Part B — Bill History:
 - [ ] History scoped to the current project (no cross-project access)
 
 **Resolution:** Pending
+
+#### Tech Design (Solution Architect)
+
+**Key insight:** The `editlog` table and "Edit History" panel in the bill modal already exist and already track user field changes. CR-3 Part B is an **extension** of this existing system — not a new table. A single new `source` column distinguishes AI vs user events.
+
+---
+
+**Component Structure**
+
+```
+Bill Detail Modal  (existing — extended)
++-- Form Fields  (existing)
+|   +-- [Each AI-filled field]
+|       +-- amber border + "AI — please verify" label  (existing)
+|       +-- ✓ "Mark as verified" button  ← NEW (Part A)
+|           Click: removes amber styling instantly (optimistic),
+|                  calls PATCH /api/bills/:id/verify-field { field }
+|                  to remove field from ocr_fields on backend
++-- "History" section  (renamed from "Edit History" — extended for Part B)
+    +-- "Created by <email>" entry  ← NEW event type
+    +-- "AI scanned (openai) — extracted: vendor, date, amount"  ← NEW event type
+    +-- "Edited: vendor, date" rows  (existing, unchanged)
+    +-- AI rows styled distinctly (indigo/blue tint vs neutral for user edits)
+```
+
+---
+
+**Data Model**
+
+No new table. Extend `editlog` with one new column:
+
+```
+editlog (existing table — one migration):
+  id, timestamp, user, bill_id, changes, project_id  ← all existing
+  source TEXT DEFAULT 'user'                         ← NEW column
+
+AI scan entry written by runOcrJob:
+  user    = "AI / openai"  (or gemini / claude / custom)
+  source  = "ai"
+  changes = { "vendor": "Rewe", "date": "2026-02-01", "amount": 24.50 }
+
+Created entry written at bill upload:
+  user    = <uploader email>
+  source  = "user"
+  changes = { "_event": "created" }
+
+User edit entry (existing — unchanged format):
+  user    = <editor email>
+  source  = "user"  (default, no change to existing writes)
+  changes = { "vendor": "..." }
+```
+
+---
+
+**New API Endpoint**
+
+```
+PATCH /api/bills/:id/verify-field
+  Auth: ensureProjectAccess + bill ownership check
+  Body: { field: "vendor" }
+  Action: removes field from ocr_fields array;
+          if ocr_fields is now empty → sets ocr_status = null
+  Response: { ok: true, ocrFields: [...remaining], ocrStatus: "done"|null }
+```
+
+---
+
+**Backend Changes**
+
+```
+db.js
+  Migration: ALTER TABLE editlog ADD COLUMN source TEXT DEFAULT 'user'
+
+routes/bills.js
+  POST /upload: after bill insert, write editlog entry { _event: "created" }, source='user'
+  New PATCH /:id/verify-field: remove field from ocr_fields; clear ocr_status if empty
+
+routes/ocr.js
+  runOcrJob success path: after writing fields to bill, write one editlog entry
+    user = "AI / <provider>", source = "ai", changes = { <field>: <value>, ... }
+```
+
+---
+
+**Frontend Changes**
+
+```
+public/js/bills.js
+  applyOcrFieldHighlights(): for each highlighted field, also inject a
+    ✓ button (.ocr-verify-btn) next to the "AI — please verify" label
+  New verifyOcrField(fieldName): calls PATCH verify-field via apiFetch;
+    on response updates bill.ocrFields/ocrStatus in allBills state;
+    removes amber styling + verify button; updates status bar and list badge
+  billLogBody rendering: detect source='ai' and _event='created' entries;
+    render AI rows with distinct style (e.g. indigo pill "AI" instead of user avatar)
+
+public/index.html
+  Rename "Edit History" heading → "History" (one word change)
+
+public/style.css
+  .ocr-verify-btn styles (small, amber-toned, inline with label)
+```
+
+---
+
+**Files to Create / Modify**
+
+| File | Action |
+|------|--------|
+| `db.js` | Migration: add `source TEXT DEFAULT 'user'` to `editlog` |
+| `routes/bills.js` | Add `created` log entry on upload; add `PATCH /:id/verify-field` |
+| `routes/ocr.js` | Write AI editlog entry on job success |
+| `public/js/bills.js` | Add verify button in `applyOcrFieldHighlights`; add `verifyOcrField()`; extend history rendering |
+| `public/index.html` | Rename "Edit History" → "History" |
+| `public/style.css` | Add `.ocr-verify-btn` styles |
+
+**No new npm packages required.**
+
