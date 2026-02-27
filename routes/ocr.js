@@ -85,7 +85,7 @@ function isPrivateUrl(urlString) {
   }
   const hostname = parsed.hostname.toLowerCase();
   // Reject localhost and loopback
-  if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1") return true;
+  if (hostname === "localhost" || /^127\./.test(hostname) || hostname === "::1") return true;
   // Reject .local mDNS hostnames
   if (hostname.endsWith(".local")) return true;
   // Reject link-local (169.254.x.x) and AWS metadata
@@ -320,7 +320,7 @@ async function runOcrJob(billId, projectId) {
 
   // Detect re-analysis (bill was previously analysed)
   const priorBill = db.prepare("SELECT ocr_status FROM bills WHERE id = ?").get(billId);
-  const isReanalysis = !!(priorBill && priorBill.ocr_status !== null);
+  const isReanalysis = !!(priorBill && priorBill.ocr_status === "done");
 
   // 1. Mark pending
   db.prepare("UPDATE bills SET ocr_status = 'pending' WHERE id = ?").run(billId);
