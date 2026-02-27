@@ -458,6 +458,28 @@ async function runOcrJob(billId, projectId) {
       errorDetail: null,
     });
 
+    // 10. Write AI editlog entry for bill history (CR-3)
+    if (writtenFields.length > 0) {
+      const extractedChanges = {};
+      for (const f of writtenFields) {
+        if (f !== "amount") extractedChanges[f] = extracted[f];
+      }
+      // Include recalculated amount if it was written
+      if (writtenFields.includes("amount") && extracted.amount != null) {
+        extractedChanges.amount = extracted.amount;
+      }
+      db.prepare(
+        "INSERT INTO editlog (timestamp, user, bill_id, changes, project_id, source) VALUES (?, ?, ?, ?, ?, ?)",
+      ).run(
+        new Date().toISOString(),
+        `AI / ${provider}`,
+        billId,
+        JSON.stringify(extractedChanges),
+        projectId,
+        "ai",
+      );
+    }
+
     const elapsed = Date.now() - jobStart;
     const writtenList = writtenFields.length > 0 ? writtenFields.join(", ") : "none";
     const skippedList = skippedFields.length > 0 ? skippedFields.join(", ") : "none";

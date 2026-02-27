@@ -270,6 +270,18 @@ router.post(
     // Save allocations to junction tables
     saveAllocations(billId, motiveAllocations, categoryAllocations, projectId);
 
+    // Log bill creation event
+    db.prepare(
+      "INSERT INTO editlog (timestamp, user, bill_id, changes, project_id, source) VALUES (?, ?, ?, ?, ?, ?)",
+    ).run(
+      new Date().toISOString(),
+      req.user.email,
+      billId,
+      JSON.stringify({ _event: "created" }),
+      projectId,
+      "user",
+    );
+
     res.json({ ok: true, id: billId });
   },
 );
@@ -301,6 +313,11 @@ router.put("/api/bills/:id", ensureProjectAccess, (req, res) => {
   const updates = [];
   const params = [];
 
+  if (date !== undefined && date !== bill.date) {
+    changes.date = date;
+    updates.push("date = ?");
+    params.push(date);
+  }
   if (email !== undefined && email !== bill.email) {
     changes.email = email;
     updates.push("email = ?");
@@ -444,6 +461,56 @@ router.put("/api/bills/:id", ensureProjectAccess, (req, res) => {
     );
   }
   res.json({ ok: true });
+});
+
+const ALLOWED_OCR_FIELDS = ["date", "vendor", "item", "type", "brutto19", "brutto7", "brutto0", "amount", "comment"];
+
+router.patch("/api/bills/:id/verify-field", ensureAuth, ensureProjectAccess, (req, res) => {
+  const projectId = req.user.currentProjectId;
+  const id = parseInt(req.params.id, 10);
+  if (!id || isNaN(id) || id <= 0) return res.status(400).json({ error: "Invalid bill ID" });
+
+  const { field } = req.body;
+  if (!field || typeof field !== "string" || !ALLOWED_OCR_FIELDS.includes(field)) {
+    return res.status(400).json({ error: "Invalid or missing field name" });
+  }
+
+  const bill = db
+    .prepare("SELECT id, ocr_fields, ocr_status FROM bills WHERE id = ? AND project_id = ?")
+    .get(id, projectId);
+  if (!bill) return res.status(404).json({ error: "Bill not found" });
+
+  let ocrFields = [];
+  try { ocrFields = JSON.parse(bill.ocr_fields || "[]"); } catch {}
+
+  if (!ocrFields.includes(field)) {
+    return res.status(400).json({ error: "Field is not in ocr_fields" });
+  }
+
+  const remaining = ocrFields.filter((f) => f !== field);
+
+  if (remaining.length === 0) {
+    db.prepare("UPDATE bills SET ocr_fields = NULL, ocr_status = NULL WHERE id = ?").run(id);
+  } else {
+    db.prepare("UPDATE bills SET ocr_fields = ? WHERE id = ?").run(JSON.stringify(remaining), id);
+  }
+
+  db.prepare(
+    "INSERT INTO editlog (timestamp, user, bill_id, changes, project_id, source) VALUES (?, ?, ?, ?, ?, ?)",
+  ).run(
+    new Date().toISOString(),
+    req.user.email,
+    id,
+    JSON.stringify({ _event: "verified", field }),
+    projectId,
+    "user",
+  );
+
+  res.json({
+    ok: true,
+    ocrFields: remaining.length > 0 ? remaining : null,
+    ocrStatus: remaining.length > 0 ? "done" : null,
+  });
 });
 
 router.delete("/api/bills/:id", ensureProjectAdmin, (req, res) => {
@@ -760,6 +827,7 @@ router.get("/api/bills/log", ensureProjectAccess, (req, res) => {
     user: l.user,
     billId: l.bill_id,
     changes: JSON.parse(l.changes || "{}"),
+    source: l.source || "user",
   }));
   res.json(mapped);
 });

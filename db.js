@@ -260,6 +260,14 @@ try {
   console.log("Migrated: added default_project_id column to users");
 }
 
+// Add source column to editlog if missing (migration — CR-3)
+try {
+  db.prepare("SELECT source FROM editlog LIMIT 1").get();
+} catch (e) {
+  db.exec("ALTER TABLE editlog ADD COLUMN source TEXT DEFAULT 'user'");
+  console.log("Migrated: added source column to editlog");
+}
+
 // Add project_id columns to data tables if missing (migration)
 const projectIdMigrations = [
   { table: "bills", check: "SELECT project_id FROM bills LIMIT 1" },
