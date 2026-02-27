@@ -1,6 +1,6 @@
 # PROJ-1: OCR / AI Bill Analysis
 
-## Status: Deployed
+## Status: Change Requested
 **Created:** 2026-02-24
 **Last Updated:** 2026-02-27
 **Deployed:** 2026-02-27 — tag `v1.8.0-PROJ-1-CR3`
@@ -896,3 +896,32 @@ public/style.css
 
 **No new npm packages required.**
 
+---
+
+### CR-4: Analyse Button + Field Verification in Upload Modal
+**Requested:** 2026-02-27 | **Priority:** Medium | **Status:** Pending Review
+
+**Current Behavior:**
+- The upload modal collects bill fields and images, then saves the bill. AI analysis must be triggered separately by opening the saved bill's detail view and clicking the "Analyse" button there.
+- Field verification (the amber "AI — please verify" badge + "✓ Verified" button) only appears in the bill detail modal, not in the upload flow.
+
+**Desired Behavior:**
+- An "Analyse" button appears in the upload modal, next to or below the uploaded image(s), allowing the user to trigger AI analysis immediately after attaching a photo — before submitting the bill.
+- After the scan completes within the upload modal, extracted fields are pre-filled into the upload form's input fields.
+- Each pre-filled field shows the same "AI — please verify" badge and "✓ Verified" inline button as in the detail view, so the user can confirm or correct values before saving.
+- Submitting the form saves the bill with any already-verified fields cleared from `ocr_fields`; unverified fields retain their amber highlight in the detail view as usual.
+
+**Rationale:**
+- Scanning during upload eliminates the need to open the bill a second time just to trigger and review OCR results. The natural workflow is: take photo → scan → review → save, all in one step.
+
+**Proposed Acceptance Criteria:**
+- [ ] Upload modal shows an "Analyse" button after at least one image is attached (button disabled/hidden when no image)
+- [ ] Clicking "Analyse" in the upload modal calls the OCR endpoint and shows a loading spinner in the upload modal
+- [ ] On success, extracted field values are pre-filled into the upload form inputs (date, vendor, item, type, brutto19/7/0)
+- [ ] Each pre-filled field shows the "AI — please verify" badge and "✓ Verified" button inline
+- [ ] Clicking "✓ Verified" on a field in the upload modal marks it verified client-side (excluded from `ocr_fields` when bill is saved)
+- [ ] Submitting the form after analysis saves the bill with correct `ocr_fields` / `ocr_status` reflecting only unverified fields
+- [ ] If OCR fails, an inline error message is shown in the upload modal (no silent failure)
+- [ ] If user submits without analysing, behaviour is unchanged (normal upload flow)
+
+**Resolution:** Pending
