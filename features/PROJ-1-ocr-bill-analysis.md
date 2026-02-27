@@ -899,7 +899,7 @@ public/style.css
 ---
 
 ### CR-4: Analyse Button + Field Verification in Upload Modal
-**Requested:** 2026-02-27 | **Priority:** Medium | **Status:** Pending Review
+**Requested:** 2026-02-27 | **Priority:** Medium | **Status:** In Progress
 
 **Current Behavior:**
 - The upload modal collects bill fields and images, then saves the bill. AI analysis must be triggered separately by opening the saved bill's detail view and clicking the "Analyse" button there.
@@ -929,7 +929,7 @@ public/style.css
 ---
 
 ### CR-5: Re-Analyse Button for Already-Analysed Bills
-**Requested:** 2026-02-27 | **Priority:** Medium | **Status:** Pending Review
+**Requested:** 2026-02-27 | **Priority:** Medium | **Status:** In Progress
 
 **Current Behavior:**
 - Once a bill has been analysed by AI, the "Analyse" button still appears but its behaviour is undefined/inconsistent for already-analysed bills. Re-clicking it may silently overwrite fields without warning or user confirmation.
