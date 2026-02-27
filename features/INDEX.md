@@ -1,6 +1,6 @@
 # vBudget — Project Index
 
-**Next Available IDs:** PROJ-3 · BUG-4 · CR-5
+**Next Available IDs:** PROJ-3 · BUG-5 · CR-5
 
 | ID | Type | Title | Status | Priority | Feature | Date |
 |----|------|-------|--------|----------|---------|------|
@@ -13,3 +13,4 @@
 | [BUG-3](BUG-3-bill-actions-csrf-token-error.md) | Bug | Bill Actions Fail with CSRF Token Error | Resolved | High | PROJ-1 | 2026-02-27 |
 | CR-3 | CR | AI Field Verification UX + Bill History/Audit Log | Deployed | High | PROJ-1 | 2026-02-27 |
 | CR-4 | CR | Analyse Button + Field Verification in Upload Modal | Pending Review | Medium | PROJ-1 | 2026-02-27 |
+| [BUG-4](BUG-4-production-startup-fails-ocr-encryption-secret.md) | Bug | Production Startup Fails — OCR_ENCRYPTION_SECRET Not Set | Resolved | High | PROJ-1 | 2026-02-27 |
