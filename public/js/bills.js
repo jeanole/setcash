@@ -1028,6 +1028,16 @@ async function pollOcrStatus(billId) {
                         }
                     });
                 }
+                // For failure or done-with-no-new-fields: reload history log so it stays fresh
+                if (data.ocrStatus !== "done" || !(data.ocrFields && data.ocrFields.length > 0)) {
+                    fetch("/api/bills/log")
+                        .then(function (r) { return r.json(); })
+                        .then(function (logs) {
+                            allLogs = logs;
+                            refreshBillLogBody();
+                        })
+                        .catch(function () {});
+                }
             } else {
                 // Just re-render the bills list to update badges
                 renderFilteredBills();

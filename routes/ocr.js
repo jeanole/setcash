@@ -318,6 +318,10 @@ async function runOcrJob(billId, projectId) {
     }
   };
 
+  // Detect re-analysis (bill was previously analysed)
+  const priorBill = db.prepare("SELECT ocr_status FROM bills WHERE id = ?").get(billId);
+  const isReanalysis = !!(priorBill && priorBill.ocr_status !== null);
+
   // 1. Mark pending
   db.prepare("UPDATE bills SET ocr_status = 'pending' WHERE id = ?").run(billId);
 
@@ -333,6 +337,19 @@ async function runOcrJob(billId, projectId) {
     const label = errorType ? `${errorType}: ` : "";
     console.error(`[OCR] Bill ${billId}: FAILED — ${label}${reason}`);
     writeLog("failed", { errorDetail: reason });
+    // Write bill history entry so the failure appears in the bill's History panel
+    try {
+      db.prepare(
+        "INSERT INTO editlog (timestamp, user, bill_id, changes, project_id, source) VALUES (?, ?, ?, ?, ?, ?)"
+      ).run(
+        new Date().toISOString(),
+        resolvedProvider ? `AI / ${resolvedProvider}` : "AI",
+        billId,
+        JSON.stringify({ _event: "analysis_failed", reason }),
+        projectId,
+        "ai"
+      );
+    } catch {}
   };
 
   try {
@@ -395,16 +412,16 @@ async function runOcrJob(billId, projectId) {
     const bill = db.prepare("SELECT * FROM bills WHERE id = ?").get(billId);
     if (!bill) return fail("Bill not found", "DBError");
 
-    // Fields eligible for OCR writing (only write if currently empty/zero)
+    // Fields eligible for OCR writing (only write if currently empty/zero, or always on re-analysis)
     const fieldChecks = {
-      date: () => extracted.date && (!bill.date || bill.date.trim() === ""),
-      vendor: () => extracted.vendor && (!bill.vendor || bill.vendor.trim() === ""),
-      item: () => extracted.item && (!bill.item || bill.item.trim() === ""),
-      type: () => extracted.type && (!bill.type || bill.type.trim() === ""),
-      brutto19: () => extracted.brutto19 != null && extracted.brutto19 > 0 && (bill.brutto19 || 0) === 0,
-      brutto7: () => extracted.brutto7 != null && extracted.brutto7 > 0 && (bill.brutto7 || 0) === 0,
-      brutto0: () => extracted.brutto0 != null && extracted.brutto0 > 0 && (bill.brutto0 || 0) === 0,
-      amount: () => extracted.amount != null && extracted.amount > 0 && (bill.amount || 0) === 0,
+      date:     () => extracted.date     && (isReanalysis || !bill.date    || bill.date.trim() === ""),
+      vendor:   () => extracted.vendor   && (isReanalysis || !bill.vendor  || bill.vendor.trim() === ""),
+      item:     () => extracted.item     && (isReanalysis || !bill.item    || bill.item.trim() === ""),
+      type:     () => extracted.type     && (isReanalysis || !bill.type    || bill.type.trim() === ""),
+      brutto19: () => extracted.brutto19 != null && extracted.brutto19 > 0 && (isReanalysis || (bill.brutto19 || 0) === 0),
+      brutto7:  () => extracted.brutto7  != null && extracted.brutto7  > 0 && (isReanalysis || (bill.brutto7  || 0) === 0),
+      brutto0:  () => extracted.brutto0  != null && extracted.brutto0  > 0 && (isReanalysis || (bill.brutto0  || 0) === 0),
+      amount:   () => extracted.amount   != null && extracted.amount   > 0 && (isReanalysis || (bill.amount   || 0) === 0),
     };
 
     const writtenFields = [];
