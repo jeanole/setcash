@@ -443,6 +443,7 @@ async function init() {
             data.append("vendor", form.vendor.value);
             data.append("item", form.item.value);
             data.append("comment", form.comment.value);
+            data.append("date", form.date.value);
             // Add pending files
             for (const f of pendingFiles) {
                 data.append("photos", f);
@@ -555,6 +556,7 @@ async function saveUploadEditBill(form) {
         vendor: form.vendor.value,
         item: form.item.value,
         comment: form.comment.value || "",
+        date: form.date.value,
         motiveAllocations: motiveAllocs,
         categoryAllocations: categoryAllocs,
     };

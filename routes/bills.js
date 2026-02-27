@@ -164,7 +164,7 @@ router.post(
   },
   (req, res) => {
     const projectId = req.user.currentProjectId;
-    const { type, vendor, comment, item, motive, brutto19, brutto7, brutto0 } =
+    const { type, vendor, comment, item, motive, brutto19, brutto7, brutto0, date } =
       req.body;
     const b19 = parseFloat(brutto19) || 0;
     const b7 = parseFloat(brutto7) || 0;
@@ -208,7 +208,7 @@ router.post(
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
-        new Date().toISOString(),
+        date || new Date().toISOString(),
         req.user.email,
         billNumber,
         type || "Kauf",
