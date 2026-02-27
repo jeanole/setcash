@@ -32,6 +32,9 @@ var cropQueue = [];
 var cropCallback = null;
 var cropperInstance = null;
 
+// OCR / AI Analysis state
+var projectOcrEnabled = false;
+
 // Admin state
 var positionsCache = [];
 
@@ -42,3 +45,6 @@ var saCurrentUserEmail = '';
 var saMembershipPositions = [];
 var saCurrentMembers = [];
 var saCurrentProjectId = null;
+
+// CSRF
+var csrfToken = null;

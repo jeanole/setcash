@@ -311,7 +311,7 @@ function renderFilteredBills() {
       <td class="px-3 py-2.5 tabular-nums"><strong class="text-slate-900">${formatCurrency(total)}</strong></td>
       <td class="px-3 py-2.5 tabular-nums"><strong class="text-slate-900">${formatCurrency(nettoTotal)}</strong></td>
       <td class="px-3 py-2.5 text-slate-500 text-xs">${motiveDisplay}${categoryDisplay ? '<br><span class="text-slate-400">' + categoryDisplay + "</span>" : ""}</td>
-      <td class="px-3 py-2.5"><button class="text-xs px-2.5 py-1 bg-indigo-50 text-indigo-600 rounded-md hover:bg-indigo-100 transition-colors border-none cursor-pointer" onclick="event.stopPropagation(); openBillDetail(${bill.id})">View</button></td>
+      <td class="px-3 py-2.5 flex items-center gap-1.5 flex-wrap">${renderOcrBadge(bill)}${projectOcrEnabled && bill.images && bill.images.length && (!bill.ocrStatus || bill.ocrStatus === "failed") ? `<button class="text-xs px-2 py-1 bg-amber-50 text-amber-700 rounded-md hover:bg-amber-100 transition-colors border border-amber-200 cursor-pointer whitespace-nowrap" onclick="event.stopPropagation(); triggerBillAnalysisFromList(${bill.id})">Analyse</button>` : ""}<button class="text-xs px-2.5 py-1 bg-indigo-50 text-indigo-600 rounded-md hover:bg-indigo-100 transition-colors border-none cursor-pointer" onclick="event.stopPropagation(); openBillDetail(${bill.id})">View</button></td>
     </tr>`;
             })
             .join("");
@@ -447,9 +447,9 @@ function openBillDetail(id) {
     // Populate form fields
     document.getElementById("detailBillNumber").value =
         bill.billNumber || "-";
-    document.getElementById("detailDate").value = formatDate(
-        bill.date,
-    );
+    document.getElementById("detailDate").value = bill.date
+        ? bill.date.substring(0, 10)
+        : "";
     document.getElementById("detailType").value =
         bill.type || "Kauf";
 
@@ -530,25 +530,22 @@ function openBillDetail(id) {
     galleryIndex = 0;
     renderGallery();
 
-    // Load edit history for this bill (by ID)
+    // Load history for this bill (by ID)
     const billLogs = allLogs.filter((log) => log.billId === id);
     const logBody = document.getElementById("billLogBody");
     if (billLogs.length === 0) {
         logBody.innerHTML =
-            '<tr><td colspan="3">No edits yet.</td></tr>';
+            '<tr><td colspan="3">No history yet.</td></tr>';
     } else {
-        logBody.innerHTML = billLogs
-            .map(
-                (entry) => `
-    <tr>
-      <td class="px-3 py-2 text-slate-500 text-xs">${escapeHtml(formatDate(entry.timestamp))}</td>
-      <td class="px-3 py-2 text-sm">${escapeHtml(entry.user)}</td>
-      <td class="px-3 py-2">${formatChanges(entry.changes)}</td>
-    </tr>
-  `,
-            )
-            .join("");
+        logBody.innerHTML = billLogs.map(renderLogEntry).join("");
     }
+
+    // Apply OCR field highlights and status
+    clearOcrFieldHighlights();
+    updateOcrStatusBar(bill);
+    showAnalyseButton(bill);
+    // Delay highlight application slightly to ensure form is populated
+    setTimeout(function () { applyOcrFieldHighlights(bill); }, 50);
 
     // Show modal
     document.getElementById("billModal").style.display = "flex";
@@ -557,11 +554,53 @@ function openBillDetail(id) {
 function formatChanges(changes) {
     if (!changes) return "";
     return Object.entries(changes)
+        .filter(([key]) => key !== "_event")
         .map(
             ([key, value]) =>
                 `<span class="bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded text-xs">${escapeHtml(key)}: ${escapeHtml(String(value))}</span>`,
         )
         .join(", ");
+}
+
+function renderLogEntry(entry) {
+    var source = entry.source || "user";
+    var changes = entry.changes || {};
+    var event = changes._event || null;
+
+    // "Created" event
+    if (event === "created") {
+        return `<tr class="bg-emerald-50/50">
+      <td class="px-3 py-2 text-slate-500 text-xs">${escapeHtml(formatDate(entry.timestamp))}</td>
+      <td class="px-3 py-2 text-sm">${escapeHtml(entry.user)}</td>
+      <td class="px-3 py-2"><span class="bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded text-xs font-medium">Bill created</span></td>
+    </tr>`;
+    }
+
+    // "Verified" event
+    if (event === "verified") {
+        return `<tr>
+      <td class="px-3 py-2 text-slate-500 text-xs">${escapeHtml(formatDate(entry.timestamp))}</td>
+      <td class="px-3 py-2 text-sm">${escapeHtml(entry.user)}</td>
+      <td class="px-3 py-2"><span class="bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded text-xs font-medium">\u2713 Verified: ${escapeHtml(changes.field || "")}</span></td>
+    </tr>`;
+    }
+
+    // AI scan event
+    if (source === "ai") {
+        var fields = Object.keys(changes).join(", ");
+        return `<tr class="bg-indigo-50/50">
+      <td class="px-3 py-2 text-slate-500 text-xs">${escapeHtml(formatDate(entry.timestamp))}</td>
+      <td class="px-3 py-2 text-sm"><span class="bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded text-xs font-semibold">AI</span> ${escapeHtml(entry.user)}</td>
+      <td class="px-3 py-2">${formatChanges(changes)}</td>
+    </tr>`;
+    }
+
+    // Regular user edit (existing format)
+    return `<tr>
+      <td class="px-3 py-2 text-slate-500 text-xs">${escapeHtml(formatDate(entry.timestamp))}</td>
+      <td class="px-3 py-2 text-sm">${escapeHtml(entry.user)}</td>
+      <td class="px-3 py-2">${formatChanges(changes)}</td>
+    </tr>`;
 }
 
 function closeModal() {
@@ -580,7 +619,7 @@ async function deleteBill() {
     )
         return;
     try {
-        const res = await fetch("/api/bills/" + currentBillId, {
+        const res = await apiFetch("/api/bills/" + currentBillId, {
             method: "DELETE",
         });
         const j = await res.json();
@@ -631,7 +670,7 @@ async function deleteSelected() {
     resultEl.textContent = "Deleting...";
 
     try {
-        const res = await fetch("/api/bills/bulk-delete", {
+        const res = await apiFetch("/api/bills/bulk-delete", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ ids }),
@@ -673,6 +712,317 @@ function downloadReport() {
     );
 }
 
+// ========== OCR / AI Analysis ==========
+
+function renderOcrBadge(bill) {
+    if (!bill.ocrStatus) return "";
+    if (bill.ocrStatus === "pending") {
+        return '<span class="ocr-badge ocr-badge-pending"><span class="ocr-spinner"></span> Analysing</span>';
+    }
+    if (bill.ocrStatus === "done") {
+        var fields = bill.ocrFields || [];
+        if (fields.length > 0) {
+            return '<span class="ocr-badge ocr-badge-done">AI - check</span>';
+        }
+        return "";
+    }
+    if (bill.ocrStatus === "failed") {
+        return '<span class="ocr-badge ocr-badge-failed">Analysis failed</span>';
+    }
+    return "";
+}
+
+function applyOcrFieldHighlights(bill) {
+    if (!bill || !bill.ocrFields) return;
+    var ocrFields = bill.ocrFields || [];
+    if (ocrFields.length === 0) return;
+
+    // Map OCR field names to detail form element IDs
+    // "amount" is excluded — it's a computed field (sum of brutto fields), not directly editable
+    var fieldMap = {
+        date: "detailDate",
+        vendor: "detailVendor",
+        item: "detailItem",
+        type: "detailType",
+        brutto19: "detailBrutto19",
+        brutto7: "detailBrutto7",
+        brutto0: "detailBrutto0",
+        comment: "detailComment",
+    };
+
+    ocrFields.forEach(function (fieldName) {
+        if (fieldName === "amount") return; // skip computed field
+        var elId = fieldMap[fieldName];
+        if (!elId) return;
+        var el = document.getElementById(elId);
+        if (!el) return;
+
+        // Add amber highlight
+        el.classList.add("ocr-field-highlight");
+
+        // Add "AI - please verify" label + verify button to the parent label
+        var parentLabel = el.closest("label");
+        if (parentLabel && !parentLabel.querySelector(".ocr-field-label")) {
+            var badge = document.createElement("span");
+            badge.className = "ocr-field-label";
+            badge.textContent = "AI - please verify";
+            parentLabel.appendChild(badge);
+
+            var verifyBtn = document.createElement("button");
+            verifyBtn.type = "button";
+            verifyBtn.className = "ocr-verify-btn";
+            verifyBtn.textContent = "\u2713 Verified";
+            verifyBtn.setAttribute("data-field", fieldName);
+            verifyBtn.onclick = function () { verifyOcrField(fieldName, el); };
+            parentLabel.appendChild(verifyBtn);
+        }
+
+        // Remove highlight when user edits the field
+        var removeHighlight = function () {
+            removeOcrHighlightFromField(el);
+            el.removeEventListener("input", removeHighlight);
+            el.removeEventListener("change", removeHighlight);
+        };
+        el.addEventListener("input", removeHighlight);
+        el.addEventListener("change", removeHighlight);
+    });
+}
+
+function clearOcrFieldHighlights() {
+    document.querySelectorAll(".ocr-field-highlight").forEach(function (el) {
+        el.classList.remove("ocr-field-highlight");
+    });
+    document.querySelectorAll(".ocr-field-label").forEach(function (el) {
+        el.remove();
+    });
+    document.querySelectorAll(".ocr-verify-btn").forEach(function (el) {
+        el.remove();
+    });
+}
+
+function removeOcrHighlightFromField(el) {
+    el.classList.remove("ocr-field-highlight");
+    var lbl = el.closest("label");
+    if (lbl) {
+        var badge = lbl.querySelector(".ocr-field-label");
+        if (badge) badge.remove();
+        var btn = lbl.querySelector(".ocr-verify-btn");
+        if (btn) btn.remove();
+    }
+}
+
+async function verifyOcrField(fieldName, el) {
+    if (currentBillId === null) return;
+    // Optimistic: remove highlight immediately
+    removeOcrHighlightFromField(el);
+    try {
+        var res = await apiFetch("/api/bills/" + currentBillId + "/verify-field", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ field: fieldName }),
+        });
+        var j = await res.json();
+        if (!j.ok) {
+            restoreOcrHighlightOnField(fieldName, el);
+            return;
+        }
+        // Update local bill state
+        var bill = allBills.find(function (b) { return b.id === currentBillId; });
+        if (bill) {
+            bill.ocrFields = j.ocrFields;
+            bill.ocrStatus = j.ocrStatus;
+            updateOcrStatusBar(bill);
+            showAnalyseButton(bill);
+        }
+        // Re-render bills list to update badge
+        renderFilteredBills();
+        // Reload logs to show the verified entry
+        var logsRes = await fetch("/api/bills/log");
+        if (logsRes.ok) {
+            allLogs = await logsRes.json();
+            refreshBillLogBody();
+        }
+    } catch (e) {
+        console.error("Error verifying field:", e);
+        restoreOcrHighlightOnField(fieldName, el);
+    }
+}
+
+function restoreOcrHighlightOnField(fieldName, el) {
+    el.classList.add("ocr-field-highlight");
+    var parentLabel = el.closest("label");
+    if (parentLabel && !parentLabel.querySelector(".ocr-field-label")) {
+        var badge = document.createElement("span");
+        badge.className = "ocr-field-label";
+        badge.textContent = "AI - please verify";
+        parentLabel.appendChild(badge);
+        var verifyBtn = document.createElement("button");
+        verifyBtn.type = "button";
+        verifyBtn.className = "ocr-verify-btn";
+        verifyBtn.textContent = "\u2713 Verified";
+        verifyBtn.setAttribute("data-field", fieldName);
+        verifyBtn.onclick = function () { verifyOcrField(fieldName, el); };
+        parentLabel.appendChild(verifyBtn);
+    }
+}
+
+function refreshBillLogBody() {
+    if (currentBillId === null) return;
+    var billLogs = allLogs.filter(function (log) { return log.billId === currentBillId; });
+    var logBody = document.getElementById("billLogBody");
+    if (!logBody) return;
+    if (billLogs.length === 0) {
+        logBody.innerHTML = '<tr><td colspan="3">No history yet.</td></tr>';
+    } else {
+        logBody.innerHTML = billLogs.map(renderLogEntry).join("");
+    }
+}
+
+function updateOcrStatusBar(bill) {
+    var bar = document.getElementById("ocrStatusBar");
+    if (!bar) return;
+
+    if (!bill.ocrStatus) {
+        bar.className = "hidden";
+        bar.innerHTML = "";
+        return;
+    }
+
+    bar.classList.remove("hidden");
+    if (bill.ocrStatus === "pending") {
+        bar.className = "px-3 py-2 rounded-lg text-sm flex items-center gap-2 bg-indigo-50 text-indigo-700 border border-indigo-200";
+        bar.innerHTML = '<span class="ocr-spinner"></span> AI analysis in progress...';
+    } else if (bill.ocrStatus === "done") {
+        var fields = bill.ocrFields || [];
+        if (fields.length > 0) {
+            bar.className = "px-3 py-2 rounded-lg text-sm flex items-center gap-2 bg-amber-50 text-amber-700 border border-amber-200";
+            bar.innerHTML = 'AI extracted ' + fields.length + ' field(s) - please verify highlighted fields below';
+        } else {
+            bar.className = "hidden";
+            bar.innerHTML = "";
+        }
+    } else if (bill.ocrStatus === "failed") {
+        bar.className = "px-3 py-2 rounded-lg text-sm flex items-center gap-2 bg-rose-50 text-rose-700 border border-rose-200";
+        bar.innerHTML = 'AI analysis failed. You can try again using the Analyse button.';
+    }
+}
+
+function showAnalyseButton(bill) {
+    var btn = document.getElementById("analyseBillBtn");
+    if (!btn) return;
+    // Show if: OCR enabled for project, bill has images, and status is not pending
+    var hasImages = bill.images && bill.images.length > 0;
+    if (projectOcrEnabled && hasImages && bill.ocrStatus !== "pending") {
+        btn.style.display = "";
+    } else {
+        btn.style.display = "none";
+    }
+}
+
+async function triggerBillAnalysis() {
+    if (currentBillId === null) return;
+    var btn = document.getElementById("analyseBillBtn");
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Starting...";
+    }
+    try {
+        var res = await apiFetch("/api/bills/" + currentBillId + "/analyse", { method: "POST" });
+        var j = await res.json();
+        if (j.ok) {
+            showMessage("detailResult", "Analysis started - fields will be filled shortly", false);
+            // Update local bill state
+            var bill = allBills.find(function (b) { return b.id === currentBillId; });
+            if (bill) bill.ocrStatus = "pending";
+            var bar = document.getElementById("ocrStatusBar");
+            if (bar) {
+                bar.classList.remove("hidden");
+                bar.className = "px-3 py-2 rounded-lg text-sm flex items-center gap-2 bg-indigo-50 text-indigo-700 border border-indigo-200";
+                bar.innerHTML = '<span class="ocr-spinner"></span> AI analysis in progress...';
+            }
+            if (btn) btn.style.display = "none";
+            startOcrPolling(currentBillId);
+        } else {
+            showMessage("detailResult", "Error: " + (j.error || "unknown"), true);
+        }
+    } catch (e) {
+        showMessage("detailResult", "Error: " + e.message, true);
+    }
+    if (btn) {
+        btn.disabled = false;
+        btn.textContent = "Analyse Bill";
+    }
+}
+
+async function triggerBillAnalysisFromList(billId) {
+    try {
+        var res = await apiFetch("/api/bills/" + billId + "/analyse", { method: "POST" });
+        var j = await res.json();
+        if (j.ok) {
+            // Update local bill state and re-render
+            var bill = allBills.find(function (b) { return b.id === billId; });
+            if (bill) bill.ocrStatus = "pending";
+            renderFilteredBills();
+            startOcrPolling(billId);
+        }
+    } catch (e) {
+        console.error("Error triggering analysis", e);
+    }
+}
+
+// ========== OCR status polling ==========
+var ocrPollTimer = null;
+
+function startOcrPolling(billId) {
+    stopOcrPolling();
+    ocrPollTimer = setInterval(function () {
+        pollOcrStatus(billId);
+    }, 3000);
+}
+
+function stopOcrPolling() {
+    if (ocrPollTimer) {
+        clearInterval(ocrPollTimer);
+        ocrPollTimer = null;
+    }
+}
+
+async function pollOcrStatus(billId) {
+    try {
+        var res = await fetch("/api/bills/" + billId + "/ocr-status");
+        if (!res.ok) return;
+        var data = await res.json();
+        if (data.ocrStatus !== "pending") {
+            stopOcrPolling();
+            // Update local bill state
+            var bill = allBills.find(function (b) { return b.id === billId; });
+            if (bill) {
+                bill.ocrStatus = data.ocrStatus;
+                bill.ocrFields = data.ocrFields;
+            }
+            // If modal is open for this bill, update it
+            if (currentBillId === billId) {
+                updateOcrStatusBar(bill || { ocrStatus: data.ocrStatus, ocrFields: data.ocrFields });
+                showAnalyseButton(bill || { ocrStatus: data.ocrStatus, ocrFields: data.ocrFields, images: [] });
+                if (data.ocrStatus === "done" && data.ocrFields && data.ocrFields.length > 0) {
+                    // Reload bill data to get updated field values
+                    loadBills().then(function () {
+                        var updated = allBills.find(function (b) { return b.id === billId; });
+                        if (updated && currentBillId === billId) {
+                            openBillDetail(billId);
+                        }
+                    });
+                }
+            } else {
+                // Just re-render the bills list to update badges
+                renderFilteredBills();
+            }
+        }
+    } catch (e) {
+        // Silently ignore polling errors
+    }
+}
+
 // ========== Bill modal event handlers ==========
 document.addEventListener("DOMContentLoaded", () => {
     // Wire add-image inputs with crop flow
@@ -711,18 +1061,18 @@ document.addEventListener("DOMContentLoaded", () => {
         const form = e.target;
         const data = {
             vendor: form.vendor.value,
-            description: form.description.value,
+            item: form.item.value,
             brutto19: parseNum(form.brutto19.value),
             brutto7: parseNum(form.brutto7.value),
             brutto0: parseNum(form.brutto0.value),
             date: form.date.value,
-            isDraft: form.isDraft ? form.isDraft.checked : false,
+            comment: form.comment.value,
             motiveAllocations: motiveAllocs,
             categoryAllocations: categoryAllocs,
         };
 
         try {
-            const res = await fetch("/api/bills/" + currentBillId, {
+            const res = await apiFetch("/api/bills/" + currentBillId, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(data),

@@ -121,6 +121,7 @@ function loadSettingsTab(tab) {
     if (tab === "adm-members" && isAdmin) admLoadPositions().then(() => admLoadMembers());
     if (tab === "adm-export" && isAdmin) admLoadCredStatus();
     if (tab === "adm-telegram" && isAdmin) admLoadTelegramSettings();
+    if (tab === "adm-ai" && isAdmin) admLoadOcrSettings();
     if (tab === "adm-projects") admLoadProjects();
 }
 
@@ -142,16 +143,20 @@ function closeModal() {
     currentBillId = null;
     galleryImages = [];
     galleryIndex = 0;
+    // Clear OCR highlights and stop polling
+    if (typeof clearOcrFieldHighlights === "function") clearOcrFieldHighlights();
+    if (typeof stopOcrPolling === "function") stopOcrPolling();
 }
 
 async function loadProjectData() {
-    // Load motives, categories, positions, and project info for current project
-    const [motivesRes, categoriesRes, positionsRes, projectRes] =
+    // Load motives, categories, positions, project info, and settings for current project
+    const [motivesRes, categoriesRes, positionsRes, projectRes, settingsRes] =
         await Promise.all([
             fetch("/api/motives"),
             fetch("/api/categories"),
             fetch("/api/positions"),
             fetch("/api/project-info"),
+            fetch("/api/admin/settings"),
         ]);
     if (motivesRes.status === 403) {
         await showProjectSelector();
@@ -161,6 +166,8 @@ async function loadProjectData() {
     categoriesData = await categoriesRes.json();
     rolesData = positionsRes.ok ? await positionsRes.json() : [];
     const projectInfo = await projectRes.json();
+    // Load OCR enabled state from project-info (accessible to all users)
+    projectOcrEnabled = !!projectInfo.ocrEnabled;
     const projectName =
         projectInfo.projectName ||
         currentUser.currentProjectName ||
@@ -295,6 +302,7 @@ async function loadProjectData() {
 }
 
 async function init() {
+    await initCsrfToken();
     const res = await fetch("/api/user");
     const user = await res.json();
     if (!user) {
@@ -438,7 +446,7 @@ async function init() {
                 JSON.stringify(categoryAllocs),
             );
 
-            const resp = await fetch("/upload", {
+            const resp = await apiFetch("/upload", {
                 method: "POST",
                 body: data,
             });
@@ -482,7 +490,7 @@ async function init() {
             };
 
             try {
-                const resp = await fetch("/api/vgeld", {
+                const resp = await apiFetch("/api/vgeld", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(data),

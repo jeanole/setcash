@@ -196,17 +196,25 @@ router.get("/api/admin/export/excel", ensureProjectAdmin, async (req, res) => {
     // Spending data (exclude drafts)
     const motiveSpending = {};
     db.prepare(
-      `SELECT bm.motive_id, SUM(b.netto_amount * bm.percentage / 100) as spent FROM bill_motives bm JOIN bills b ON b.id = bm.bill_id WHERE (b.status IS NULL OR b.status = 'complete') GROUP BY bm.motive_id`,
+      `SELECT bm.motive_id, SUM(b.netto_amount * bm.percentage / 100) as spent
+       FROM bill_motives bm
+       JOIN bills b ON b.id = bm.bill_id
+       WHERE b.project_id = ? AND (b.status IS NULL OR b.status = 'confirmed')
+       GROUP BY bm.motive_id`,
     )
-      .all()
+      .all(projectId)
       .forEach((r) => {
         motiveSpending[r.motive_id] = r.spent || 0;
       });
     const categorySpending = {};
     db.prepare(
-      `SELECT bc.category_id, SUM(b.netto_amount * bc.percentage / 100) as spent FROM bill_categories bc JOIN bills b ON b.id = bc.bill_id WHERE (b.status IS NULL OR b.status = 'complete') GROUP BY bc.category_id`,
+      `SELECT bc.category_id, SUM(b.netto_amount * bc.percentage / 100) as spent
+       FROM bill_categories bc
+       JOIN bills b ON b.id = bc.bill_id
+       WHERE b.project_id = ? AND (b.status IS NULL OR b.status = 'confirmed')
+       GROUP BY bc.category_id`,
     )
-      .all()
+      .all(projectId)
       .forEach((r) => {
         categorySpending[r.category_id] = r.spent || 0;
       });
@@ -306,23 +314,25 @@ router.get("/api/admin/export/excel", ensureProjectAdmin, async (req, res) => {
 // Images backup: zip of all bill images in folder structure
 router.get("/api/admin/export/images", ensureProjectAdmin, (req, res) => {
   try {
+    const projectId = req.user.currentProjectId;
     const images = db
       .prepare(
         `
       SELECT bi.bill_id, bi.filename, bi.file, bi.sort_order,
-             b.bill_number, b.vendor, b.email, b.date
+             b.bill_number, b.vendor, b.email, b.date, b.project_id
       FROM bill_images bi
       JOIN bills b ON b.id = bi.bill_id
+      WHERE b.project_id = ?
       ORDER BY b.email, bi.bill_id, bi.sort_order, bi.id
     `,
       )
-      .all();
+      .all(projectId);
 
     if (images.length === 0) {
       return res.status(404).json({ error: "No images to export" });
     }
 
-    const settings = getSettings();
+    const settings = getSettings(projectId);
     const projectName = settings.projectTitle || "vBudget";
     const dateStr = new Date().toISOString().split("T")[0];
     const zipName = `${projectName.replace(/[^a-zA-Z0-9_-]/g, "_")}_images_${dateStr}.zip`;
@@ -456,17 +466,25 @@ router.post(
       }
       const motiveSpending = {};
       db.prepare(
-        `SELECT bm.motive_id, SUM(b.netto_amount * bm.percentage / 100) as spent FROM bill_motives bm JOIN bills b ON b.id = bm.bill_id WHERE (b.status IS NULL OR b.status = 'complete') GROUP BY bm.motive_id`,
+        `SELECT bm.motive_id, SUM(b.netto_amount * bm.percentage / 100) as spent
+         FROM bill_motives bm
+         JOIN bills b ON b.id = bm.bill_id
+         WHERE b.project_id = ? AND (b.status IS NULL OR b.status = 'confirmed')
+         GROUP BY bm.motive_id`,
       )
-        .all()
+        .all(projectId)
         .forEach((r) => {
           motiveSpending[r.motive_id] = r.spent || 0;
         });
       const categorySpending = {};
       db.prepare(
-        `SELECT bc.category_id, SUM(b.netto_amount * bc.percentage / 100) as spent FROM bill_categories bc JOIN bills b ON b.id = bc.bill_id WHERE (b.status IS NULL OR b.status = 'complete') GROUP BY bc.category_id`,
+        `SELECT bc.category_id, SUM(b.netto_amount * bc.percentage / 100) as spent
+         FROM bill_categories bc
+         JOIN bills b ON b.id = bc.bill_id
+         WHERE b.project_id = ? AND (b.status IS NULL OR b.status = 'confirmed')
+         GROUP BY bc.category_id`,
       )
-        .all()
+        .all(projectId)
         .forEach((r) => {
           categorySpending[r.category_id] = r.spent || 0;
         });
@@ -620,14 +638,14 @@ router.post(
       const vgeldAnalysisData = [vgeldAnalysisHeaders];
       const vgeldSums = db
         .prepare(
-          "SELECT to_user as user, SUM(amount) as received FROM vgeld GROUP BY to_user",
+          "SELECT to_user as user, SUM(amount) as received FROM vgeld WHERE project_id = ? GROUP BY to_user",
         )
-        .all();
+        .all(projectId);
       const billSums = db
         .prepare(
-          "SELECT email as user, SUM(amount) as spent FROM bills GROUP BY email",
+          "SELECT email as user, SUM(amount) as spent FROM bills WHERE project_id = ? AND (status IS NULL OR status = 'confirmed') GROUP BY email",
         )
-        .all();
+        .all(projectId);
       const analysis = {};
       vgeldSums.forEach((v) => {
         if (!analysis[v.user]) analysis[v.user] = { received: 0, spent: 0 };

@@ -12,6 +12,7 @@ require("./db");
 
 const { initGoogleServices } = require("./google");
 const { getSettings } = require("./routes/helpers");
+const { ensureCsrf } = require("./middleware");
 // Route modules
 const authRouter = require("./routes/auth");
 const projectsRouter = require("./routes/projects");
@@ -26,12 +27,30 @@ const notificationsRouter = require("./routes/notifications");
 const settingsRouter = require("./routes/settings");
 const reportingRouter = require("./routes/reporting");
 const exportsRouter = require("./routes/exports");
+const securityRouter = require("./routes/security");
 const telegramRouter = require("./routes/telegram");
 const superadminRouter = require("./routes/superadmin");
+const ocrRouter = require("./routes/ocr");
 
 const PORT = process.env.PORT || 3000;
 const DEV_MODE = process.env.DEV_MODE === "true";
 const DATA_DIR = path.join(__dirname, "data");
+
+// Hardened secrets: refuse to start in production with weak session secret
+const DEFAULT_SESSION_SECRET = "change-this-in-production";
+const sessionSecret = process.env.SESSION_SECRET;
+if (process.env.NODE_ENV === "production") {
+  if (!sessionSecret || sessionSecret === DEFAULT_SESSION_SECRET || sessionSecret.length < 16) {
+    console.error(
+      "[Startup] SESSION_SECRET is missing, too short, or using a default/weak value. Refusing to start in production.",
+    );
+    process.exit(1);
+  }
+} else if (!sessionSecret || sessionSecret === DEFAULT_SESSION_SECRET) {
+  console.warn(
+    "[Startup] WARNING: SESSION_SECRET is not set or uses the default value. Set a strong SESSION_SECRET before storing API keys.",
+  );
+}
 
 const app = express();
 
@@ -53,6 +72,8 @@ app.use((req, res, next) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "DENY");
   res.setHeader("X-XSS-Protection", "1; mode=block");
+  res.setHeader("Referrer-Policy", "origin-when-cross-origin");
+  res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   next();
 });
 
@@ -69,12 +90,15 @@ app.use(
       ttl: 86400,
       retries: 0,
     }),
-    secret: process.env.SESSION_SECRET || "change-this-in-production",
+    secret: process.env.SESSION_SECRET || DEFAULT_SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     cookie: { httpOnly: true, maxAge: 24 * 60 * 60 * 1000 },
   }),
 );
+
+// CSRF protection for state-changing requests
+app.use(ensureCsrf);
 
 // Static files
 app.use(express.static("public"));
@@ -95,6 +119,8 @@ app.use(reportingRouter);
 app.use(exportsRouter);
 app.use(telegramRouter);
 app.use(superadminRouter);
+app.use(ocrRouter);
+app.use(securityRouter);
 
 // Start server
 app.listen(PORT, () => {

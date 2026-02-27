@@ -278,6 +278,7 @@ router.get("/api/project-info", (req, res) => {
     version: pkg.version,
     currentProjectId: projectId,
     currentProjectName: req.session?.user?.currentProjectName || null,
+    ocrEnabled: !!settings.ocrEnabled,
   });
 });
 

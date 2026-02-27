@@ -1,4 +1,5 @@
 const db = require("./db");
+const crypto = require("crypto");
 
 function findUser(email) {
   return db
@@ -86,6 +87,48 @@ function ensureProjectOwner(req, res, next) {
   return next();
 }
 
+function ensureCsrf(req, res, next) {
+  const method = (req.method || "GET").toUpperCase();
+  if (method === "GET" || method === "HEAD" || method === "OPTIONS") {
+    return next();
+  }
+
+  // Allow auth endpoints to work without CSRF for now (login/OAuth flows)
+  if (
+    req.path === "/login" ||
+    req.path === "/auth/local" ||
+    req.path.startsWith("/auth/google")
+  ) {
+    return next();
+  }
+
+  if (!req.session) {
+    return res.status(403).json({ error: "Session missing for CSRF check" });
+  }
+
+  // Lazily create a CSRF token if none exists yet
+  if (!req.session.csrfToken) {
+    req.session.csrfToken = crypto.randomBytes(32).toString("hex");
+  }
+
+  const headerToken =
+    req.get("x-csrf-token") || req.get("X-CSRF-Token") || null;
+  const bodyToken = req.body && (req.body._csrf || req.body.csrfToken);
+  const token = headerToken || bodyToken;
+
+  if (!token || token !== req.session.csrfToken) {
+    const isApi = req.path.startsWith("/api/") || req.xhr;
+    const message =
+      "Invalid or missing CSRF token. Please reload the page and try again.";
+    if (isApi) {
+      return res.status(403).json({ error: message });
+    }
+    return res.status(403).send(message);
+  }
+
+  return next();
+}
+
 module.exports = {
   findUser,
   ensureAuth,
@@ -93,4 +136,5 @@ module.exports = {
   ensureProjectAccess,
   ensureProjectAdmin,
   ensureProjectOwner,
+  ensureCsrf,
 };

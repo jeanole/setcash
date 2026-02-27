@@ -1,5 +1,7 @@
 // ========== Admin ==========
 
+var admPositionsCache = [];
+
 async function admLoadPositions() {
     try {
         admPositionsCache = await (
@@ -328,6 +330,93 @@ async function admDeleteProjectById(projectId, projectName) {
     }
 }
 
+// ========== Admin: AI Analysis (OCR) ==========
+
+async function admLoadOcrSettings() {
+    try {
+        const settings = await (await fetch("/api/admin/settings")).json();
+        document.getElementById("admOcrEnabled").checked = !!settings.ocrEnabled;
+        document.getElementById("admOcrProvider").value = settings.ocrProvider || "openai";
+        document.getElementById("admOcrBaseUrl").value = settings.ocrBaseUrl || "";
+        document.getElementById("admOcrApiKey").value = "";
+
+        // Show masked key if configured
+        const maskedEl = document.getElementById("admOcrApiKeyMasked");
+        if (settings.ocrApiKeyMasked) {
+            maskedEl.textContent = "Current key: ..." + escapeHtml(settings.ocrApiKeyMasked);
+        } else {
+            maskedEl.textContent = "";
+        }
+
+        // Toggle base URL visibility
+        admToggleOcrBaseUrl();
+
+        // Status indicator
+        const statusEl = document.getElementById("admOcrStatus");
+        if (settings.ocrEnabled && settings.ocrApiKeyMasked) {
+            statusEl.innerHTML = '<span class="text-emerald-600 font-medium">AI Analysis is configured and enabled</span>';
+        } else if (settings.ocrEnabled) {
+            statusEl.innerHTML = '<span class="text-amber-500 font-medium">Enabled but no API key configured</span>';
+        } else {
+            statusEl.innerHTML = '<span class="text-slate-400">AI Analysis is disabled</span>';
+        }
+        admLoadOcrLog();
+    } catch (e) {
+        console.error("Error loading OCR settings", e);
+    }
+}
+
+async function admLoadOcrLog() {
+    const tbody = document.getElementById("admOcrLogBody");
+    try {
+        const rows = await (await fetch("/api/admin/ocr-log")).json();
+        if (!rows.length) {
+            tbody.innerHTML = '<tr><td colspan="6" class="px-3 py-4 text-slate-400 text-center">No analysis runs yet</td></tr>';
+            return;
+        }
+        tbody.innerHTML = rows.map((r) => {
+            const time = r.timestamp ? new Date(r.timestamp).toLocaleString() : "—";
+            const bill = r.billNumber ? escapeHtml(r.billNumber) : (r.billId ? `#${r.billId}` : "—");
+            const provider = escapeHtml(r.provider || "—");
+            const statusBadge = r.status === "done"
+                ? '<span class="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">done</span>'
+                : r.status === "failed"
+                ? '<span class="text-xs px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 font-medium">failed</span>'
+                : '<span class="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium">' + escapeHtml(r.status || "—") + '</span>';
+            const fields = r.fieldsWritten && r.fieldsWritten.length
+                ? escapeHtml(r.fieldsWritten.join(", "))
+                : "—";
+            const hasDetail = r.aiResponsePreview || r.errorDetail;
+            const detailBtn = hasDetail
+                ? `<button class="text-xs text-indigo-600 hover:text-indigo-800 cursor-pointer bg-transparent border-none" onclick="this.closest('tr').nextElementSibling.classList.toggle('hidden')">Show</button>`
+                : "—";
+            const detailContent = hasDetail
+                ? `<tr class="hidden"><td colspan="6" class="px-3 py-3 bg-slate-50 text-xs">` +
+                  (r.errorDetail ? `<div class="mb-2"><span class="font-semibold text-rose-600">Error:</span> ${escapeHtml(r.errorDetail)}</div>` : "") +
+                  (r.aiResponsePreview ? `<div><span class="font-semibold text-slate-600">AI Response:</span><pre class="mt-1 whitespace-pre-wrap text-slate-500 bg-white p-2 rounded border border-slate-200 max-h-40 overflow-auto">${escapeHtml(r.aiResponsePreview)}</pre></div>` : "") +
+                  `</td></tr>`
+                : "";
+            return `<tr class="border-b border-slate-50 hover:bg-slate-50/50">
+                <td class="px-3 py-2.5 text-slate-500 whitespace-nowrap">${time}</td>
+                <td class="px-3 py-2.5 font-medium">${bill}</td>
+                <td class="px-3 py-2.5">${provider}</td>
+                <td class="px-3 py-2.5">${statusBadge}</td>
+                <td class="px-3 py-2.5 text-slate-600">${fields}</td>
+                <td class="px-3 py-2.5">${detailBtn}</td>
+            </tr>${detailContent}`;
+        }).join("");
+    } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="6" class="px-3 py-4 text-rose-500 text-center">Error loading log</td></tr>';
+        console.error("Error loading OCR log", e);
+    }
+}
+
+function admToggleOcrBaseUrl() {
+    const provider = document.getElementById("admOcrProvider").value;
+    document.getElementById("admOcrBaseUrlLabel").style.display =
+        provider === "custom" ? "" : "none";
+}
+
 // ========== Admin: Telegram ==========
 
 async function admLoadTelegramSettings() {
@@ -502,6 +591,36 @@ document.addEventListener("DOMContentLoaded", () => {
             j.ok ? "Export Sheet ID saved" : j.error || "Error",
             !j.ok,
         );
+    };
+
+    // AI Analysis provider change
+    document.getElementById("admOcrProvider").addEventListener("change", admToggleOcrBaseUrl);
+
+    // AI Analysis form
+    document.getElementById("admOcrForm").onsubmit = async (e) => {
+        e.preventDefault();
+        const payload = {
+            ocrEnabled: document.getElementById("admOcrEnabled").checked,
+            ocrProvider: document.getElementById("admOcrProvider").value,
+            ocrBaseUrl: document.getElementById("admOcrBaseUrl").value,
+        };
+        // Only send API key if user typed a new one
+        const keyVal = document.getElementById("admOcrApiKey").value;
+        if (keyVal) {
+            payload.ocrApiKey = keyVal;
+        }
+        const res = await fetch("/api/admin/settings", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+        });
+        const j = await res.json();
+        if (j.ok) {
+            msg("admOcrResult", "AI Analysis settings saved", false);
+            admLoadOcrSettings();
+        } else {
+            msg("admOcrResult", j.error || "Error", true);
+        }
     };
 
     document.getElementById("admTelegramForm").onsubmit = async (e) => {

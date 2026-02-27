@@ -176,6 +176,37 @@ db.exec(`
   );
 `);
 
+// Create ocr_log table if it does not exist
+db.exec(`
+  CREATE TABLE IF NOT EXISTS ocr_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL,
+    bill_id INTEGER REFERENCES bills(id) ON DELETE SET NULL,
+    timestamp TEXT DEFAULT (datetime('now')),
+    provider TEXT,
+    status TEXT,
+    fields_written TEXT,
+    ai_response TEXT,
+    error_detail TEXT
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_ocr_log_project ON ocr_log(project_id, timestamp);
+`);
+
+// Add OCR columns to bills if missing (migration)
+try {
+  db.prepare("SELECT ocr_status FROM bills LIMIT 1").get();
+} catch (e) {
+  db.exec("ALTER TABLE bills ADD COLUMN ocr_status TEXT DEFAULT NULL");
+  console.log("Migrated: added ocr_status column to bills");
+}
+try {
+  db.prepare("SELECT ocr_fields FROM bills LIMIT 1").get();
+} catch (e) {
+  db.exec("ALTER TABLE bills ADD COLUMN ocr_fields TEXT DEFAULT NULL");
+  console.log("Migrated: added ocr_fields column to bills");
+}
+
 // Add bills.status column if missing (migration)
 try {
   db.prepare("SELECT status FROM bills LIMIT 1").get();
@@ -227,6 +258,14 @@ try {
 } catch (e) {
   db.exec("ALTER TABLE users ADD COLUMN default_project_id INTEGER");
   console.log("Migrated: added default_project_id column to users");
+}
+
+// Add source column to editlog if missing (migration — CR-3)
+try {
+  db.prepare("SELECT source FROM editlog LIMIT 1").get();
+} catch (e) {
+  db.exec("ALTER TABLE editlog ADD COLUMN source TEXT DEFAULT 'user'");
+  console.log("Migrated: added source column to editlog");
 }
 
 // Add project_id columns to data tables if missing (migration)
@@ -711,6 +750,39 @@ function migrateToProjects() {
   );
 }
 
+// Recover stale OCR jobs: any bill left in ocr_status='pending' from a previous
+// server run will never complete. Reset them to 'failed' and notify the owner.
+function recoverStaleOcrJobs() {
+  let stale;
+  try {
+    stale = db
+      .prepare("SELECT id, email, project_id FROM bills WHERE ocr_status = 'pending'")
+      .all();
+  } catch (e) {
+    // ocr_status column may not exist yet (migration runs above, but be defensive)
+    return;
+  }
+  if (!stale || stale.length === 0) return;
+
+  const resetStmt = db.prepare("UPDATE bills SET ocr_status = 'failed' WHERE id = ?");
+  const notifyStmt = db.prepare(
+    "INSERT INTO notifications (user_email, type, message, project_id) VALUES (?, 'ocr_failed', ?, ?)"
+  );
+
+  for (const bill of stale) {
+    resetStmt.run(bill.id);
+    if (bill.email) {
+      notifyStmt.run(
+        bill.email,
+        "Bill analysis failed: server restarted during analysis",
+        bill.project_id
+      );
+    }
+  }
+
+  console.log(`[OCR] Recovered ${stale.length} stale OCR job(s) — reset to failed`);
+}
+
 // Run migrations and initialization
 migrateData();
 initUsers();
@@ -720,6 +792,7 @@ migrateMotiveAllocations();
 migrateBillImages();
 initSettings();
 migrateToProjects();
+recoverStaleOcrJobs();
 
 module.exports = db;
 module.exports.DATA_DIR = DATA_DIR;

@@ -155,6 +155,9 @@ async function cropCurrentImage() {
                 var bill = allBills.find(function (b) { return b.id === currentBillId; });
                 if (bill) {
                     galleryImages = bill.images || [];
+                    // Mark the replaced image with a cache-bust timestamp so the browser fetches the new file
+                    var idx = galleryImages.findIndex(function (x) { return x.id === img.id; });
+                    if (idx !== -1) galleryImages[idx] = { ...galleryImages[idx], _cb: Date.now() };
                     if (galleryIndex >= galleryImages.length) galleryIndex = Math.max(0, galleryImages.length - 1);
                     renderGallery();
                 }
@@ -200,7 +203,7 @@ function renderGallery() {
     track.innerHTML = galleryImages
         .map(
             (img, i) =>
-                `<div class="min-w-full flex items-center justify-center p-4"><img src="/uploads/${escapeHtml(img.file)}" onclick="openImageModal(${i})" title="Click to view full size" class="max-w-full max-h-[300px] rounded cursor-pointer hover:opacity-90" /></div>`,
+                `<div class="min-w-full flex items-center justify-center p-4"><img src="/uploads/${escapeHtml(img.file)}${img._cb ? "?cb=" + img._cb : ""}" onclick="openImageModal(${i})" title="Click to view full size" class="max-w-full max-h-[300px] rounded cursor-pointer hover:opacity-90" /></div>`,
         )
         .join("");
 
@@ -208,7 +211,7 @@ function renderGallery() {
     dots.innerHTML = galleryImages
         .map(
             (_, i) =>
-                `<span class="w-2 h-2 rounded-full cursor-pointer transition-colors ${i === galleryIndex ? "bg-indigo-500" : "bg-slate-300"}" onclick="galleryGoTo(${i})"></span>`,
+                `<span class="gallery-dot w-2 h-2 rounded-full cursor-pointer transition-colors ${i === galleryIndex ? "bg-indigo-500" : "bg-slate-300"}" onclick="galleryGoTo(${i})"></span>`,
         )
         .join("");
 
@@ -236,7 +239,8 @@ function updateGalleryPosition() {
     track.style.transform = `translateX(-${galleryIndex * 100}%)`;
     // Update active dot
     document.querySelectorAll(".gallery-dot").forEach((d, i) => {
-        d.classList.toggle("active", i === galleryIndex);
+        d.classList.toggle("bg-indigo-500", i === galleryIndex);
+        d.classList.toggle("bg-slate-300", i !== galleryIndex);
     });
     // Update counter and download link
     const counter = document.getElementById("imageCounter");
@@ -267,7 +271,7 @@ function openImageModal(idx) {
     if (galleryImages.length === 0) return;
     const current = galleryImages[galleryIndex];
     document.getElementById("fullSizeImage").src =
-        "/uploads/" + current.file;
+        "/uploads/" + current.file + (current._cb ? "?cb=" + current._cb : "");
     updateFullsizeCounter();
     document.getElementById("imageModal").style.display = "flex";
 }
@@ -281,8 +285,9 @@ function fullsizeNav(dir) {
     galleryIndex =
         (galleryIndex + dir + galleryImages.length) %
         galleryImages.length;
+    const navImg = galleryImages[galleryIndex];
     document.getElementById("fullSizeImage").src =
-        "/uploads/" + galleryImages[galleryIndex].file;
+        "/uploads/" + navImg.file + (navImg._cb ? "?cb=" + navImg._cb : "");
     updateFullsizeCounter();
     updateGalleryPosition();
 }

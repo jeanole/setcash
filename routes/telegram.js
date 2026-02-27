@@ -9,6 +9,11 @@ const { ensureAuth, ensureProjectAdmin } = require("../middleware");
 const activeBots = new Map(); // projectId -> TelegramBot instance
 const mediaGroupBuffers = new Map(); // bufferKey -> { messages, timer }
 
+// Lazy-loaded to avoid circular dependency at startup
+function getRunOcrJob() {
+  return require("./ocr").runOcrJob;
+}
+
 function getProjectSettings(projectId) {
   const rows = db
     .prepare("SELECT key, value FROM project_settings WHERE project_id = ?")
@@ -118,16 +123,24 @@ async function processMediaGroup(bufferKey, projectId, userEmail) {
 
   if (photos.length === 0) return;
   const caption = buf.messages[0].caption || null;
+  const settings = getProjectSettings(projectId);
   const billId = createDraftBill(projectId, userEmail, photos, caption);
   console.log(
     `[TG ${projectId}] Created draft bill #${billId} with ${photos.length} image(s) for ${userEmail}`,
   );
 
+  if (settings.ocrEnabled) {
+    getRunOcrJob()(billId, projectId).catch((e) =>
+      console.error(`[OCR] Unhandled error for bill #${billId}:`, e.message)
+    );
+  }
+
   const chatId = buf.messages[0].chat.id;
+  const ocrNote = settings.ocrEnabled ? "\nBeleganalyse läuft im Hintergrund." : "";
   bot
     .sendMessage(
       chatId,
-      `✓ ${photos.length} Foto(s) empfangen – Beleg als Entwurf gespeichert.\nBitte in vBudget vervollständigen.`,
+      `✓ ${photos.length} Foto(s) empfangen – Beleg als Entwurf gespeichert.\nBitte in vBudget vervollständigen.${ocrNote}`,
     )
     .catch(() => {});
 }
@@ -148,14 +161,23 @@ async function processSinglePhoto(bot, msg, projectId, userEmail) {
     return;
   }
   const caption = msg.caption || null;
+  const settings = getProjectSettings(projectId);
   const billId = createDraftBill(projectId, userEmail, [downloaded], caption);
   console.log(
     `[TG ${projectId}] Created draft bill #${billId} for ${userEmail}`,
   );
+
+  if (settings.ocrEnabled) {
+    getRunOcrJob()(billId, projectId).catch((e) =>
+      console.error(`[OCR] Unhandled error for bill #${billId}:`, e.message)
+    );
+  }
+
+  const ocrNote = settings.ocrEnabled ? "\nBeleganalyse läuft im Hintergrund." : "";
   bot
     .sendMessage(
       msg.chat.id,
-      `✓ Foto empfangen – Beleg als Entwurf gespeichert.\nBitte in vBudget vervollständigen.`,
+      `✓ Foto empfangen – Beleg als Entwurf gespeichert.\nBitte in vBudget vervollständigen.${ocrNote}`,
     )
     .catch(() => {});
 }

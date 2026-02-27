@@ -147,6 +147,8 @@ router.get("/api/bills", ensureProjectAccess, (req, res) => {
     motiveAllocations: motivesByBill[b.id] || [],
     categoryAllocations: categoriesByBill[b.id] || [],
     status: b.status || "confirmed",
+    ocrStatus: b.ocr_status || null,
+    ocrFields: b.ocr_fields ? JSON.parse(b.ocr_fields) : null,
   }));
   res.json(mapped);
 });
@@ -268,6 +270,18 @@ router.post(
     // Save allocations to junction tables
     saveAllocations(billId, motiveAllocations, categoryAllocations, projectId);
 
+    // Log bill creation event
+    db.prepare(
+      "INSERT INTO editlog (timestamp, user, bill_id, changes, project_id, source) VALUES (?, ?, ?, ?, ?, ?)",
+    ).run(
+      new Date().toISOString(),
+      req.user.email,
+      billId,
+      JSON.stringify({ _event: "created" }),
+      projectId,
+      "user",
+    );
+
     res.json({ ok: true, id: billId });
   },
 );
@@ -299,6 +313,11 @@ router.put("/api/bills/:id", ensureProjectAccess, (req, res) => {
   const updates = [];
   const params = [];
 
+  if (date !== undefined && date !== bill.date) {
+    changes.date = date;
+    updates.push("date = ?");
+    params.push(date);
+  }
   if (email !== undefined && email !== bill.email) {
     changes.email = email;
     updates.push("email = ?");
@@ -391,6 +410,26 @@ router.put("/api/bills/:id", ensureProjectAccess, (req, res) => {
     updates.push("netto_amount = ?");
     params.push((newB19 || 0) / 1.19 + (newB7 || 0) / 1.07 + (newB0 || 0));
 
+    // Strip OCR-suggested fields that the user has now explicitly edited
+    if (bill.ocr_fields) {
+      let ocrFields = JSON.parse(bill.ocr_fields);
+      const editedFields = Object.keys(changes);
+      // BUG-8: When a brutto field is edited, also strip "amount" since it gets recalculated
+      const bruttoFields = ["brutto19", "brutto7", "brutto0"];
+      const anyBruttoEdited = bruttoFields.some((f) => editedFields.includes(f));
+      const fieldsToRemove = anyBruttoEdited ? [...editedFields, "amount"] : editedFields;
+      ocrFields = ocrFields.filter((f) => !fieldsToRemove.includes(f));
+      if (ocrFields.length === 0) {
+        updates.push("ocr_fields = ?");
+        params.push(null);
+        updates.push("ocr_status = ?");
+        params.push(null);
+      } else {
+        updates.push("ocr_fields = ?");
+        params.push(JSON.stringify(ocrFields));
+      }
+    }
+
     params.push(id);
     db.prepare(`UPDATE bills SET ${updates.join(", ")} WHERE id = ?`).run(
       ...params,
@@ -422,6 +461,60 @@ router.put("/api/bills/:id", ensureProjectAccess, (req, res) => {
     );
   }
   res.json({ ok: true });
+});
+
+const ALLOWED_OCR_FIELDS = ["date", "vendor", "item", "type", "brutto19", "brutto7", "brutto0", "amount", "comment"];
+
+router.patch("/api/bills/:id/verify-field", ensureAuth, ensureProjectAccess, (req, res) => {
+  const projectId = req.user.currentProjectId;
+  const id = parseInt(req.params.id, 10);
+  if (!id || isNaN(id) || id <= 0) return res.status(400).json({ error: "Invalid bill ID" });
+
+  const { field } = req.body;
+  if (!field || typeof field !== "string" || !ALLOWED_OCR_FIELDS.includes(field)) {
+    return res.status(400).json({ error: "Invalid or missing field name" });
+  }
+
+  const bill = db
+    .prepare("SELECT id, ocr_fields, ocr_status FROM bills WHERE id = ? AND project_id = ?")
+    .get(id, projectId);
+  if (!bill) return res.status(404).json({ error: "Bill not found" });
+
+  let ocrFields = [];
+  try { ocrFields = JSON.parse(bill.ocr_fields || "[]"); } catch {}
+
+  if (!ocrFields.includes(field)) {
+    return res.status(400).json({ error: "Field is not in ocr_fields" });
+  }
+
+  let remaining = ocrFields.filter((f) => f !== field);
+  // "amount" is a computed field not shown in the UI — auto-clear it if it's the only one left
+  if (remaining.length === 1 && remaining[0] === "amount") {
+    remaining = [];
+  }
+
+  if (remaining.length === 0) {
+    db.prepare("UPDATE bills SET ocr_fields = NULL, ocr_status = NULL WHERE id = ?").run(id);
+  } else {
+    db.prepare("UPDATE bills SET ocr_fields = ? WHERE id = ?").run(JSON.stringify(remaining), id);
+  }
+
+  db.prepare(
+    "INSERT INTO editlog (timestamp, user, bill_id, changes, project_id, source) VALUES (?, ?, ?, ?, ?, ?)",
+  ).run(
+    new Date().toISOString(),
+    req.user.email,
+    id,
+    JSON.stringify({ _event: "verified", field }),
+    projectId,
+    "user",
+  );
+
+  res.json({
+    ok: true,
+    ocrFields: remaining.length > 0 ? remaining : null,
+    ocrStatus: remaining.length > 0 ? "done" : null,
+  });
 });
 
 router.delete("/api/bills/:id", ensureProjectAdmin, (req, res) => {
@@ -738,6 +831,7 @@ router.get("/api/bills/log", ensureProjectAccess, (req, res) => {
     user: l.user,
     billId: l.bill_id,
     changes: JSON.parse(l.changes || "{}"),
+    source: l.source || "user",
   }));
   res.json(mapped);
 });
@@ -751,7 +845,7 @@ router.get("/api/bills/by-motive", ensureProjectAccess, (req, res) => {
     FROM bill_motives bm
     JOIN bills b ON b.id = bm.bill_id
     JOIN motives m ON m.id = bm.motive_id
-    WHERE b.project_id = ? AND (b.status IS NULL OR b.status = 'complete')
+    WHERE b.project_id = ? AND (b.status IS NULL OR b.status = 'confirmed')
     GROUP BY bm.motive_id
   `,
     )
@@ -761,7 +855,7 @@ router.get("/api/bills/by-motive", ensureProjectAccess, (req, res) => {
     .prepare(
       `
     SELECT SUM(b.netto_amount) as spent FROM bills b
-    WHERE b.project_id = ? AND (b.status IS NULL OR b.status = 'complete')
+    WHERE b.project_id = ? AND (b.status IS NULL OR b.status = 'confirmed')
     AND b.id NOT IN (SELECT DISTINCT bill_id FROM bill_motives)
   `,
     )
@@ -807,7 +901,7 @@ router.get("/api/bills/by-category", ensureProjectAccess, (req, res) => {
     FROM bill_categories bc
     JOIN bills b ON b.id = bc.bill_id
     JOIN categories c ON c.id = bc.category_id
-    WHERE b.project_id = ? AND (b.status IS NULL OR b.status = 'complete')
+    WHERE b.project_id = ? AND (b.status IS NULL OR b.status = 'confirmed')
     GROUP BY bc.category_id
   `,
     )
@@ -817,7 +911,7 @@ router.get("/api/bills/by-category", ensureProjectAccess, (req, res) => {
     .prepare(
       `
     SELECT SUM(b.netto_amount) as spent FROM bills b
-    WHERE b.project_id = ? AND (b.status IS NULL OR b.status = 'complete')
+    WHERE b.project_id = ? AND (b.status IS NULL OR b.status = 'confirmed')
     AND b.id NOT IN (SELECT DISTINCT bill_id FROM bill_categories)
   `,
     )
@@ -855,11 +949,47 @@ router.get("/api/bills/by-category", ensureProjectAccess, (req, res) => {
 });
 
 // Serve uploaded files (supports subdirectories like /uploads/user/file.jpg)
-router.get("/uploads/*", ensureAuth, (req, res) => {
-  const filePath = req.params[0];
-  const file = path.join(DATA_DIR, "uploads", filePath);
-  if (fs.existsSync(file)) return res.sendFile(file);
-  res.status(404).send("Not found");
+// Security: enforce project membership/authorization and prevent cross-project access
+router.get("/uploads/*", ensureProjectAccess, (req, res) => {
+  const relPath = req.params[0];
+  if (!relPath) return res.status(404).send("Not found");
+
+  // Look up image by file path in bill_images first
+  let row = db
+    .prepare(
+      `
+      SELECT bi.file, b.project_id
+      FROM bill_images bi
+      JOIN bills b ON b.id = bi.bill_id
+      WHERE bi.file = ?
+    `,
+    )
+    .get(relPath);
+
+  // Fallback to legacy bills.file column
+  if (!row) {
+    row = db
+      .prepare("SELECT file, project_id FROM bills WHERE file = ?")
+      .get(relPath);
+  }
+
+  if (!row || !row.file) {
+    return res.status(404).send("Not found");
+  }
+
+  const targetProjectId = row.project_id;
+  const user = req.user;
+
+  // Super-admins can access any project; regular users are bound to currentProjectId
+  if (!user.superAdmin && user.currentProjectId !== targetProjectId) {
+    return res.status(403).send("Forbidden");
+  }
+
+  const file = path.join(DATA_DIR, "uploads", row.file);
+  if (!fs.existsSync(file)) {
+    return res.status(404).send("Not found");
+  }
+  return res.sendFile(file);
 });
 
 module.exports = router;
