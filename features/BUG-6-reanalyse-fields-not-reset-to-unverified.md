@@ -1,6 +1,6 @@
 # BUG-6: Re-analyse Does Not Reset Fields to Unverified State
 
-**Status:** Open
+**Status:** Resolved
 **Reported:** 2026-02-27
 **Severity:** High
 **Skill Tag:** [Frontend]
@@ -36,7 +36,7 @@ The root cause is likely that `triggerBillAnalysis()` does not call `clearOcrFie
 ---
 
 ## Resolution
-**Status:** Open
-**Resolved Date:** —
-**Fixed In:** — *(commit hash or PR)*
-**Fix Description:** —
+**Status:** Resolved
+**Resolved Date:** 2026-02-27
+**Fixed In:** d44367648aab8a31b03bfc4d6c35db00a5a11f33
+**Fix Description:** `runOcrJob` now detects re-analysis by checking if `ocr_status` was previously set. On re-analysis, `isReanalysis = true` causes `fieldChecks` to overwrite all OCR-extracted fields (not just empty ones), ensuring `ocr_fields` is populated and amber verification badges are applied after polling completes.

@@ -1,6 +1,6 @@
 # BUG-7: Re-analysis Produces No Bill History Log Entry
 
-**Status:** Open
+**Status:** Resolved
 **Reported:** 2026-02-27
 **Severity:** Medium
 **Skill Tag:** [Backend]
@@ -41,7 +41,7 @@ Every OCR analysis run — including re-analysis — writes an entry to the bill
 ---
 
 ## Resolution
-**Status:** Open
-**Resolved Date:** —
-**Fixed In:** — *(commit hash or PR)*
-**Fix Description:** —
+**Status:** Resolved
+**Resolved Date:** 2026-02-27
+**Fixed In:** d44367648aab8a31b03bfc4d6c35db00a5a11f33
+**Fix Description:** The `fail()` helper in `runOcrJob` now inserts an `editlog` row with `_event: "analysis_failed"` so failed analyses appear in the bill History panel. The frontend `pollOcrStatus` now reloads `allLogs` and calls `refreshBillLogBody()` after failure (or done-with-no-fields) so the history panel updates without the user needing to reopen the modal.

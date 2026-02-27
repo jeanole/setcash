@@ -17,5 +17,5 @@
 | [BUG-5](BUG-5-project-delete-csrf-token-error.md) | Bug | Project Delete Button Fails with CSRF Token Error | Resolved | Critical | PROJ-2 | 2026-02-27 |
 | CR-5 | CR | Re-Analyse Button for Already-Analysed Bills | Pending Review | Medium | PROJ-1 | 2026-02-27 |
 | [PROJ-3](PROJ-3-upload-shortcut-button.md) | Feature | Upload Shortcut Button in Bills Table | Planned | — | — | 2026-02-27 |
-| [BUG-6](BUG-6-reanalyse-fields-not-reset-to-unverified.md) | Bug | Re-analyse Does Not Reset Fields to Unverified State | Open | High | PROJ-1 | 2026-02-27 |
-| [BUG-7](BUG-7-reanalyse-no-history-log-entry.md) | Bug | Re-analysis Produces No Bill History Log Entry | Open | Medium | PROJ-1 | 2026-02-27 |
+| [BUG-6](BUG-6-reanalyse-fields-not-reset-to-unverified.md) | Bug | Re-analyse Does Not Reset Fields to Unverified State | Resolved | High | PROJ-1 | 2026-02-27 |
+| [BUG-7](BUG-7-reanalyse-no-history-log-entry.md) | Bug | Re-analysis Produces No Bill History Log Entry | Resolved | Medium | PROJ-1 | 2026-02-27 |
