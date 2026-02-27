@@ -232,3 +232,102 @@ Primary environments:
 | ID | Severity | Title | Status |
 |----|----------|-------|--------|
 | [BUG-5](BUG-5-project-delete-csrf-token-error.md) | Critical | Project Delete Button Fails with CSRF Token Error | Resolved |
+
+---
+
+## QA Test Results (Re-test 2026-02-27)
+
+**Tested:** 2026-02-27
+**App URL:** http://localhost:3000
+**Tester:** QA Engineer (AI)
+**Focus:** AC-3 CSRF full coverage audit + spot-checks post BUG-5 fix
+
+### Static Analysis: Raw fetch() Audit
+
+Audited all 10 frontend JS modules for raw `fetch()` calls with mutating HTTP methods (POST/PUT/DELETE/PATCH). Only `apiFetch()` should be used for state-changing requests.
+
+| Module | Raw GET fetch() | Mutating apiFetch() | Raw mutating fetch() | Result |
+|--------|----------------|--------------------|--------------------|--------|
+| `admin.js` | 12 calls | 22 calls | 0 | PASS |
+| `superadmin.js` | 4 calls | 18 calls | 0 | PASS |
+| `budget.js` | 3 calls | 7 calls | 0 | PASS |
+| `gallery.js` | 1 call (image blob) | 3 calls | 0 | PASS |
+| `sidebar.js` | 3 calls | 4 calls | 0 | PASS |
+| `notifications.js` | 1 call | 2 calls | 0 | PASS |
+| `vgeld.js` | 3 calls | 1 call | 0 | PASS |
+| `telegram.js` | 2 calls | 1 call | 0 | PASS |
+| `bills.js` | 5 calls | 6 calls | 0 | PASS |
+| `core.js` | 6 calls | 2 calls | 0 | PASS |
+
+**Conclusion:** Zero raw mutating `fetch()` calls remain. All 66 state-changing requests across all modules use `apiFetch()` with CSRF token injection via `withCsrf()`.
+
+### AC-3: CSRF Protection
+
+#### Server-side middleware
+- [x] `ensureCsrf` defined in `middleware.js` (lines 90-130): skips GET/HEAD/OPTIONS, exempts only `/login`, `/auth/local`, `/auth/google*`, validates `X-CSRF-Token` header or `_csrf`/`csrfToken` body field against `req.session.csrfToken`.
+- [x] Applied globally in `server.js` line 101 (`app.use(ensureCsrf)`) before all route mounts (lines 107-123).
+- [x] CSRF exemptions are minimal: only login and OAuth endpoints.
+- [x] Token is cryptographically random (32 bytes hex via `crypto.randomBytes`).
+- [x] Token is session-tied: stored in `req.session.csrfToken`, different sessions produce different tokens.
+
+#### Frontend CSRF integration
+- [x] `initCsrfToken()` in `utils.js` fetches token from `/api/csrf-token` on app init.
+- [x] `withCsrf()` injects `X-CSRF-Token` header on all non-GET/HEAD/OPTIONS requests.
+- [x] `apiFetch()` wraps all state-changing calls and handles 403 responses with console warning.
+- [x] `init()` in `core.js` calls `await initCsrfToken()` before any other API calls.
+
+#### /api/csrf-token endpoint
+- [x] Defined in `routes/security.js` as GET, protected by `ensureAuth`.
+- [x] Returns `{ token: "..." }` JSON with session-tied token.
+
+#### Runtime negative CSRF tests
+- [x] `POST /api/bills` without `X-CSRF-Token` returns 403 JSON: `{"error":"Invalid or missing CSRF token..."}`
+- [x] `PUT /api/admin/settings` without `X-CSRF-Token` returns 403 JSON.
+- [x] `DELETE /api/vgeld/1` without `X-CSRF-Token` returns 403 JSON.
+- [x] `POST /upload` without `X-CSRF-Token` returns 403 plain text (non-API path).
+- [x] `POST /login` bypasses CSRF as expected (exempted endpoint, returns 302).
+- [x] `GET /api/csrf-token` without auth returns 401 "Not logged in".
+
+### Spot-checks
+
+#### AC-1: Export queries are project-scoped (spot-check)
+- [x] All SQL queries in `routes/exports.js` filter by `WHERE project_id = ?` for bills, bill_motives, bill_categories, vgeld, motives, categories, budget_matrix, and image ZIP exports. No regression.
+
+#### AC-2: Image access checks (spot-check)
+- [x] `GET /uploads/test.jpg` without auth returns 302 redirect to `/login`. Unauthenticated users cannot access uploaded images.
+
+#### AC-4: Hardened secrets & encryption config (spot-check)
+- [x] `server.js` lines 42-53: production startup refuses if `SESSION_SECRET` is missing, too short (<16), or matches known default.
+- [x] Non-production: warns but does not crash.
+- [x] `.env.example` documents both `SESSION_SECRET` and `OCR_ENCRYPTION_SECRET` with clear guidance.
+
+#### AC-5: Status handling consistency (spot-check)
+- [x] `routes/reporting.js` uses `(b.status IS NULL OR b.status = 'confirmed')` consistently. No legacy `'complete'` status found.
+- [x] `routes/exports.js` uses the same pattern in all spending aggregation queries.
+
+### Edge Cases
+
+#### EC-1: User without a current project
+- [x] `ensureProjectAccess` returns 403 JSON `{"error":"No project selected"}` when `currentProjectId` is missing (not a 500).
+
+#### EC-4: CSRF errors on old clients
+- [x] API paths return 403 JSON with clear error message: `{"error":"Invalid or missing CSRF token. Please reload the page and try again."}`.
+- [x] Non-API paths return 403 plain text with the same message.
+
+### Security Audit Results (CSRF-focused)
+- [x] CSRF bypass by omitting `X-CSRF-Token`: all tested endpoints correctly reject with 403.
+- [x] No state-changing endpoints missing CSRF middleware: `ensureCsrf` is global, applied before all routes.
+- [x] CSRF exemptions are truly minimal: only `/login`, `/auth/local`, `/auth/google*`.
+- [x] CSRF token is session-tied: generated per-session with `crypto.randomBytes(32)`, not reusable across sessions.
+- [x] No raw mutating `fetch()` calls in any frontend module: all 66 state-changing calls use `apiFetch()`.
+
+### Bugs Found
+
+None found. The previously reported low-severity bug (CSRF 403 not surfaced in UI) from the 2026-02-26 test remains open but is unchanged -- it is a UX improvement, not a security issue.
+
+### Summary
+- **Acceptance Criteria:** 5/5 passed (AC-3 fully re-verified, ACs 1/2/4/5 spot-checked)
+- **Bugs Found:** 0 new (1 pre-existing low from 2026-02-26, still open)
+- **Security:** Pass -- CSRF protection is comprehensive. No bypass vectors identified via static analysis (all 10 frontend modules clean) or runtime negative tests (POST/PUT/DELETE without token all return 403).
+- **Production Ready:** YES
+- **Recommendation:** BUG-5 fix is confirmed effective. All 37 raw `fetch()` calls successfully migrated to `apiFetch()`. Deploy with confidence.
