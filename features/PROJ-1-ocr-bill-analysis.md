@@ -1,6 +1,6 @@
 # PROJ-1: OCR / AI Bill Analysis
 
-## Status: Change Requested
+## Status: In Review
 **Created:** 2026-02-24
 **Last Updated:** 2026-02-26
 
@@ -669,7 +669,7 @@ _To be added by /deploy_
 
 | ID | Severity | Title | Status |
 |----|----------|-------|--------|
-| [BUG-1](BUG-1-ocr-analysis-hangs-no-timeout-feedback.md) | High | OCR Analysis Runs Indefinitely With No UI Feedback or Timeout | Open |
+| [BUG-1](BUG-1-ocr-analysis-hangs-no-timeout-feedback.md) | High | OCR Analysis Runs Indefinitely With No UI Feedback or Timeout | Resolved |
 | [BUG-2](BUG-2-analyse-button-csrf-token-error.md) | High | Analyse Button Fails with CSRF Token Error | Resolved |
 | [BUG-3](BUG-3-bill-actions-csrf-token-error.md) | High | Bill Actions Fail with CSRF Token Error | Resolved |
 
@@ -717,7 +717,7 @@ New function `admLoadOcrLog()` — fetches `/api/admin/ocr-log`, renders table. 
 ---
 
 ### CR-2: Improve Console Logging Clarity for OCR Field Writes
-**Requested:** 2026-02-26 | **Priority:** Low | **Status:** Pending Review
+**Requested:** 2026-02-26 | **Priority:** Low | **Status:** Deployed
 
 **Current Behavior:** Console output from `runOcrJob` logs field writes in a way that looks identical to user edits (e.g. `Bill 42 edited: vendor, date`), making server logs confusing and hard to use for debugging.
 
@@ -726,8 +726,8 @@ New function `admLoadOcrLog()` — fetches `/api/admin/ocr-log`, renders table. 
 **Rationale:** Low-effort, high-value improvement for diagnosing OCR issues before the full admin logging panel (CR-1) is built.
 
 **Proposed Acceptance Criteria:**
-- [ ] All `runOcrJob` / `analyseImage` console calls prefixed with `[OCR]`
-- [ ] Start, success, and failure states each logged with structured detail
-- [ ] No API keys or secrets logged at any level
+- [x] All `runOcrJob` / `analyseImage` console calls prefixed with `[OCR]`
+- [x] Start, success, and failure states each logged with structured detail
+- [x] No API keys or secrets logged at any level
 
-**Resolution:** Pending
+**Resolution:** Already implemented as part of BUG-1 fix and CR-1 work. All OCR console output in `routes/ocr.js` uses `[OCR]` prefix with structured detail (provider, fields written, errors, HTTP status).
