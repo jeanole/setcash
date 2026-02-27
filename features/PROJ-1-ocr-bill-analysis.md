@@ -707,10 +707,10 @@ New function `admLoadOcrLog()` — fetches `/api/admin/ocr-log`, renders table. 
 - [x] New `ocr_log` table: `id`, `project_id`, `bill_id`, `timestamp`, `provider`, `status`, `fields_written`, `ai_response` (truncated 2000 chars), `error_detail`
 - [x] `runOcrJob` writes one log row on every run (success and failure)
 - [x] `GET /api/admin/ocr-log` returns last 50 entries for the project (admin-only)
-- [ ] Settings "AI Analysis" tab shows OCR Log table with expandable detail rows (frontend — deferred)
+- [x] Settings "AI Analysis" tab shows OCR Log table with expandable detail rows (frontend — deferred)
 - [x] Log is scoped to current project; API key never stored or shown in log
 
-**Resolution:** Backend implemented — `ocr_log` table, index, `runOcrJob` logging, and `GET /api/admin/ocr-log` endpoint deployed. Frontend UI deferred to `/frontend`.
+**Resolution:** Fully deployed — backend (`ocr_log` table, index, `runOcrJob` logging, `GET /api/admin/ocr-log` endpoint) and frontend (OCR Log table card in AI Analysis settings tab with expandable detail rows) both deployed.
 
 ---
 
