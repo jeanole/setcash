@@ -458,12 +458,16 @@ async function init() {
                 JSON.stringify(categoryAllocs),
             );
 
+            const submitBtn = form.querySelector("[type='submit']");
+            if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "Uploading..."; }
+
             const resp = await apiFetch("/upload", {
                 method: "POST",
                 body: data,
             });
             const json = await resp.json();
             if (json.ok) {
+                if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Upload"; }
                 showMessage("uploadResult", "Bill uploaded successfully!", false);
                 form.reset();
                 pendingFiles = [];
@@ -488,7 +492,10 @@ async function init() {
                 if (uploadModal && uploadModal.style.display !== "none") {
                     closeUploadModal(true);
                 }
+                // Reload bills table so new bill appears immediately
+                loadBills();
             } else {
+                if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Upload"; }
                 showMessage("uploadResult", "Error: " + (json.error || "unknown"), true);
             }
         });
