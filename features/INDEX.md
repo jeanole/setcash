@@ -1,6 +1,6 @@
 # vBudget — Project Index
 
-**Next Available IDs:** PROJ-4 · BUG-8 · CR-6
+**Next Available IDs:** PROJ-4 · BUG-9 · CR-6
 
 | ID | Type | Title | Status | Priority | Feature | Date |
 |----|------|-------|--------|----------|---------|------|
@@ -19,3 +19,4 @@
 | [PROJ-3](PROJ-3-upload-shortcut-button.md) | Feature | Upload Shortcut Button in Bills Table | Planned | — | — | 2026-02-27 |
 | [BUG-6](BUG-6-reanalyse-fields-not-reset-to-unverified.md) | Bug | Re-analyse Does Not Reset Fields to Unverified State | Resolved | High | PROJ-1 | 2026-02-27 |
 | [BUG-7](BUG-7-reanalyse-no-history-log-entry.md) | Bug | Re-analysis Produces No Bill History Log Entry | Resolved | Medium | PROJ-1 | 2026-02-27 |
+| BUG-8 | Bug | Multer fileFilter Rejection Returns 500 HTML Instead of 400 JSON | Resolved | High | PROJ-3 | 2026-02-28 |
