@@ -483,9 +483,13 @@
                     <div
                         class="bg-white rounded-xl shadow-sm border border-slate-100 p-5 md:p-6 mb-5 overflow-x-auto"
                     >
-                        <h2 class="text-base font-semibold text-slate-900 mb-4">
-                            All Bills
-                        </h2>
+                        <div class="flex items-center justify-between mb-4">
+                            <h2 class="text-base font-semibold text-slate-900 m-0">All Bills</h2>
+                            <button onclick="openUploadModal()"
+                                class="text-sm px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium flex items-center gap-1.5">
+                                + Upload
+                            </button>
+                        </div>
                         <div class="admin-only" style="display: none">
                             <button
                                 onclick="deleteSelected()"
@@ -2284,6 +2288,16 @@
                         </table>
                     </div>
                 </div>
+            </div>
+        </div>
+        <!-- Upload Bill Modal -->
+        <div id="uploadModal" class="fixed inset-0 bg-black/50 z-[1300] flex items-center justify-center p-4 md:p-5" style="display:none" onclick="if(event.target===this)closeUploadModal()">
+            <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+                <div class="flex justify-between items-center px-5 py-4 border-b border-slate-100 sticky top-0 bg-white z-10 rounded-t-2xl">
+                    <h2 class="text-base font-semibold text-slate-900 m-0">Upload Bill</h2>
+                    <button class="text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full w-9 h-9 flex items-center justify-center text-2xl leading-none bg-transparent border-none cursor-pointer" onclick="closeUploadModal()">&times;</button>
+                </div>
+                <div id="uploadModalBody" class="p-5 md:p-6"></div>
             </div>
         </div>
     </body>

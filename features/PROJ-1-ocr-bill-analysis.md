@@ -1,9 +1,9 @@
 # PROJ-1: OCR / AI Bill Analysis
 
-## Status: Change Requested
+## Status: Deployed
 **Created:** 2026-02-24
-**Last Updated:** 2026-02-27
-**Deployed:** 2026-02-27 — tag `v1.8.0-PROJ-1-CR3`
+**Last Updated:** 2026-02-28
+**Deployed:** 2026-02-28 — tag `v1.9.0-PROJ-1`
 
 ## Dependencies
 - None (standalone addition to existing bill upload flow)

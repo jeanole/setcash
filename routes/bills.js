@@ -160,7 +160,10 @@ router.post(
   (req, res, next) => {
     // multer is attached to req via app.locals.upload
     const upload = req.app.locals.upload;
-    upload.array("photos", 10)(req, res, next);
+    upload.array("photos", 10)(req, res, (err) => {
+      if (err) return res.status(400).json({ error: err.message });
+      next();
+    });
   },
   (req, res) => {
     const projectId = req.user.currentProjectId;
@@ -611,7 +614,10 @@ router.post(
   ensureProjectAccess,
   (req, res, next) => {
     const upload = req.app.locals.upload;
-    upload.array("photos", 10)(req, res, next);
+    upload.array("photos", 10)(req, res, (err) => {
+      if (err) return res.status(400).json({ error: err.message });
+      next();
+    });
   },
   (req, res) => {
     const projectId = req.user.currentProjectId;
@@ -684,7 +690,10 @@ router.put(
   ensureProjectAccess,
   (req, res, next) => {
     const upload = req.app.locals.upload;
-    upload.single("photo")(req, res, next);
+    upload.single("photo")(req, res, (err) => {
+      if (err) return res.status(400).json({ error: err.message });
+      next();
+    });
   },
   (req, res) => {
     const projectId = req.user.currentProjectId;
@@ -776,7 +785,10 @@ router.post(
   ensureProjectAccess,
   (req, res, next) => {
     const upload = req.app.locals.upload;
-    upload.single("photo")(req, res, next);
+    upload.single("photo")(req, res, (err) => {
+      if (err) return res.status(400).json({ error: err.message });
+      next();
+    });
   },
   (req, res) => {
     const projectId = req.user.currentProjectId;
