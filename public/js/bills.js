@@ -1145,6 +1145,7 @@ async function triggerUploadAnalysis() {
         data.append("vendor", form.vendor.value);
         data.append("item", form.item.value);
         data.append("comment", form.comment.value || "");
+        data.append("date", form.date.value);
         for (var i = 0; i < pendingFiles.length; i++) {
             data.append("photos", pendingFiles[i]);
         }
@@ -1368,7 +1369,8 @@ function closeUploadModal(skipReset) {
         var form = document.getElementById("uploadForm");
         if (form) form.reset();
         pendingFiles = [];
-        if (typeof renderUploadThumbnails === "function") renderUploadThumbnails();
+        var uploadThumbnails = document.getElementById("uploadThumbnails");
+        if (uploadThumbnails) uploadThumbnails.innerHTML = "";
         if (typeof clearAllUploadOcrHighlights === "function") clearAllUploadOcrHighlights();
         window.uploadEditBillId = null;
         window.uploadOcrFields = [];

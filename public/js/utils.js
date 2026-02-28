@@ -35,7 +35,7 @@ function showMessage(elementId, text, isError) {
   el.className = isError
     ? 'bg-rose-50 text-rose-700 border border-rose-200 rounded-lg px-4 py-3 text-sm mt-3'
     : 'bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg px-4 py-3 text-sm mt-3';
-  setTimeout(() => { el.textContent = ''; el.className = ''; }, 3000);
+  if (!isError) setTimeout(() => { el.textContent = ''; el.className = ''; }, 3000);
 }
 
 // Netto calculation helper
