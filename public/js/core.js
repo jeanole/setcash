@@ -351,6 +351,11 @@ async function init() {
             thumb.appendChild(removeBtn);
             container.appendChild(thumb);
         });
+        // CR-4: show/hide Analyse button based on photo count and OCR enabled state
+        var analyseSection = document.getElementById("uploadAnalyseSection");
+        if (analyseSection) {
+            analyseSection.style.display = (pendingFiles.length > 0 && window.projectOcrEnabled) ? "" : "none";
+        }
     }
 
     document
@@ -382,6 +387,12 @@ async function init() {
         .addEventListener("submit", async (e) => {
             e.preventDefault();
             const form = e.target;
+
+            // CR-4: If we're in OCR edit mode (bill was already saved during Analyse), update it instead
+            if (window.uploadEditBillId) {
+                await saveUploadEditBill(form);
+                return;
+            }
 
             const motiveAllocContainer =
                 document.getElementById("uploadMotiveAlloc");
@@ -432,6 +443,7 @@ async function init() {
             data.append("vendor", form.vendor.value);
             data.append("item", form.item.value);
             data.append("comment", form.comment.value);
+            data.append("date", form.date.value);
             // Add pending files
             for (const f of pendingFiles) {
                 data.append("photos", f);
@@ -522,3 +534,63 @@ async function init() {
 }
 
 init().catch((e) => console.error(e));
+
+// CR-4: Save a bill that was already created during the "Analyse with AI" flow
+async function saveUploadEditBill(form) {
+    var billId = window.uploadEditBillId;
+    var statusDiv = document.getElementById("uploadAnalyseStatus");
+    var submitBtn = form.querySelector("[type='submit']");
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "Saving..."; }
+
+    // Gather allocation data
+    var motiveAllocContainer = document.getElementById("uploadMotiveAlloc");
+    var categoryAllocContainer = document.getElementById("uploadCategoryAlloc");
+    var motiveAllocs = motiveAllocContainer ? motiveAllocContainer.getAllocations() : [];
+    var categoryAllocs = categoryAllocContainer ? categoryAllocContainer.getAllocations() : [];
+
+    var payload = {
+        type: form.type.value,
+        brutto19: parseFloat(form.brutto19.value) || 0,
+        brutto7: parseFloat(form.brutto7.value) || 0,
+        brutto0: parseFloat(form.brutto0.value) || 0,
+        vendor: form.vendor.value,
+        item: form.item.value,
+        comment: form.comment.value || "",
+        date: form.date.value,
+        motiveAllocations: motiveAllocs,
+        categoryAllocations: categoryAllocs,
+    };
+
+    try {
+        var resp = await apiFetch("/api/bills/" + billId, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+        });
+        var json = await resp.json();
+        if (json.ok) {
+            showMessage("uploadResult", "Bill saved successfully!", false);
+            // Reset everything
+            form.reset();
+            pendingFiles = [];
+            if (typeof clearAllUploadOcrHighlights === "function") clearAllUploadOcrHighlights();
+            window.uploadEditBillId = null;
+            window.uploadOcrFields = [];
+            var analyseSection = document.getElementById("uploadAnalyseSection");
+            if (analyseSection) analyseSection.style.display = "none";
+            if (statusDiv) statusDiv.classList.add("hidden");
+            if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Upload"; }
+            // Re-initialize allocation widgets
+            createAllocationWidget("uploadMotiveAlloc", "motive", motivesData, [], 0);
+            createAllocationWidget("uploadCategoryAlloc", "category", categoriesData, [], 0);
+            // Reload bills list
+            if (typeof loadProjectData === "function") loadProjectData();
+        } else {
+            showMessage("uploadResult", "Error: " + escapeHtml(json.error || "unknown"), true);
+            if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Save Changes"; }
+        }
+    } catch (err) {
+        showMessage("uploadResult", "Error: " + escapeHtml(err.message), true);
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Save Changes"; }
+    }
+}

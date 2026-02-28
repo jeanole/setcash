@@ -298,7 +298,7 @@ function renderFilteredBills() {
                 return `
     <tr data-id="${bill.id}" class="clickable-row cursor-pointer${bill.status === "draft" ? " bill-draft-row" : ""}" onclick="openBillDetail(${bill.id})">
       <td class="admin-only px-3 py-2.5" style="${isAdmin ? "" : "display:none"}" onclick="event.stopPropagation()"><input type="checkbox" class="bill-checkbox" data-id="${bill.id}" onchange="updateSelectedCount()"></td>
-      <td class="px-3 py-2.5 flex items-center gap-1.5 flex-wrap">${renderOcrBadge(bill)}${projectOcrEnabled && bill.images && bill.images.length && (!bill.ocrStatus || bill.ocrStatus === "failed") ? `<button class="text-xs px-2 py-1 bg-amber-50 text-amber-700 rounded-md hover:bg-amber-100 transition-colors border border-amber-200 cursor-pointer whitespace-nowrap" onclick="event.stopPropagation(); triggerBillAnalysisFromList(${bill.id})">Analyse</button>` : ""}<button class="text-xs px-2.5 py-1 bg-indigo-50 text-indigo-600 rounded-md hover:bg-indigo-100 transition-colors border-none cursor-pointer" onclick="event.stopPropagation(); openBillDetail(${bill.id})">View</button></td>
+      <td class="px-3 py-2.5 flex items-center gap-1.5 flex-wrap">${renderOcrBadge(bill)}${projectOcrEnabled && bill.images && bill.images.length && bill.ocrStatus !== "pending" ? `<button class="text-xs px-2 py-1 bg-amber-50 text-amber-700 rounded-md hover:bg-amber-100 transition-colors border border-amber-200 cursor-pointer whitespace-nowrap" onclick="event.stopPropagation(); triggerBillAnalysisFromList(${bill.id})">${(bill.ocrStatus === "done" || (bill.ocrFields && bill.ocrFields.length > 0)) ? "Re-analyse" : "Analyse"}</button>` : ""}<button class="text-xs px-2.5 py-1 bg-indigo-50 text-indigo-600 rounded-md hover:bg-indigo-100 transition-colors border-none cursor-pointer" onclick="event.stopPropagation(); openBillDetail(${bill.id})">View</button></td>
       <td class="px-3 py-2.5"><strong class="text-slate-900">${escapeHtml(bill.billNumber || "-")}</strong>${bill.status === "draft" ? ' <span class="bg-rose-500 text-white rounded text-[0.65rem] px-1.5 py-px align-middle">Entwurf</span>' : ""}</td>
       <td class="px-3 py-2.5 text-slate-500">${escapeHtml(formatDate(bill.date))}</td>
       <td class="px-3 py-2.5">${escapeHtml(bill.email)}</td>
@@ -914,6 +914,9 @@ function showAnalyseButton(bill) {
     var hasImages = bill.images && bill.images.length > 0;
     if (projectOcrEnabled && hasImages && bill.ocrStatus !== "pending") {
         btn.style.display = "";
+        // CR-5: show "Re-analyse" label if bill already has OCR results
+        var hasPriorResults = bill.ocrStatus === "done" || (bill.ocrFields && bill.ocrFields.length > 0);
+        btn.textContent = hasPriorResults ? "Re-analyse" : "Analyse Bill";
     } else {
         btn.style.display = "none";
     }
@@ -921,6 +924,13 @@ function showAnalyseButton(bill) {
 
 async function triggerBillAnalysis() {
     if (currentBillId === null) return;
+    // CR-5: confirm before re-analysing if bill already has OCR results
+    var bill = allBills.find(function (b) { return b.id === currentBillId; });
+    var hasPriorResults = bill && (bill.ocrStatus === "done" || (bill.ocrFields && bill.ocrFields.length > 0));
+    if (hasPriorResults) {
+        var confirmed = confirm("This will re-analyse the bill and overwrite all AI-filled fields. Continue?");
+        if (!confirmed) return;
+    }
     var btn = document.getElementById("analyseBillBtn");
     if (btn) {
         btn.disabled = true;
@@ -932,7 +942,6 @@ async function triggerBillAnalysis() {
         if (j.ok) {
             showMessage("detailResult", "Analysis started - fields will be filled shortly", false);
             // Update local bill state
-            var bill = allBills.find(function (b) { return b.id === currentBillId; });
             if (bill) bill.ocrStatus = "pending";
             var bar = document.getElementById("ocrStatusBar");
             if (bar) {
@@ -955,12 +964,18 @@ async function triggerBillAnalysis() {
 }
 
 async function triggerBillAnalysisFromList(billId) {
+    // CR-5: confirm before re-analysing if bill already has OCR results
+    var bill = allBills.find(function (b) { return b.id === billId; });
+    var hasPriorResults = bill && (bill.ocrStatus === "done" || (bill.ocrFields && bill.ocrFields.length > 0));
+    if (hasPriorResults) {
+        var confirmed = confirm("This will re-analyse the bill and overwrite all AI-filled fields. Continue?");
+        if (!confirmed) return;
+    }
     try {
         var res = await apiFetch("/api/bills/" + billId + "/analyse", { method: "POST" });
         var j = await res.json();
         if (j.ok) {
             // Update local bill state and re-render
-            var bill = allBills.find(function (b) { return b.id === billId; });
             if (bill) bill.ocrStatus = "pending";
             renderFilteredBills();
             startOcrPolling(billId);
@@ -1013,6 +1028,16 @@ async function pollOcrStatus(billId) {
                         }
                     });
                 }
+                // For failure or done-with-no-new-fields: reload history log so it stays fresh
+                if (data.ocrStatus !== "done" || !(data.ocrFields && data.ocrFields.length > 0)) {
+                    fetch("/api/bills/log")
+                        .then(function (r) { return r.json(); })
+                        .then(function (logs) {
+                            allLogs = logs;
+                            refreshBillLogBody();
+                        })
+                        .catch(function () {});
+                }
             } else {
                 // Just re-render the bills list to update badges
                 renderFilteredBills();
@@ -1021,6 +1046,202 @@ async function pollOcrStatus(billId) {
     } catch (e) {
         // Silently ignore polling errors
     }
+}
+
+// ========== Upload Modal OCR (CR-4) ==========
+
+// Track which OCR-filled fields are still unverified in the upload form
+window.uploadOcrFields = [];
+
+function applyUploadOcrHighlights(ocrFields) {
+    window.uploadOcrFields = ocrFields ? ocrFields.slice() : [];
+    // fieldMap: OCR field name → upload form input name attribute
+    var uploadFieldMap = {
+        date: "date",
+        vendor: "vendor",
+        item: "item",
+        comment: "comment",
+        type: "type",
+        brutto19: "brutto19",
+        brutto7: "brutto7",
+        brutto0: "brutto0",
+        // amount: skip (computed from brutto fields)
+    };
+    window.uploadOcrFields.forEach(function (fieldName) {
+        if (fieldName === "amount") return;
+        var inputName = uploadFieldMap[fieldName];
+        if (!inputName) return;
+        var el = document.querySelector("#uploadForm [name='" + inputName + "']");
+        if (!el) return;
+        el.classList.add("ocr-field-highlight");
+        var parentLabel = el.closest("label");
+        if (parentLabel && !parentLabel.querySelector(".ocr-field-label")) {
+            var badge = document.createElement("span");
+            badge.className = "ocr-field-label";
+            badge.textContent = "AI - please verify";
+            parentLabel.appendChild(badge);
+            var verifyBtn = document.createElement("button");
+            verifyBtn.type = "button";
+            verifyBtn.className = "ocr-verify-btn";
+            verifyBtn.textContent = "\u2713 Verified";
+            verifyBtn.setAttribute("data-field", fieldName);
+            (function (fn, elem) {
+                verifyBtn.onclick = function () { clearUploadOcrField(fn, elem); };
+            })(fieldName, el);
+            parentLabel.appendChild(verifyBtn);
+        }
+        // Auto-clear on edit
+        var removeHighlight = function () {
+            clearUploadOcrField(fieldName, el);
+            el.removeEventListener("input", removeHighlight);
+            el.removeEventListener("change", removeHighlight);
+        };
+        el.addEventListener("input", removeHighlight);
+        el.addEventListener("change", removeHighlight);
+    });
+}
+
+function clearUploadOcrField(fieldName, el) {
+    el.classList.remove("ocr-field-highlight");
+    var lbl = el.closest("label");
+    if (lbl) {
+        var badge = lbl.querySelector(".ocr-field-label");
+        if (badge) badge.remove();
+        var btn = lbl.querySelector(".ocr-verify-btn");
+        if (btn) btn.remove();
+    }
+    window.uploadOcrFields = window.uploadOcrFields.filter(function (f) { return f !== fieldName; });
+}
+
+function clearAllUploadOcrHighlights() {
+    var form = document.getElementById("uploadForm");
+    if (!form) return;
+    form.querySelectorAll(".ocr-field-highlight").forEach(function (el) { el.classList.remove("ocr-field-highlight"); });
+    form.querySelectorAll(".ocr-field-label").forEach(function (el) { el.remove(); });
+    form.querySelectorAll(".ocr-verify-btn").forEach(function (el) { el.remove(); });
+    window.uploadOcrFields = [];
+}
+
+async function triggerUploadAnalysis() {
+    var btn = document.getElementById("uploadAnalyseBtn");
+    var statusDiv = document.getElementById("uploadAnalyseStatus");
+    var form = document.getElementById("uploadForm");
+    if (!form || !pendingFiles.length) return;
+
+    // Disable button, show loading state
+    btn.disabled = true;
+    btn.textContent = "Saving & Analysing...";
+    statusDiv.className = "text-sm px-3 py-2 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200";
+    statusDiv.textContent = "Saving bill draft and starting AI analysis...";
+    statusDiv.classList.remove("hidden");
+
+    try {
+        // Step 1: Save draft bill via POST /upload
+        var data = new FormData();
+        data.append("type", form.type.value);
+        data.append("brutto19", form.brutto19.value);
+        data.append("brutto7", form.brutto7.value);
+        data.append("brutto0", form.brutto0.value);
+        data.append("vendor", form.vendor.value);
+        data.append("item", form.item.value);
+        data.append("comment", form.comment.value || "");
+        for (var i = 0; i < pendingFiles.length; i++) {
+            data.append("photos", pendingFiles[i]);
+        }
+        // Empty allocations for draft
+        data.append("motiveAllocations", JSON.stringify([]));
+        data.append("categoryAllocations", JSON.stringify([]));
+
+        var uploadResp = await apiFetch("/upload", { method: "POST", body: data });
+        var uploadJson = await uploadResp.json();
+        if (!uploadJson.ok) throw new Error(uploadJson.error || "Upload failed");
+
+        // Upload endpoint returns { ok: true, id: billId }
+        var billId = uploadJson.id;
+        if (!billId) throw new Error("No bill ID returned from upload");
+
+        window.uploadEditBillId = billId;
+
+        // Step 2: Trigger OCR analysis
+        var analyseResp = await apiFetch("/api/bills/" + billId + "/analyse", { method: "POST" });
+        var analyseJson = await analyseResp.json();
+        if (!analyseJson.ok && analyseResp.status !== 202) throw new Error(analyseJson.error || "Analysis trigger failed");
+
+        statusDiv.textContent = "AI analysis in progress...";
+
+        // Step 3: Poll for completion
+        pollUploadOcr(billId, btn, statusDiv, form);
+
+    } catch (err) {
+        statusDiv.className = "text-sm px-3 py-2 rounded-lg bg-rose-50 text-rose-700 border border-rose-200";
+        statusDiv.textContent = "Error: " + escapeHtml(err.message);
+        statusDiv.classList.remove("hidden");
+        btn.disabled = false;
+        btn.textContent = "&#x2736; Analyse with AI";
+        window.uploadEditBillId = null;
+    }
+}
+
+function pollUploadOcr(billId, btn, statusDiv, form) {
+    var maxAttempts = 30;
+    var attempt = 0;
+    var interval = setInterval(async function () {
+        attempt++;
+        if (attempt > maxAttempts) {
+            clearInterval(interval);
+            statusDiv.className = "text-sm px-3 py-2 rounded-lg bg-rose-50 text-rose-700 border border-rose-200";
+            statusDiv.textContent = "Analysis timed out. You can save the bill manually.";
+            btn.disabled = false;
+            btn.textContent = "&#x2736; Analyse with AI";
+            return;
+        }
+        try {
+            var resp = await fetch("/api/bills/" + billId + "/ocr-status");
+            if (!resp.ok) return;
+            var data = await resp.json();
+            if (data.ocrStatus === "pending") return; // still running
+            clearInterval(interval);
+            if (data.ocrStatus === "done") {
+                // Fetch full bills list to get pre-filled field values for this bill
+                var billsResp = await fetch("/api/bills");
+                var bills = billsResp.ok ? await billsResp.json() : [];
+                var bill = bills.find(function (b) { return b.id === billId; });
+                if (bill) {
+                    // Pre-fill form fields with OCR-extracted values
+                    if (bill.date) form.date.value = bill.date;
+                    if (bill.vendor) form.vendor.value = bill.vendor;
+                    if (bill.item) form.item.value = bill.item;
+                    if (bill.comment) form.comment.value = bill.comment;
+                    if (bill.type) form.type.value = bill.type;
+                    if (bill.brutto19 != null) form.brutto19.value = bill.brutto19;
+                    if (bill.brutto7 != null) form.brutto7.value = bill.brutto7;
+                    if (bill.brutto0 != null) form.brutto0.value = bill.brutto0;
+                    // Trigger netto recalculation and allocation amount update
+                    var b19Input = form.querySelector("[name='brutto19']");
+                    if (b19Input) b19Input.dispatchEvent(new Event("input", { bubbles: true }));
+                    // Update local state
+                    allBills = bills;
+                }
+                // Apply OCR highlights
+                applyUploadOcrHighlights(data.ocrFields || []);
+                // Update submit button
+                var submitBtn = form.querySelector("[type='submit']");
+                if (submitBtn) submitBtn.textContent = "Save Changes";
+                statusDiv.className = "text-sm px-3 py-2 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200";
+                statusDiv.textContent = "AI analysis complete. Review the fields and click Save Changes.";
+                btn.disabled = false;
+                btn.textContent = "Re-analyse";
+            } else {
+                // failed or unexpected status
+                statusDiv.className = "text-sm px-3 py-2 rounded-lg bg-rose-50 text-rose-700 border border-rose-200";
+                statusDiv.textContent = "Analysis failed. You can still save the bill manually or try re-analysing.";
+                btn.disabled = false;
+                btn.textContent = "&#x2736; Analyse with AI";
+            }
+        } catch (e) {
+            // network error, keep polling
+        }
+    }, 2000);
 }
 
 // ========== Bill modal event handlers ==========
