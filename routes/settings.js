@@ -67,7 +67,9 @@ router.put("/api/admin/settings", ensureProjectAdmin, (req, res) => {
   }
   if (ocrApiKey !== undefined && ocrApiKey !== "") {
     // BUG-10: Validate custom base URL when provider is custom
-    const effectiveProvider = ocrProvider !== undefined ? ocrProvider : "openai";
+    // R4-3: Read saved provider from DB when not included in this request
+    const savedSettings = getSettings(projectId);
+    const effectiveProvider = ocrProvider !== undefined ? ocrProvider : (savedSettings.ocrProvider || "openai");
     if (effectiveProvider === "custom") {
       if (!ocrBaseUrl || !ocrBaseUrl.startsWith("https://")) {
         return res.status(400).json({ error: "Custom provider base URL must start with https://" });
@@ -84,6 +86,13 @@ router.put("/api/admin/settings", ensureProjectAdmin, (req, res) => {
     // BUG-10: Validate base URL format when provided
     if (ocrBaseUrl !== "" && !ocrBaseUrl.startsWith("https://")) {
       return res.status(400).json({ error: "ocrBaseUrl must start with https://" });
+    }
+    // R4-2: Also SSRF-check when ocrBaseUrl is updated independently (without ocrApiKey)
+    if (ocrBaseUrl !== "") {
+      const { isPrivateUrl } = require("./ocr");
+      if (isPrivateUrl(ocrBaseUrl)) {
+        return res.status(400).json({ error: "Custom provider base URL must not point to a private or reserved address" });
+      }
     }
     insert.run(projectId, "ocrBaseUrl", JSON.stringify(ocrBaseUrl));
   }
