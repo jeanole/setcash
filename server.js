@@ -55,7 +55,17 @@ if (process.env.NODE_ENV === "production") {
 const app = express();
 
 // Multer instance shared with route files via app.locals
-const upload = multer({ limits: { fileSize: 10 * 1024 * 1024 } }); // 10MB per file
+const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+const upload = multer({
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter(req, file, cb) {
+    if (ALLOWED_IMAGE_TYPES.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only image files (JPEG, PNG, WebP, GIF) are allowed"));
+    }
+  },
+}); // 10MB per file
 app.locals.upload = upload;
 
 // Security: Block access to data directory
