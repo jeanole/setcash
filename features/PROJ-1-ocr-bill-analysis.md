@@ -1459,3 +1459,94 @@ The list-level button label uses `bill.ocrStatus === "done" ? "Re-analyse" : "An
 | NEW-BUG-R4-3 | Low | P3 | [Backend] | effectiveProvider defaults to "openai" instead of reading saved provider from DB |
 
 **Production Readiness:** NOT READY. NEW-BUG-R4-1 (date field save failure) must be fixed -- users will see OCR-extracted dates that are silently discarded. R3-2 (cosmetic) remains open but non-blocking. NEW-BUG-R4-2 and NEW-BUG-R4-3 are defense-in-depth improvements that are mitigated by the runtime SSRF check and are non-blocking.
+
+---
+
+## QA Test Results -- Round 5
+
+**Tested:** 2026-02-28
+**App URL:** http://localhost:3000
+**Tester:** QA Engineer (AI)
+**Focus:** R4-1 fix verification (commit `02e47d3`) -- date field wired through upload and save-after-OCR payloads
+
+### Test 1: Fix 1 -- Upload POST FormData includes date
+
+- [x] `public/js/core.js` line 446: `data.append("date", form.date.value)` present in upload FormData construction
+- [x] Date append (L446) occurs BEFORE the `apiFetch("/upload", ...)` call (L461)
+- [x] Field name `"date"` matches HTML input `name="date"` at `public/index.html` line 448
+
+**Verdict: PASS**
+
+### Test 2: Fix 2 -- saveUploadEditBill PUT payload includes date
+
+- [x] `public/js/core.js` line 559: `date: form.date.value` included in `saveUploadEditBill()` payload object
+- [x] Property name `date` matches PUT handler destructure at `routes/bills.js` line 310
+
+**Verdict: PASS**
+
+### Test 3: Fix 3 -- POST /upload handler reads date from req.body
+
+- [x] `routes/bills.js` line 167: `date` destructured from `req.body` in POST /upload handler
+- [x] INSERT at line 211 uses `date || new Date().toISOString()` (conditional, not hardcoded)
+- [x] Fallback to current timestamp preserved for callers that omit date (Telegram uses its own INSERT at `routes/telegram.js` L64 with `datetime('now')` -- independent path)
+
+**Verdict: PASS**
+
+### Test 4: End-to-end date flow verification
+
+- [x] **Normal upload path:** User fills date input -> `form.date.value` appended to FormData (L446) -> backend destructures (L167) -> INSERT stores user-provided date (L211)
+- [x] **OCR upload path:** `pollUploadOcr()` pre-fills date input (L1211: `if (bill.date) form.date.value = bill.date`) -> user clicks Save -> `saveUploadEditBill()` sends `date: form.date.value` (L559) -> PUT handler detects change (L316-319) and stores it
+- [x] **User edits OCR date:** `applyUploadOcrHighlights()` registers input/change listeners (L1094-1098) that call `clearUploadOcrField()` -> removes highlight -> on save, PUT handler strips "date" from `ocr_fields` (L414-431)
+- [x] **User clicks Verified:** Verify button (L1083-1090) calls `clearUploadOcrField()` -> clears highlight -> date value still sent in PUT payload (L559) -> stored correctly
+- [x] **No date provided:** Empty date input returns `""` -> `"" || new Date().toISOString()` falls back to server timestamp (empty string is falsy in JS)
+
+**Verdict: PASS**
+
+### Test 5: Regression checks
+
+- [x] `pollUploadOcr()` still pre-fills date input from bill data (`public/js/bills.js` L1211)
+- [x] `applyUploadOcrHighlights()` still highlights date field -- `uploadFieldMap` includes `date: "date"` (`public/js/bills.js` L1060)
+- [x] PUT /api/bills/:id still processes date changes (L316-319) and strips from `ocr_fields` (L414-431) -- R3-1 fix intact
+- [x] Normal upload (no OCR) flow unaffected -- all fields including date appended to FormData
+- [x] Telegram uploads still work -- uses independent INSERT with `datetime('now')` at `routes/telegram.js` L64
+
+**Verdict: PASS**
+
+### Test 6: Security spot-check
+
+- [x] Date field value not used in any unsafe context -- no innerHTML, no string concatenation in SQL
+- [x] Date goes through parameterized query in INSERT (`routes/bills.js` L207-208, position 1 at L211) and UPDATE (L318-319 with `?` placeholder)
+- [x] No XSS vector introduced -- HTML input is `type="date"` (browser-constrained format); backend uses parameterized queries; frontend list rendering uses `escapeHtml()`
+
+**Verdict: PASS**
+
+### Still-open items (status confirmation only)
+
+| ID | Description | Status |
+|----|-------------|--------|
+| R4-2 | Settings save path missing isPrivateUrl check on ocrBaseUrl | **STILL PRESENT** (Low, mitigated by runtime SSRF check in `routes/ocr.js` L76-87) |
+| R4-3 | effectiveProvider defaults to "openai" instead of reading saved provider | **STILL PRESENT** (Low, non-blocking) |
+| R3-2 | Cosmetic label inconsistency (list button label condition) | **STILL PRESENT** (Low, non-blocking) |
+
+### Bugs Found
+
+None. All 3 edits in the R4-1 fix are correct and complete.
+
+### Summary
+
+| Test | Scope | Result |
+|------|-------|--------|
+| Test 1 | Upload POST FormData includes date | **PASS** |
+| Test 2 | saveUploadEditBill PUT payload includes date | **PASS** |
+| Test 3 | POST /upload handler reads date from req.body | **PASS** |
+| Test 4 | End-to-end date flow (5 sub-scenarios) | **PASS** |
+| Test 5 | Regression checks (5 items) | **PASS** |
+| Test 6 | Security spot-check (3 items) | **PASS** |
+
+**R4-1 Fix Verification: PASS (all 3 edits verified, all flows tested)**
+
+**New bugs found: 0**
+
+**Still-open low-severity items: 3** (R4-2, R4-3, R3-2 -- all non-blocking, unchanged from Round 4)
+
+**Production Readiness:** READY. The R4-1 date field fix is correct and complete. The date value flows end-to-end from the upload form through FormData/JSON to the database in all paths (normal upload, OCR upload, save-after-OCR). The 3 remaining open items are all Low severity and non-blocking for deployment.
