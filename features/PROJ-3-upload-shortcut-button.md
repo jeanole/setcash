@@ -1,6 +1,6 @@
 # PROJ-3: Upload Shortcut Button in Bills Table
 
-## Status: Planned
+## Status: In Review
 **Created:** 2026-02-27
 **Last Updated:** 2026-02-27
 
@@ -626,3 +626,92 @@ _To be added by /architecture_
 
 ## Deployment
 _To be added by /deploy_
+
+## QA Test Results (Round 3)
+
+---
+
+**Tested:** 2026-02-28
+**App URL:** http://localhost:3000
+**Tester:** QA Engineer (AI)
+**Method:** Source code inspection — `routes/bills.js`, `server.js`
+**Round 3 Focus:** BUG-8 fix verification only (all other items passed in Round 2 and the code they test is unchanged)
+
+---
+
+### BUG-8 Fix Verification
+
+#### Check 1: All 4 multer call sites have the inline error callback
+
+Each of the 4 upload route handlers in `routes/bills.js` was inspected:
+
+| Site | Route | Lines | Pattern |
+|------|-------|-------|---------|
+| 1 | `POST /upload` | 163-166 | `upload.array("photos", 10)(req, res, (err) => { if (err) return res.status(400).json({ error: err.message }); next(); })` |
+| 2 | `POST /api/bills/:id/images` | 617-620 | `upload.array("photos", 10)(req, res, (err) => { if (err) return res.status(400).json({ error: err.message }); next(); })` |
+| 3 | `PUT /api/bills/:id/images/:imageId` | 693-696 | `upload.single("photo")(req, res, (err) => { if (err) return res.status(400).json({ error: err.message }); next(); })` |
+| 4 | `POST /api/bills/:id/image` (legacy) | 788-791 | `upload.single("photo")(req, res, (err) => { if (err) return res.status(400).json({ error: err.message }); next(); })` |
+
+All 4 sites have the exact required inline error callback pattern.
+
+**Result: PASS**
+
+#### Check 2: Error message from `fileFilter` flows through correctly
+
+`server.js` line 65: `cb(new Error("Only image files (JPEG, PNG, WebP, GIF) are allowed"))`.
+
+When multer's `fileFilter` calls `cb(new Error(...))`, multer passes the error as the first argument to the upload callback. All 4 sites respond with `res.status(400).json({ error: err.message })`, which yields:
+
+```json
+{ "error": "Only image files (JPEG, PNG, WebP, GIF) are allowed" }
+```
+
+with HTTP 400. The error propagation chain is complete and correct across all 4 endpoints.
+
+**Result: PASS**
+
+#### Check 3: Valid uploads (err is falsy) still call `next()` — regression check
+
+All 4 inline callbacks use the pattern:
+```js
+(err) => {
+  if (err) return res.status(400).json({ error: err.message });
+  next();
+}
+```
+When `fileFilter` accepts a valid image via `cb(null, true)`, multer invokes the callback with `err = null`. The `if (err)` branch is not taken and `next()` is called unconditionally. No route handler body was modified by the BUG-8 fix — upload processing logic is fully intact.
+
+**Result: PASS**
+
+---
+
+### BUG-8 Status: FIXED
+
+All three verification checks pass. The multer fileFilter rejection now correctly returns HTTP 400 with a JSON error body on all 4 upload endpoints. The fix is complete, targeted, and introduces no regression.
+
+### SEC-3 Final Result: PASS
+
+Both halves of server-side file-type validation are now in place:
+- `fileFilter` in `server.js` rejects non-image MIME types (confirmed in Round 2 — BUG-7 fix)
+- Inline error callback in all 4 `routes/bills.js` multer call sites converts the rejection to a structured `400 { error: "..." }` JSON response (confirmed in Round 3 — BUG-8 fix)
+
+SEC-3 was PARTIAL in Round 2 due to BUG-8. With BUG-8 now fixed, SEC-3 is fully satisfied.
+
+### Regression Result: PASS
+
+Valid image uploads pass through all 4 error callbacks unchanged — `next()` is called on success, route handlers execute as before. No other code in any upload route handler was modified.
+
+---
+
+### Summary
+
+| Item | Result |
+|------|--------|
+| BUG-8 — Multer error returns 400 JSON (not 500 HTML) | FIXED |
+| SEC-3 — Server-side file-type validation complete | PASS |
+| Regression — Valid uploads unaffected | PASS |
+| All Round 2 items (9 AC, 5 EC, 4 OCR, 4/5 SEC, 5 REG) | Carried forward PASS |
+
+**Production Ready: YES**
+
+All bugs found across Rounds 1 and 2 have been resolved (BUG-1 through BUG-7 fixed in their respective commits; BUG-4 accepted as below minimum breakpoint; BUG-8 fixed and verified in Round 3). The upload shortcut button feature is complete and safe to deploy.
