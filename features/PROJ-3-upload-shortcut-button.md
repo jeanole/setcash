@@ -365,5 +365,264 @@ _To be added by /architecture_
 - **Production Ready:** NO
 - **Recommendation:** Fix BUG-1 (no table reload), BUG-5 (duplicate submit), BUG-3 (stale thumbnails), and BUG-6 (date regression in OCR draft) before deployment. BUG-2 (error message timeout) and BUG-7 (server-side file validation) should also be resolved. BUG-4 is a low-priority cosmetic edge case below the minimum supported breakpoint.
 
+## QA Test Results (Round 2)
+
+---
+
+**Tested:** 2026-02-28
+**App URL:** http://localhost:3000
+**Tester:** QA Engineer (AI)
+**Method:** Source code inspection — `public/index.html`, `public/js/bills.js`, `public/js/core.js`, `public/js/utils.js`, `routes/bills.js`, `server.js`
+**Round 2 Focus:** Bug fix verification (BUG-1 through BUG-7) + full re-test of all ACs, ECs, OCR, Security, and Regression items
+
+---
+
+### Round 1 Bug Fix Verification
+
+#### BUG-1: Bills table does not reload after successful upload via modal
+- **Status: FIXED**
+- `core.js` lines 490-496: after calling `closeUploadModal(true)`, the success path now calls `loadBills()` unconditionally (not gated on modal state). The fix is correct and covers both modal and non-modal upload paths.
+- Regression check: non-modal upload also benefits from the same `loadBills()` call — no regression.
+
+#### BUG-2: Upload error message disappears after 3 seconds in modal
+- **Status: FIXED**
+- `utils.js` line 38: `if (!isError) setTimeout(() => { el.textContent = ''; el.className = ''; }, 3000)` — the `setTimeout` is now guarded by `!isError`. Error messages persist indefinitely; only success messages auto-clear after 3 seconds.
+- Regression check: success messages in all other parts of the app still auto-clear — confirmed unaffected.
+
+#### BUG-3: Stale thumbnails shown when upload modal reopened after mid-fill close
+- **Status: FIXED**
+- `bills.js` line 1372-1373: `closeUploadModal()` now directly clears thumbnails via `uploadThumbnails.innerHTML = ""` rather than calling the locally-scoped `renderUploadThumbnails`. The DOM is cleared correctly regardless of function scope.
+- Regression check: `renderUploadThumbnails` inside `init()` in `core.js` is still used for live thumbnail rendering during file selection — unaffected.
+
+#### BUG-4: Overflow guard below 300px — confirm status
+- **Status: ACCEPTED (no fix applied)**
+- No responsive truncation or wrapping class was added to the heading row. Accepted as below the minimum supported breakpoint (375px). At 375px the layout is correct.
+
+#### BUG-5: Submit button not disabled during in-flight upload — duplicate bill risk
+- **Status: FIXED**
+- `core.js` lines 461-462: `submitBtn.disabled = true; submitBtn.textContent = "Uploading..."` is set immediately before `apiFetch("/upload", ...)`. Lines 470 and 498: button is re-enabled in both the success path and the error path.
+- Regression check: button re-enables on error so retries are possible — confirmed correct.
+
+#### BUG-6: Date field missing from OCR draft in `triggerUploadAnalysis()` — PROJ-1 regression
+- **Status: FIXED**
+- `bills.js` line 1148: `data.append("date", form.date.value)` is now present in `triggerUploadAnalysis()` FormData construction, consistent with the standard submit path (`core.js` line 446) and OCR save path (`core.js` line 571).
+- Regression check: date field is not double-appended; each path appends it exactly once.
+
+#### BUG-7: No server-side file-type validation in multer
+- **Status: FIXED — but a new related bug introduced (see BUG-8)**
+- `server.js` lines 58-68: `ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"]` and a `fileFilter` function now validate `file.mimetype` against the allowed list. Files with disallowed MIME types trigger `cb(new Error("Only image files (JPEG, PNG, WebP, GIF) are allowed"))`.
+- **NEW FINDING:** The `fileFilter` correctly rejects disallowed files, but when it calls `next(err)`, there is no error-handler middleware in the route chain at `/upload`, `/api/bills/:id/images`, or the two `PUT` image-replacement endpoints. Express's built-in error handler will respond with a `500 Internal Server Error` (HTML body), not a `400 Bad Request` (JSON body). This means a rejected file returns an unhandled 500 rather than the expected 4xx JSON `{ error: "..." }`. Logged as BUG-8.
+
+---
+
+### Acceptance Criteria Status
+
+#### AC-1: "+ Upload" button displayed in Bills table header
+- [x] Button present in `#tab-bills` at lines 488-491 of `public/index.html`
+- [x] Placed inside `div.flex.items-center.justify-between.mb-4` next to the "All Bills" `<h2>`
+
+**Result: PASS**
+
+#### AC-2: Button visible to all logged-in project members (not admin-only)
+- [x] Button element has no `admin-only` class and no JS `isAdmin` guard
+- [x] `openUploadModal()` in `bills.js` has no role check
+
+**Result: PASS**
+
+#### AC-3: Clicking button opens upload form in a modal overlay (not a pane switch)
+- [x] `openUploadModal()` sets `modal.style.display = "flex"` — no `switchPane()` call
+- [x] Modal is `position: fixed; inset: 0` with `z-[1300]`
+
+**Result: PASS**
+
+#### AC-4: Modal contains same upload form fields as existing Upload pane
+- [x] `openUploadModal()` physically moves `#uploadForm` card into `#uploadModalBody`
+- [x] All fields present: photo, type, brutto amounts, vendor, item, comment, date, motive + category allocation widgets
+
+**Result: PASS**
+
+#### AC-5: Modal can be dismissed without submitting
+- [x] × button calls `closeUploadModal()` (no submit)
+- [x] Backdrop click: `onclick="if(event.target===this)closeUploadModal()"` on wrapper div
+- [x] `closeUploadModal()` does not call form submit
+
+**Result: PASS**
+
+#### AC-6: On successful submission, modal closes and Bills table reloads (was FAIL in R1)
+- [x] Success path calls `closeUploadModal(true)` (line 493)
+- [x] Immediately followed by `loadBills()` (line 496) — BUG-1 fix confirmed effective
+
+**Result: PASS** (was FAIL in Round 1 — now FIXED)
+
+#### AC-7: Button uses "+" symbol
+- [x] Button text is `+ Upload`
+
+**Result: PASS**
+
+#### AC-8: Button style consistent with app UI — Tailwind classes, no inline styles
+- [x] Button uses only Tailwind utility classes; no `style=""` attribute
+- [x] Modal wrapper uses `style="display:none"` — consistent with all other modals in the app
+
+**Result: PASS**
+
+#### AC-9: Button and modal usable on mobile (375px), tablet (768px), desktop (1440px)
+- [x] Modal: `p-4 md:p-5` padding, `w-full max-w-2xl` width cap, `max-h-[90vh] overflow-y-auto`
+- [x] Button label is short ("+ Upload") — fits in heading row at 375px
+
+**Result: PASS**
+
+---
+
+### Edge Cases Status
+
+#### EC-1: Submit fails — error shown in modal, modal stays open (was PARTIAL in R1)
+- [x] Error message shown via `showMessage("uploadResult", ..., true)` inside moved card — visible in modal
+- [x] Modal not closed on error — only success path calls `closeUploadModal()`
+- [x] Error message now persists (BUG-2 fix: `if (!isError)` guards the `setTimeout`)
+
+**Result: PASS** (was PARTIAL in Round 1 — now FIXED)
+
+#### EC-2: User closes modal mid-fill — form state discarded, thumbnails cleared (was PARTIAL in R1)
+- [x] `form.reset()` called, `pendingFiles = []` set (line 1370-1371)
+- [x] `uploadThumbnails.innerHTML = ""` now clears thumbnail DOM directly (line 1372-1373) — BUG-3 fix confirmed
+- [x] Bills table not touched on close
+
+**Result: PASS** (was PARTIAL in Round 1 — now FIXED)
+
+#### EC-3: Mobile layout — modal near-full-screen, button fits heading row
+- [x] Responsive classes confirmed (same as R1)
+
+**Result: PASS**
+
+#### EC-4: No project selected — Bills pane inaccessible; button inherits guard
+- [x] Confirmed — unchanged from R1
+
+**Result: PASS**
+
+#### EC-5: Duplicate submission — submit button disabled during in-flight request (was FAIL in R1)
+- [x] `submitBtn.disabled = true` set before `apiFetch()` (line 462)
+- [x] Re-enabled in success path (line 470) and error path (line 498)
+- [x] `finally` block pattern not needed — both branches re-enable
+
+**Result: PASS** (was FAIL in Round 1 — now FIXED)
+
+---
+
+### OCR Interaction Results
+
+#### OCR-1: Modal upload triggers OCR pipeline
+- [x] Same `POST /upload` endpoint — OCR pipeline unchanged
+
+**Result: PASS**
+
+#### OCR-2: OCR field results populated correctly after modal upload
+- [x] `pollUploadOcr()` pre-fills same DOM nodes — unaffected by modal context
+
+**Result: PASS**
+
+#### OCR-3: CSRF token included in modal upload request
+- [x] `apiFetch()` injects `X-CSRF-Token` for all POST/PUT requests
+
+**Result: PASS**
+
+#### OCR-4: Date field wired through in OCR draft path (was PARTIAL in R1)
+- [x] `data.append("date", form.date.value)` present at `bills.js` line 1148 — BUG-6 fix confirmed
+
+**Result: PASS** (was PARTIAL in Round 1 — now FIXED)
+
+---
+
+### Security Audit Results
+
+#### SEC-1: POST /upload still requires auth — no new unprotected endpoints
+- [x] `ensureProjectAccess` middleware unchanged on all upload endpoints
+
+**Result: PASS**
+
+#### SEC-2: Modal uses `apiFetch()` — CSRF token carried in all state-mutating requests
+- [x] All POST/PUT calls go through `apiFetch()` which calls `withCsrf()`
+
+**Result: PASS**
+
+#### SEC-3: Server-side file-type validation now in place (was PARTIAL in R1)
+- [x] `ALLOWED_IMAGE_TYPES` array and `fileFilter` present in `server.js` — BUG-7 core fix confirmed
+- [ ] **BUG-8 (Medium — Backend):** When `fileFilter` rejects a file, multer calls `next(err)`. There is no error-handling middleware in the route chain for `/upload`, `/api/bills/:id/images`, or the two image-replacement `PUT` endpoints. Express's default error handler returns a `500 Internal Server Error` (HTML body) instead of a `400 Bad Request` (JSON). The frontend `apiFetch` call receives a non-JSON 500 response, causing `resp.json()` to throw an unhandled exception in the upload handler (`core.js` line 468: `const json = await resp.json()`). The user sees a JS error rather than a clean error message.
+
+**Result: PARTIAL** — file-type validation logic is correct but error response path is broken (BUG-8)
+
+#### SEC-4: XSS — user-supplied values in modal use textContent / escapeHtml
+- [x] `showMessage()` uses `el.textContent` — not `innerHTML`
+- [x] Error paths in `saveUploadEditBill` use `escapeHtml()`
+- [x] OCR status messages use `textContent`
+
+**Result: PASS**
+
+#### SEC-5: No secrets in new JS code
+- [x] No hardcoded credentials or tokens in any modified JS files
+
+**Result: PASS**
+
+---
+
+### Regression Test Results
+
+#### REG-1: Existing Upload pane (non-modal) still works after fixes
+- [x] `closeUploadModal()` thumbnail clearing now uses `uploadThumbnails.innerHTML = ""` — does not affect the Upload pane when modal is never opened
+- [x] All event listeners attached at `DOMContentLoaded` survive DOM moves
+- [x] Submit button disable/enable pattern applies equally in pane and modal contexts
+
+**Result: PASS**
+
+#### REG-2: Bills table loads normally without modal open
+- [x] `loadBills()` called unconditionally after upload success — no modal state dependency introduced
+
+**Result: PASS**
+
+#### REG-3: PROJ-1 OCR flow via standard Upload pane unaffected
+- [x] BUG-6 fix adds `data.append("date", ...)` to `triggerUploadAnalysis()` — date now preserved in OCR draft for both pane and modal
+
+**Result: PASS**
+
+#### REG-4: `showMessage()` auto-clear for success messages not broken by BUG-2 fix
+- [x] `if (!isError) setTimeout(...)` — success messages still auto-clear after 3 seconds; fix is minimal and targeted
+
+**Result: PASS**
+
+#### REG-5: BUG-7 multer fix does not break valid image uploads
+- [x] Valid JPEG, PNG, WebP, GIF files pass `ALLOWED_IMAGE_TYPES.includes(file.mimetype)` and reach `cb(null, true)` — no regression for valid uploads
+
+**Result: PASS**
+
+---
+
+### Bugs Found (Round 2)
+
+#### BUG-8: Multer fileFilter rejection returns 500 HTML instead of 400 JSON — unhandled error
+- **Severity:** Medium
+- **Skill:** [Backend]
+- **Steps to Reproduce:**
+  1. Using `curl` or a request tool, POST a file with a non-image MIME type (e.g., `application/pdf` or `text/html`) to `POST /upload`
+  2. The `fileFilter` callback fires with `cb(new Error("Only image files (JPEG, PNG, WebP, GIF) are allowed"))`
+  3. Multer calls `next(err)` — no error-handler middleware in the route chain catches it
+  4. Express's default error handler responds with a `500 Internal Server Error` (HTML page)
+  5. The frontend `apiFetch` receives a non-JSON 500, causing `resp.json()` to throw, and the upload form handler crashes silently
+- **Root Cause:** All four multer-using route handlers in `routes/bills.js` (lines 157-164, 608-615, 682-688, 778-779) call `upload.array/single()(req, res, next)` without a following error-handler middleware argument. The `fileFilter` error is never converted to a structured `{ error: "..." }` JSON response with a 4xx status code.
+- **Expected:** Rejected file returns `400 Bad Request` with JSON body `{ "error": "Only image files (JPEG, PNG, WebP, GIF) are allowed" }`
+- **Actual:** Rejected file returns `500 Internal Server Error` with HTML body; frontend JS throws on `resp.json()`
+- **Priority:** Fix before deployment
+
+---
+
+### Summary
+- **Round 1 Bugs Fixed:** 6/7 (BUG-1 FIXED, BUG-2 FIXED, BUG-3 FIXED, BUG-4 ACCEPTED/no fix, BUG-5 FIXED, BUG-6 FIXED, BUG-7 FIXED with caveat — see BUG-8)
+- **Acceptance Criteria:** 9/9 passed (all Round 1 failures resolved)
+- **Edge Cases:** 5/5 passed (all Round 1 failures resolved)
+- **OCR Interaction:** 4/4 passed (OCR-4 failure resolved)
+- **Security:** 4/5 passed (SEC-3 PARTIAL — BUG-8 new finding)
+- **Regression:** 5/5 passed
+- **New Bugs Found:** 1 (BUG-8 — medium severity, backend)
+- **Production Ready:** NO (BUG-8 must be fixed: multer rejects return unhandled 500 instead of 400 JSON)
+- **Recommendation:** Fix BUG-8 (add multer error-handler middleware to all four upload endpoints returning 400 JSON) before deployment. All Round 1 bugs are resolved. Feature is otherwise complete and correct.
+
 ## Deployment
 _To be added by /deploy_
