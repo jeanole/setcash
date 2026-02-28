@@ -1,8 +1,10 @@
 # PROJ-3: Upload Shortcut Button in Bills Table
 
-## Status: In Review
+## Status: Deployed
 **Created:** 2026-02-27
-**Last Updated:** 2026-02-27
+**Last Updated:** 2026-02-28
+**Deployed:** 2026-02-28
+**Tag:** v1.10.0-PROJ-3
 
 ## Dependencies
 - None (UI-only addition — reuses existing upload form markup)
@@ -625,7 +627,12 @@ _To be added by /architecture_
 - **Recommendation:** Fix BUG-8 (add multer error-handler middleware to all four upload endpoints returning 400 JSON) before deployment. All Round 1 bugs are resolved. Feature is otherwise complete and correct.
 
 ## Deployment
-_To be added by /deploy_
+
+**Deployed:** 2026-02-28
+**Tag:** v1.10.0-PROJ-3
+**Branch:** production
+**Commits merged:** feat, fix (BUG-1–8), test (QA rounds 1–3)
+**QA approval:** Round 3 — Production Ready: YES
 
 ## QA Test Results (Round 3)
 
