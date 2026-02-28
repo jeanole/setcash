@@ -483,6 +483,11 @@ async function init() {
                     [],
                     0,
                 );
+                // Close upload modal if open (form state already reset above)
+                var uploadModal = document.getElementById("uploadModal");
+                if (uploadModal && uploadModal.style.display !== "none") {
+                    closeUploadModal(true);
+                }
             } else {
                 showMessage("uploadResult", "Error: " + (json.error || "unknown"), true);
             }
@@ -583,6 +588,11 @@ async function saveUploadEditBill(form) {
             // Re-initialize allocation widgets
             createAllocationWidget("uploadMotiveAlloc", "motive", motivesData, [], 0);
             createAllocationWidget("uploadCategoryAlloc", "category", categoriesData, [], 0);
+            // Close upload modal if open (form state already reset above)
+            var uploadModal = document.getElementById("uploadModal");
+            if (uploadModal && uploadModal.style.display !== "none") {
+                closeUploadModal(true);
+            }
             // Reload bills list
             if (typeof loadProjectData === "function") loadProjectData();
         } else {

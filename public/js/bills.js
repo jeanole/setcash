@@ -1310,3 +1310,78 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 });
+
+// ========== Upload Modal ==========
+
+var _uploadCardClasses = ["bg-white", "rounded-xl", "shadow-sm", "border", "border-slate-100", "p-5", "md:p-6", "mb-5"];
+
+function openUploadModal() {
+    var tabUpload = document.getElementById("tab-upload");
+    var modal = document.getElementById("uploadModal");
+    var modalBody = document.getElementById("uploadModalBody");
+    if (!tabUpload || !modal || !modalBody) return;
+
+    // Get the direct child card of #tab-upload
+    var card = tabUpload.querySelector(":scope > div");
+    if (!card) return;
+
+    // Hide the card's own "Upload Bill" heading (duplicates the modal header)
+    var cardHeading = card.querySelector("h2");
+    if (cardHeading) cardHeading.style.display = "none";
+
+    // Remove card-level styling classes (they look wrong inside the modal body)
+    _uploadCardClasses.forEach(function (cls) { card.classList.remove(cls); });
+
+    // Move the card into the modal body
+    modalBody.appendChild(card);
+
+    // Show modal and lock body scroll
+    modal.style.display = "flex";
+    document.body.style.overflow = "hidden";
+}
+
+function closeUploadModal(skipReset) {
+    var tabUpload = document.getElementById("tab-upload");
+    var modal = document.getElementById("uploadModal");
+    var modalBody = document.getElementById("uploadModalBody");
+    if (!modal) return;
+
+    // Move the card back into #tab-upload (if it was moved there)
+    var card = modalBody ? modalBody.querySelector(":scope > div") : null;
+    if (card && tabUpload) {
+        // Restore card-level styling classes
+        _uploadCardClasses.forEach(function (cls) { card.classList.add(cls); });
+
+        // Restore the card's own heading visibility
+        var cardHeading = card.querySelector("h2");
+        if (cardHeading) cardHeading.style.display = "";
+
+        tabUpload.appendChild(card);
+    }
+
+    // Hide modal and unlock body scroll
+    modal.style.display = "none";
+    document.body.style.overflow = "";
+
+    // Reset form state unless caller already handled it (e.g. success path)
+    if (!skipReset) {
+        var form = document.getElementById("uploadForm");
+        if (form) form.reset();
+        pendingFiles = [];
+        if (typeof renderUploadThumbnails === "function") renderUploadThumbnails();
+        if (typeof clearAllUploadOcrHighlights === "function") clearAllUploadOcrHighlights();
+        window.uploadEditBillId = null;
+        window.uploadOcrFields = [];
+        var analyseSection = document.getElementById("uploadAnalyseSection");
+        if (analyseSection) analyseSection.style.display = "none";
+        var analyseStatus = document.getElementById("uploadAnalyseStatus");
+        if (analyseStatus) analyseStatus.classList.add("hidden");
+        var submitBtn = form ? form.querySelector("[type='submit']") : null;
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Upload"; }
+        // Re-initialize allocation widgets
+        if (typeof createAllocationWidget === "function") {
+            createAllocationWidget("uploadMotiveAlloc", "motive", motivesData, [], 0);
+            createAllocationWidget("uploadCategoryAlloc", "category", categoriesData, [], 0);
+        }
+    }
+}
