@@ -1,0 +1,340 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum ProjectRole {
+  user
+  admin
+}
+
+enum BillStatus {
+  confirmed
+  pending
+  approved
+  rejected
+  paid
+}
+
+enum OcrStatus {
+  pending
+  done
+  failed
+}
+
+// ---------------------------------------------------------------------------
+// Models
+// ---------------------------------------------------------------------------
+
+model User {
+  id            String   @id @default(uuid())
+  legacyId      Int?
+  email         String   @unique
+  passwordHash  String
+  isSuperAdmin  Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  defaultProjectId String?
+  defaultProject   Project? @relation("UserDefaultProject", fields: [defaultProjectId], references: [id])
+
+  memberships   ProjectMember[]
+  notifications Notification[]
+  telegramLinks TelegramLink[]
+  telegramLinkCodes TelegramLinkCode[]
+}
+
+model Project {
+  id        String   @id @default(uuid())
+  legacyId  Int?
+  name      String
+  subtitle  String?
+  createdAt DateTime @default(now())
+
+  members       ProjectMember[]
+  positions     ProjectPosition[]
+  settings      ProjectSettings[]
+  bills         Bill[]
+  motives       Motive[]
+  categories    Category[]
+  budgetMatrix  BudgetMatrix[]
+  vgeld         Vgeld[]
+  editLogs      EditLog[]
+  ocrLogs       OcrLog[]
+  notifications Notification[]
+  telegramLinks TelegramLink[]
+  telegramLinkCodes TelegramLinkCode[]
+  defaultForUsers User[] @relation("UserDefaultProject")
+}
+
+model ProjectMember {
+  id        String      @id @default(uuid())
+  legacyId  Int?
+  projectId String
+  userEmail String
+  role      ProjectRole @default(user)
+
+  project    Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  positionId String?
+  position   ProjectPosition? @relation(fields: [positionId], references: [id], onDelete: SetNull)
+
+  @@unique([projectId, userEmail])
+  @@index([projectId])
+  @@index([userEmail])
+}
+
+model ProjectPosition {
+  id        String @id @default(uuid())
+  legacyId  Int?
+  projectId String
+  name      String
+
+  project Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  members ProjectMember[]
+
+  @@unique([projectId, name])
+  @@index([projectId])
+}
+
+model ProjectSettings {
+  projectId String
+  key       String
+  value     String?
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, key])
+  @@index([projectId])
+}
+
+model Bill {
+  id                 String      @id @default(uuid())
+  legacyId           Int?
+  projectId          String
+  submittedByEmail   String
+  date               DateTime
+  billNumber         String?
+  type               String?
+  vendor             String?
+  item               String?
+  comment            String?
+  motiveLegacy       String?
+  brutto19           Decimal     @default(0)
+  brutto7            Decimal     @default(0)
+  brutto0            Decimal     @default(0)
+  nettoAmount        Decimal     @default(0)
+  grossAmount        Decimal     @default(0)
+  status             BillStatus  @default(confirmed)
+  ocrStatus          OcrStatus?
+  ocrFields          Json?
+  telegramCaption    String?
+  filename           String?
+  createdAt          DateTime    @default(now())
+
+  project    Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  images     BillImage[]
+  motives    BillMotive[]
+  categories BillCategory[]
+  editLogs   EditLog[]
+  ocrLogs    OcrLog[]
+
+  @@index([projectId])
+  @@index([submittedByEmail])
+  @@index([status])
+}
+
+model BillImage {
+  id        String   @id @default(uuid())
+  legacyId  Int?
+  billId    String
+  filename  String?
+  filePath  String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  bill Bill @relation(fields: [billId], references: [id], onDelete: Cascade)
+
+  @@index([billId])
+}
+
+model BillMotive {
+  id         String  @id @default(uuid())
+  legacyId   Int?
+  billId     String
+  motiveId   String
+  percentage Decimal @default(100)
+
+  bill   Bill   @relation(fields: [billId], references: [id], onDelete: Cascade)
+  motive Motive @relation(fields: [motiveId], references: [id], onDelete: Cascade)
+
+  @@unique([billId, motiveId])
+  @@index([billId])
+  @@index([motiveId])
+}
+
+model BillCategory {
+  id         String  @id @default(uuid())
+  legacyId   Int?
+  billId     String
+  categoryId String
+  percentage Decimal @default(100)
+
+  bill     Bill     @relation(fields: [billId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([billId, categoryId])
+  @@index([billId])
+  @@index([categoryId])
+}
+
+model Motive {
+  id        String  @id @default(uuid())
+  legacyId  Int?
+  projectId String
+  name      String
+  budget    Decimal @default(0)
+
+  project      Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  billMotives  BillMotive[]
+  budgetMatrix BudgetMatrix[]
+
+  @@index([projectId])
+}
+
+model Category {
+  id        String  @id @default(uuid())
+  legacyId  Int?
+  projectId String
+  name      String
+  budget    Decimal @default(0)
+
+  project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  billCategories BillCategory[]
+  budgetMatrix  BudgetMatrix[]
+
+  @@index([projectId])
+}
+
+model BudgetMatrix {
+  id        String  @id @default(uuid())
+  legacyId  Int?
+  projectId String
+  motiveId  String
+  categoryId String
+  amount    Decimal @default(0)
+
+  project  Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  motive   Motive   @relation(fields: [motiveId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, motiveId, categoryId])
+  @@index([projectId])
+  @@index([motiveId])
+  @@index([categoryId])
+}
+
+model Vgeld {
+  id        String   @id @default(uuid())
+  legacyId  Int?
+  projectId String
+  date      DateTime
+  amount    Decimal
+  fromUser  String?
+  toUser    String
+  createdBy String?
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+model EditLog {
+  id        String   @id @default(uuid())
+  legacyId  Int?
+  projectId String
+  timestamp DateTime @default(now())
+  user      String
+  billId    String?
+  changes   Json
+  source    String   @default("user")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  bill    Bill?   @relation(fields: [billId], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+  @@index([billId])
+}
+
+model OcrLog {
+  id           String    @id @default(uuid())
+  legacyId     Int?
+  projectId    String?
+  billId       String?
+  timestamp    DateTime  @default(now())
+  provider     String?
+  status       String?
+  fieldsWritten Json?
+  aiResponse   Json?
+  errorDetail  String?
+
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  bill    Bill?    @relation(fields: [billId], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+  @@index([billId])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  legacyId  Int?
+  userEmail String
+  type      String
+  message   String
+  projectId String?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user    User     @relation(fields: [userEmail], references: [email], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([userEmail])
+  @@index([projectId])
+}
+
+model TelegramLink {
+  id             String   @id @default(uuid())
+  legacyId       Int?
+  projectId      String
+  telegramUserId String
+  userEmail      String
+  linkedAt       DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userEmail], references: [email], onDelete: Cascade)
+
+  @@unique([projectId, telegramUserId])
+  @@index([projectId])
+  @@index([userEmail])
+}
+
+model TelegramLinkCode {
+  code      String   @id
+  userEmail String
+  projectId String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userEmail], references: [email], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([userEmail])
+  @@index([projectId])
+}
