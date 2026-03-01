@@ -1893,3 +1893,143 @@ Without `sameSite`, modern browsers default to `Lax`, which provides basic CSRF 
 **CR-4 and CR-5 status:** Both are fully implemented and passing all acceptance criteria. INDEX.md status should be updated from "In Progress" / "Pending Review" to "Deployed".
 
 **Production Readiness:** READY. No Critical or High severity bugs. The one Medium bug (netto_amount during re-analysis) affects data display accuracy only during re-analysis flows and does not cause data loss -- the brutto values themselves are correct, and netto is recalculated correctly when the user subsequently edits and saves the bill. The Low bug is a defense-in-depth improvement. Both are non-blocking for continued production operation.
+
+---
+
+## QA Test Results (Round 7)
+
+**Tested:** 2026-03-01
+**App URL:** http://localhost:3000
+**Tester:** QA Engineer (AI)
+**Scope:** Focused fix-verification for NEW-BUG-R6-1 and NEW-BUG-R6-2 from Round 6
+**Fix Commit:** `6b5f4ab` -- `fix(PROJ-1): recalculate netto_amount on re-analysis, harden session cookie`
+
+---
+
+### Part 1: NEW-BUG-R6-1 Fix Verification (netto_amount recalculation)
+
+**Bug Description (Round 6):** During re-analysis, brutto fields were overwritten by new AI values, but `netto_amount` was not recalculated because the guard condition `(bill.amount || 0) === 0` failed (bill already had a non-zero amount from the first analysis). This left netto_amount stale and inconsistent with the new brutto breakdown.
+
+**Fix Applied:** Line 450 of `routes/ocr.js` changed from:
+```javascript
+if (anyAmountWritten && (bill.amount || 0) === 0) {
+```
+to:
+```javascript
+if (anyAmountWritten && (isReanalysis || (bill.amount || 0) === 0)) {
+```
+
+#### R6-1-FIX-1: Guard condition now includes `isReanalysis`
+- [x] **PASS** -- Line 450 reads `isReanalysis || (bill.amount || 0) === 0`. During re-analysis (`isReanalysis = true`), the recalculation block always fires regardless of existing `bill.amount`.
+
+#### R6-1-FIX-2: Re-analysis scenario -- brutto fields and netto recalculated consistently
+- [x] **PASS** -- Traced full re-analysis path: (1) `fieldChecks` at lines 421-423 pass for brutto fields when `isReanalysis=true`, (2) `anyAmountWritten` becomes true, (3) line 450 fires due to `isReanalysis`, (4) lines 451-458 recalculate `amount` (sum of brutto) and `netto_amount` (sum of brutto/VAT-rate) using new AI values for written fields and existing bill values for unwritten fields.
+
+#### R6-1-FIX-3: Regression -- first-time analysis with zero amount still recalculates
+- [x] **PASS** -- When `isReanalysis=false` and `bill.amount=0`: `(false || (0 === 0))` evaluates to `true`. Recalculation block fires as before.
+
+#### R6-1-FIX-4: Regression -- first-time analysis with user-entered amount preserves it
+- [x] **PASS** -- When `isReanalysis=false` and `bill.amount=100`: (1) `fieldChecks.amount` at line 424: `(false || (100 === 0))` = `false`, so AI amount is skipped; (2) Recalc guard at line 450: `(false || (100 === 0))` = `false`, so recalculation is skipped. User amount preserved.
+
+#### R6-1-FIX-5: Check for double-push of "amount" to writtenFields
+- [ ] **OBSERVATION** -- Pre-existing issue (not introduced by this fix): When AI returns both brutto fields and a non-zero `amount`, and the recalculation block fires, `"amount"` is pushed to `writtenFields` twice -- once by `fieldChecks` (line 436) and once by the recalc block (line 459). This causes: (a) `ocr_fields` JSON contains duplicate `"amount"` entry, (b) SQL UPDATE has `amount = ?` twice (harmless -- last value wins, and the recalculated value is the correct one). This existed before the R6-1 fix was applied. See NEW-BUG-R7-1 below.
+
+**NEW-BUG-R6-1 verdict: FIXED.** The core issue (netto_amount not recalculated during re-analysis) is resolved. The recalculation guard now correctly includes `isReanalysis`, ensuring netto_amount stays consistent with brutto fields during re-analysis.
+
+---
+
+### Part 2: NEW-BUG-R6-2 Fix Verification (session cookie)
+
+**Bug Description (Round 6):** Session cookie lacked `secure` flag and `sameSite` attribute. Without `secure`, the cookie could be transmitted over HTTP in production. Without explicit `sameSite`, behavior depended on browser defaults.
+
+**Fix Applied:** `server.js` cookie configuration expanded from single-line to multi-line with new attributes.
+
+#### R6-2-FIX-1: `secure` set conditionally for production
+- [x] **PASS** -- Line 109: `secure: process.env.NODE_ENV === "production"`. Cookie is secure-only in production, allowing HTTP in development.
+
+#### R6-2-FIX-2: `sameSite` set to `"lax"`
+- [x] **PASS** -- Line 110: `sameSite: "lax"`. Provides explicit CSRF protection. Cross-site POST requests will not include the session cookie.
+
+#### R6-2-FIX-3: Regression -- `httpOnly` still true
+- [x] **PASS** -- Line 107: `httpOnly: true` is still present. Cookie remains inaccessible to client-side JavaScript.
+
+#### R6-2-FIX-4: Regression -- `maxAge` still set
+- [x] **PASS** -- Line 108: `maxAge: 24 * 60 * 60 * 1000` (24 hours) is still present and unchanged.
+
+**NEW-BUG-R6-2 verdict: FIXED.** Session cookie now has proper `secure` and `sameSite` attributes.
+
+---
+
+### Part 3: Broader Regression Spot-Check
+
+#### REG-1: fieldChecks guards for first-time writes
+- [x] **PASS** -- Lines 416-425: All eight field checks use `isReanalysis || <empty-check>`. When `isReanalysis` is false, original empty/zero guards still apply. No regressions.
+
+#### REG-2: isReanalysis detection logic
+- [x] **PASS** -- Line 323: `const isReanalysis = !!(priorBill && priorBill.ocr_status === "done")`. Only bills previously completed analysis are treated as re-analysis. Failed or pending bills are treated as first-time. Unchanged from prior rounds.
+
+#### REG-3: SESSION_SECRET enforcement
+- [x] **PASS** -- Lines 42-53: Production refuses to start with weak/missing/short secret (exits with error). Development shows warning. Unchanged.
+
+#### REG-4: Security headers
+- [x] **PASS** -- Lines 81-88: All five headers present: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `X-XSS-Protection: 1; mode=block`, `Referrer-Policy: origin-when-cross-origin`, `Strict-Transport-Security: max-age=31536000; includeSubDomains`. Unchanged.
+
+---
+
+### Part 4: New Issues Found (Round 7)
+
+#### NEW-BUG-R7-1: Duplicate "amount" entry in writtenFields and ocr_fields [LOW] (Pre-existing)
+
+- **Severity:** Low
+- **Priority:** P4
+- **Tag:** **[Backend]**
+- **File:** `C:/Users/jensmoeller/code/vbudget/routes/ocr.js` lines 424, 432-436, 455-459
+- **Pre-existing:** Yes -- this issue existed before the R6-1 fix and was not introduced by it.
+
+**Description:**
+
+When the AI returns both brutto fields (brutto19/7/0) and a non-zero `amount`, and the recalculation block fires (line 450), the string `"amount"` is pushed to `writtenFields` twice:
+1. First at line 436 via the `fieldChecks.amount` check (line 424)
+2. Second at line 459 by the recalculation block
+
+This causes two minor data quality issues:
+- `ocr_fields` stored in the database contains a duplicate `"amount"` entry, e.g. `["vendor","brutto19","amount","amount"]`
+- The SQL UPDATE statement at line 463 contains `amount = ?` twice with different values (the AI-extracted raw amount and the brutto-sum recalculated amount). SQLite uses the last value, which is the recalculated amount -- this is actually the correct behavior since the recalculated value is more consistent.
+
+**Impact:** Cosmetic only. The duplicate in `ocr_fields` does not affect UI behavior (`Array.includes("amount")` returns the same result with duplicates). The SQL duplicate produces correct results because the last SET value wins. The editlog at lines 482-489 uses a dictionary, so duplicates are harmlessly overwritten.
+
+**Steps to Reproduce:**
+1. Upload a bill with no amounts
+2. Trigger AI analysis where the AI returns brutto19=100 AND amount=100
+3. Check the database: `SELECT ocr_fields FROM bills WHERE id = ?` -- will show `["vendor","brutto19","amount","amount"]`
+
+**Expected:** `writtenFields` should contain `"amount"` only once. The recalculation block (line 459) should check whether `"amount"` is already in `writtenFields` before pushing, or the `fieldChecks.amount` entry should be removed since the recalculation block always computes a more accurate amount from brutto values.
+
+---
+
+### Bugs Found Summary
+
+| ID | Severity | Priority | Tag | Title | New or Pre-existing |
+|----|----------|----------|-----|-------|---------------------|
+| NEW-BUG-R7-1 | Low | P4 | [Backend] | Duplicate "amount" entry in writtenFields and ocr_fields | Pre-existing |
+
+**Total new bugs: 1 (0 Critical, 0 High, 0 Medium, 1 Low)**
+
+---
+
+### Round 7 Summary
+
+| Test Phase | Scope | Result |
+|------------|-------|--------|
+| Phase 1 | NEW-BUG-R6-1 fix verification (5 tests) | **4/5 PASS, 1 observation (pre-existing Low)** |
+| Phase 2 | NEW-BUG-R6-2 fix verification (4 tests) | **4/4 PASS** |
+| Phase 3 | Broader regression spot-check (4 tests) | **4/4 PASS** |
+
+**R6 bugs fixed: 2/2**
+- NEW-BUG-R6-1 (Medium): netto_amount recalculation -- **FIXED**
+- NEW-BUG-R6-2 (Low): session cookie hardening -- **FIXED**
+
+**New bugs found: 1** (Low severity, pre-existing)
+- NEW-BUG-R7-1 (Low): Duplicate "amount" in writtenFields -- cosmetic data quality issue, no functional impact
+
+**Production Readiness:** READY. Both R6 bugs are confirmed fixed. The only new finding is a pre-existing Low/P4 cosmetic issue with no functional impact. No Critical or High severity bugs remain.
