@@ -16,7 +16,7 @@
 | [BUG-4](BUG-4-production-startup-fails-ocr-encryption-secret.md) | Bug | Production Startup Fails — OCR_ENCRYPTION_SECRET Not Set | Resolved | High | PROJ-1 | 2026-02-27 |
 | [BUG-5](BUG-5-project-delete-csrf-token-error.md) | Bug | Project Delete Button Fails with CSRF Token Error | Resolved | Critical | PROJ-2 | 2026-02-27 |
 | CR-5 | CR | Re-Analyse Button for Already-Analysed Bills | Pending Review | Medium | PROJ-1 | 2026-02-27 |
-| [PROJ-3](PROJ-3-upload-shortcut-button.md) | Feature | Upload Shortcut Button in Bills Table | In Review | — | — | 2026-02-27 |
+| [PROJ-3](PROJ-3-upload-shortcut-button.md) | Feature | Upload Shortcut Button in Bills Table | Deployed | — | — | 2026-02-28 |
 | [BUG-6](BUG-6-reanalyse-fields-not-reset-to-unverified.md) | Bug | Re-analyse Does Not Reset Fields to Unverified State | Resolved | High | PROJ-1 | 2026-02-27 |
 | [BUG-7](BUG-7-reanalyse-no-history-log-entry.md) | Bug | Re-analysis Produces No Bill History Log Entry | Resolved | Medium | PROJ-1 | 2026-02-27 |
 | BUG-8 | Bug | Multer fileFilter Rejection Returns 500 HTML Instead of 400 JSON | Resolved | High | PROJ-3 | 2026-02-28 |

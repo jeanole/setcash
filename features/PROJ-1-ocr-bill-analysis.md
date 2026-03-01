@@ -1550,3 +1550,486 @@ None. All 3 edits in the R4-1 fix are correct and complete.
 **Still-open low-severity items: 3** (R4-2, R4-3, R3-2 -- all non-blocking, unchanged from Round 4)
 
 **Production Readiness:** READY. The R4-1 date field fix is correct and complete. The date value flows end-to-end from the upload form through FormData/JSON to the database in all paths (normal upload, OCR upload, save-after-OCR). The 3 remaining open items are all Low severity and non-blocking for deployment.
+
+---
+
+## QA Test Results -- Round 6
+
+**Tested:** 2026-02-28
+**App URL:** http://localhost:3000 (code-level review; no running instance)
+**Tester:** QA Engineer (AI)
+**Scope:** Full regression of all previous bug fixes; security red-team audit; CR-3/CR-4/CR-5 completeness verification; edge case re-check; status update on 3 previously-open low-severity items.
+
+---
+
+### Part 1: Previous Bug Fix Regression (9 items)
+
+#### R2-BUG-1 (Critical): Property name mismatch (`bill.ocr_status` vs `bill.ocrStatus`)
+- [x] **STILL FIXED.** `public/js/bills.js` consistently uses `bill.ocrStatus` and `bill.ocrFields` (camelCase) matching the API response at `routes/bills.js` lines 150-151. Zero occurrences of snake_case `bill.ocr_status` or `bill.ocr_fields` found in any frontend JS file.
+- **Verdict: PASS**
+
+#### R2-BUG-2 (High): Non-admin users cannot see OCR features
+- [x] **STILL FIXED.** `public/js/core.js` line 170: `projectOcrEnabled = !!projectInfo.ocrEnabled` reads from `/api/project-info` (public endpoint). `routes/projects.js` line 281: `ocrEnabled: !!settings.ocrEnabled` included in `/api/project-info` response without admin guard.
+- **Verdict: PASS**
+
+#### R2-BUG-3 (Medium): PUT `/api/bills/:id` does not process date field
+- [x] **STILL FIXED.** `routes/bills.js` lines 319-323: `if (date !== undefined && date !== bill.date) { changes.date = date; updates.push("date = ?"); params.push(date); }`. Date is correctly handled in the PUT handler.
+- **Verdict: PASS**
+
+#### R2-BUG-4 (Low): Analyse button shown for already-analysed bills
+- [x] **STILL FIXED.** `public/js/bills.js` line 301: button label uses `(bill.ocrStatus === "done" || (bill.ocrFields && bill.ocrFields.length > 0)) ? "Re-analyse" : "Analyse"`. `showAnalyseButton()` at line 915: hides button when `ocrStatus === "pending"`.
+- **Verdict: PASS**
+
+#### R2-BUG-5 (Medium): Form field name mismatches
+- [x] **STILL FIXED.** Detail form submit handler at `public/js/bills.js` lines 1284-1291: sends `date: form.date.value` along with all other fields. `public/js/core.js` line 571: `saveUploadEditBill` payload includes `date: form.date.value`. Backend PUT handler at `routes/bills.js` line 313 destructures `date`.
+- **Verdict: PASS**
+
+#### R2-BUG-6 (Low): SESSION_SECRET warning only in ocr.js
+- [x] **STILL FIXED.** `server.js` lines 42-53: production mode (`process.exit(1)`) and dev mode (`console.warn`) checks for weak SESSION_SECRET at application startup, before any route handler registration.
+- **Verdict: PASS**
+
+#### R3-BUG-3 (Medium): Re-analysis after failed analysis overwrites user data
+- [x] **STILL FIXED.** `routes/ocr.js` line 323: `const isReanalysis = !!(priorBill && priorBill.ocr_status === "done");`. Only `"done"` triggers re-analysis mode; `"failed"` bills use first-time analysis behavior (field guards remain active).
+- **Verdict: PASS**
+
+#### R3-BUG-4 (Medium): SSRF guard does not block full 127.0.0.0/8 loopback range
+- [x] **STILL FIXED.** `routes/ocr.js` line 88: `/^127\./.test(hostname)` blocks the entire 127.0.0.0/8 range. Full RFC1918 ranges also blocked: `/^10\./`, `/^192\.168\./`, `/^172\.(1[6-9]|2\d|3[01])\./`.
+- **Verdict: PASS**
+
+#### R4-BUG-1 (Medium): Date field value never sent to backend
+- [x] **STILL FIXED.**
+  - Upload POST: `public/js/core.js` line 446: `data.append("date", form.date.value)`
+  - Save-after-OCR PUT: `public/js/core.js` line 571: `date: form.date.value`
+  - Backend POST /upload: `routes/bills.js` line 170: `date` destructured from `req.body`; line 214: `date || new Date().toISOString()`
+  - Backend PUT: `routes/bills.js` lines 319-323: date detected, stored, and stripped from `ocr_fields`
+- **Verdict: PASS**
+
+**Bug Fix Regression Summary: 9/9 PASS. All previously-fixed bugs remain fixed.**
+
+---
+
+### Part 2: Previously-Open Low-Severity Items (3 items)
+
+#### R4-2: Settings save path missing isPrivateUrl check on standalone ocrBaseUrl update
+- [x] **NOW FIXED.** `routes/settings.js` lines 85-97: when `ocrBaseUrl` is updated independently (without `ocrApiKey`), `isPrivateUrl()` is now called (lines 91-95). Both the `startsWith("https://")` format check (line 87-89) and the SSRF check (lines 91-95) are applied.
+- **Verdict: FIXED -- no longer open**
+
+#### R4-3: effectiveProvider defaults to "openai" instead of reading saved provider
+- [x] **NOW FIXED.** `routes/settings.js` line 71-72: `const savedSettings = getSettings(projectId);` reads the current DB state. `const effectiveProvider = ocrProvider !== undefined ? ocrProvider : (savedSettings.ocrProvider || "openai");` uses the saved provider from DB as priority, with `"openai"` only as a final fallback for truly unconfigured projects.
+- **Verdict: FIXED -- no longer open**
+
+#### R3-2: List button label condition inconsistent with confirmation trigger condition
+- [x] **NOW FIXED.** `public/js/bills.js` line 301: list button label now uses `(bill.ocrStatus === "done" || (bill.ocrFields && bill.ocrFields.length > 0)) ? "Re-analyse" : "Analyse"`, which matches the broader condition used in `triggerBillAnalysisFromList()` at lines 969 (`bill.ocrStatus === "done" || (bill.ocrFields && bill.ocrFields.length > 0)`). Both conditions are now identical.
+- **Verdict: FIXED -- no longer open**
+
+**Previously-Open Items Summary: 3/3 NOW FIXED. All three low-severity items that were open since Round 4/5 have been resolved.**
+
+---
+
+### Part 3: Original PROJ-1 Acceptance Criteria (14 items)
+
+#### AC-1: AI Analysis settings sub-tab
+- [x] `public/index.html` contains AI Analysis settings sub-tab with toggle, provider dropdown, API key input, base URL input, and save button. `public/js/admin.js` lines 335-367 load OCR settings; lines 600-624 handle save.
+- **Verdict: PASS**
+
+#### AC-2: Settings stored per project
+- [x] `routes/settings.js` lines 58-97: all four OCR keys (`ocrEnabled`, `ocrProvider`, `ocrApiKey`, `ocrBaseUrl`) are stored in `project_settings` table scoped by `projectId`.
+- **Verdict: PASS**
+
+#### AC-3: API key never in GET response
+- [x] `routes/settings.js` lines 17-19: `settings.ocrApiKeyMasked = maskApiKey(settings.ocrApiKey); delete settings.ocrApiKey;`. Raw encrypted key is deleted before sending response.
+- **Verdict: PASS**
+
+#### AC-4: Analyse button visible when OCR enabled
+- [x] `public/js/bills.js` line 301: button rendered when `projectOcrEnabled && bill.images && bill.images.length && bill.ocrStatus !== "pending"`. `showAnalyseButton()` at line 915 uses the same logic for the detail modal.
+- **Verdict: PASS**
+
+#### AC-5: Clicking Analyse returns 202
+- [x] `routes/ocr.js` line 566: `res.status(202).json({ ok: true, message: "Analysis started" })`.
+- **Verdict: PASS**
+
+#### AC-6: Analysing indicator while job runs
+- [x] `renderOcrBadge()` at line 719-721: `ocrStatus === "pending"` renders spinner badge. `updateOcrStatusBar()` at lines 892-894: shows spinner in detail modal. `startOcrPolling()` at line 991 polls every 3 seconds.
+- **Verdict: PASS**
+
+#### AC-7: Results shown on reload
+- [x] `renderOcrBadge()` at lines 722-727: `ocrStatus === "done"` with non-empty `ocrFields` shows amber badge. `applyOcrFieldHighlights()` at lines 735-789 applies amber highlights and verify buttons. `pollOcrStatus()` success path (lines 1022-1030) reloads bill data and re-opens detail.
+- **Verdict: PASS**
+
+#### AC-8: Telegram auto-trigger
+- [x] `routes/telegram.js` lines 132-135 (media group) and 170-173 (single photo): `if (settings.ocrEnabled) { getRunOcrJob()(billId, projectId)... }`. Confirmation messages include OCR note (lines 139, 176).
+- **Verdict: PASS**
+
+#### AC-9: Background job logic
+- [x] `runOcrJob()` at `routes/ocr.js` lines 295-513: sets pending (326), reads settings (357-363), validates config (365-371), reads image (388-396), calls AI (409), writes fields with guards (416-461), sets done/ocr_fields (466-469), logs (472-497), creates failure notification (329-352). All paths covered.
+- **Verdict: PASS**
+
+#### AC-10: Database columns migration
+- [x] `db.js` lines 197-208: `ocr_status TEXT DEFAULT NULL` and `ocr_fields TEXT DEFAULT NULL` migrations via try/catch pattern. `editlog.source` migration at lines 264-269. `ocr_log` table at lines 180-194.
+- **Verdict: PASS**
+
+#### AC-11: OCR fields stripping on edit
+- [x] `routes/bills.js` lines 417-434: strips edited fields (including date at lines 419) from `ocr_fields`. When `ocrFields` becomes empty, sets both `ocr_fields = NULL` and `ocr_status = NULL` (lines 425-429). Amount auto-strip when brutto fields edited (lines 421-423).
+- **Verdict: PASS**
+
+#### AC-12: Badge rendering
+- [x] `renderOcrBadge()` at lines 717-733: pending (spinner), done+fields (amber), failed (red), done+no-fields (empty). All four states correctly rendered. Badge content is hardcoded strings -- no XSS risk.
+- **Verdict: PASS**
+
+#### AC-13: Field highlights in detail view
+- [x] `applyOcrFieldHighlights()` at lines 735-789: applies `ocr-field-highlight` CSS class, creates badge via `textContent` (XSS-safe), creates verify button, attaches input/change listeners to remove highlight on edit. `clearOcrFieldHighlights()` at lines 791-800 cleans up on modal close.
+- **Verdict: PASS**
+
+#### AC-14: Failure notification
+- [x] `routes/ocr.js` lines 330-336: `fail()` helper creates notification in `notifications` table with `type = 'ocr_failed'` and message including reason. Scoped by `projectId`.
+- **Verdict: PASS**
+
+**Original ACs Summary: 14/14 PASS.**
+
+---
+
+### Part 4: CR-3 Verification (Field Verification + Bill History)
+
+#### CR3-1: Verify button per AI-filled field
+- [x] `applyOcrFieldHighlights()` at lines 771-777: creates button with class `ocr-verify-btn`, text "Verified", `data-field` attribute, and `onclick` calling `verifyOcrField(fieldName, el)`. Button is keyboard-accessible (native `<button>` element).
+- **Verdict: PASS**
+
+#### CR3-2: PATCH /api/bills/:id/verify-field endpoint
+- [x] `routes/bills.js` lines 471-521: validates field against `ALLOWED_OCR_FIELDS` whitelist (line 469: `["date", "vendor", "item", "type", "brutto19", "brutto7", "brutto0", "amount", "comment"]`), checks bill ownership via `project_id`, removes field from `ocr_fields`, auto-clears "amount" if it's the last remaining field (lines 495-497), writes editlog entry with `source = "user"` and `_event: "verified"`, returns updated `ocrFields` and `ocrStatus`.
+- **Verdict: PASS**
+
+#### CR3-3: Bill history with source column
+- [x] `db.js` lines 264-269: migration adds `source TEXT DEFAULT 'user'` to `editlog`. `routes/ocr.js` lines 488-497: AI analysis writes editlog entry with `source = 'ai'` and `user = "AI / ${provider}"`. `routes/bills.js` line 278-286: bill creation writes editlog entry with `source = 'user'` and `_event: "created"`. `routes/ocr.js` lines 342-352: analysis failure writes editlog entry with `source = 'ai'` and `_event: "analysis_failed"`.
+- **Verdict: PASS**
+
+#### CR3-4: History rendering (AI vs user entries)
+- [x] `renderLogEntry()` at `public/js/bills.js` lines 565-604: handles `_event: "created"` (emerald style), `_event: "verified"` (amber checkmark), `source: "ai"` (indigo AI badge), and regular user edits. All dynamic content uses `escapeHtml()`. `formatChanges()` at lines 554-563 also uses `escapeHtml()`.
+- **Verdict: PASS**
+
+#### CR3-5: "Created" event logged on upload
+- [x] `routes/bills.js` lines 277-286: `INSERT INTO editlog` with `_event: "created"`, `source: "user"`, and `user: req.user.email` immediately after bill INSERT.
+- **Verdict: PASS**
+
+**CR-3 Summary: 5/5 PASS.**
+
+---
+
+### Part 5: CR-4 Verification (Analyse in Upload Modal)
+
+#### CR4-1: Analyse button visible when photos attached and OCR enabled
+- [x] `public/js/core.js` lines 355-358: `renderUploadThumbnails()` sets `analyseSection.style.display` based on `pendingFiles.length > 0 && window.projectOcrEnabled`. HTML markup at `public/index.html` line 339: section hidden by default with `style="display:none"`.
+- **Verdict: PASS**
+
+#### CR4-2: Saves draft + triggers OCR
+- [x] `triggerUploadAnalysis()` at `public/js/bills.js` lines 1125-1184: (1) builds FormData with all form fields including date (line 1148), (2) POSTs to `/upload` via `apiFetch`, (3) captures `billId` from response, (4) POSTs to `/api/bills/${billId}/analyse`, (5) starts polling via `pollUploadOcr()`. Loading state managed (lines 1131-1136). Error handling in catch block (lines 1176-1183).
+- **Verdict: PASS**
+
+#### CR4-3: Pre-fills form on success
+- [x] `pollUploadOcr()` success path at lines 1205-1234: fetches full bills list, finds bill by ID, pre-fills `form.date.value`, `form.vendor.value`, `form.item.value`, `form.comment.value`, `form.type.value`, `form.brutto19.value`, `form.brutto7.value`, `form.brutto0.value`. Triggers netto recalculation via `b19Input.dispatchEvent(new Event("input", { bubbles: true }))`. Updates `allBills` state. Applies OCR highlights. Changes submit button to "Save Changes".
+- **Verdict: PASS**
+
+#### CR4-4: OCR highlights in upload form
+- [x] `applyUploadOcrHighlights()` at lines 1056-1101: iterates `ocrFields`, applies `ocr-field-highlight` class, creates badge (`textContent` -- XSS-safe) and verify button. Verify button calls `clearUploadOcrField()`. `uploadFieldMap` includes `date: "date"` (line 1060). Auto-clear on edit via input/change listeners (lines 1094-1100).
+- **Verdict: PASS**
+
+#### CR4-5: Save-after-OCR uses PUT
+- [x] `saveUploadEditBill()` at `public/js/core.js` lines 551-613: when `window.uploadEditBillId` is set (line 1164 of bills.js), the submit handler routes to `saveUploadEditBill()` which calls `PUT /api/bills/${billId}` via `apiFetch`. Payload includes `date: form.date.value` (line 571). Resets all state on success (lines 586-604). Re-initializes allocation widgets.
+- **Verdict: PASS**
+
+#### CR4-6: Error handling
+- [x] `triggerUploadAnalysis()` catch block (lines 1176-1183): sets red styling on status div, displays escaped error message, re-enables button, clears `uploadEditBillId`. `pollUploadOcr()` failure path (lines 1236-1241): shows red status message. Timeout path (lines 1191-1197): shows timeout message after 30 attempts (60 seconds). Network errors in polling silently caught (line 1243).
+- **Verdict: PASS**
+
+**CR-4 Summary: 6/6 PASS.**
+
+---
+
+### Part 6: CR-5 Verification (Re-Analyse Button)
+
+#### CR5-1: Button label changes to "Re-analyse"
+- [x] `showAnalyseButton()` at lines 917-919: `var hasPriorResults = bill.ocrStatus === "done" || (bill.ocrFields && bill.ocrFields.length > 0); btn.textContent = hasPriorResults ? "Re-analyse" : "Analyse Bill";`. List-level button at line 301 uses the same condition.
+- **Verdict: PASS**
+
+#### CR5-2: Confirmation dialog before re-analysis
+- [x] `triggerBillAnalysis()` at lines 929-933: `if (hasPriorResults) { var confirmed = confirm("This will re-analyse the bill and overwrite all AI-filled fields. Continue?"); if (!confirmed) return; }`. `triggerBillAnalysisFromList()` at lines 969-973: same pattern.
+- **Verdict: PASS**
+
+#### CR5-3: Backend re-analysis overwrites fields
+- [x] `routes/ocr.js` line 323: `isReanalysis = !!(priorBill && priorBill.ocr_status === "done")`. When true, all `fieldChecks` bypass the zero/empty guard via `isReanalysis ||` (lines 417-424), allowing AI to overwrite existing values.
+- [x] Backend resets `ocr_fields` to the full set of newly-written fields (line 466-468), so all overwritten fields show as unverified.
+- **Verdict: PASS**
+
+#### CR5-4: First-time Analyse has no confirmation
+- [x] When `hasPriorResults === false`, the `if (hasPriorResults)` block is skipped entirely and the POST proceeds immediately without `confirm()`.
+- **Verdict: PASS**
+
+**CR-5 Summary: 4/4 PASS.**
+
+---
+
+### Part 7: Security Audit (15 checks)
+
+| # | Check | Status | Notes |
+|---|-------|--------|-------|
+| SEC-1 | API key never leaked to client | PASS | `routes/settings.js` lines 17-19: `delete settings.ocrApiKey` before response. Only `ocrApiKeyMasked` (last 4 chars of decrypted key) is returned. |
+| SEC-2 | API key encrypted at rest (AES-256-GCM) | PASS | `routes/ocr.js` lines 37-48: `encryptApiKey()` uses AES-256-GCM with random 12-byte IV and SHA-256-derived key. Auth tag stored alongside ciphertext. Decryption failure returns `null` (lines 50-65). |
+| SEC-3 | SSRF protection on custom URLs | PASS | Runtime check in `routes/ocr.js` lines 378-384 (always fires before outbound request). Save-time check in `routes/settings.js` lines 73-81 (when API key + custom provider) and lines 91-95 (standalone base URL update). Blocks localhost, full 127.0.0.0/8, .local, link-local, RFC1918, unspecified addresses. |
+| SEC-4 | Auth on all OCR endpoints | PASS | POST `/api/bills/:id/analyse`: `ensureAuth, ensureProjectAccess` (line 541). GET `/api/bills/:id/ocr-status`: `ensureAuth, ensureProjectAccess` (line 519). PATCH `/api/bills/:id/verify-field`: `ensureAuth, ensureProjectAccess` (line 471). GET `/api/admin/ocr-log`: `ensureProjectAdmin` (line 102). All bill queries scope by `project_id`. |
+| SEC-5 | CSRF on all state-changing requests | PASS | `middleware.js` lines 90-130: `ensureCsrf` validates `X-CSRF-Token` header for all non-GET/HEAD/OPTIONS requests. Frontend `apiFetch()` function (in utils.js) sends the CSRF token on all requests. `verifyOcrField()` uses `apiFetch` (line 819). `triggerBillAnalysis*()` uses `apiFetch` (lines 940, 975). |
+| SEC-6 | XSS in OCR-extracted fields | PASS | All OCR values flow through `.value` property assignment on form inputs (lines 1212-1219), which is XSS-safe. Badge/button content uses `textContent` (lines 767-774), not `innerHTML`. `renderLogEntry()` uses `escapeHtml()` on all dynamic content (lines 572-603). `renderOcrBadge()` uses hardcoded strings (lines 717-733). |
+| SEC-7 | SQL injection prevention | PASS | All queries use parameterized statements (`?` placeholders). Dynamic column names in UPDATE at `routes/ocr.js` line 461 are from hardcoded `fieldChecks` keys, not user input. |
+| SEC-8 | Cross-project data access | PASS | All bill queries include `AND project_id = ?`. `runOcrJob` reads image from `bill_images` table via bill ID, but the `POST /api/bills/:id/analyse` handler verifies bill belongs to `req.user.currentProjectId` before calling `runOcrJob` (line 552-554). OCR log scoped by project (line 118). |
+| SEC-9 | SESSION_SECRET enforcement | PASS | `server.js` lines 42-48: `process.exit(1)` in production for weak/missing/default/short SESSION_SECRET. Dev mode warns. `routes/ocr.js` lines 16-30: same enforcement for OCR encryption secret. |
+| SEC-10 | Security headers | PASS | `server.js` lines 81-87: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `X-XSS-Protection: 1; mode=block`, `Referrer-Policy: origin-when-cross-origin`, `Strict-Transport-Security: max-age=31536000; includeSubDomains`. |
+| SEC-11 | Input validation on endpoints | PASS | Bill ID validated with `parseInt` + range check on all OCR endpoints. `ocrProvider` validated against enum (settings.js lines 62-65). `verify-field` field name validated against whitelist (bills.js line 477). Base URL validated with `startsWith("https://")` + SSRF check. |
+| SEC-12 | Gemini API key not in URL | PASS | `routes/ocr.js` line 183: `"x-goog-api-key": apiKey` in headers, not in URL query parameter. |
+| SEC-13 | No secrets in console logging | PASS | All `[OCR]` console output logs provider name, field names, HTTP status codes, and elapsed time. API keys are never logged. `writeLog()` stores `provider` but not `apiKey`. Error responses are truncated to 500 chars before logging (lines 160, 204, 256). |
+| SEC-14 | Encryption key derivation | PASS | `getEncryptionKey()` at line 33: SHA-256 hash of base secret produces 32-byte key. Uses `OCR_ENCRYPTION_SECRET` if available, falls back to `SESSION_SECRET`, then to default. The default fallback is guarded by startup warnings/exit. IV is randomly generated per encryption (12 bytes). |
+| SEC-15 | Path traversal on image reads | PASS | Image filenames are constructed server-side from controlled components (`userFolder`, `billNumber`, `dateStr`, extension). Telegram filenames use `tg_<timestamp>_<random>.<ext>`. `path.join(DATA_DIR, "uploads", img.file)` resolves the final path. No user-controlled path segments. |
+
+**Security Audit Summary: 15/15 PASS. No security vulnerabilities found.**
+
+---
+
+### Part 8: Edge Cases (10 checks)
+
+| # | Case | Status | Notes |
+|---|------|--------|-------|
+| EC-1 | No image on bill | PASS | `routes/ocr.js` line 393: `if (!img \|\| !img.file) return fail("No image attached to this bill", "InputError");` |
+| EC-2 | Multi-image bill (first image only) | PASS | `routes/ocr.js` line 390: `LIMIT 1` on query, ordered by `sort_order, id`. |
+| EC-3 | Provider 429 rate limit | PASS | All three providers check for `resp.status === 429` and throw `"Rate limit exceeded"` (lines 166, 210, 262). |
+| EC-4 | Invalid API key / 401 | PASS | OpenAI/Custom and Claude check 401 (lines 165, 261). Gemini checks for 400 with `API_KEY` in message (line 209). |
+| EC-5 | Partial extraction | PASS | Each field independently checked in `fieldChecks` (lines 416-425). Null fields are skipped. Non-null, non-writable fields go to `skippedFields` (line 438). |
+| EC-6 | OCR disabled for project | PASS | Backend: `runOcrJob` checks `settings.ocrEnabled` (line 365). Telegram: checks before calling `runOcrJob` (lines 132, 170). Frontend: `projectOcrEnabled` controls button visibility. |
+| EC-7 | User edits bill before analysis finishes | PASS | First-time analysis only writes to empty/zero fields (fieldChecks guards at lines 417-424). User data is never overwritten during initial analysis. |
+| EC-8 | Server restart mid-job | PASS | Bill stays at `ocr_status = 'pending'`. Endpoint returns 409 if re-triggered while pending (line 557-558). User can click Analyse again after restart. |
+| EC-9 | Duplicate analysis prevention | PASS | `routes/ocr.js` lines 557-558: returns 409 when `bill.ocr_status === "pending"`. |
+| EC-10 | Amount auto-clear on verify | PASS | `routes/bills.js` lines 495-497: if `remaining.length === 1 && remaining[0] === "amount"`, remaining is set to `[]`, clearing both `ocr_fields` and `ocr_status`. |
+
+**Edge Cases Summary: 10/10 PASS.**
+
+---
+
+### Part 9: New Issues Found (Round 6)
+
+#### NEW-BUG-R6-1: Re-analysis does not recalculate netto_amount when brutto fields are overwritten [MEDIUM]
+
+- **Severity:** Medium
+- **Priority:** P2
+- **Tag:** **[Backend]**
+- **File:** `C:/Users/jensmoeller/code/vbudget/routes/ocr.js` lines 442-462
+
+**Description:**
+
+During re-analysis (`isReanalysis = true`), the `fieldChecks` bypass allows brutto fields (brutto19, brutto7, brutto0) to be overwritten with new AI-extracted values. The `amount` field is also overwritten with the AI's extracted amount via `fieldChecks` (line 424, `isReanalysis` bypass).
+
+However, the `netto_amount` recalculation block at lines 448-457 is guarded by `(bill.amount || 0) === 0`. During re-analysis, `bill.amount` is non-zero (set by the first analysis), so this guard fails and the recalculation is skipped. As a result:
+
+1. `brutto19/7/0` are updated with new AI values
+2. `amount` is updated with the AI's raw extracted amount (via fieldChecks)
+3. `netto_amount` retains its old value from the previous analysis
+
+The bill ends up with inconsistent brutto/netto values. The net amount displayed to the user is stale and does not reflect the new brutto breakdown.
+
+**Steps to Reproduce:**
+1. Upload a bill with no amounts, trigger AI analysis
+2. AI fills brutto19=50.00 -> amount recalculated as 50.00, netto_amount=42.02
+3. Click "Re-analyse" and confirm
+4. AI now extracts brutto19=80.00 -> brutto19 updated to 80.00, but netto_amount remains 42.02 (should be 67.23)
+
+**Expected:** During re-analysis, the `netto_amount` recalculation guard should also check `isReanalysis` so that `netto_amount` is recalculated to match the new brutto values.
+
+---
+
+#### NEW-BUG-R6-2: Session cookie missing `secure` flag for production HTTPS deployments [LOW]
+
+- **Severity:** Low
+- **Priority:** P3
+- **Tag:** **[Backend]**
+- **File:** `C:/Users/jensmoeller/code/vbudget/server.js` line 106
+
+**Description:**
+
+The session cookie configuration at line 106 sets `httpOnly: true` but does not set `secure: true` or `sameSite`. Without `secure: true`, the session cookie is transmitted over both HTTP and HTTPS connections. In a production HTTPS deployment, if any HTTP endpoint is accidentally accessible (before HSTS kicks in on the first HTTPS visit, or on a subdomain), the session cookie could be intercepted in transit.
+
+The HSTS header (`Strict-Transport-Security: max-age=31536000; includeSubDomains`) mitigates this for subsequent visits after the first HTTPS request, but does not protect the very first request or non-browser clients.
+
+Without `sameSite`, modern browsers default to `Lax`, which provides basic CSRF protection but could be made explicit for clarity.
+
+**Expected:** Set `secure: true` when `NODE_ENV === "production"`, and add `sameSite: "lax"` explicitly. Example: `cookie: { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", maxAge: 24 * 60 * 60 * 1000 }`.
+
+---
+
+### Bugs Found Summary
+
+| ID | Severity | Priority | Tag | Title |
+|----|----------|----------|-----|-------|
+| NEW-BUG-R6-1 | Medium | P2 | [Backend] | Re-analysis does not recalculate netto_amount when brutto fields are overwritten |
+| NEW-BUG-R6-2 | Low | P3 | [Backend] | Session cookie missing `secure` flag for production HTTPS deployments |
+
+**Total new bugs: 2 (0 Critical, 0 High, 1 Medium, 1 Low)**
+
+---
+
+### Round 6 Summary
+
+| Test Phase | Scope | Result |
+|------------|-------|--------|
+| Phase 1 | Previous bug fix regression (9 items) | **9/9 PASS** |
+| Phase 2 | Previously-open low-severity items (3 items) | **3/3 NOW FIXED** |
+| Phase 3 | Original PROJ-1 ACs (14 items) | **14/14 PASS** |
+| Phase 4 | CR-3 verification (5 items) | **5/5 PASS** |
+| Phase 5 | CR-4 verification (6 items) | **6/6 PASS** |
+| Phase 6 | CR-5 verification (4 items) | **4/4 PASS** |
+| Phase 7 | Security audit (15 checks) | **15/15 PASS** |
+| Phase 8 | Edge cases (10 checks) | **10/10 PASS** |
+
+**New bugs found: 2** (1 Medium, 1 Low)
+- NEW-BUG-R6-1 (Medium): netto_amount inconsistency during re-analysis -- data correctness issue but not data loss
+- NEW-BUG-R6-2 (Low): session cookie hardening for production HTTPS -- defense-in-depth improvement
+
+**Previously-open items resolved: 3** (R4-2, R4-3, R3-2 -- all now fixed)
+
+**CR-4 and CR-5 status:** Both are fully implemented and passing all acceptance criteria. INDEX.md status should be updated from "In Progress" / "Pending Review" to "Deployed".
+
+**Production Readiness:** READY. No Critical or High severity bugs. The one Medium bug (netto_amount during re-analysis) affects data display accuracy only during re-analysis flows and does not cause data loss -- the brutto values themselves are correct, and netto is recalculated correctly when the user subsequently edits and saves the bill. The Low bug is a defense-in-depth improvement. Both are non-blocking for continued production operation.
+
+---
+
+## QA Test Results (Round 7)
+
+**Tested:** 2026-03-01
+**App URL:** http://localhost:3000
+**Tester:** QA Engineer (AI)
+**Scope:** Focused fix-verification for NEW-BUG-R6-1 and NEW-BUG-R6-2 from Round 6
+**Fix Commit:** `6b5f4ab` -- `fix(PROJ-1): recalculate netto_amount on re-analysis, harden session cookie`
+
+---
+
+### Part 1: NEW-BUG-R6-1 Fix Verification (netto_amount recalculation)
+
+**Bug Description (Round 6):** During re-analysis, brutto fields were overwritten by new AI values, but `netto_amount` was not recalculated because the guard condition `(bill.amount || 0) === 0` failed (bill already had a non-zero amount from the first analysis). This left netto_amount stale and inconsistent with the new brutto breakdown.
+
+**Fix Applied:** Line 450 of `routes/ocr.js` changed from:
+```javascript
+if (anyAmountWritten && (bill.amount || 0) === 0) {
+```
+to:
+```javascript
+if (anyAmountWritten && (isReanalysis || (bill.amount || 0) === 0)) {
+```
+
+#### R6-1-FIX-1: Guard condition now includes `isReanalysis`
+- [x] **PASS** -- Line 450 reads `isReanalysis || (bill.amount || 0) === 0`. During re-analysis (`isReanalysis = true`), the recalculation block always fires regardless of existing `bill.amount`.
+
+#### R6-1-FIX-2: Re-analysis scenario -- brutto fields and netto recalculated consistently
+- [x] **PASS** -- Traced full re-analysis path: (1) `fieldChecks` at lines 421-423 pass for brutto fields when `isReanalysis=true`, (2) `anyAmountWritten` becomes true, (3) line 450 fires due to `isReanalysis`, (4) lines 451-458 recalculate `amount` (sum of brutto) and `netto_amount` (sum of brutto/VAT-rate) using new AI values for written fields and existing bill values for unwritten fields.
+
+#### R6-1-FIX-3: Regression -- first-time analysis with zero amount still recalculates
+- [x] **PASS** -- When `isReanalysis=false` and `bill.amount=0`: `(false || (0 === 0))` evaluates to `true`. Recalculation block fires as before.
+
+#### R6-1-FIX-4: Regression -- first-time analysis with user-entered amount preserves it
+- [x] **PASS** -- When `isReanalysis=false` and `bill.amount=100`: (1) `fieldChecks.amount` at line 424: `(false || (100 === 0))` = `false`, so AI amount is skipped; (2) Recalc guard at line 450: `(false || (100 === 0))` = `false`, so recalculation is skipped. User amount preserved.
+
+#### R6-1-FIX-5: Check for double-push of "amount" to writtenFields
+- [ ] **OBSERVATION** -- Pre-existing issue (not introduced by this fix): When AI returns both brutto fields and a non-zero `amount`, and the recalculation block fires, `"amount"` is pushed to `writtenFields` twice -- once by `fieldChecks` (line 436) and once by the recalc block (line 459). This causes: (a) `ocr_fields` JSON contains duplicate `"amount"` entry, (b) SQL UPDATE has `amount = ?` twice (harmless -- last value wins, and the recalculated value is the correct one). This existed before the R6-1 fix was applied. See NEW-BUG-R7-1 below.
+
+**NEW-BUG-R6-1 verdict: FIXED.** The core issue (netto_amount not recalculated during re-analysis) is resolved. The recalculation guard now correctly includes `isReanalysis`, ensuring netto_amount stays consistent with brutto fields during re-analysis.
+
+---
+
+### Part 2: NEW-BUG-R6-2 Fix Verification (session cookie)
+
+**Bug Description (Round 6):** Session cookie lacked `secure` flag and `sameSite` attribute. Without `secure`, the cookie could be transmitted over HTTP in production. Without explicit `sameSite`, behavior depended on browser defaults.
+
+**Fix Applied:** `server.js` cookie configuration expanded from single-line to multi-line with new attributes.
+
+#### R6-2-FIX-1: `secure` set conditionally for production
+- [x] **PASS** -- Line 109: `secure: process.env.NODE_ENV === "production"`. Cookie is secure-only in production, allowing HTTP in development.
+
+#### R6-2-FIX-2: `sameSite` set to `"lax"`
+- [x] **PASS** -- Line 110: `sameSite: "lax"`. Provides explicit CSRF protection. Cross-site POST requests will not include the session cookie.
+
+#### R6-2-FIX-3: Regression -- `httpOnly` still true
+- [x] **PASS** -- Line 107: `httpOnly: true` is still present. Cookie remains inaccessible to client-side JavaScript.
+
+#### R6-2-FIX-4: Regression -- `maxAge` still set
+- [x] **PASS** -- Line 108: `maxAge: 24 * 60 * 60 * 1000` (24 hours) is still present and unchanged.
+
+**NEW-BUG-R6-2 verdict: FIXED.** Session cookie now has proper `secure` and `sameSite` attributes.
+
+---
+
+### Part 3: Broader Regression Spot-Check
+
+#### REG-1: fieldChecks guards for first-time writes
+- [x] **PASS** -- Lines 416-425: All eight field checks use `isReanalysis || <empty-check>`. When `isReanalysis` is false, original empty/zero guards still apply. No regressions.
+
+#### REG-2: isReanalysis detection logic
+- [x] **PASS** -- Line 323: `const isReanalysis = !!(priorBill && priorBill.ocr_status === "done")`. Only bills previously completed analysis are treated as re-analysis. Failed or pending bills are treated as first-time. Unchanged from prior rounds.
+
+#### REG-3: SESSION_SECRET enforcement
+- [x] **PASS** -- Lines 42-53: Production refuses to start with weak/missing/short secret (exits with error). Development shows warning. Unchanged.
+
+#### REG-4: Security headers
+- [x] **PASS** -- Lines 81-88: All five headers present: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `X-XSS-Protection: 1; mode=block`, `Referrer-Policy: origin-when-cross-origin`, `Strict-Transport-Security: max-age=31536000; includeSubDomains`. Unchanged.
+
+---
+
+### Part 4: New Issues Found (Round 7)
+
+#### NEW-BUG-R7-1: Duplicate "amount" entry in writtenFields and ocr_fields [LOW] (Pre-existing)
+
+- **Severity:** Low
+- **Priority:** P4
+- **Tag:** **[Backend]**
+- **File:** `C:/Users/jensmoeller/code/vbudget/routes/ocr.js` lines 424, 432-436, 455-459
+- **Pre-existing:** Yes -- this issue existed before the R6-1 fix and was not introduced by it.
+
+**Description:**
+
+When the AI returns both brutto fields (brutto19/7/0) and a non-zero `amount`, and the recalculation block fires (line 450), the string `"amount"` is pushed to `writtenFields` twice:
+1. First at line 436 via the `fieldChecks.amount` check (line 424)
+2. Second at line 459 by the recalculation block
+
+This causes two minor data quality issues:
+- `ocr_fields` stored in the database contains a duplicate `"amount"` entry, e.g. `["vendor","brutto19","amount","amount"]`
+- The SQL UPDATE statement at line 463 contains `amount = ?` twice with different values (the AI-extracted raw amount and the brutto-sum recalculated amount). SQLite uses the last value, which is the recalculated amount -- this is actually the correct behavior since the recalculated value is more consistent.
+
+**Impact:** Cosmetic only. The duplicate in `ocr_fields` does not affect UI behavior (`Array.includes("amount")` returns the same result with duplicates). The SQL duplicate produces correct results because the last SET value wins. The editlog at lines 482-489 uses a dictionary, so duplicates are harmlessly overwritten.
+
+**Steps to Reproduce:**
+1. Upload a bill with no amounts
+2. Trigger AI analysis where the AI returns brutto19=100 AND amount=100
+3. Check the database: `SELECT ocr_fields FROM bills WHERE id = ?` -- will show `["vendor","brutto19","amount","amount"]`
+
+**Expected:** `writtenFields` should contain `"amount"` only once. The recalculation block (line 459) should check whether `"amount"` is already in `writtenFields` before pushing, or the `fieldChecks.amount` entry should be removed since the recalculation block always computes a more accurate amount from brutto values.
+
+---
+
+### Bugs Found Summary
+
+| ID | Severity | Priority | Tag | Title | New or Pre-existing |
+|----|----------|----------|-----|-------|---------------------|
+| NEW-BUG-R7-1 | Low | P4 | [Backend] | Duplicate "amount" entry in writtenFields and ocr_fields | Pre-existing |
+
+**Total new bugs: 1 (0 Critical, 0 High, 0 Medium, 1 Low)**
+
+---
+
+### Round 7 Summary
+
+| Test Phase | Scope | Result |
+|------------|-------|--------|
+| Phase 1 | NEW-BUG-R6-1 fix verification (5 tests) | **4/5 PASS, 1 observation (pre-existing Low)** |
+| Phase 2 | NEW-BUG-R6-2 fix verification (4 tests) | **4/4 PASS** |
+| Phase 3 | Broader regression spot-check (4 tests) | **4/4 PASS** |
+
+**R6 bugs fixed: 2/2**
+- NEW-BUG-R6-1 (Medium): netto_amount recalculation -- **FIXED**
+- NEW-BUG-R6-2 (Low): session cookie hardening -- **FIXED**
+
+**New bugs found: 1** (Low severity, pre-existing)
+- NEW-BUG-R7-1 (Low): Duplicate "amount" in writtenFields -- cosmetic data quality issue, no functional impact
+
+**Production Readiness:** READY. Both R6 bugs are confirmed fixed. The only new finding is a pre-existing Low/P4 cosmetic issue with no functional impact. No Critical or High severity bugs remain.
