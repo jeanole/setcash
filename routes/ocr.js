@@ -445,7 +445,9 @@ async function runOcrJob(billId, projectId) {
       const anyAmountWritten = writtenFields.some((f) => amountFields.includes(f));
       // BUG-2: Only recalculate and write amount/netto_amount when the user does not already
       // have a manually entered amount. This prevents overwriting user data.
-      if (anyAmountWritten && (bill.amount || 0) === 0) {
+      // NEW-BUG-R6-1: During re-analysis, brutto fields are always overwritten (per fieldChecks
+      // above), so netto_amount must also be recalculated unconditionally to stay consistent.
+      if (anyAmountWritten && (isReanalysis || (bill.amount || 0) === 0)) {
         const newB19 = writtenFields.includes("brutto19") ? extracted.brutto19 : (bill.brutto19 || 0);
         const newB7 = writtenFields.includes("brutto7") ? extracted.brutto7 : (bill.brutto7 || 0);
         const newB0 = writtenFields.includes("brutto0") ? extracted.brutto0 : (bill.brutto0 || 0);
