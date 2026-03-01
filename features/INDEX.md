@@ -1,6 +1,6 @@
 # vBudget — Project Index
 
-**Next Available IDs:** PROJ-4 · BUG-9 · CR-6
+**Next Available IDs:** PROJ-14 · BUG-9 · CR-6
 
 | ID | Type | Title | Status | Priority | Feature | Date |
 |----|------|-------|--------|----------|---------|------|
@@ -20,3 +20,13 @@
 | [BUG-6](BUG-6-reanalyse-fields-not-reset-to-unverified.md) | Bug | Re-analyse Does Not Reset Fields to Unverified State | Resolved | High | PROJ-1 | 2026-02-27 |
 | [BUG-7](BUG-7-reanalyse-no-history-log-entry.md) | Bug | Re-analysis Produces No Bill History Log Entry | Resolved | Medium | PROJ-1 | 2026-02-27 |
 | BUG-8 | Bug | Multer fileFilter Rejection Returns 500 HTML Instead of 400 JSON | Resolved | High | PROJ-3 | 2026-02-28 |
+| [PROJ-4](PROJ-4-nextjs-scaffold.md) | Feature | Next.js App Scaffold + PostgreSQL + Docker | Planned | — | — | 2026-03-01 |
+| [PROJ-5](PROJ-5-nextauth-authentication.md) | Feature | NextAuth.js Authentication | Planned | — | PROJ-4 | 2026-03-01 |
+| [PROJ-6](PROJ-6-sqlite-postgres-migration.md) | Feature | SQLite → PostgreSQL Data Migration Script | Planned | — | PROJ-4 | 2026-03-01 |
+| [PROJ-7](PROJ-7-bills-feature.md) | Feature | Bills Feature | Planned | — | PROJ-5, PROJ-6 | 2026-03-01 |
+| [PROJ-8](PROJ-8-budget-matrix.md) | Feature | Budget Matrix | Planned | — | PROJ-5, PROJ-6 | 2026-03-01 |
+| [PROJ-9](PROJ-9-categories-motives.md) | Feature | Categories & Motives Admin Pages | Planned | — | PROJ-5, PROJ-6 | 2026-03-01 |
+| [PROJ-10](PROJ-10-members-projects-settings.md) | Feature | Members, Projects & Settings | Planned | — | PROJ-5, PROJ-6 | 2026-03-01 |
+| [PROJ-11](PROJ-11-reports-exports.md) | Feature | Reports & Exports | Planned | — | PROJ-5, PROJ-6, PROJ-9 | 2026-03-01 |
+| [PROJ-12](PROJ-12-integrations.md) | Feature | Integrations (Google Sheets + Telegram) | Planned | — | PROJ-5, PROJ-10 | 2026-03-01 |
+| [PROJ-13](PROJ-13-production-cutover.md) | Feature | Production Cutover | Planned | — | PROJ-4–12 | 2026-03-01 |
