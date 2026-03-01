@@ -82,6 +82,7 @@ model ProjectMember {
   role      ProjectRole @default(user)
 
   project    Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user       User             @relation(fields: [userEmail], references: [email], onDelete: Cascade)
   positionId String?
   position   ProjectPosition? @relation(fields: [positionId], references: [id], onDelete: SetNull)
 
