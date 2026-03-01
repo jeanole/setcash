@@ -31,7 +31,15 @@
       "Bash(cmd /c:*)",
       "Bash(export PATH=\"$PATH:/c/Users/jensmoeller/AppData/Local/Programs/GitHub CLI:/c/Program Files/GitHub CLI\")",
       "WebFetch(domain:api.github.com)",
-      "Bash(powershell -Command:*)"
+      "Bash(powershell -Command:*)",
+      "Bash(git mv:*)",
+      "Bash(git rm:*)",
+      "Skill(backend)",
+      "Skill(backend:*)",
+      "Bash(npm show next@14 dist-tags)",
+      "Bash(npm show \"next@^14\" version)",
+      "Bash(npm audit)",
+      "Bash(npm run build)"
     ]
   }
 }
