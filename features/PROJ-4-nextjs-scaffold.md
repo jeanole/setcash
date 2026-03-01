@@ -387,7 +387,280 @@ A component library decision (shadcn/ui, Radix, etc.) can be made in PROJ-7 when
 first real pages are built.
 
 ## QA Test Results
-_To be added by /qa_
+
+**Tested:** 2026-03-01
+**App URL:** http://localhost:3001
+**Tester:** QA Engineer (AI)
+**Branch:** to_nextjs
+**Docker stack:** docker-compose.test.yml (vbudget-next + postgres-test)
+
+### Acceptance Criteria Status
+
+#### AC-1: `/nextjs/` directory with Next.js 14+ App Router
+- [x] `nextjs/` directory exists with `app/` directory (App Router)
+- [x] Next.js version 14.2.35 in `package.json` (meets >=14 requirement)
+- [x] App Router conventions used: `app/layout.tsx`, `app/page.tsx`, route groups `(public)/`, `(protected)/`
+
+**Result: PASS**
+
+#### AC-2: TypeScript configured with strict mode
+- [x] `tsconfig.json` present with `"strict": true`
+- [x] TypeScript 5.6.3 in devDependencies
+- [x] Module resolution set to `"bundler"` (correct for Next.js 14)
+
+**Result: PASS**
+
+#### AC-3: Prisma installed and connected to PostgreSQL via DATABASE_URL
+- [x] `@prisma/client` ^5.22.0 in dependencies; `prisma` ^5.22.0 in devDependencies
+- [x] `schema.prisma` datasource: `provider = "postgresql"`, `url = env("DATABASE_URL")`
+- [x] `lib/db.ts` exports a PrismaClient singleton with hot-reload protection
+
+**Result: PASS**
+
+#### AC-4: Prisma schema defines all required models
+- [x] All 12 spec-listed models present: User, Project, ProjectMember, Bill, BillImage, BillMotive, BillCategory, Category, Motive, Vgeld, EditLog
+- [ ] BUG: Spec says `Settings` but schema uses `ProjectSettings` (name mismatch)
+- [x] Schema exceeds spec with 7 additional models: ProjectPosition, BudgetMatrix, OcrLog, Notification, TelegramLink, TelegramLinkCode, ProjectSettings (total: 18 models, 19 tables including `_prisma_migrations`)
+- [x] All models match the Tech Design section B data model definitions
+
+**Result: PASS (with documentation note -- `Settings` vs `ProjectSettings` is an intentional design improvement documented in Tech Design, but spec AC text should be updated)**
+
+#### AC-5: `prisma migrate dev` runs successfully against fresh PostgreSQL
+- [ ] BUG: `prisma/migrations/` directory does NOT exist in the committed codebase despite commit message "Add Prisma seed script and initial database migration"
+- [ ] BUG: `prisma/migrations/` is listed in `nextjs/.gitignore`, preventing migrations from ever being committed
+- [x] When manually run with `DATABASE_URL`, `prisma migrate dev --name init` creates and applies migration successfully
+- [x] All 18 model tables created in PostgreSQL database
+- [x] Seed script (`prisma db seed`) runs successfully, creating admin user, default project, motives, categories, and positions
+
+**Result: FAIL -- migration files missing from repo; gitignore blocks them from being committed**
+
+#### AC-6: `docker-compose.test.yml` starts nextjs (port 3001) + postgres service
+- [x] Both services defined: `vbudget-next` and `postgres-test`
+- [x] Next.js reachable at http://localhost:3001 (HTTP 200)
+- [x] PostgreSQL healthy at port 5433
+- [ ] BUG: Container is marked `unhealthy` because Dockerfile HEALTHCHECK references `/api/health` endpoint which does not exist (returns 404)
+
+**Result: PASS (services start and work, but healthcheck is broken -- see BUG-3)**
+
+#### AC-7: `.env.test` gitignored + `.env.test.example` committed
+- [x] `nextjs/.env.test.example` is tracked in git with all required keys and dummy values
+- [x] `nextjs/.gitignore` excludes `.env.test` and `.env.local`
+- [ ] BUG: Root `.env.test` (required by `docker-compose.test.yml` via `env_file: .env.test`) is NOT gitignored by root `.gitignore` -- risk of accidental secret commit
+- [ ] BUG: Root `.env.test` was missing and had to be created manually to start Docker stack. No `.env.test.example` at repo root is committed as a template.
+
+**Result: FAIL -- root `.env.test` not gitignored; no root-level `.env.test.example` template committed**
+
+#### AC-8: `npm run dev` starts without errors on port 3001
+- [x] `package.json` script: `"dev": "next dev -p 3001"`
+- [x] Docker logs confirm clean startup: `Ready in 76ms` on port 3001
+- [x] No TypeScript or runtime errors in container logs
+
+**Result: PASS**
+
+#### AC-9: Root layout renders sidebar shell and main content slot
+- [ ] BUG: `app/layout.tsx` is a minimal HTML wrapper (`<html><body>{children}</body></html>`) with NO sidebar or header
+- [x] Sidebar shell (AppShell + Sidebar + Header) exists in `(protected)/layout.tsx` via `AppShell` component
+- [x] Navigating to `/dashboard` (protected route) renders full AppShell with sidebar, header, and main content area
+- [x] Home page `/` does NOT show sidebar (expected -- it is a public landing page)
+
+**Result: FAIL -- AC literally says "Root layout (`app/layout.tsx`) renders a sidebar shell" but the root layout is a bare wrapper. The sidebar lives in `(protected)/layout.tsx` instead. This is arguably a better architecture (public pages should not have sidebar) but does not match the AC as written.**
+
+#### AC-10: `app/page.tsx` renders "vBudget -- Next.js migration in progress"
+- [ ] BUG: The exact string "vBudget -- Next.js migration in progress" does not appear as a single element. The text is split across two separate HTML elements:
+  - `<span>vBudget</span>` (in the logo area)
+  - `<p>Next.js migration in progress</p>` (in a separate notice box)
+  - The em-dash separator is absent entirely
+- [x] Both pieces of text ARE present on the page and visually convey the intended message
+- [x] HTTP 200 returned at http://localhost:3001
+
+**Result: FAIL (strict) / PASS (intent) -- the visual intent is met but the exact required string is not rendered as specified**
+
+#### AC-11: Branch `to_nextjs` contains all `/nextjs/` commits
+- [x] Current branch is `to_nextjs`
+- [x] Two commits touch `nextjs/`: scaffold init + seed script
+- [x] No nextjs changes on main branch
+
+**Result: PASS**
+
+### Edge Cases Status
+
+#### EC-1: Missing DATABASE_URL causes fast-fail with clear error
+- [x] `lib/env.ts` contains `assertEnv('DATABASE_URL')` that throws `[vBudget] Missing required environment variable: DATABASE_URL`
+- [x] `validateEnv()` function exists for batch validation
+- [ ] BUG: `lib/env.ts` is NEVER imported anywhere in the application. No layout, page, middleware, or startup file imports `env` or calls `validateEnv()`. The guard is dead code and will never execute at runtime.
+- [x] Prisma itself will fail with its own error if DATABASE_URL is missing (fallback behavior), but the custom error message specified in the AC will never appear
+
+**Result: FAIL -- env validation module exists but is dead code (never imported)**
+
+#### EC-2: Express app untouched
+- [x] `git diff main -- server.js db.js middleware.js routes/ public/ package.json docker-compose.yml` produces no output
+- [x] All Express application files are identical to main branch
+
+**Result: PASS**
+
+#### EC-3: docker-compose.test.yml does not conflict with docker-compose.yml
+- [x] Production: service `vbudget`, port `5000:3000`, no database service
+- [x] Test: services `vbudget-next` (port `3001:3001`), `postgres-test` (port `5433:5432`)
+- [x] Different service names, different host ports, different volume names
+- [x] Both can run side-by-side without conflict
+
+**Result: PASS**
+
+#### EC-4: UUID primary keys + legacyId on all models
+- [x] All models with standard IDs use `String @id @default(uuid())`
+- [x] `legacyId Int?` present on: User, Project, ProjectMember, ProjectPosition, Bill, BillImage, BillMotive, BillCategory, Motive, Category, BudgetMatrix, Vgeld, EditLog, OcrLog, Notification, TelegramLink
+- [x] `ProjectSettings` uses composite key `@@id([projectId, key])` (correct -- no UUID needed)
+- [x] `TelegramLinkCode` uses `code String @id` (correct -- code is the natural key)
+
+**Result: PASS**
+
+### Security Audit Results
+
+#### S-1: No secrets committed
+- [x] `nextjs/.env.test.example` contains only dummy/placeholder values (no real credentials)
+- [x] `nextjs/.gitignore` excludes `.env`, `.env.test`, `.env.local`
+- [ ] BUG: Root `.env.test` is NOT covered by root `.gitignore` (root `.gitignore` only has `.env`). Currently `.env.test` exists at root with test credentials. If `git add .` is run, it would be committed.
+- [x] No real `.env` files have been committed historically (`git log --all --diff-filter=A -- '*.env*'` clean)
+
+**Result: WARN -- root `.env.test` is at risk of accidental commit**
+
+#### S-2: Prisma client log levels
+- [x] `lib/db.ts` logs `['query', 'error', 'warn']` in development and `['error']` only in production
+- [x] Production log level is safe -- no query logging that could expose sensitive data
+
+**Result: PASS**
+
+#### S-3: Dockerfile security hardening
+- [x] Multi-stage build (deps -> builder -> runner)
+- [x] Runs as non-root user `nextjs` (uid 1001, gid 1001)
+- [x] Uses `node:20-alpine` (minimal attack surface)
+- [x] No secrets baked into image; env vars passed via `env_file` at runtime
+- [x] `NODE_ENV=production` set in runner stage
+- [ ] BUG: HEALTHCHECK endpoint `/api/health` does not exist, causing container to be perpetually `unhealthy`
+- [x] Docker build warning: "Prisma failed to detect the libssl/openssl version" (non-blocking, cosmetic)
+
+**Result: PASS (hardening is correct; healthcheck endpoint missing is documented as BUG-3)**
+
+#### S-4: No hardcoded credentials
+- [x] No hardcoded passwords, API keys, or connection strings in `lib/`, `app/`, or `components/`
+- [ ] WARN: `prisma/seed.ts` has fallback `'admin123'` for `ADMIN_PASSWORD` (line 8: `process.env.ADMIN_PASSWORD ?? 'admin123'`). This is acceptable for a seed script but should be documented.
+
+**Result: PASS (seed fallback is standard practice for dev seeds)**
+
+### Regression Test Results
+
+#### R-1: Express app files untouched
+- [x] `server.js`, `db.js`, `middleware.js`, all `routes/*`, all `public/*`, root `package.json` -- zero changes vs main branch
+
+**Result: PASS**
+
+#### R-2: docker-compose.yml (production) unmodified
+- [x] `git diff main -- docker-compose.yml` produces no output
+
+**Result: PASS**
+
+### Responsive / Cross-Browser (Limited Scope -- Stub Pages)
+
+#### Mobile (375px)
+- [x] Home page: centered card layout, fully visible, no horizontal overflow
+- [x] Dashboard: Sidebar has `hidden lg:flex` -- correctly hidden below 1024px breakpoint
+- [x] Main content area has responsive padding `p-4 md:p-6`
+
+#### Desktop (1024px+)
+- [x] Dashboard: Sidebar visible via `lg:flex`, fixed width `w-64`
+- [x] Header and main content fill remaining space with `flex-1`
+
+**Result: PASS (CSS classes are correct; visual verification deferred to browser testing)**
+
+### Bugs Found
+
+#### BUG-1: `prisma/migrations/` directory missing and gitignored [Architecture] [Deploy]
+- **Severity:** High
+- **Steps to Reproduce:**
+  1. Clone the repo on branch `to_nextjs`
+  2. Run `ls nextjs/prisma/migrations/`
+  3. Expected: Migration files present (commit message says "initial database migration")
+  4. Actual: Directory does not exist
+  5. Additionally, `nextjs/.gitignore` contains `prisma/migrations/`, preventing migrations from ever being committed
+- **Impact:** Developers cannot run `prisma migrate deploy` to set up a new database from the repo. They must run `prisma migrate dev` interactively, which is not suitable for CI/CD or production deployments. Prisma's official guidance is to commit migration files.
+- **Priority:** Fix before deployment
+
+#### BUG-2: Root `.env.test` not gitignored and no `.env.test.example` at root [Deploy] [Architecture]
+- **Severity:** High
+- **Steps to Reproduce:**
+  1. `docker-compose.test.yml` requires `env_file: .env.test` at the repo root
+  2. Root `.gitignore` only has `.env`, not `.env.test`
+  3. Run `git check-ignore .env.test` at repo root -- exits with code 1 (not ignored)
+  4. Expected: `.env.test` is gitignored; a `.env.test.example` template is committed
+  5. Actual: `.env.test` can be accidentally committed; no template exists
+- **Impact:** Test credentials (database password, admin password) could be accidentally committed to git
+- **Priority:** Fix before deployment
+
+#### BUG-3: Dockerfile HEALTHCHECK references non-existent `/api/health` endpoint [Backend] [Deploy]
+- **Severity:** Medium
+- **Steps to Reproduce:**
+  1. Start Docker stack: `docker-compose -f docker-compose.test.yml up -d`
+  2. Run `docker ps` -- container shows `(unhealthy)`
+  3. Run `curl http://localhost:3001/api/health` -- returns 404
+  4. Expected: HEALTHCHECK passes; 200 response from `/api/health`
+  5. Actual: No API route directory exists (`app/api/` is missing). HEALTHCHECK always fails.
+- **Impact:** Container orchestration tools (Docker Compose, Kubernetes) will treat the container as unhealthy and may restart it or prevent traffic routing
+- **Priority:** Fix before deployment
+
+#### BUG-4: `lib/env.ts` validation module is dead code -- never imported [Backend]
+- **Severity:** Medium
+- **Steps to Reproduce:**
+  1. Search all `.ts` and `.tsx` files for imports of `lib/env` or `@/lib/env`
+  2. Expected: At least one file imports `validateEnv()` or the `env` object
+  3. Actual: Zero imports found. The module is never used anywhere.
+- **Impact:** Missing `DATABASE_URL` will not produce the custom `[vBudget] Missing required environment variable` error. Instead, Prisma will throw its own less-informative error.
+- **Priority:** Fix in next sprint
+
+#### BUG-5: AC-9 -- Root layout does not render sidebar shell [Frontend] [Architecture]
+- **Severity:** Low
+- **Steps to Reproduce:**
+  1. Read `app/layout.tsx`
+  2. Expected (per AC-9): Root layout wraps children with sidebar + main content area
+  3. Actual: Root layout is `<html><body>{children}</body></html>` with no sidebar
+  4. Sidebar lives in `(protected)/layout.tsx` via AppShell component
+- **Impact:** This is arguably better architecture (public pages like login should not have sidebar) but does not match AC-9 as written. The AC text should be updated to match the implementation.
+- **Priority:** Nice to have (update spec wording)
+
+#### BUG-6: AC-10 -- Placeholder text split across elements, missing em-dash [Frontend]
+- **Severity:** Low
+- **Steps to Reproduce:**
+  1. Navigate to http://localhost:3001
+  2. Expected: Single text "vBudget -- Next.js migration in progress"
+  3. Actual: "vBudget" appears as logo text in one `<span>`, "Next.js migration in progress" in a separate `<p>` inside a notice card. The em-dash separator is absent.
+- **Impact:** Cosmetic; the visual intent is met. The page clearly communicates the migration status.
+- **Priority:** Nice to have
+
+#### BUG-7: `nextjs/public/` directory was missing from the committed codebase [Deploy]
+- **Severity:** Medium
+- **Steps to Reproduce:**
+  1. The tech design specifies `public/uploads/` directory structure
+  2. Dockerfile line `COPY --from=builder --chown=nextjs:nodejs /app/public ./public` requires the directory
+  3. Expected: `nextjs/public/` directory committed with at least a `.gitkeep`
+  4. Actual: Directory was missing; Docker build would fail without manual intervention
+- **Impact:** Fresh clones cannot build the Docker image without manually creating `nextjs/public/`
+- **Priority:** Fix before deployment
+
+#### BUG-8: Docker build warning -- Prisma libssl detection failure [Deploy]
+- **Severity:** Low
+- **Steps to Reproduce:**
+  1. Run `docker-compose -f docker-compose.test.yml up --build`
+  2. Observe build output: "Prisma failed to detect the libssl/openssl version"
+- **Impact:** Non-blocking warning; Prisma still functions correctly. May indicate a future compatibility issue with Alpine's OpenSSL packaging.
+- **Priority:** Nice to have
+
+### Summary
+- **Acceptance Criteria:** 7/11 passed (AC-5, AC-7, AC-9, AC-10 failed)
+- **Edge Cases:** 3/4 passed (EC-1 failed)
+- **Security:** WARN -- root `.env.test` not gitignored (S-1 flagged)
+- **Regression:** 2/2 passed
+- **Bugs Found:** 8 total (0 critical, 2 high, 3 medium, 3 low)
+- **Production Ready:** NO
+- **Recommendation:** Fix BUG-1 (commit migrations, remove from gitignore), BUG-2 (gitignore root `.env.test`, add `.env.test.example`), BUG-3 (create `/api/health` endpoint), and BUG-7 (commit `public/.gitkeep`) before marking as Deployed
 
 ## Deployment
 _To be added by /deploy_
