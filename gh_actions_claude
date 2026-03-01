@@ -1,0 +1,87 @@
+name: Claude Code
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  issues:
+    types: [opened, assigned]
+  pull_request_review:
+    types: [submitted]
+
+jobs:
+  claude:
+    if: |
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
+      (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write      # required: commit features/INDEX.md, bug/CR docs, QA results
+      pull-requests: write # required: post comments with results
+      issues: write        # required: post comments with results
+      id-token: write
+      actions: read        # required: read CI results on PRs
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history — needed by pipeline skill for git log / tagging
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run Claude Code
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+          additional_permissions: |
+            actions: read
+
+          custom_instructions: |
+            You are operating inside the vBudget repository via GitHub Actions.
+
+            Skills are defined in `.claude/skills/`. Read the relevant SKILL.md and follow it exactly.
+            Key skills for this workflow:
+              - report   → `.claude/skills/report/SKILL.md`
+              - pipeline → `.claude/skills/pipeline/SKILL.md`
+
+            ## Routing by trigger
+
+            ### New issue opened (GitHub issue body/title contains @claude)
+            Treat the issue title + body as the user's report description.
+            Execute the `report` skill (read its SKILL.md and follow every phase).
+            Skip asking for details already present in the issue body.
+            After committing, post a comment on the issue summarising what was created
+            (e.g. "BUG-9 created at features/BUG-9-*.md. INDEX.md updated.").
+
+            ### Comment: @claude /report [description]
+            Execute the `report` skill using [description] as the input.
+            Commit the created files, then post a comment with the outcome.
+
+            ### Comment: @claude /pipeline PROJ-N
+            Execute the `pipeline` skill for PROJ-N (read its SKILL.md and follow every step).
+            CI-specific constraint: you cannot call AskUserQuestion interactively.
+            - Gate 1 (auto-fix bugs?): post a comment listing the bugs and ask for a reply
+              "@claude yes" to proceed, or proceed automatically if the comment that triggered
+              you already contains "--yolo".
+            - Gate 2 (deploy to production?): ALWAYS post a comment asking for explicit human
+              approval before pushing to the production branch. Never skip this gate.
+
+            ### All other @claude comments
+            Follow the comment instructions, guided by the project rules in `.claude/rules/`.
+
+            ## Always
+            - Read `features/INDEX.md` before creating or updating any feature/bug/CR document.
+            - Use commit format: `type(ID): description` (e.g. `bug(BUG-9): ...`).
+            - Never commit secrets or credentials.
+            - Follow all rules in `.claude/rules/` (general, backend, frontend, security).
