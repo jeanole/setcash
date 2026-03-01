@@ -662,7 +662,10 @@ NEW-BUG-2 (High) means regular (non-admin) users have no way to trigger or see O
 Both must be fixed before deployment.
 
 ## Deployment
-_To be added by /deploy_
+
+**Initial deploy:** 2026-02-28 — tag `v1.9.0-PROJ-1`
+**Patch deploy:** 2026-03-01 — tag `v1.9.1-PROJ-1` (netto_amount re-analysis recalc + session cookie hardening)
+**Branch:** production
 
 ---
 
