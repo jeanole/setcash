@@ -1,8 +1,8 @@
 # PROJ-5: NextAuth.js Authentication
 
-## Status: Planned
+## Status: In Progress
 **Created:** 2026-03-01
-**Last Updated:** 2026-03-01
+**Last Updated:** 2026-03-02
 
 ## Dependencies
 - Requires: PROJ-4 (Next.js scaffold + Prisma schema + PostgreSQL)
@@ -50,7 +50,146 @@
 <!-- Sections below are added by subsequent skills -->
 
 ## Tech Design (Solution Architect)
-_To be added by /architecture_
+
+### Overview
+PROJ-5 wires NextAuth.js v5 into the existing Next.js 14 scaffold. It replaces the current stub login page and open-access protected routes with a full credential + Google OAuth flow, mirroring the role and project logic already present in the Express app.
+
+---
+
+### Component Structure
+
+```
+Auth System
++-- NextAuth Config  (nextjs/auth.ts)
+|   +-- CredentialsProvider  → email lookup + bcrypt compare
+|   +-- GoogleProvider       → Google OAuth 2.0
+|   +-- JWT callbacks        → embed id, email, role, currentProjectId in token
+|
++-- API Route  (app/api/auth/[...nextauth]/route.ts)
+|   └── Delegates all OAuth flows and token exchange to NextAuth
+|
++-- Middleware  (nextjs/middleware.ts)
+|   └── Edge middleware — intercepts every request
+|       → Session present  → allow through
+|       → Session missing  → redirect to /login
+|       (only applies to routes under /(protected)/)
+|
++-- Login Page  (app/(public)/login/page.tsx)
+|   +-- LoginForm component
+|   |   +-- Email field
+|   |   +-- Password field
+|   |   +-- Error message area  ("Invalid email or password")
+|   |   +-- Sign In button
+|   |   +-- Divider
+|   |   +-- "Sign in with Google" button
+|   └── (public) route group — never intercepted by middleware
+|
++-- Protected Layout  (app/(protected)/layout.tsx)
+|   +-- Server-side session guard  → redirects to /login if session absent
+|   +-- SessionProvider wrapper   → makes session available to client components
+|   +-- AppShell  (Sidebar + Header)
+|
++-- Header  (components/layout/Header.tsx)  [updated]
+|   +-- User initials avatar  (derived from email)
+|   +-- User email display
+|   +-- SignOutButton component
+|
++-- Auth Components  (components/auth/)
+|   +-- LoginForm.tsx      — form with error state, credential + Google sign-in
+|   +-- SignOutButton.tsx  — calls NextAuth signOut(), redirects to /login
+|
++-- Session Helper  (lib/auth/session.ts)
+    +-- getCurrentUser()  — server-side wrapper around getServerSession()
+        Returns: { id, email, role, currentProjectId } or null
+```
+
+---
+
+### Data Model
+
+No new database tables are needed.
+
+**What is stored in the JWT cookie (encrypted, client-readable only by the server):**
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | UUID string | User's primary key from the `User` table |
+| `email` | string | User's email address |
+| `role` | `"user"` \| `"admin"` \| `"superadmin"` | Resolved at login — see Role Derivation below |
+| `currentProjectId` | UUID string or null | The project the user is currently working in |
+
+**Role Derivation (resolved once at login, stored in the JWT):**
+1. If `User.isSuperAdmin = true` → role is `"superadmin"`
+2. Else look up `ProjectMember` for the resolved `currentProjectId` → `ProjectMember.role` (`"admin"` or `"user"`)
+3. If no active project or no membership → role is `"user"`
+
+**Project Auto-Selection (mirrors Express `initUsers()` logic):**
+1. Use `User.defaultProjectId` if the field is set
+2. Otherwise, query all `ProjectMember` rows for the user — if there is exactly one, use that project
+3. Otherwise `currentProjectId` is null (user must select a project later)
+
+**Password Portability:**
+Passwords are stored as bcrypt hashes in `User.passwordHash` using the same library (`bcryptjs`, 10 rounds) as the Express app. The same account works in both the Express app and the Next.js app without any migration.
+
+---
+
+### Tech Decisions
+
+| Decision | Choice | Why |
+|---|---|---|
+| Auth library | NextAuth.js v5 (Auth.js) | Industry standard for Next.js App Router; handles OAuth state, CSRF, token rotation automatically |
+| Session storage | JWT cookies | Stateless — no extra database table; matches the spec requirement; works on serverless edge |
+| Password login | CredentialsProvider | Lets us call bcrypt.compare() against the existing `passwordHash` column |
+| Google login | GoogleProvider | Reuses the same Google OAuth app and credentials already deployed for the Express app |
+| Role embedding | Role stored in JWT | Avoids a database round-trip on every page load; role changes take effect at next login |
+| Middleware placement | Edge middleware at root | Runs before any rendering; most efficient and reliable guard for protected routes |
+| No DB session adapter | Omitted | JWT strategy doesn't need one; avoids an extra table and complexity |
+
+---
+
+### New Files
+
+| File | Purpose |
+|---|---|
+| `nextjs/auth.ts` | NextAuth v5 configuration: providers, JWT callbacks, session shape |
+| `nextjs/middleware.ts` | Edge middleware: protects all `/(protected)/` routes |
+| `nextjs/app/api/auth/[...nextauth]/route.ts` | Mounts NextAuth HTTP handlers (GET + POST) |
+| `nextjs/components/auth/LoginForm.tsx` | Login form with credential fields, error message, Google button |
+| `nextjs/components/auth/SignOutButton.tsx` | Client component: calls `signOut()` and redirects to `/login` |
+| `nextjs/lib/auth/session.ts` | `getCurrentUser()` helper for server components and API routes |
+
+### Modified Files
+
+| File | What changes |
+|---|---|
+| `nextjs/app/(public)/login/page.tsx` | Replace stub with real page using `LoginForm` |
+| `nextjs/app/(protected)/layout.tsx` | Add server-side session check + `SessionProvider` wrapper |
+| `nextjs/components/layout/Header.tsx` | Display user email, derived initials, and `SignOutButton` |
+| `nextjs/app/layout.tsx` | Ensure `SessionProvider` is available to client tree |
+| `nextjs/lib/env.ts` | Add `NEXTAUTH_SECRET` to the validated env var list |
+
+---
+
+### Dependencies
+
+| Package | Purpose |
+|---|---|
+| `next-auth@beta` | NextAuth.js v5 — the `@beta` tag is required for Next.js 14 App Router support |
+
+> `bcryptjs` is already installed from PROJ-4. No DB adapter needed (JWT strategy).
+
+---
+
+### Environment Variables
+
+All auth env vars are already documented in `.env.test.example` at the repo root (added in PROJ-4 BUG-2 fix). The frontend developer must verify `nextjs/.env.test.example` is also updated.
+
+| Variable | Description |
+|---|---|
+| `NEXTAUTH_SECRET` | Long random string — signs and encrypts JWT cookies |
+| `NEXTAUTH_URL` | Public base URL of the app (`http://localhost:3001` for local Docker) |
+| `GOOGLE_CLIENT_ID` | Google OAuth 2.0 client ID (same as Express app) |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth 2.0 client secret (same as Express app) |
 
 ## QA Test Results
 _To be added by /qa_
