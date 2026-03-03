@@ -5,7 +5,7 @@
  * than a cryptic runtime failure deep in the app.
  */
 
-const REQUIRED_ENV_VARS = ['DATABASE_URL'] as const;
+const REQUIRED_ENV_VARS = ['DATABASE_URL', 'NEXTAUTH_SECRET'] as const;
 
 type RequiredEnvVar = (typeof REQUIRED_ENV_VARS)[number];
 
@@ -44,4 +44,5 @@ export function validateEnv(): void {
 
 export const env = {
   DATABASE_URL: assertEnv('DATABASE_URL'),
+  NEXTAUTH_SECRET: assertEnv('NEXTAUTH_SECRET'),
 } satisfies Record<RequiredEnvVar, string>;
