@@ -192,7 +192,342 @@ All auth env vars are already documented in `.env.test.example` at the repo root
 | `GOOGLE_CLIENT_SECRET` | Google OAuth 2.0 client secret (same as Express app) |
 
 ## QA Test Results
-_To be added by /qa_
+
+**Tested:** 2026-03-03
+**App URL:** http://localhost:3001
+**Tester:** QA Engineer (AI)
+**Method:** Static code review + live Docker testing (curl)
+**Docker:** vbudget-vbudget-next-1 (Next.js on :3001), vbudget-postgres-test-1 (PostgreSQL on :5433)
+
+> **CRITICAL BLOCKER:** The Docker image running in the test stack was built from PROJ-4
+> code. The PROJ-5 commits (`3cca599` feat, `5965c22` fix) exist in git but the Docker
+> image has NOT been rebuilt. As a result, all live tests reflect the **old** placeholder
+> code (no LoginForm, no NextAuth routes, no middleware auth). Every live-test failure
+> below is caused by this stale build. Static code review of the source files was used
+> to verify correctness of the PROJ-5 implementation itself.
+
+---
+
+### Acceptance Criteria Status
+
+#### AC-1: NextAuth.js v5 installed and configured
+- [x] `next-auth@^5.0.0-beta.30` listed in `nextjs/package.json` dependencies
+- [x] `nextjs/auth.ts` exports `{ handlers, auth, signIn, signOut }` via `NextAuth()`
+- [x] `nextjs/app/api/auth/[...nextauth]/route.ts` exists and mounts `{ GET, POST }` from handlers
+- [ ] BUG-1: Live endpoint `/api/auth/providers` returns 404 (stale Docker image)
+- [ ] BUG-2: Live endpoint `/api/auth/session` returns 404 (stale Docker image)
+
+#### AC-2: CredentialsProvider -- email + bcrypt login
+- [x] (Static) CredentialsProvider configured with email + password fields
+- [x] (Static) `authorize()` calls `prisma.user.findUnique({ where: { email } })` then `bcrypt.compare()`
+- [x] (Static) Returns `null` for wrong password (generic CredentialsSignin error)
+- [x] (Static) Returns `null` for empty email/password (line 76-78 check)
+- [ ] BUG-1: Cannot live-test login -- `/api/auth/callback/credentials` returns 404 (stale Docker image)
+
+#### AC-3: GoogleProvider -- Google OAuth 2.0
+- [x] (Static) GoogleProvider configured with `process.env.GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`
+- [x] (Static) `signIn` callback handles Google user creation (line 187-212)
+- [x] (Static) New Google users auto-created with empty passwordHash
+- [ ] Cannot live-test -- Google credentials are set to "not-configured" in `.env.test`
+
+#### AC-4: Session strategy is JWT
+- [x] (Static) `session: { strategy: 'jwt' }` set in `auth.ts` line 58
+- [x] (Static) No `Session` model in `prisma/schema.prisma`
+- [ ] Cannot verify cookie name live (stale Docker image)
+
+#### AC-5: JWT contains id, email, role, currentProjectId
+- [x] (Static) JWT callback enriches token with `id`, `role`, `currentProjectId` (lines 126-168)
+- [x] (Static) Session callback maps `token.id`, `token.role`, `token.currentProjectId` to session (lines 173-182)
+- [x] (Static) TypeScript augmentation declares `JWT { id, role, currentProjectId }` (lines 23-29)
+- [ ] Cannot decode live JWT (no auth session available due to stale image)
+
+#### AC-6: Middleware protects /(protected)/ routes
+- [x] (Static) `middleware.ts` uses `auth()` wrapper and checks `isAuthenticated`
+- [x] (Static) Unauthenticated users redirected to `/login?callbackUrl=...`
+- [x] (Static) Public routes `/login`, `/api/auth/*`, `/_next/*`, `/favicon.ico` are passed through
+- [ ] BUG-3: Live -- `/dashboard` returns HTTP 200 (not redirect) for unauthenticated users (stale image)
+- [ ] BUG-5: (Static) `/api/health` is NOT in the public route list in middleware -- will be redirected to /login for unauthenticated users, breaking Docker healthcheck
+
+#### AC-7: /login page renders correctly
+- [x] (Static) `LoginForm` component has email field, password field, error display, submit button
+- [x] (Static) "Sign in with Google" button with Google SVG logo is present
+- [x] (Static) vBudget monogram ("vB" in indigo circle) and product name are rendered
+- [x] (Static) `vb-rise` animation defined in `globals.css` with staggered delays in LoginForm
+- [x] (Static) Page metadata sets `title: 'Sign in -- vBudget'`
+- [ ] BUG-1: Live -- Login page shows PROJ-4 placeholder "Login page -- coming in PROJ-5" (stale image)
+
+#### AC-8: /logout clears session and redirects to /login
+- [x] (Static) `SignOutButton` calls `signOut({ callbackUrl: '/login' })`
+- [x] (Static) Loading state managed with useState, disabled during sign-out
+- [ ] Cannot live-test (stale Docker image)
+
+#### AC-9: Google OAuth callback URL configurable via NEXTAUTH_URL
+- [x] `NEXTAUTH_URL` present in `nextjs/.env.test.example` (line 3)
+- [x] `NEXTAUTH_URL` present in root `.env.test.example` (line 6)
+- [x] NextAuth reads `NEXTAUTH_URL` automatically for callback construction
+
+#### AC-10: Incorrect credentials return user-facing error
+- [x] (Static) `mapError('CredentialsSignin')` returns "Invalid email or password."
+- [x] (Static) `mapError('GoogleOnlyAccount')` returns "This account uses Google Sign-In. Please use the button below."
+- [x] (Static) `mapError('AccountDisabled')` returns "Your account is not active. Please contact your administrator."
+- [x] (Static) Error displayed in red alert box with `role="alert"` and `aria-live="polite"`
+- [ ] BUG-6: (Static) Form has `noValidate` attribute and `handleSubmit` does not validate empty fields client-side -- empty submission triggers a server round-trip instead of instant feedback
+
+#### AC-11: Superadmin seeded from ADMIN_EMAIL / ADMIN_PASSWORD
+- [x] (Static) `prisma/seed.ts` reads `ADMIN_EMAIL` / `ADMIN_PASSWORD` from env vars
+- [x] (Static) Creates user with `isSuperAdmin: true`, hashes password with bcrypt
+- [x] (Static) Sets `defaultProjectId` for admin user
+- [x] (Live) Database shows admin@example.com with `isSuperAdmin=true` and `defaultProjectId` set
+- [ ] Cannot verify JWT role=superadmin live (stale image)
+
+#### AC-12: Auth env vars documented in .env.test.example
+- [x] `NEXTAUTH_SECRET` present in both `nextjs/.env.test.example` and root `.env.test.example`
+- [x] `NEXTAUTH_URL` present in both
+- [x] `GOOGLE_CLIENT_ID` present in both
+- [x] `GOOGLE_CLIENT_SECRET` present in both
+- [x] `ADMIN_EMAIL` and `ADMIN_PASSWORD` present in both
+
+#### AC-13: NEXTAUTH_SECRET missing causes clear error
+- [x] (Static) `lib/env.ts` includes `NEXTAUTH_SECRET` in `REQUIRED_ENV_VARS` array (line 8)
+- [x] (Static) `assertEnv()` throws descriptive error: "[vBudget] Missing required environment variable: NEXTAUTH_SECRET"
+- [x] (Static) `validateEnv()` collects all missing vars and throws a combined error message
+
+---
+
+### Edge Cases Status
+
+#### EC-1: Google-only account trying credentials
+- [x] (Static) `auth.ts` line 97: `if (!user.passwordHash) throw new GoogleOnlyAccountError()`
+- [x] (Static) `LoginForm` maps `GoogleOnlyAccount` error code to "This account uses Google Sign-In. Please use the button below."
+- [ ] Cannot live-test (stale Docker image)
+
+#### EC-2: Disabled account (isActive = false)
+- [x] (Static) `auth.ts` line 96: `if (!user.isActive) throw new AccountDisabledError()`
+- [x] (Static) Google sign-in callback line 196: `if (existing && !existing.isActive) return false`
+- [ ] BUG-4: `isActive` column missing from PostgreSQL database -- migration `20260303_add_user_isactive` exists but was never applied. Auth would crash at runtime when querying `user.isActive`.
+
+#### EC-3: NEXTAUTH_SECRET missing
+- [x] (Static) `lib/env.ts` throws immediately if NEXTAUTH_SECRET is missing
+- [x] (Static) Error message includes instructions to copy `.env.test.example`
+
+#### EC-4: JWT expiry / session refresh
+- [x] (Static) No custom `maxAge` or `updateAge` set -- NextAuth defaults apply (30 days)
+- [x] (Static) `updateAge` not set to 0, so session refresh works normally
+
+#### EC-5: Google OAuth new user auto-creation
+- [x] (Static) `signIn` callback creates user with `email` and empty `passwordHash` (lines 200-205)
+- [x] (Static) New user has default `isActive: true` (schema default)
+- [ ] BUG-7: (Static) New Google user has no project memberships and no role -- `getCurrentUser()` will return `role: 'user'` but `currentProjectId: null`. The user has no access to any project data after creation.
+
+---
+
+### Security Audit Results
+
+#### AUTH-1: Protected route bypass
+- [ ] BUG-3: (Live) `/dashboard` returns HTTP 200 with full page content for unauthenticated users (stale Docker image, but also a concern if middleware fails)
+- [x] (Static) Middleware redirects unauthenticated users to `/login?callbackUrl=...`
+- [x] (Static) Protected layout has server-side `auth()` check as second defense layer
+
+#### AUTH-2: JWT manipulation
+- [x] (Static) NextAuth uses `NEXTAUTH_SECRET` to sign and encrypt JWTs -- tampering invalidates the token
+- [x] (Static) `auth.ts` `authorize()` return object does NOT include `passwordHash`
+- [x] (Static) JWT callback does NOT expose `passwordHash` in token
+- [x] (Static) Session callback does NOT expose `passwordHash` in session
+
+#### AUTH-3: Credential injection
+- [x] (Static) Prisma uses parameterized queries -- SQL injection is prevented
+- [x] (Static) Email field uses `type="email"` HTML attribute for basic format validation
+- [x] (Static) Error messages use React JSX (auto-escaped) -- no XSS in error display
+
+#### AUTH-4: Sensitive data exposure
+- [x] (Static) `passwordHash` is NOT in JWT token fields
+- [x] (Static) `passwordHash` is NOT in session callback output
+- [x] (Static) `/api/auth/session` response (when working) would only contain `id`, `email`, `role`, `currentProjectId`
+
+#### AUTH-5: Google OAuth state parameter
+- [x] (Static) NextAuth v5 handles CSRF state parameter automatically for all OAuth providers
+
+#### AUTH-6: Session fixation
+- [x] (Static) NextAuth JWT strategy issues a new token on each sign-in -- no session fixation risk
+
+#### AUTH-7: Secrets in code
+- [x] No hardcoded secrets in `auth.ts` -- all secrets read from `process.env`
+- [x] No hardcoded secrets in `middleware.ts`
+- [x] No hardcoded secrets in `LoginForm.tsx`
+- [ ] BUG-8: (Static) No `.dockerignore` file in `nextjs/` -- Docker build copies `.env.test`, `.env.test.example`, and other non-essential files into the image
+
+#### AUTH-8: Rate limiting
+- [ ] BUG-9: (Static) No rate limiting on authentication endpoints -- brute-force attacks on `/api/auth/callback/credentials` are not throttled
+
+#### AUTH-9: Security headers
+- [ ] BUG-10: (Static) No security headers configured (X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Strict-Transport-Security) -- required by project security rules
+
+#### AUTH-10: Input validation
+- [ ] BUG-11: (Static) No Zod validation on credentials in `authorize()` -- project rules require "Validate ALL user input on the server side with Zod"
+
+---
+
+### Regression Test Results
+
+#### PROJ-4: Health endpoint
+- [x] `GET /api/health` returns `{"status":"ok"}` with HTTP 200 (live confirmed)
+
+#### PROJ-4: Root page
+- [x] `GET /` returns HTTP 200 and renders PROJ-4 scaffold page (live confirmed)
+
+#### PROJ-4: Docker stack
+- [x] Both containers start cleanly and report healthy
+- [x] PostgreSQL is reachable with seeded data (admin user present)
+
+---
+
+### Responsive / Cross-Browser (Static Review Only)
+
+Login page CSS analysis (source code -- cannot live-test due to stale Docker image):
+- [x] Card uses `max-w-sm w-full` with `p-4` on main container -- fits 375px mobile
+- [x] Card is flex-centered: `flex items-center justify-center` -- centered at 768px and 1440px
+- [x] Background gradients use `radial-gradient` with fixed attachment -- visible at 1440px
+- [x] Form inputs use `w-full` -- no horizontal overflow at any breakpoint
+- [ ] Note: Cannot verify actual rendering due to stale Docker image
+
+---
+
+### Bugs Found
+
+#### BUG-1: Docker image is stale -- PROJ-5 code not deployed [Deploy]
+- **Severity:** Critical
+- **Steps to Reproduce:**
+  1. Run `docker-compose -f docker-compose.test.yml up`
+  2. Visit http://localhost:3001/login
+  3. Expected: LoginForm with email/password fields and Google sign-in button
+  4. Actual: Placeholder page showing "Login page -- coming in PROJ-5"
+- **Root Cause:** Docker image was built from PROJ-4 commits. PROJ-5 commits (`3cca599`, `5965c22`) are in git but `docker-compose build` was never re-run.
+- **Impact:** ALL authentication features are non-functional in the deployed test stack. No live testing of auth flows is possible.
+- **Priority:** Fix before deployment -- rebuild with `docker-compose -f docker-compose.test.yml build --no-cache`
+
+#### BUG-2: NextAuth API routes return 404 [Deploy]
+- **Severity:** Critical
+- **Steps to Reproduce:**
+  1. `curl http://localhost:3001/api/auth/session` -- returns 404
+  2. `curl http://localhost:3001/api/auth/providers` -- returns 404
+  3. `curl -X POST http://localhost:3001/api/auth/callback/credentials` -- returns 404
+- **Expected:** NextAuth endpoints return JSON responses
+- **Actual:** All return 404 HTML pages
+- **Root Cause:** Same as BUG-1 -- stale Docker image does not include `app/api/auth/[...nextauth]/route.ts`
+- **Priority:** Fix before deployment (resolved by rebuilding Docker image)
+
+#### BUG-3: /dashboard accessible without authentication [Deploy]
+- **Severity:** Critical
+- **Steps to Reproduce:**
+  1. `curl -s -o /dev/null -w "%{http_code}" http://localhost:3001/dashboard` -- returns 200
+  2. Full page HTML returned including sidebar, header, and dashboard content
+- **Expected:** HTTP 302 redirect to `/login?callbackUrl=/dashboard`
+- **Actual:** HTTP 200 with full page content (header shows "?" avatar with no user info)
+- **Root Cause:** Stale Docker image has no auth middleware. After rebuild, middleware.ts should handle this.
+- **Priority:** Fix before deployment (resolved by rebuilding Docker image)
+
+#### BUG-4: Database missing `isActive` column -- migration not applied [Backend]
+- **Severity:** Critical
+- **Steps to Reproduce:**
+  1. `docker exec postgres-test psql -U vbudget -d vbudget -c "SELECT column_name FROM information_schema.columns WHERE table_name='User';"`
+  2. Result shows 7 columns -- `isActive` is NOT present
+  3. Only `20260301195848_init` migration applied; `20260303115657_add_user_isactive` is pending
+- **Expected:** `isActive` column exists with `BOOLEAN NOT NULL DEFAULT true`
+- **Actual:** Column does not exist. `auth.ts` line 96 references `user.isActive` which would crash at runtime.
+- **Impact:** Any attempt to authenticate after rebuilding the Docker image would fail with a Prisma/PostgreSQL error because the code expects `isActive` but the column does not exist.
+- **Priority:** Fix before deployment -- run `prisma migrate deploy` inside the container after rebuild, or add migration step to Dockerfile/entrypoint
+
+#### BUG-5: /api/health not excluded from auth middleware [Backend]
+- **Severity:** High
+- **Steps to Reproduce:**
+  1. (Static review) `middleware.ts` lines 20-24: `isPublicRoute` does not include `/api/health`
+  2. Middleware matcher `/((?!api/auth|_next/static|_next/image|favicon.ico|.*\\..*).*)'` DOES match `/api/health`
+  3. After rebuild, unauthenticated requests to `/api/health` will be redirected to `/login`
+- **Expected:** `/api/health` is publicly accessible (used by Docker healthcheck)
+- **Actual:** Middleware will redirect unauthenticated `/api/health` requests to `/login`
+- **Impact:** Docker `HEALTHCHECK` command (`wget -qO- http://127.0.0.1:3001/api/health`) will fail, causing Docker to mark the container as unhealthy and potentially restart it in a loop.
+- **Priority:** Fix before deployment
+
+#### BUG-6: No client-side empty field validation on login form [Frontend]
+- **Severity:** Low
+- **Steps to Reproduce:**
+  1. (Static review) `LoginForm.tsx` line 176: `<form onSubmit={handleSubmit} noValidate>`
+  2. `handleSubmit` does not check for empty email/password before calling `signIn()`
+  3. Empty submission makes a server round-trip to `/api/auth/callback/credentials`
+- **Expected:** Client-side validation prevents empty submission (instant feedback)
+- **Actual:** Empty fields are sent to the server. Server-side `authorize()` returns null, which works but wastes a network round-trip.
+- **Priority:** Nice to have
+
+#### BUG-7: Google-created users have no project access [Backend]
+- **Severity:** Medium
+- **Steps to Reproduce:**
+  1. (Static review) `auth.ts` lines 198-206: New Google user created with only `email` and empty `passwordHash`
+  2. No `ProjectMember` record is created
+  3. No `defaultProjectId` is set
+- **Expected:** New user should either be assigned to a default project or shown a "no project" onboarding screen
+- **Actual:** User is created but has `currentProjectId: null` and no project memberships. They can log in but cannot access any project data.
+- **Priority:** Fix in next sprint (requires product decision on auto-assignment vs onboarding)
+
+#### BUG-8: Missing .dockerignore in nextjs/ [Deploy]
+- **Severity:** Low
+- **Steps to Reproduce:**
+  1. Check `nextjs/.dockerignore` -- file does not exist
+  2. `Dockerfile` `COPY . .` copies everything including `.env.test`, `.env.test.example`, `node_modules/`, `.next/`
+- **Expected:** `.dockerignore` excludes sensitive and unnecessary files from the build context
+- **Actual:** All files copied, potentially including local env files with secrets, and unnecessarily large build context
+- **Priority:** Nice to have
+
+#### BUG-9: No rate limiting on auth endpoints [Backend]
+- **Severity:** Medium
+- **Steps to Reproduce:**
+  1. (Static review) No rate-limiting middleware or configuration found in any file
+  2. `grep -ri "rate.?limit" nextjs/` returns no results
+  3. Project security rules require: "Implement rate limiting on authentication endpoints"
+- **Expected:** Rate limiting on `/api/auth/callback/credentials` to prevent brute-force attacks
+- **Actual:** No rate limiting -- unlimited login attempts possible
+- **Priority:** Fix in next sprint
+
+#### BUG-10: No security headers configured [Backend]
+- **Severity:** Medium
+- **Steps to Reproduce:**
+  1. (Static review) `grep -ri "X-Frame-Options\|X-Content-Type-Options\|Referrer-Policy\|Strict-Transport" nextjs/` returns no results
+  2. No `next.config.mjs` headers configuration
+  3. Project security rules require: X-Frame-Options: DENY, X-Content-Type-Options: nosniff, Referrer-Policy: origin-when-cross-origin, Strict-Transport-Security with includeSubDomains
+- **Expected:** Security headers set on all responses
+- **Actual:** No security headers configured
+- **Priority:** Fix in next sprint
+
+#### BUG-11: No Zod validation on credential inputs [Backend]
+- **Severity:** Low
+- **Steps to Reproduce:**
+  1. (Static review) `auth.ts` `authorize()` only checks `!credentials?.email || !credentials?.password` and does type coercion
+  2. No Zod schema validation
+  3. Project rules require: "Validate ALL user input on the server side with Zod"
+- **Expected:** Zod schema validates email format and password constraints before DB lookup
+- **Actual:** Basic truthy check only -- no format validation. Prisma parameterization prevents SQL injection, so risk is low.
+- **Priority:** Nice to have
+
+#### BUG-12: Nested SessionProviders in RootLayout and ProtectedLayout [Frontend]
+- **Severity:** Low
+- **Steps to Reproduce:**
+  1. `app/layout.tsx` line 18: `<SessionProvider>{children}</SessionProvider>` (no session prop)
+  2. `app/(protected)/layout.tsx` line 25: `<SessionProvider session={session}>` (with session prop)
+  3. Protected pages get double-wrapped by SessionProvider
+- **Expected:** Single SessionProvider, either at root or at protected layout level
+- **Actual:** Nested SessionProviders. The inner one (with session prop) takes precedence for protected routes, and the outer one triggers an extra `/api/auth/session` fetch on every page load (including public pages).
+- **Impact:** Extra network request on every page load; confusing architecture
+- **Priority:** Nice to have
+
+---
+
+### Summary
+
+- **Acceptance Criteria:** 8/13 passed (static verification), 0/13 fully live-verified
+- **Edge Cases:** 4/5 passed (static), 0/5 live-verified
+- **Bugs Found:** 12 total (4 critical, 1 high, 3 medium, 4 low)
+- **Security:** Issues found (no rate limiting, no security headers, no Zod validation, missing .dockerignore)
+- **Production Ready:** NO
+- **Recommendation:** Fix BUG-1 through BUG-5 before deployment. The Docker image must be rebuilt, the `isActive` migration must be applied, and `/api/health` must be added to the middleware public route list. After those fixes, re-run QA to live-verify all acceptance criteria. BUG-9 and BUG-10 (rate limiting and security headers) should be addressed before production but can be deferred to the next sprint for the test environment.
 
 ## Deployment
 _To be added by /deploy_
