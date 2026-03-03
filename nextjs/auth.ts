@@ -1,4 +1,4 @@
-import NextAuth from 'next-auth';
+import NextAuth, { CredentialsSignin } from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import Google from 'next-auth/providers/google';
 import { PrismaClient } from '@prisma/client';
@@ -26,6 +26,20 @@ declare module '@auth/core/jwt' {
     role: 'user' | 'admin' | 'superadmin';
     currentProjectId: string | null;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Custom error classes for CredentialsProvider (NextAuth v5)
+// The `code` property surfaces as result.error in the client when
+// signIn('credentials', { redirect: false }) is used.
+// ---------------------------------------------------------------------------
+
+class GoogleOnlyAccountError extends CredentialsSignin {
+  code = 'GoogleOnlyAccount' as const;
+}
+
+class AccountDisabledError extends CredentialsSignin {
+  code = 'AccountDisabled' as const;
 }
 
 // ---------------------------------------------------------------------------
@@ -78,6 +92,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         });
 
         if (!user) return null;
+
+        if (!user.isActive) throw new AccountDisabledError();
+        if (!user.passwordHash) throw new GoogleOnlyAccountError();
 
         const passwordMatch = await bcrypt.compare(password, user.passwordHash);
         if (!passwordMatch) return null;
@@ -175,6 +192,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const existing = await prisma.user.findUnique({
           where: { email: user.email },
         });
+
+        if (existing && !existing.isActive) return false;
 
         if (!existing) {
           // Auto-create user on first Google sign-in (passwordHash is empty)

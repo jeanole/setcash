@@ -15,6 +15,10 @@ function mapError(code: string | undefined): string {
       return 'Please use Google to sign in for this account.';
     case 'AccessDenied':
       return 'Account not active. Please contact your administrator.';
+    case 'GoogleOnlyAccount':
+      return 'This account uses Google Sign-In. Please use the button below.';
+    case 'AccountDisabled':
+      return 'Your account is not active. Please contact your administrator.';
     default:
       return 'An error occurred. Please try again.';
   }
