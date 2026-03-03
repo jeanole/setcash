@@ -3,6 +3,7 @@ import Credentials from 'next-auth/providers/credentials';
 import Google from 'next-auth/providers/google';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { z } from 'zod';
 
 // ---------------------------------------------------------------------------
 // NextAuth v5 session/JWT type augmentation
@@ -56,6 +57,7 @@ if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   session: { strategy: 'jwt' },
+  trustHost: true,
 
   pages: {
     signIn: '/login',
@@ -73,16 +75,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         password: { label: 'Password', type: 'password' },
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
-          return null;
-        }
+        const credentialsSchema = z.object({
+          email: z.string().email(),
+          password: z.string().min(1),
+        });
 
-        const email =
-          typeof credentials.email === 'string' ? credentials.email : '';
-        const password =
-          typeof credentials.password === 'string'
-            ? credentials.password
-            : '';
+        const parsed = credentialsSchema.safeParse(credentials);
+        if (!parsed.success) return null;
+        const { email, password } = parsed.data;
 
         const user = await prisma.user.findUnique({
           where: { email },
