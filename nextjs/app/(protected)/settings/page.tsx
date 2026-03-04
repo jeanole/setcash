@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { auth } from '../../../auth';
+import { auth } from '@/auth';
 import ProjectIdentityForm from '@/components/settings/ProjectIdentityForm';
 
 export default async function GeneralSettingsPage() {

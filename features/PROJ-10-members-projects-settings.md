@@ -622,7 +622,94 @@ The existing Prisma schema needs minor updates:
 - Project deletion requires explicit confirmation with project name (opt-in safeguard)
 
 ## QA Test Results
-_To be added by /qa_
+
+**QA Date:** 2026-03-04  
+**Test Environment:** Local Docker (http://localhost:3001)  
+**Tester:** QA Engineer  
+**Test Outcome:** BLOCKED - Critical environment issues prevent full testing
+
+---
+
+### Build-Blocking Bugs Found
+
+#### BUG-001: Missing `sonner` dependency — **Critical** [Deploy]
+- **Issue:** `sonner` toast library imported in multiple files but not in package.json
+- **Files affected:** 
+  - `components/settings/ProjectIdentityForm.tsx`
+  - `lib/hooks/useMembers.ts`
+  - `lib/hooks/usePositions.ts`
+  - `lib/hooks/useProjects.ts`
+- **Error:** `Module not found: Can't resolve 'sonner'`
+- **Fix:** `npm install sonner` (applied)
+- **Status:** RESOLVED
+
+#### BUG-002: Incorrect relative import paths for auth — **Critical** [Backend]
+- **Issue:** Multiple API routes use incorrect relative paths to import `auth`
+- **Files affected:**
+  - `app/api/projects/[id]/members/[memberId]/route.ts` - `../../../../../auth`
+  - `app/api/projects/[id]/positions/route.ts` - `../../../../auth`
+  - `app/api/projects/[id]/resign/route.ts` - `../../../../auth`
+  - `app/api/projects/route.ts` - `../../../../auth`
+- **Fix:** Use `@/auth` path alias instead (applied to all files)
+- **Status:** RESOLVED
+
+---
+
+### Environment Issues Blocking Testing
+
+#### ENV-001: Host disk critically full — **Critical**
+- **Issue:** C: drive at 100% capacity (476GB used / 476GB total, only 87MB free)
+- **Impact:** Cannot build Docker images, Next.js cannot compile, temp files fail
+- **Error:** `ENOSPC: no space left on device`
+- **Recommendation:** Free up disk space on host machine before testing can proceed
+
+#### ENV-002: Missing AUTH_SECRET — **High**
+- **Issue:** NextAuth requires `AUTH_SECRET` environment variable in production mode
+- **Impact:** Login/authentication will fail
+- **Fix:** Add `AUTH_SECRET` to `.env.test` or docker-compose.test.yml
+
+---
+
+### Code Review Findings (Static Analysis)
+
+During investigation of build issues, the following code concerns were noted:
+
+#### Security Issues
+
+| ID | File | Issue | Severity | Skill Tag |
+|----|------|-------|----------|-----------|
+| BUG-003 | `app/(protected)/settings/members/page.tsx` | **Missing server-side role guard** — page is 'use client' with no SSR protection. Regular users can view (not just access via tab) the members management UI by directly accessing `/settings/members`. API correctly rejects actions, but UI should be protected too. | **High** | [Frontend] |
+| BUG-004 | `app/(protected)/settings/positions/page.tsx` | **Missing server-side role guard** — same issue as members page. Direct URL access shows UI to unauthorized users. | **High** | [Frontend] |
+
+#### Code Quality Issues (Fixed)
+
+| File | Issue | Severity | Skill Tag |
+|------|-------|----------|-----------|
+| `app/api/projects/[id]/members/route.ts` | Uses `../../../../auth` instead of `@/auth` — **FIXED** | Low | [Backend] |
+| `app/(protected)/settings/layout.tsx` | Uses `../../../auth` instead of `@/auth` — **FIXED** | Low | [Backend] |
+| `app/(protected)/settings/page.tsx` | Uses `../../../auth` instead of `@/auth` — **FIXED** | Low | [Backend] |
+| `app/api/projects/[id]/positions/[posId]/route.ts` | Uses `../../../../../auth` instead of `@/auth` — **FIXED** | Low | [Backend] |
+
+---
+
+### Recommended Next Steps
+
+1. **Free up disk space** on host machine (minimum 5GB recommended)
+2. **Add AUTH_SECRET** to test environment configuration
+3. **Rebuild and restart** test environment
+4. **Re-run full QA test plan** once environment is healthy
+
+---
+
+### Production-Ready Status: **NO**
+
+**Blockers:**
+- [ ] Critical environment issues prevent validation
+- [ ] Build bugs were found and fixed (verification needed)
+- [ ] Security audit not completed due to environment
+- [ ] Manual acceptance criteria testing blocked
+
+**Recommendation:** Fix environment issues and re-run complete QA test plan before deploying to production.
 
 ## Deployment
 _To be added by /deploy_

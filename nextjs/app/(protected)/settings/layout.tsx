@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { auth } from '../../../auth';
+import { auth } from '@/auth';
 import SettingsTabs from '@/components/settings/SettingsTabs';
 
 export default async function SettingsLayout({
