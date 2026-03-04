@@ -510,11 +510,17 @@ SQLite row counts (from database):
 
 ### Required Actions Before Deployment
 
-1. **[Critical]** Add `@unique` attribute to `legacyId` fields in Prisma schema for all tables
-2. **[Critical]** Create Prisma migration: `npx prisma migrate dev --name add_legacyid_unique`
-3. **[Medium]** Fix `toDecimal()` to preserve null: `return value === null ? null : new Decimal(value ?? 0)`
-4. **[Low]** Fix `toBoolean()` to preserve null: `return value === null ? null : value === 1`
-5. **[Low]** Remove unused `telegramLinkIdMap` or add FK references
+#### Completed Fixes (2026-03-04)
+- ✅ **BUG-1 Fixed**: Added `@unique` to `legacyId` fields in all 16 models
+- ✅ **BUG-2 Fixed**: `toDecimal()` now preserves null values
+- ✅ **BUG-3 Fixed**: `toBoolean()` now preserves null values  
+- ✅ **BUG-4 Fixed**: Removed unused `telegramLinkIdMap`
+- ✅ Prisma client regenerated with new unique constraints
+
+#### Remaining Actions
+1. **[Critical]** Create Prisma migration: `npx prisma migrate dev --name add_legacyid_unique`
+   - Run when DATABASE_URL is available
+2. **[Required]** Re-run QA to verify all bugs fixed
 
 ### Regression Test Scope
 - PROJ-4 scaffold: ✅ Works (PostgreSQL running)
