@@ -24,6 +24,9 @@ RUN npx prisma generate
 
 RUN npm run build
 
+# Compile seed script for production
+RUN npx tsc prisma/seed.ts --outDir dist --module commonjs --target es2020 --esModuleInterop --skipLibCheck
+
 # Stage 3 — runner: minimal production image
 FROM node:20-alpine AS runner
 WORKDIR /app
@@ -42,12 +45,15 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 
-# Copy Prisma for migration at startup
+# Copy Prisma for migration and seed at startup
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/prisma ./node_modules/prisma
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
+# Copy compiled seed script and its dependencies
+COPY --from=builder --chown=nextjs:nodejs /app/dist/seed.js ./prisma/seed.js
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/bcryptjs ./node_modules/bcryptjs
 
 USER nextjs
 
@@ -59,4 +65,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
 ENV PORT=3001
 ENV HOSTNAME="0.0.0.0"
 
-CMD ["sh", "-c", "node node_modules/prisma/build/index.js migrate deploy && node server.js"]
+CMD ["sh", "-c", "node node_modules/prisma/build/index.js migrate deploy && node prisma/seed.js && node server.js"]
