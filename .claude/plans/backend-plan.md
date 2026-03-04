@@ -1,97 +1,63 @@
-# Backend Implementation Plan — CR-1: Admin OCR/AI Logging Panel
+# Backend Implementation Plan
 
-## Feature
-CR-1 in `features/PROJ-1-ocr-bill-analysis.md` — Admin OCR/AI Logging Panel in Settings
+## Bug Fix
+BUG-9: Rate limiting not applied to auth endpoints
 
 ## Context Summary
-- Project uses Node.js + Express + SQLite (better-sqlite3)
-- DB migrations use try/catch pattern: `SELECT col FROM table LIMIT 1` → if error → `ALTER TABLE`
-- `routes/ocr.js` contains `runOcrJob()` — the function we need to extend with logging
-- `routes/settings.js` contains admin settings endpoints — we add the log query endpoint here
-- `public/js/admin.js` handles admin settings UI — frontend work deferred to `/frontend`
-- `public/index.html` — frontend work deferred to `/frontend`
 
-## User Decisions
-All decisions made by architect in CR-1 Tech Design — no open questions.
+### Root Cause
+The middleware.ts has rate limiting code for `/api/auth/callback/credentials`, but the matcher config excludes ALL `/api/auth/*` routes:
 
-## Open Bug Reports to Address
-- BUG-1 (OCR Analysis Runs Indefinitely) — already fixed in previous session; will update INDEX.md status
+```javascript
+matcher: ['/((?!api/auth|_next/static|...).*))']
+```
 
-## Tables to Create
+This means the middleware never executes for the credentials callback, so rate limiting is never triggered.
 
-### `ocr_log`
-| Column | Type | Notes |
-|--------|------|-------|
-| `id` | INTEGER PRIMARY KEY AUTOINCREMENT | |
-| `project_id` | INTEGER | FK → projects(id) ON DELETE SET NULL |
-| `bill_id` | INTEGER | FK → bills(id) ON DELETE SET NULL |
-| `timestamp` | TEXT | ISO datetime, DEFAULT datetime('now') |
-| `provider` | TEXT | e.g. "openai", "gemini", "claude", "custom" |
-| `status` | TEXT | "done" / "failed" / "skipped" |
-| `fields_written` | TEXT | JSON array or null |
-| `ai_response` | TEXT | Truncated to 2000 chars, null for config/input failures |
-| `error_detail` | TEXT | null on success |
+### Current State
+- Rate limiting code exists in middleware.ts (5 attempts per 60s per IP)
+- Matcher excludes `/api/auth/*` routes
+- The credentials callback needs rate limiting to prevent brute force
 
-Migration: CREATE TABLE IF NOT EXISTS in `db.js` (append to the main schema block is not possible since it uses IF NOT EXISTS — add as separate CREATE TABLE IF NOT EXISTS statement after the main block, before the existing ALTER migrations).
+## Solution
 
-### Index
-- `CREATE INDEX IF NOT EXISTS idx_ocr_log_project ON ocr_log(project_id, timestamp)`
+Move rate limiting from middleware to the API route level:
 
-## API Endpoints to Implement
+1. **Create dedicated credentials route** that wraps NextAuth with rate limiting
+2. **Remove rate limiting from middleware** (keep auth protection)
+3. **Update NextAuth config** to expose credentials provider separately
 
-### `GET /api/admin/ocr-log`
-- **File:** `routes/settings.js`
-- **Auth:** `ensureProjectAdmin`
-- **Query:** Last 50 rows from `ocr_log` for `project_id`, joined with `bills.bill_number`, ordered by `timestamp DESC`
-- **Response:** Array of objects:
-  ```json
-  {
-    "id": 1,
-    "billId": 42,
-    "billNumber": "R-2026-042",
-    "timestamp": "2026-02-26T14:30:00",
-    "provider": "openai",
-    "status": "done",
-    "fieldsWritten": ["vendor", "date", "amount"],
-    "aiResponsePreview": "first 200 chars...",
-    "errorDetail": null
-  }
-  ```
-- **Error cases:** 403 if not project admin (middleware handles)
+## Implementation Steps
 
-## Backend Modifications
+### 1. Create `nextjs/app/api/auth/callback/credentials/route.ts`
 
-### `routes/ocr.js` — `runOcrJob()`
-Extend to write one `ocr_log` row at every exit:
+New file that:
+- Implements in-memory rate limiting (same logic as middleware)
+- Wraps the credentials authorization
+- Returns 429 when rate limited
+- Falls through to NextAuth handler when allowed
 
-1. **Capture raw AI response text** — store the raw text from `analyseImage()` before it goes through `parseOcrResponse()`. This means `analyseImage()` needs to return both the parsed result AND the raw text. OR we capture the raw text separately. Simplest: modify `analyseImage` to return `{ parsed, rawText }` instead of just parsed result.
+### 2. Update `nextjs/middleware.ts`
 
-2. **At the `fail()` helper** — insert log row with status='failed', error_detail=reason, ai_response=null (since we haven't called the AI yet at most fail points), provider from settings (if available).
+Remove the rate limiting code block (lines 40-56) since it never executes anyway.
 
-3. **At success path** — insert log row with status='done', fields_written=JSON array, ai_response=rawText (truncated to 2000 chars), error_detail=null.
+### 3. Update `nextjs/auth.ts` (if needed)
 
-4. **For config/input failures** (OCR not enabled, no API key, no image) — status='skipped' or 'failed', ai_response=null.
+Ensure credentials provider is properly configured for external authorization.
 
-### `db.js`
-- Add `CREATE TABLE IF NOT EXISTS ocr_log (...)` after existing schema block
+## Testing
 
-## Implementation Steps (ordered)
-
-1. **`db.js`** — Add `ocr_log` table creation + index
-2. **`routes/ocr.js`** — Modify `analyseImage()` to return `{ parsed, rawText }`; update call sites. Modify `runOcrJob()` to capture raw response and insert `ocr_log` rows at every exit point.
-3. **`routes/settings.js`** — Add `GET /api/admin/ocr-log` endpoint
-4. **Verify** — No new npm packages needed
+After fix:
+1. 5 failed login attempts from same IP should succeed
+2. 6th attempt should return 429 "Too many login attempts"
+3. After 60 seconds, attempts should succeed again
+4. Valid login should work normally
+5. Other auth endpoints (/api/auth/session, etc.) should not be rate limited
 
 ## Checklist
-- [ ] `ocr_log` table created in db.js
-- [ ] Index on (project_id, timestamp)
-- [ ] `analyseImage()` returns raw text alongside parsed result
-- [ ] `runOcrJob()` writes log row on success
-- [ ] `runOcrJob()` writes log row on failure (all fail paths)
-- [ ] `runOcrJob()` writes log row on skip (config/input errors)
-- [ ] Raw AI response truncated to 2000 chars before storage
-- [ ] API key NEVER stored in log
-- [ ] `GET /api/admin/ocr-log` endpoint returns last 50 entries
-- [ ] Endpoint joins bills.bill_number for display
-- [ ] Endpoint scoped to current project
-- [ ] Endpoint protected by ensureProjectAdmin
+
+- [ ] Create credentials API route with rate limiting
+- [ ] Remove rate limiting from middleware
+- [ ] Test rate limiting works (5 attempts, then 429)
+- [ ] Test valid login still works
+- [ ] Test other auth endpoints unaffected

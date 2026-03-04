@@ -1,173 +1,200 @@
-# Frontend Implementation Plan — PROJ-1 CR-4 + CR-5
+# Frontend Implementation Plan — PROJ-5
 
 ## Feature
-PROJ-1: OCR / AI Bill Analysis — pending CRs
-- CR-4: Analyse Button + Field Verification in Upload Modal
-- CR-5: Re-Analyse Button for Already-Analysed Bills
-Spec: `features/PROJ-1-ocr-bill-analysis.md`
+PROJ-5: NextAuth.js Authentication
+Spec: `features/PROJ-5-nextauth-authentication.md`
 
 ## Context Summary
-- PROJ-1 core + CR-1/CR-2/CR-3 all deployed; CR-4 and CR-5 are Pending Review
-- The app is vanilla HTML/JS with Tailwind CSS classes
-- Upload form: `public/index.html` lines 290-464 (tab-upload pane), submit handler in `public/js/core.js` lines 380-477
-- Upload form fields: photos, type, brutto19/7/0, vendor, item, comment, motive/category allocations. **No date field in upload form** (date is auto-set to `new Date().toISOString()` on the server)
-- Bill detail modal: `public/js/bills.js` has `triggerBillAnalysis()` (line 922), `showAnalyseButton()` (line 910), `applyOcrFieldHighlights()` (line 735), `verifyOcrField()` (line 814)
-- OCR analyse endpoint: `POST /api/bills/:id/analyse` — requires a saved bill ID, fires `runOcrJob` in background, returns 202
-- OCR polling: `startOcrPolling(billId)` polls `GET /api/bills/:id` until `ocrStatus` changes from "pending"
+- PROJ-4 scaffold is complete: Next.js 14, Tailwind v4, Prisma, PostgreSQL, Docker
+- Design system established: indigo primary (`indigo-600`), slate grays, soft radial gradient body background
+- Existing layout components: `AppShell`, `Sidebar`, `Header` (all stubs, desktop-only sidebar)
+- Existing pages: login stub, dashboard stub, protected layout stub
+- `bcryptjs` already installed; `next-auth` NOT yet installed
+- `lib/env.ts` exists with `DATABASE_URL` validation — will extend with `NEXTAUTH_SECRET`
+- Tech design in spec is comprehensive — no architectural ambiguity
+- Branch: `to_nextjs`
+
+## User Decisions
+- Login page: centered card on fullscreen background with logo — creative design, film-set feel
+- Google button: standard Google branding (white, "G" logo)
+- Transition/animation: "film set being built" — sequential elements animate in like props being placed on a stage
+- Accessibility: WCAG 2.1 AA defaults (focus rings, labels, ARIA)
+- Error UX: inline error message below the form (not toast)
 
 ## Open Bug Reports to Address
-None — all PROJ-1 bugs resolved.
+None
 
-## Key Architecture Decision: CR-4
+## Existing Components to Reuse
+- `nextjs/app/globals.css` — CSS vars, focus ring, scrollbar styles (no changes needed)
+- `nextjs/components/layout/Header.tsx` — modify to show user avatar with initials + SignOutButton
+- `nextjs/app/(protected)/layout.tsx` — modify to add session guard + SessionProvider
+- `nextjs/app/layout.tsx` — modify to wrap with SessionProvider
+- `nextjs/lib/env.ts` — extend with NEXTAUTH_SECRET
 
-**Problem:** The current analyse endpoint requires a saved bill (`POST /api/bills/:id/analyse`). CR-4 wants analysis _during upload, before saving_.
+## New Components to Build
 
-**Chosen approach: Two-step save-then-analyse**
-1. When user clicks "Analyse" in the upload form, first save the bill immediately via `POST /upload` (existing endpoint) — this creates the bill with images
-2. Then immediately trigger `POST /api/bills/:id/analyse` on the newly created bill
-3. Poll for results via `startOcrPolling(billId)`
-4. When OCR completes, pre-fill the form as an "edit view" — switch the upload form into an edit mode showing the OCR results with verification badges
-5. User reviews/verifies fields and clicks "Save Changes" which calls `PUT /api/bills/:id`
+### 1. `nextjs/auth.ts` — NextAuth v5 configuration
+- Providers: CredentialsProvider (email + bcrypt), GoogleProvider
+- JWT callbacks: embed `id`, `email`, `role`, `currentProjectId` in token
+- Session callback: forward token fields to session object
+- Error handling: throw on missing NEXTAUTH_SECRET at startup
 
-**Why this approach:**
-- No new backend endpoints needed — reuses existing `/upload`, `/api/bills/:id/analyse`, and `PUT /api/bills/:id`
-- The bill is saved as a draft (status="draft" when vendor is empty and amounts are 0), so it's safe to save before OCR fills in values
-- This matches the existing backend flow exactly
+### 2. `nextjs/middleware.ts` — Edge middleware
+- Protects all routes under `/(protected)/`
+- Redirects unauthenticated requests to `/login`
+- Allows `/login`, `/api/auth/**`, and static assets through without auth check
 
-**UX flow:**
-1. User attaches photo(s) → "Analyse" button appears
-2. User clicks "Analyse" → button shows "Saving & Analysing..." spinner
-3. Behind the scenes: POST /upload saves draft bill → POST /api/bills/:id/analyse triggers OCR → poll for results
-4. When done: form switches to edit mode with OCR results pre-filled + amber verification badges
-5. User reviews, verifies fields, clicks "Save Changes" (PUT /api/bills/:id)
-6. On success: form resets, user sees success message
+### 3. `nextjs/app/api/auth/[...nextauth]/route.ts` — NextAuth HTTP handler
+- Mounts GET and POST handlers from `auth.ts`
 
-## Changes
+### 4. `nextjs/components/auth/LoginForm.tsx` — Client Component
+**Props:** none (self-contained, uses `signIn()`)
+**States:**
+- Idle: email + password fields, Sign In button, Google button
+- Loading: button shows spinner, fields disabled
+- Error: inline red error message below the form ("Invalid email or password" / "Use Google login" / "Account not active")
+**Responsive:** full-width on mobile, max-w-sm on all viewports (card constrains width)
+**Animation:** each form element fades+slides in with staggered delay (see Design Specifications)
 
-### CR-5: Re-Analyse Button (simpler, do first)
+### 5. `nextjs/components/auth/SignOutButton.tsx` — Client Component
+**Props:** none
+**Behaviour:** calls `signOut({ callbackUrl: '/login' })` on click
+**States:** idle text "Sign out"; loading spinner while signing out
+**Responsive:** text button, fits inline in Header
 
-**File: `public/js/bills.js`**
+### 6. `nextjs/lib/auth/session.ts` — Server helper
+- `getCurrentUser()` — wraps `getServerSession(authConfig)`
+- Returns `{ id, email, role, currentProjectId }` or `null`
+- Used in server components and API route guards
 
-1. **Modify `showAnalyseButton(bill)` (line 910):**
-   - If `bill.ocrStatus === "done"` or (`bill.ocrFields && bill.ocrFields.length > 0`): label = "Re-analyse"
-   - Otherwise: label = "Analyse"
-   - Store the label state on the button
+## Pages / Routes to Create or Modify
 
-2. **Modify `triggerBillAnalysis()` (line 922):**
-   - Before triggering: check if bill has existing OCR results
-   - If yes: show `confirm("This will re-analyse the bill and overwrite all AI-filled fields. Continue?")`
-   - If user cancels: return early, do nothing
-   - If user confirms or no prior analysis: proceed as before
+### `/login` — `nextjs/app/(public)/login/page.tsx` [MODIFY]
+**Route:** `/login`
+**Components:** LoginForm
+**Data source:** NextAuth (client-side `signIn()`)
+**Design:** full-screen dark cinematic background, centered card with vBudget logo
 
-3. **Modify `triggerBillAnalysisFromList(billId)` (line 957):**
-   - Same confirm logic for list-level "Analyse" button
-   - Update the button text in `renderFilteredBills()` to show "Re-analyse" when appropriate (line 301 template)
+### `/app/(protected)/layout.tsx` [MODIFY]
+**Changes:**
+- Import `getCurrentUser()` from `lib/auth/session.ts`
+- Server-side session check → redirect to `/login` if null
+- Wrap children with `SessionProvider` (makes session available to client components)
 
-### CR-4: Analyse Button in Upload Modal
+### `/app/layout.tsx` [MODIFY]
+**Changes:**
+- Import and render `SessionProvider` to make session context available globally to client components
 
-**File: `public/index.html`**
+### `nextjs/components/layout/Header.tsx` [MODIFY]
+**Changes:**
+- Import `getCurrentUser()` (server-side call)
+- Replace `?` avatar with user initials derived from email (first letter, uppercase, indigo-600 bg)
+- Add user email displayed below/beside avatar (hidden on mobile)
+- Mount `SignOutButton` inline in the header's right side
 
-1. **Add "Analyse" button to upload form** — between the photo area and the Type field:
-   ```html
-   <div id="uploadAnalyseSection" style="display: none">
-       <button type="button" id="uploadAnalyseBtn"
-           onclick="triggerUploadAnalysis()"
-           class="text-sm px-4 py-2 bg-amber-50 text-amber-700 rounded-lg hover:bg-amber-100 transition-colors border border-amber-200 cursor-pointer flex items-center gap-2">
-           <svg ...> <!-- small scan/sparkle icon -->
-           Analyse
-       </button>
-       <div id="uploadAnalyseStatus" class="hidden text-sm mt-2"></div>
-   </div>
-   ```
+## Data Connection
+- **CredentialsProvider:** calls Prisma to find user by email, `bcrypt.compare()` for password
+- **GoogleProvider:** standard OAuth flow via NextAuth, creates user on first Google login
+- **JWT strategy:** no DB session table; token signed with `NEXTAUTH_SECRET`
+- **Role derivation:** resolved in `jwt` callback — queries `ProjectMember` for active project
+- **Loading states:** `LoginForm` manages its own loading state via React state
+- **Error states:** NextAuth error codes mapped to user-friendly messages in `LoginForm`
 
-**File: `public/js/bills.js`** (or a new section in `core.js`)
+## Design Specifications
 
-2. **Show/hide Analyse button based on photo state:**
-   - In the existing `renderUploadThumbnails()` or photo change handlers:
-     if `pendingFiles.length > 0 && projectOcrEnabled` → show `#uploadAnalyseSection`
-     else → hide it
+### Login Page — Full-Screen Film Set
 
-3. **New function `triggerUploadAnalysis()`:**
-   ```
-   async function triggerUploadAnalysis() {
-     // 1. Disable button, show "Saving & Analysing..."
-     // 2. Build FormData from current upload form fields + pendingFiles
-     // 3. POST /upload → get { ok: true, billId: N }
-     // 4. POST /api/bills/:billId/analyse → get { ok: true }
-     // 5. Poll via startOcrPolling(billId) with a callback
-     // 6. When OCR completes:
-     //    a. Fetch GET /api/bills/:billId for full bill data
-     //    b. Switch upload form into "edit mode":
-     //       - Store billId in a variable (uploadEditBillId)
-     //       - Pre-fill all form fields with OCR-extracted values
-     //       - Apply OCR field highlights (amber badges + verify buttons)
-     //       - Change submit button text to "Save Changes"
-     //       - Change form submit handler to PUT /api/bills/:billId
-     //    c. Show success message
-     // 7. On error: show inline error, re-enable button
-   }
-   ```
+**Background (the "stage before the set is built"):**
+- Dark: `bg-slate-950` base
+- Layered radial gradients: deep indigo glow top-left, soft emerald glow bottom-right — like two stage spotlights warming up
+- Subtle noise texture via `bg-[url(...)]` or CSS `background-blend-mode` for cinematic grain
+- Background fades in first (opacity 0 → 1, 400ms ease-out)
 
-4. **Modify upload form submit handler** (in `core.js` line 382):
-   - Check if `uploadEditBillId` is set
-   - If yes: submit as PUT /api/bills/:id instead of POST /upload
-   - Include `ocrFields` tracking (which fields are still unverified)
-   - On success: reset form + clear uploadEditBillId
+**Card (the main "set piece" arriving on stage):**
+- `bg-white/95 backdrop-blur-sm` — frosted glass feel on the dark stage
+- `rounded-2xl`, `shadow-xl` (using `--vb-shadow-xl`)
+- `max-w-sm w-full p-8`
+- Animates in: slides up from below (`translateY(40px) → 0`) + fades in, 500ms ease-out, 200ms delay after background
 
-5. **OCR field highlighting in upload form:**
-   - Need a fieldMap for upload form IDs (different from detail form IDs):
-     ```
-     uploadFieldMap = {
-       date: null,  // no date field in upload form
-       vendor: uploadForm.vendor,
-       item: uploadForm.item,
-       type: uploadForm.type,
-       brutto19: uploadForm.brutto19,
-       brutto7: uploadForm.brutto7,
-       brutto0: uploadForm.brutto0,
-       comment: uploadForm.comment
-     }
-     ```
-   - Apply same amber highlight + verify button pattern
-   - Track verified fields client-side in a Set
+**Logo area (the "marquee lights" turning on):**
+- Centered `vB` monogram in a indigo-600 circle (`w-12 h-12 rounded-full bg-indigo-600`) — appears with a pop (scale 0.6→1 + opacity, 300ms ease-out, 100ms after card)
+- `vBudget` text in `text-2xl font-bold text-slate-800`, below the monogram, delay 150ms after monogram
+- Subtitle `text-sm text-slate-500 "Expense Tracker"`, delay 50ms after title
 
-6. **Reset function** — when switching away from upload tab or after successful save:
-   - Clear `uploadEditBillId`
-   - Clear all OCR highlights from upload form
-   - Reset button text back to "Upload"
+**Form elements (props being placed, one after another):**
+- Email field: fades+slides up, delay 0ms after logo complete (~700ms total from page load)
+- Password field: same, +80ms stagger
+- Submit button: +80ms more
+- Divider + Google button: +80ms more
 
-## Files to Modify
+**Animation keyframe (used for all elements):**
+```css
+@keyframes vb-rise {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+```
+Each element uses `animation: vb-rise Xms ease-out both;` with incrementing delays.
+Add this keyframe to `globals.css`.
 
-| File | Changes |
-|------|---------|
-| `public/js/bills.js` | CR-5: modify `showAnalyseButton()`, `triggerBillAnalysis()`, `triggerBillAnalysisFromList()`, bill list template; CR-4: add `triggerUploadAnalysis()`, `applyUploadOcrHighlights()`, upload field verification tracking |
-| `public/js/core.js` | CR-4: modify upload form submit handler to support edit mode, show/hide analyse button on photo changes |
-| `public/index.html` | CR-4: add analyse button + status area in upload form |
+**Form fields:**
+- `input` — `w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 focus:bg-white` + `box-shadow: var(--vb-ring)` on focus
+- Label: `text-sm font-medium text-slate-700` above each input
 
-No new npm packages. No backend changes needed.
+**Submit button:**
+- `w-full bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg py-2.5 text-sm font-semibold transition-colors`
+- Loading: `opacity-60 cursor-not-allowed` + inline spinner (SVG `animate-spin`)
+
+**Divider:**
+- `<hr>` with centered "or" text in `text-xs text-slate-400`
+
+**Google button:**
+- White bg, border `border-slate-200`, hover `bg-slate-50`
+- Google "G" SVG logo (standard) inline left
+- Text: "Sign in with Google"
+
+**Inline error:**
+- `text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mt-2`
+- Appears with `vb-rise` animation (no stagger, immediate)
+
+### Header — Updated
+- User initials: first character of email, uppercase, `bg-indigo-600 text-white rounded-full w-8 h-8`
+- Email: `text-xs text-slate-500` truncated, hidden on mobile
+- SignOutButton: `text-xs text-slate-500 hover:text-slate-700` button, beside or below avatar
+
+### Typography
+- Font: system-ui (inherited from Tailwind v4 default — no Google Fonts CDN)
+- Heading: `text-2xl font-bold text-slate-800`
+- Body: `text-sm text-slate-600`
+- Errors: `text-sm text-red-600`
+
+## Installation Step
+Before implementing, the subagent must run:
+```bash
+cd nextjs && npm install next-auth@beta
+```
+
+## Env Vars to Add to `lib/env.ts`
+Add `NEXTAUTH_SECRET` to `REQUIRED_ENV_VARS` — throw if missing.
 
 ## Checklist
-
-### CR-5
-- [ ] Analyse button shows "Re-analyse" when bill has existing OCR results
-- [ ] Clicking "Re-analyse" shows confirmation dialog
-- [ ] Cancelling confirmation does nothing
-- [ ] Confirming triggers re-analysis normally
-- [ ] List-level button also shows "Re-analyse" and has confirmation
-- [ ] First-time "Analyse" has no confirmation (works as before)
-
-### CR-4
-- [ ] "Analyse" button appears in upload form when photos attached + OCR enabled
-- [ ] Button hidden when no photos
-- [ ] Clicking "Analyse" saves draft bill and triggers OCR
-- [ ] Loading spinner shown during save + analysis
-- [ ] On OCR success: form fields pre-filled with extracted values
-- [ ] OCR-filled fields show amber highlight + "AI - please verify" + verify button
-- [ ] Verify button clears highlight client-side
-- [ ] Submit button changes to "Save Changes" after analysis
-- [ ] Submitting after analysis calls PUT (not POST /upload)
-- [ ] Unverified fields tracked in ocr_fields on save
-- [ ] OCR failure shows inline error in upload form
-- [ ] Normal upload (without analyse) works unchanged
-- [ ] Form resets cleanly after successful save
-- [ ] All dynamic content uses escapeHtml() for XSS safety
+- [ ] `next-auth@beta` installed
+- [ ] `nextjs/auth.ts` created — CredentialsProvider + GoogleProvider + JWT callbacks
+- [ ] `nextjs/middleware.ts` created — protects `/(protected)/` routes
+- [ ] `nextjs/app/api/auth/[...nextauth]/route.ts` created
+- [ ] `nextjs/components/auth/LoginForm.tsx` created — all states: idle, loading, error
+- [ ] `nextjs/components/auth/SignOutButton.tsx` created
+- [ ] `nextjs/lib/auth/session.ts` created — `getCurrentUser()` helper
+- [ ] `nextjs/app/(public)/login/page.tsx` updated — full design, film-set animation
+- [ ] `nextjs/app/(protected)/layout.tsx` updated — session guard + SessionProvider
+- [ ] `nextjs/app/layout.tsx` updated — SessionProvider wrapper
+- [ ] `nextjs/components/layout/Header.tsx` updated — initials avatar + email + SignOutButton
+- [ ] `nextjs/lib/env.ts` updated — NEXTAUTH_SECRET added to required vars
+- [ ] `@keyframes vb-rise` added to `globals.css`
+- [ ] `nextjs/.env.test.example` verified to include all auth env vars
+- [ ] No TypeScript errors (next build passes)
+- [ ] Responsive: 375px, 768px, 1440px
+- [ ] Accessibility: ARIA labels on form, focus rings working, semantic HTML
+- [ ] Error messages cover: invalid credentials, Google-only account, inactive account
+- [ ] Code committed: `feat(PROJ-5): Implement NextAuth.js authentication UI`
+- [ ] `features/INDEX.md` status updated

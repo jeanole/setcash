@@ -1,59 +1,111 @@
-# QA Test Plan -- PROJ-1: OCR / AI Bill Analysis (Round 7)
+# QA Test Plan
 
 ## Feature
-PROJ-1 -- `features/PROJ-1-ocr-bill-analysis.md`
+PROJ-5: NextAuth.js Authentication
+Feature spec: `features/PROJ-5-nextauth-authentication.md`
 
 ## Context Summary
-- Feature deployed as v1.9.0-PROJ-1 after 6 prior QA rounds
-- Rounds 1-5 found and fixed many bugs. Round 6 found 2 new bugs.
-- Round 7 is a focused fix-verification round for 2 bugs from Round 6:
-  - NEW-BUG-R6-1 (Medium): netto_amount not recalculated during re-analysis
-  - NEW-BUG-R6-2 (Low): session cookie missing secure flag and sameSite
-- All other items passed in Round 6
 
-## Focus Areas
-1. Verify NEW-BUG-R6-1 fix: netto_amount recalculation guard now includes `isReanalysis`
-2. Verify NEW-BUG-R6-2 fix: session cookie has `secure` and `sameSite` attributes
-3. Regression spot-check: first-time analysis still preserves user-entered amounts
-4. Check for any new issues introduced by the fixes
+### Previous QA Status
+The previous QA (2026-03-03) was **blocked by a stale Docker image** - the PROJ-5 code was in git but the running container was built from PROJ-4. All live tests failed with 404s or showed placeholder content.
 
----
+### Recent Fixes Applied
+Commit `ffbf654` indicates these bugs were fixed:
+- Middleware auth bypass issues
+- Rate limiting on auth endpoints  
+- Security headers (X-Frame-Options, HSTS, etc.)
+- Dockerfile migration deployment
 
-## Test Matrix
+### Current Status
+- PROJ-5 marked as "Complete" in INDEX.md
+- Docker image should now contain all PROJ-5 code
+- Need to verify all previously-blocked tests now pass
 
-### Phase 1: NEW-BUG-R6-1 Fix Verification (netto_amount recalculation)
+## User Guidance
+- **Scope**: Focus on previously failed/blocked items from last QA
+- **Test accounts**: Default admin from seed (admin@example.com / admin123)
+- **Specific worries**: None
 
-| Test | Description | Files |
-|------|-------------|-------|
-| R6-1-FIX-1 | Guard condition now includes `isReanalysis` | `routes/ocr.js` line 450 |
-| R6-1-FIX-2 | Re-analysis scenario: brutto fields + netto recalculated | `routes/ocr.js` lines 450-460 |
-| R6-1-FIX-3 | Regression: first-time analysis with zero amount still recalculates | `routes/ocr.js` lines 450-460 |
-| R6-1-FIX-4 | Regression: first-time analysis with user-entered amount preserves it | `routes/ocr.js` lines 424, 450 |
-| R6-1-FIX-5 | Check for double-push of "amount" to writtenFields | `routes/ocr.js` lines 424, 459 |
+## Previously Failed Items to Re-Test
 
-### Phase 2: NEW-BUG-R6-2 Fix Verification (session cookie)
+### Critical - Docker/Image Issues (Should be Fixed)
 
-| Test | Description | Files |
-|------|-------------|-------|
-| R6-2-FIX-1 | `secure` set to `process.env.NODE_ENV === "production"` | `server.js` line 109 |
-| R6-2-FIX-2 | `sameSite` set to `"lax"` | `server.js` line 110 |
-| R6-2-FIX-3 | Regression: httpOnly still true | `server.js` line 107 |
-| R6-2-FIX-4 | Regression: maxAge still set | `server.js` line 108 |
+| Item | Previous Status | What to Test |
+|------|-----------------|--------------|
+| BUG-1 | Docker image stale | Rebuild and verify login page shows LoginForm (not placeholder) |
+| BUG-2 | API routes 404 | Verify `/api/auth/session`, `/api/auth/providers` return JSON |
+| BUG-3 | /dashboard accessible without auth | Verify unauthenticated requests redirect to /login |
+| BUG-4 | isActive column missing | Verify migration runs on container startup |
 
-### Phase 3: Broader Regression Spot-Check
+### High Priority - Auth Functionality (Previously Blocked)
 
-| Test | Description | Files |
-|------|-------------|-------|
-| REG-1 | fieldChecks still guards first-time writes properly | `routes/ocr.js` lines 416-425 |
-| REG-2 | isReanalysis detection unchanged | `routes/ocr.js` line 323 |
-| REG-3 | SESSION_SECRET enforcement unchanged | `server.js` lines 42-53 |
-| REG-4 | Security headers unchanged | `server.js` lines 81-88 |
+| Item | Previous Status | What to Test |
+|------|-----------------|--------------|
+| AC-1 | Live endpoints 404 | Test all NextAuth endpoints live |
+| AC-2 | Cannot live-test login | Test email + password login flow |
+| AC-6 | Middleware not protecting | Verify protected route redirects |
+| AC-7 | Login page placeholder | Verify LoginForm renders with fields |
 
----
+### Medium/Low Priority (Verify Fixes)
 
-## Bug Report Instructions
-- APPEND results as "## QA Test Results (Round 7)" to `features/PROJ-1-ocr-bill-analysis.md`
-- Use template from `.claude/skills/qa/test-template.md`
-- Tag every bug with [Frontend] or [Backend]
-- NEVER fix bugs -- only find, document, and prioritize
-- Commit with: `test(PROJ-1): QA Round 7 -- R6 bug fix verification`
+| Item | Previous Status | What to Test |
+|------|-----------------|--------------|
+| BUG-5 | /api/health not public | Verify health endpoint returns 200 without auth |
+| BUG-9 | No rate limiting | Test that 5+ failed logins trigger rate limit |
+| BUG-10 | No security headers | Verify HSTS, X-Frame-Options present |
+| BUG-11 | No Zod validation | Verify email format validation works |
+| BUG-12 | Nested SessionProviders | Verify only one SessionProvider exists |
+
+## Edge Cases to Test
+
+| Edge Case | Previous Status | What to Test |
+|-----------|-----------------|--------------|
+| EC-1 | Cannot live-test Google-only | Create Google user, try credentials login |
+| EC-2 | isActive column missing | Test disabled account login (if possible) |
+| EC-5 | Google users no project | Create new Google user, verify behavior |
+
+## Security Audit Scope
+
+Focus on items that were previously flagged:
+
+1. **Rate Limiting** (BUG-9 fix verification)
+   - Test 5 failed logins from same IP
+   - Verify 6th attempt is blocked with 429
+
+2. **Security Headers** (BUG-10 fix verification)
+   - Verify Strict-Transport-Security header present
+   - Verify X-Frame-Options: DENY
+   - Verify X-Content-Type-Options: nosniff
+
+3. **Protected Route Bypass** (BUG-3 fix verification)
+   - Test /dashboard without session cookie
+   - Verify 302 redirect to /login
+   - Test with invalid session cookie
+
+4. **Input Validation** (BUG-11 fix verification)
+   - Test invalid email format
+   - Test SQL injection in email field
+   - Test XSS in email field
+
+5. **Exposed Secrets**
+   - Verify no secrets in API responses
+   - Verify passwordHash not in JWT/session
+
+## Regression Test Scope
+
+Minimal - only verify PROJ-4 health endpoint still works:
+- `GET /api/health` returns `{"status":"ok"}`
+- `GET /` returns 200
+
+## Test Environment
+
+- **URL**: http://localhost:3001
+- **Docker**: `docker-compose -f docker-compose.test.yml up --build`
+- **Credentials**: admin@example.com / admin123
+
+## Bug Report Template
+
+Use format from `.claude/skills/bug-report/SKILL.md`:
+- Tag with skill: [Backend], [Frontend], or [Deploy]
+- Include severity: Critical, High, Medium, Low
+- Reference the original bug ID if it's a regression (e.g., "BUG-4 regression")

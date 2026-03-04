@@ -624,17 +624,41 @@ _To be added by /deploy_
 
 ### Bugs Found (Round 2)
 
-#### BUG-9: Rate limiting not applied to auth endpoints [Backend] - REGRESSION
+#### BUG-9: Rate limiting not applied to auth endpoints [Backend] - FIXED
 - **Severity:** High
-- **Previous Status:** Marked as fixed in commit `ffbf654`
-- **Current Status:** Rate limiting code exists but is NOT triggered
-- **Root Cause:** middleware.ts matcher config excludes `/api/auth/*` routes:
-  ```javascript
-  matcher: ['/((?!api/auth|_next/static|...).*))']
-  ```
-  The negative lookahead `(?!api/auth)` excludes ALL `/api/auth/` routes from middleware execution, including the credentials callback that needs rate limiting.
-- **Impact:** Brute-force attacks on login endpoint are not throttled
-- **Priority:** Fix before production
+- **Fix Commit:** `41632c2` - Rate limiting moved from middleware to API route
+- **Fixed Date:** 2026-03-04
+
+**Fix Details:**
+Rate limiting was moved from `middleware.ts` (which excluded `/api/auth/*` routes via matcher config) to the API route level at `nextjs/app/api/auth/callback/credentials/route.ts`. The new implementation:
+- Uses in-memory rate limiting (5 attempts per 60 seconds per IP)
+- Returns 429 with `Retry-After: 60` header when limit exceeded
+- Counter resets after 60 seconds
+
+**Verification Results (2026-03-04 Live Test):**
+
+| Test | Result | Details |
+|------|--------|---------|
+| 5 failed logins allowed | ✅ PASS | HTTP 302 (redirect with auth error) |
+| 6th failed login blocked | ✅ PASS | HTTP 429 "Too many login attempts" |
+| Retry-After header present | ✅ PASS | Value: 60 seconds |
+| 7th+ attempts blocked | ✅ PASS | Continues to return 429 |
+| Other auth endpoints unaffected | ✅ PASS | /api/auth/session, /api/auth/providers, /api/health all work |
+| Protected routes still enforced | ✅ PASS | /dashboard redirects unauthenticated users |
+
+**Test Commands:**
+```bash
+# 6 failed attempts - 6th should return 429
+curl -X POST -d 'email=admin@example.com&password=wrong&csrfToken=...' \
+  http://localhost:3001/api/auth/callback/credentials
+
+# Valid login works
+curl -X POST -d 'email=admin@example.com&password=admin123&csrfToken=...' \
+  http://localhost:3001/api/auth/callback/credentials
+# Returns 302 redirect to /dashboard with session cookie
+```
+
+**Status:** FIXED and VERIFIED ✅
 
 ---
 
@@ -642,14 +666,18 @@ _To be added by /deploy_
 
 - **Acceptance Criteria:** 12/13 passed (92%), 1 N/A
 - **Edge Cases:** 2/5 passed, 3 not testable (require Google OAuth or additional seed data)
-- **Bug Fixes Verified:** 8/9 (BUG-1 through BUG-5, BUG-10, BUG-11 fixed; BUG-9 regression found)
-- **Security:** 6/7 checks passed (rate limiting excluded by matcher)
+- **Bug Fixes Verified:** 9/9 (BUG-1 through BUG-5, BUG-9, BUG-10, BUG-11 all fixed)
+- **Security:** 7/7 checks passed
 - **Regression:** All PROJ-4 tests passed
-- **Production Ready:** CONDITIONAL
+- **Production Ready:** YES
 
 ### Recommendation
 
-**Fix BUG-9 (rate limiting matcher exclusion) before production deployment.**
+**PROJ-5 is production ready.** All critical bugs have been fixed and verified:
+- BUG-1 through BUG-5: Docker and migration issues resolved
+- BUG-9: Rate limiting now works correctly at API route level
+- BUG-10: Security headers configured
+- BUG-11: Zod validation implemented
 
 The authentication system is functional and secure for most use cases. All critical auth flows work correctly:
 - Login with valid credentials

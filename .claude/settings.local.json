@@ -39,7 +39,19 @@
       "Bash(npm show next@14 dist-tags)",
       "Bash(npm show \"next@^14\" version)",
       "Bash(npm audit)",
-      "Bash(npm run build)"
+      "Bash(npm run build)",
+      "Bash(npx prisma validate)",
+      "Bash(DATABASE_URL=\"postgresql://dummy:dummy@localhost:5432/dummy\" npx prisma validate)",
+      "Bash(DATABASE_URL=\"postgresql://dummy:dummy@localhost:5432/dummy\" npx prisma generate)",
+      "Bash(docker info)",
+      "Bash(docker-compose -f /c/Users/jensmoeller/code/vbudget/docker-compose.test.yml up -d postgres-test)",
+      "Bash(/c/Users/jensmoeller/code/vbudget/.env.test:*)",
+      "Bash(docker-compose -f docker-compose.test.yml down -v)",
+      "Bash(docker-compose -f docker-compose.test.yml build)",
+      "Bash(docker-compose -f docker-compose.test.yml up -d)",
+      "Bash(docker ps --format \"table {{.Names}}\\\\t{{.Status}}\\\\t{{.Ports}}\")",
+      "Bash(ls /c/Users/jensmoeller/code/vbudget/nextjs/app/\\\\\\(protected\\\\\\)/dashboard/)",
+      "Bash(ls /c/Users/jensmoeller/code/vbudget/nextjs/app/\\\\\\(public\\\\\\)/)"
     ]
   }
 }
