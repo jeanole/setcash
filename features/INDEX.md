@@ -1,6 +1,6 @@
 # vBudget — Project Index
 
-**Next Available IDs:** PROJ-18 · BUG-12 · CR-8
+**Next Available IDs:** PROJ-18 · BUG-12 · CR-9
 
 | ID | Type | Title | Status | Priority | Feature | Date |
 |----|------|-------|--------|----------|---------|------|
@@ -38,4 +38,5 @@
 | [PROJ-14](PROJ-14-spending-overview.md) | Feature | Spending Overview | In Progress | — | PROJ-7, PROJ-9 | 2026-03-04 |
 | [PROJ-15](PROJ-15-vgeld-advance-money.md) | Feature | V-Geld (Advance Money) | In Progress | — | PROJ-7 | 2026-03-04 |
 | [PROJ-16](PROJ-16-notifications-system.md) | Feature | Notifications System | In Progress | — | PROJ-5, PROJ-10 | 2026-03-04 |
-| [PROJ-17](PROJ-17-super-admin.md) | Feature | Super-Admin | In Progress | — | PROJ-5, PROJ-10 | 2026-03-04 |
+| [PROJ-17](PROJ-17-super-admin.md) | Feature | Super-Admin | Change Requested | — | PROJ-5, PROJ-10 | 2026-03-04 |
+| [CR-8](CR-8-create-user-button-super-admin.md) | CR | Add Create User Button to Super Admin Users Tab | Pending Review | Medium | PROJ-17 | 2026-03-04 |
