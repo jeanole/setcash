@@ -1,6 +1,6 @@
 # vBudget — Project Index
 
-**Next Available IDs:** PROJ-14 · BUG-10 · CR-8
+**Next Available IDs:** PROJ-14 · BUG-12 · CR-8
 
 | ID | Type | Title | Status | Priority | Feature | Date |
 |----|------|-------|--------|----------|---------|------|
@@ -30,6 +30,8 @@
 | [PROJ-11](PROJ-11-reports-exports.md) | Feature | Reports & Exports | Planned | — | PROJ-5, PROJ-6, PROJ-9 | 2026-03-01 |
 | [PROJ-12](PROJ-12-integrations.md) | Feature | Integrations (Google Sheets + Telegram) | Planned | — | PROJ-5, PROJ-10 | 2026-03-01 |
 | [PROJ-13](PROJ-13-production-cutover.md) | Feature | Production Cutover | Planned | — | PROJ-4–12 | 2026-03-01 |
-| [CR-6](CR-6-camera-upload-bills.md) | CR | Add Camera Capture to Bill Upload | Pending Review | High | PROJ-7 | 2026-03-04 |
-| [CR-7](CR-7-image-crop-overlay.md) | CR | Add Image Crop Feature with Overlay Buttons | Pending Review | Medium | PROJ-7 | 2026-03-04 |
+| [CR-6](CR-6-camera-upload-bills.md) | CR | Add Camera Capture to Bill Upload | Deployed | High | PROJ-7 | 2026-03-04 |
+| [CR-7](CR-7-image-crop-overlay.md) | CR | Add Image Crop Feature with Overlay Buttons | Deployed | Medium | PROJ-7 | 2026-03-04 |
 | [BUG-9](BUG-9-duplicate-image-upload-sections.md) | Bug | Duplicate Image Upload Sections on New Bill Page | Resolved | High | PROJ-7 | 2026-03-04 |
+| [BUG-10](BUG-10-hardcoded-isadmin-exposes-admin-ui.md) | Bug | Hardcoded isAdmin Flag Exposes Admin UI to All Users | Resolved | Critical | PROJ-7 | 2026-03-04 |
+| [BUG-11](BUG-11-missing-rate-limiting.md) | Bug | Missing Rate Limiting on Bill Creation and Re-analysis | Resolved | Medium | PROJ-7 | 2026-03-04 |

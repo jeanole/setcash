@@ -10,7 +10,6 @@ import {
   cn,
 } from '@/lib/utils';
 import AllocationWidget from './AllocationWidget';
-import BillImageUpload from './BillImageUpload';
 
 interface BillFormProps {
   initialData?: Partial<Bill>;
@@ -316,19 +315,6 @@ export default function BillForm({
           </div>
         </div>
       </section>
-
-      {/* Image Upload */}
-      {!initialData?.id && (
-        <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-          <h2 className="text-lg font-semibold text-slate-900 mb-4">Images</h2>
-          <BillImageUpload
-            onUpload={(files) => {
-              // Handle file upload after form submit
-              console.log('Files to upload:', files);
-            }}
-          />
-        </section>
-      )}
 
       {/* Validation Errors */}
       {validationErrors.length > 0 && (

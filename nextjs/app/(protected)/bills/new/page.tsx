@@ -117,18 +117,8 @@ export default function NewBillPage() {
         </div>
       )}
 
-      {/* Form */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-        <BillForm
-          onSubmit={handleSubmit}
-          motives={motives}
-          categories={categories}
-          isSubmitting={isSubmitting}
-        />
-      </div>
-
-      {/* Image upload section (separate from form) */}
-      <div className="mt-6 bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+      {/* Image upload section */}
+      <div className="mb-6 bg-white rounded-xl border border-slate-200 shadow-sm p-6">
         <h2 className="text-lg font-semibold text-slate-900 mb-4">Images</h2>
         <BillImageUpload
           onUpload={(files) => setPendingFiles((prev) => [...prev, ...files])}
@@ -137,6 +127,16 @@ export default function NewBillPage() {
             filename: f.name,
             file: URL.createObjectURL(f),
           }))}
+        />
+      </div>
+
+      {/* Form */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+        <BillForm
+          onSubmit={handleSubmit}
+          motives={motives}
+          categories={categories}
+          isSubmitting={isSubmitting}
         />
       </div>
     </div>

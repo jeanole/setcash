@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import AppShell from '@/components/layout/AppShell';
 import BillList from '@/components/bills/BillList';
 import BillFilters from '@/components/bills/BillFilters';
@@ -68,8 +69,9 @@ export default function BillsPage() {
     BILLS_PER_PAGE
   );
 
-  // Check if user is admin (simplified - in real app this would come from auth)
-  const isAdmin = true; // TODO: Get from auth context
+  // Check if user is admin from session
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.role === 'admin' || session?.user?.role === 'superadmin';
 
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this bill?')) return;

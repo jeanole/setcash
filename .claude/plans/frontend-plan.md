@@ -1,157 +1,86 @@
 # Frontend Implementation Plan
 
 ## Feature
-CR-6 & CR-7: Camera Capture + Image Crop Feature — `features/CR-6-camera-upload-bills.md`, `features/CR-7-image-crop-overlay.md`
+BUG-9: Duplicate Image Upload Sections on New Bill Page — `features/BUG-9-duplicate-image-upload-sections.md`
 
 ## Context Summary
-- **Project:** vBudget Next.js migration (from Express/Vanilla JS)
-- **Existing Code:** `BillImageUpload.tsx`, `ImageGallery.tsx` components already exist
-- **Original Implementation:** Uses Cropper.js for cropping, `capture="environment"` for camera
-- **Dependencies:** Need to install `cropperjs` and `@types/cropperjs`
+- **Project:** vBudget Next.js migration
+- **Bug:** The `/bills/new` page shows TWO image upload sections
+- **Location 1:** `BillForm.tsx` lines 320-331 (inside form component)
+- **Location 2:** `page.tsx` lines 130-141 (separate section at bottom)
+- **Fix Required:** Remove from BillForm, move to top in page.tsx
 
 ## User Decisions
-
 | Question | Answer |
 |----------|--------|
-| Visual Style | Match existing vBudget style exactly |
-| Mobile Support | Mobile-first responsive |
-| Camera Button Position | **At the top** of upload section (as specified in CR-6) |
-| Crop Library | Cropper.js (same as original app) |
+| Visual Style | Match existing vBudget style |
+| Image Upload Position | **TOP** of form (as per original vBudget) |
 
 ## Open Bug Reports to Address
-None
+- BUG-9: Duplicate Image Upload Sections (this bug)
 
 ## Existing Components to Modify
 
-| Component | Location | Changes Needed |
-|-----------|----------|----------------|
-| `BillImageUpload` | `components/bills/BillImageUpload.tsx` | Add camera button, crop modal integration |
-| `ImageGallery` | `components/bills/ImageGallery.tsx` | Add overlay buttons (Download, Crop), integrate crop modal |
+| Component | Location | Changes |
+|-----------|----------|---------|
+| `BillForm.tsx` | `components/bills/BillForm.tsx` | Remove image upload section (lines 320-331) |
+| `page.tsx` | `app/(protected)/bills/new/page.tsx` | Move image upload to top (before form) |
 
-## New Components to Build
-
-### 1. `CropModal` — `/components/bills/CropModal.tsx`
-- **Props:** `isOpen: boolean, file: File | null, onSave: (croppedBlob: Blob) => void, onSkip: () => void, onCancel: () => void, counter?: string`
-- **States:** Loading cropper, cropping, error
-- **Features:**
-  - Cropper.js integration
-  - ViewMode 1, autoCropArea 0.8
-  - "Crop & Save", "Skip (use original)", "Cancel" buttons
-  - 60vh height on desktop, responsive
-  - Counter display for multi-image processing ("1 / 3")
-
-### 2. `ImageOverlayButtons` — `/components/bills/ImageOverlayButtons.tsx` (or inline in ImageGallery)
-- **Props:** `image: BillImage, onDownload: () => void, onCrop: () => void, onDelete: () => void`
-- **Position:** Absolute top-right on image
-- **Buttons:**
-  - Download (dark bg, download icon)
-  - Crop (dark bg, crop icon) 
-  - Delete (dark bg → rose on hover, trash icon)
-- **Style:** `bg-black/50 hover:bg-black/75`, rounded-lg, white icons
-
-## Dependencies to Add
-
-```json
-{
-  "cropperjs": "^1.6.2",
-  "@types/cropperjs": "^1.3.0"
-}
-```
-
-Also need to import Cropper.js CSS in globals.css or layout.
-
-## BillImageUpload Modifications
-
-### Camera Button (CR-6)
-- Add green "Take Photo" button at the **top** of upload section
-- Use `<input type="file" accept="image/*" capture="environment" />`
-- Style: emerald-500 bg, white text, rounded-lg
-- Process captured images through crop modal
-
-### Crop Modal Integration
-- Add state for crop modal: `isCropModalOpen`, `filesToProcess`, `currentFileIndex`
-- When files selected (via file picker OR camera), process through crop modal sequentially
-- `processThroughCropModal()` function similar to original:
-  - Open crop modal for each file
-  - On Save: use cropped blob
-  - On Skip: use original file
-  - On Cancel: discard file
-  - Continue to next file
-
-### Flow
-```
-User selects files/camera → Show crop modal for each → Collect processed files → Call onUpload()
-```
-
-## ImageGallery Modifications (CR-7)
-
-### Overlay Buttons
-- Add Download button (opens image in new tab / download)
-- Add Crop button (opens crop modal for existing image)
-- Reposition Delete button to overlay (currently in hover overlay)
-- Style: `absolute top-2 right-2 flex gap-1.5`, buttons have `bg-black/50 hover:bg-black/75`
-
-### Re-crop Existing Images
-- New prop: `onCropImage?: (imageId: string, croppedBlob: Blob) => void`
-- Fetch image as blob, open crop modal, upload cropped result
+## No New Components Needed
+This is a fix that only requires removing duplicate code and repositioning existing components.
 
 ## Pages / Routes to Modify
 
 ### `/app/(protected)/bills/new/page.tsx`
-- Update `BillImageUpload` usage to handle camera capture
+**Current Structure:**
+1. Header
+2. Result message
+3. Form (contains BillForm with its own image upload)
+4. Image upload section (duplicate)
 
-### `/app/(protected)/bills/[id]/page.tsx`
-- Update `ImageGallery` usage to pass `onCropImage` handler
+**New Structure:**
+1. Header
+2. Result message
+3. **Images section** (moved to top)
+4. Form (BillForm without image upload)
 
-## Data Connection
+## Changes Required
 
-### API Endpoints Needed (already exist or assumed)
-- `PUT /api/bills/[id]/images/[imageId]` - Replace/crop existing image
-- `GET /uploads/[file]` - Fetch image for cropping
+### 1. BillForm.tsx - Remove Image Upload Section
+**Remove lines 320-331:**
+```tsx
+{/* Image Upload */}
+{!initialData?.id && (
+  <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+    <h2 className="text-lg font-semibold text-slate-900 mb-4">Images</h2>
+    <BillImageUpload
+      onUpload={(files) => {
+        // Handle file upload after form submit
+        console.log('Files to upload:', files);
+      }}
+    />
+  </section>
+)}
+```
+
+Also remove the `BillImageUpload` import since it's no longer used in this file.
+
+### 2. page.tsx - Move Image Upload to Top
+**Current order:** Header → Result → Form → Images
+**New order:** Header → Result → Images → Form
+
+Move the image upload section (lines 130-141) to appear BEFORE the form section (line 121).
 
 ## Design Specifications
-
-### Colors
-- Camera button: `bg-emerald-500 hover:bg-emerald-600 text-white`
-- Overlay buttons: `bg-black/50 hover:bg-black/75 text-white`
-- Delete overlay button: `hover:bg-rose-500/80`
-- Crop modal bg: white, border: slate-100
-
-### Layout
-- Crop modal: `max-w-2xl`, centered, `60vh` cropper area
-- Overlay buttons: `w-8 h-8`, `rounded-lg`, `top-2 right-2`
-- Icons: 15x15px in overlay buttons
-
-### Animations
-- Use existing `animate-[vb-rise_0.2s_ease-out]` for modal
-- Overlay opacity transition: `opacity-0 group-hover:opacity-100`
+- Keep existing styling: `bg-white rounded-xl border border-slate-200 shadow-sm p-6`
+- Keep existing BillImageUpload component with same props
+- No visual changes, just repositioning
 
 ## Checklist
-
-### CR-6: Camera Capture
-- [ ] Install `cropperjs` dependency
-- [ ] Add green "Take Photo" button to `BillImageUpload`
-- [ ] Position camera button at **top** of upload section
-- [ ] Use `capture="environment"` for back camera
-- [ ] Process camera captures through crop modal
-
-### CR-7: Image Crop
-- [ ] Create `CropModal` component with Cropper.js
-- [ ] Add crop modal styles/globals.css import
-- [ ] Implement "Crop & Save", "Skip", "Cancel" buttons
-- [ ] Add multi-file counter display
-- [ ] Create `processThroughCropModal` flow
-- [ ] Add overlay buttons to `ImageGallery` (Download, Crop, Delete)
-- [ ] Style overlay buttons: top-right, semi-transparent dark bg
-- [ ] Implement re-crop for existing images
-- [ ] Add download functionality
-
-### Testing
-- [ ] Camera button works on mobile devices
-- [ ] Crop modal opens for file uploads
-- [ ] Crop modal opens for camera captures
-- [ ] Skip uses original file
-- [ ] Cancel discards file
-- [ ] Overlay buttons visible on hover
-- [ ] Download works correctly
-- [ ] Re-crop uploads new image
+- [ ] Remove image upload from `BillForm.tsx` (lines 320-331)
+- [ ] Remove unused `BillImageUpload` import from `BillForm.tsx`
+- [ ] Move image upload section to top in `page.tsx` (before form)
+- [ ] Verify only ONE image upload section appears on /bills/new
+- [ ] Verify image upload is at the TOP of the page
+- [ ] Verify form submission still works with images
+- [ ] Update BUG-9 status to "Resolved"

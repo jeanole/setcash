@@ -1,300 +1,256 @@
 # Backend Implementation Plan
 
 ## Feature
-PROJ-6: SQLite → PostgreSQL Data Migration Script
-Spec: `features/PROJ-6-sqlite-postgres-migration.md`
+PROJ-7: Bills Feature — Port from Express to Next.js App Router
 
 ## Context Summary
 
-### Project Context (from INDEX.md)
-- PROJ-6 is "In Progress" status
-- Depends on PROJ-4 (Next.js scaffold + PostgreSQL) which is Deployed
-- Part of the `to_nextjs` branch migration effort
+### Current State
+- **Frontend**: Complete — All pages and components exist in `nextjs/app/(protected)/bills/` and `nextjs/components/bills/`
+- **Database**: Prisma schema ready with all required tables (Bill, BillImage, BillMotive, BillCategory, EditLog, OcrLog)
+- **Auth**: NextAuth.js v5 configured with JWT strategy, session includes `user.id`, `user.role`, `user.currentProjectId`
+- **Middleware**: Authentication middleware protects all routes except `/login`, `/api/auth/*`, `/api/health`
 
-### Existing Tables (SQLite - Legacy)
-Located in `data/vbudget.db`:
-1. `users` - id, email, hash, admin, super_admin, default_project_id
-2. `projects` - id, name, subtitle, created_at
-3. `project_positions` - id, project_id, name
-4. `project_members` - id, project_id, user_email, project_role, position_id
-5. `motives` - id, name, budget, project_id
-6. `categories` - id, name, budget, project_id
-7. `bills` - id, date, email, bill_number, type, vendor, item, comment, motive, brutto19, brutto7, brutto0, amount, filename, file, ocr_status, ocr_fields, telegram_caption, netto_amount, status, project_id
-8. `bill_images` - id, bill_id, filename, file, sort_order, created_at
-9. `bill_motives` - id, bill_id, motive_id, percentage
-10. `bill_categories` - id, bill_id, category_id, percentage
-11. `budget_matrix` - id, motive_id, category_id, amount, project_id
-12. `vgeld` - id, date, amount, from_user, to_user, created_by, project_id
-13. `editlog` - id, timestamp, user, bill_id, changes, source, project_id
-14. `project_settings` - project_id, key, value
-15. `ocr_log` - id, project_id, bill_id, timestamp, provider, status, fields_written, ai_response, error_detail
-16. `telegram_links` - id, project_id, telegram_user_id, user_email, linked_at
-17. `telegram_link_codes` - code, user_email, project_id, expires_at, created_at
-18. `notifications` - id, user_email, type, message, project_id, is_read, created_at
+### Existing Express Routes to Port
+From `routes/bills.js` (1000+ lines):
+- Bill CRUD (list, create, update, delete, bulk delete)
+- Image management (upload, replace, delete, reorder)
+- Allocations (motive/category split with percentages)
+- Edit logging
 
-### Target Tables (PostgreSQL via Prisma)
-All models use UUID primary keys with `legacyId Int?` for migration mapping:
-- `User`, `Project`, `ProjectPosition`, `ProjectMember`, `Motive`, `Category`
-- `Bill`, `BillImage`, `BillMotive`, `BillCategory`, `BudgetMatrix`
-- `Vgeld`, `EditLog`, `ProjectSettings`, `OcrLog`
-- `Notification`, `TelegramLink`, `TelegramLinkCode`
+From `routes/ocr.js`:
+- OCR analysis trigger
+- OCR status polling
+- API key encryption/decryption
 
-### Key Differences to Handle
-| Aspect | SQLite | PostgreSQL/Prisma |
-|--------|--------|-------------------|
-| Primary Keys | INTEGER AUTOINCREMENT | UUID (String) |
-| Foreign Keys | INTEGER | UUID (String) |
-| Booleans | 0/1 INTEGER | Boolean |
-| Dates | TEXT (ISO strings) | DateTime |
-| JSON | TEXT | Json |
-| User role | `admin` column (0/1) | `isSuperAdmin` + `ProjectRole` enum |
+From `routes/motives.js` & `routes/categories.js`:
+- List motives/categories for current project
+
+### Key Business Logic to Port
+1. **Bill Number Generation**: Format `group.position` (e.g., 1.01-1.20, 2.01-2.20) based on user's bill count in project
+2. **Draft Auto-promotion**: Draft → Confirmed when vendor and amount are both present
+3. **OCR Field Stripping**: Remove verified fields from ocr_fields JSON when user edits them
+4. **Allocation Defaults**: 100% to Default/Uncategorized if none specified
+5. **Image Cleanup**: Delete files from disk on bill/image deletion
+6. **Legacy Column Sync**: Keep bills.filename/file synced with first image
 
 ## User Decisions
 
-**None required** - This is a one-time data migration tool with well-defined requirements. The spec already covers:
-- Script location: `/nextjs/scripts/migrate-sqlite-to-pg.ts`
-- SQLite path: configurable via `SQLITE_PATH` env var, default `../../data/vbudget.db`
-- PostgreSQL connection: via `DATABASE_URL` env var
-- All tables and migration order defined
-- Idempotency via upsert
-- Reporting requirements
+### File Upload Configuration
+- **Storage**: `data/uploads/` (outside Next.js public for security)
+- **Serving**: `/uploads/[...path]` route handler with project access check
+- **Max file size**: 10MB
+- **Allowed types**: jpg, png, webp, pdf
+- **Max images per bill**: 10
+
+### Authorization Rules
+- **List/View**: Any authenticated user with project access
+- **Create**: Any authenticated user with project access
+- **Update/Delete own**: User who created the bill
+- **Update/Delete any**: Project admins only
+- **Bulk delete**: Project admins only
+- **Approve/Reject/MarkPaid**: Project admins only
+- **OCR Analysis**: Project admins only
+
+### OCR Analysis
+- OCR service is external (OpenAI, Gemini, or Claude)
+- API keys stored encrypted in project_settings
+- Analysis runs asynchronously (bill.ocrStatus = 'pending' → 'done'/'failed')
+- Frontend polls `/api/bills/[id]/ocr-status` every 3 seconds
 
 ## Open Bug Reports to Address
-None - No open bugs for PROJ-6 in INDEX.md
+**None** — BUG-9 (Duplicate Image Upload Sections) is Resolved
 
-## Implementation Plan
+## Tables (Already Exist in schema.prisma)
 
-### 1. Dependencies to Add
-Add to `nextjs/package.json` devDependencies:
-- `better-sqlite3` - For reading from SQLite database
-- `@types/better-sqlite3` - TypeScript types
+No new tables needed. Existing tables:
+- `Bill` — Core expense data
+- `BillImage` — Multiple images per bill
+- `BillMotive` / `BillCategory` — Junction tables with percentages
+- `EditLog` — Audit trail
+- `OcrLog` — OCR analysis logs
+- `Motive` / `Category` — Reference data
+- `ProjectSettings` — OCR provider config
 
-### 2. Migration Script Structure
-Create `/nextjs/scripts/migrate-sqlite-to-pg.ts`:
+## API Endpoints to Implement
+
+### Bills
+| Endpoint | Method | Auth | Description |
+|----------|--------|------|-------------|
+| `/api/bills` | GET | Project member | List bills with allocations, images, pagination |
+| `/api/bills` | POST | Project member | Create bill with images (multipart/form-data) |
+| `/api/bills/[id]` | GET | Project member | Get single bill with full details |
+| `/api/bills/[id]` | PUT | Project member | Update bill fields |
+| `/api/bills/[id]` | DELETE | Admin or owner | Delete bill + cleanup images |
+| `/api/bills/bulk-delete` | POST | Admin | Bulk delete bills |
+| `/api/bills/log` | GET | Project member | Get edit history for project |
+
+### Bill Images
+| Endpoint | Method | Auth | Description |
+|----------|--------|------|-------------|
+| `/api/bills/[id]/images` | POST | Project member | Add images to existing bill |
+| `/api/bills/[id]/images/[imageId]` | PUT | Project member | Replace/crop image |
+| `/api/bills/[id]/images/[imageId]` | DELETE | Admin or owner | Delete single image |
+| `/api/bills/[id]/images/reorder` | PUT | Project member | Reorder images (new endpoint) |
+
+### OCR
+| Endpoint | Method | Auth | Description |
+|----------|--------|------|-------------|
+| `/api/bills/[id]/analyse` | POST | Admin | Trigger OCR analysis |
+| `/api/bills/[id]/ocr-status` | GET | Project member | Get OCR status |
+| `/api/bills/[id]/verify-field` | PATCH | Project member | Verify/reject OCR field |
+
+### Status Workflow
+| Endpoint | Method | Auth | Description |
+|----------|--------|------|-------------|
+| `/api/bills/[id]/status` | PATCH | Admin | Update status (approve/reject/paid) |
+
+### Reference Data
+| Endpoint | Method | Auth | Description |
+|----------|--------|------|-------------|
+| `/api/motives` | GET | Project member | List motives for current project |
+| `/api/categories` | GET | Project member | List categories for current project |
+
+### File Serving
+| Endpoint | Method | Auth | Description |
+|----------|--------|------|-------------|
+| `/uploads/[...path]` | GET | Project member | Serve uploaded images with access check |
+
+## Input Validation (Zod Schemas)
 
 ```typescript
-// ID Mapping Maps (in-memory)
-const userIdMap: Map<number, string> = new Map();
-const projectIdMap: Map<number, string> = new Map();
-const projectPositionIdMap: Map<number, string> = new Map();
-const projectMemberIdMap: Map<number, string> = new Map();
-const motiveIdMap: Map<number, string> = new Map();
-const categoryIdMap: Map<number, string> = new Map();
-const billIdMap: Map<number, string> = new Map();
-const billImageIdMap: Map<number, string> = new Map();
-const billMotiveIdMap: Map<number, string> = new Map();
-const billCategoryIdMap: Map<number, string> = new Map();
-const budgetMatrixIdMap: Map<number, string> = new Map();
-const vgeldIdMap: Map<number, string> = new Map();
-const editLogIdMap: Map<number, string> = new Map();
-const ocrLogIdMap: Map<number, string> = new Map();
-const notificationIdMap: Map<number, string> = new Map();
-const telegramLinkIdMap: Map<number, string> = new Map();
+// Bill creation
+const createBillSchema = z.object({
+  date: z.string().datetime(),
+  type: z.string().default('Kauf'),
+  vendor: z.string().min(1),
+  item: z.string(),
+  comment: z.string(),
+  brutto19: z.number().min(0).default(0),
+  brutto7: z.number().min(0).default(0),
+  brutto0: z.number().min(0).default(0),
+  motiveAllocations: z.array(z.object({
+    motiveId: z.string(),
+    percentage: z.number().min(0).max(100)
+  })).default([]),
+  categoryAllocations: z.array(z.object({
+    categoryId: z.string(),
+    percentage: z.number().min(0).max(100)
+  })).default([]),
+});
 
-// Migration results tracking
-interface MigrationResult {
-  table: string;
-  inserted: number;
-  errors: number;
-  errorDetails: string[];
-}
-```
+// Bill update (partial)
+const updateBillSchema = createBillSchema.partial();
 
-### 3. Migration Order & Logic
+// Status update
+const updateStatusSchema = z.object({
+  status: z.enum(['confirmed', 'pending', 'approved', 'rejected', 'paid'])
+});
 
-#### Step 1: Users (Root - no FKs)
-- SQLite: `id, email, hash, admin, super_admin, default_project_id`
-- PG: `id, legacyId, email, passwordHash, isSuperAdmin, isActive, defaultProjectId, createdAt`
-- Transformations:
-  - `hash` → `passwordHash`
-  - `super_admin || admin` → `isSuperAdmin` (boolean)
-  - `default_project_id` → resolved via projectIdMap after projects migrated
+// Verify field
+const verifyFieldSchema = z.object({
+  field: z.enum(['date', 'vendor', 'item', 'type', 'brutto19', 'brutto7', 'brutto0', 'amount', 'comment'])
+});
 
-#### Step 2: Projects (Root - no FKs)
-- SQLite: `id, name, subtitle, created_at`
-- PG: `id, legacyId, name, subtitle, createdAt`
-- Transformations:
-  - `created_at` TEXT → `createdAt` DateTime
+// Bulk delete
+const bulkDeleteSchema = z.object({
+  ids: z.array(z.string()).min(1)
+});
 
-#### Step 3: ProjectPositions
-- SQLite: `id, project_id, name`
-- PG: `id, legacyId, projectId, name`
-- FK: `project_id` → `projectIdMap.get(project_id)`
-
-#### Step 4: ProjectMembers
-- SQLite: `id, project_id, user_email, project_role, position_id`
-- PG: `id, legacyId, projectId, userEmail, role, positionId`
-- Transformations:
-  - `project_role` → `role` (ProjectRole enum: 'user' | 'admin')
-- FKs: `project_id`, `position_id` (nullable)
-
-#### Step 5: Motives
-- SQLite: `id, name, budget, project_id`
-- PG: `id, legacyId, projectId, name, budget`
-- FK: `project_id` → `projectIdMap.get(project_id)`
-
-#### Step 6: Categories
-- SQLite: `id, name, budget, project_id`
-- PG: `id, legacyId, projectId, name, budget`
-- FK: `project_id` → `projectIdMap.get(project_id)`
-
-#### Step 7: Bills
-- SQLite: `id, date, email, bill_number, type, vendor, item, comment, motive, brutto19, brutto7, brutto0, amount, filename, file, ocr_status, ocr_fields, telegram_caption, netto_amount, status, project_id`
-- PG: `id, legacyId, projectId, submittedByEmail, date, billNumber, type, vendor, item, comment, motiveLegacy, brutto19, brutto7, brutto0, nettoAmount, grossAmount, status, ocrStatus, ocrFields, telegramCaption, filename, createdAt`
-- Transformations:
-  - `date` TEXT → `date` DateTime
-  - `email` → `submittedByEmail`
-  - `amount` → `grossAmount`
-  - `ocr_status` TEXT → `ocrStatus` OcrStatus enum
-  - `ocr_fields` TEXT → `ocrFields` Json (parse JSON)
-  - `status` TEXT ('confirmed', 'pending', etc.) → BillStatus enum
-  - `motive` → `motiveLegacy` (kept for historical reference)
-- FK: `project_id` → resolved
-
-#### Step 8: BillImages
-- SQLite: `id, bill_id, filename, file, sort_order, created_at`
-- PG: `id, legacyId, billId, filename, filePath, sortOrder, createdAt`
-- Transformations:
-  - `file` → `filePath`
-  - `sort_order` → `sortOrder`
-  - `created_at` TEXT → `createdAt` DateTime
-- FK: `bill_id` → `billIdMap.get(bill_id)`
-
-#### Step 9: BillMotives
-- SQLite: `id, bill_id, motive_id, percentage`
-- PG: `id, legacyId, billId, motiveId, percentage`
-- FKs: `bill_id`, `motive_id`
-
-#### Step 10: BillCategories
-- SQLite: `id, bill_id, category_id, percentage`
-- PG: `id, legacyId, billId, categoryId, percentage`
-- FKs: `bill_id`, `category_id`
-
-#### Step 11: BudgetMatrix
-- SQLite: `id, motive_id, category_id, amount, project_id`
-- PG: `id, legacyId, projectId, motiveId, categoryId, amount`
-- FKs: `project_id`, `motive_id`, `category_id`
-
-#### Step 12: Vgeld
-- SQLite: `id, date, amount, from_user, to_user, created_by, project_id`
-- PG: `id, legacyId, projectId, date, amount, fromUser, toUser, createdBy, createdAt`
-- Transformations:
-  - `date` TEXT → `date` DateTime
-  - `createdAt` = now (not in SQLite)
-- FK: `project_id`
-
-#### Step 13: EditLog
-- SQLite: `id, timestamp, user, bill_id, changes, source, project_id`
-- PG: `id, legacyId, projectId, timestamp, user, billId, changes, source`
-- Transformations:
-  - `timestamp` TEXT → `timestamp` DateTime
-  - `changes` TEXT → `changes` Json (parse JSON)
-- FKs: `project_id`, `bill_id` (nullable)
-
-#### Step 14: ProjectSettings
-- SQLite: `project_id, key, value`
-- PG: Same structure (composite PK)
-- FK: `project_id` → resolved
-
-#### Step 15: OcrLog
-- SQLite: `id, project_id, bill_id, timestamp, provider, status, fields_written, ai_response, error_detail`
-- PG: `id, legacyId, projectId, billId, timestamp, provider, status, fieldsWritten, aiResponse, errorDetail`
-- Transformations:
-  - `timestamp` TEXT → `timestamp` DateTime
-  - `fields_written` TEXT → `fieldsWritten` Json
-  - `ai_response` TEXT → `aiResponse` Json
-- FKs: `project_id` (nullable), `bill_id` (nullable)
-
-#### Step 16: TelegramLinks
-- SQLite: `id, project_id, telegram_user_id, user_email, linked_at`
-- PG: `id, legacyId, projectId, telegramUserId, userEmail, linkedAt`
-- Transformations:
-  - `linked_at` TEXT → `linkedAt` DateTime
-- FKs: `project_id`, `user_email` (resolved via email, not ID map)
-
-#### Step 17: TelegramLinkCodes
-- SQLite: `code, user_email, project_id, expires_at, created_at`
-- PG: Same structure (code is PK)
-- Transformations:
-  - `expires_at` TEXT → `expiresAt` DateTime
-  - `created_at` TEXT → `createdAt` DateTime
-- FKs: `project_id`, `user_email`
-
-#### Step 18: Notifications
-- SQLite: `id, user_email, type, message, project_id, is_read, created_at`
-- PG: `id, legacyId, userEmail, type, message, projectId, isRead, createdAt`
-- Transformations:
-  - `is_read` INTEGER (0/1) → `isRead` Boolean
-  - `created_at` TEXT → `createdAt` DateTime
-- FKs: `user_email`, `project_id` (nullable)
-
-### 4. Data Type Helpers
-```typescript
-function toBoolean(value: number | null): boolean {
-  return value === 1;
-}
-
-function toDateTime(value: string | null): Date | null {
-  if (!value) return null;
-  const date = new Date(value);
-  return isNaN(date.getTime()) ? null : date;
-}
-
-function toJson(value: string | null): any {
-  if (!value) return null;
-  try {
-    return JSON.parse(value);
-  } catch {
-    return null;
-  }
-}
-
-function toDecimal(value: number | null): Decimal {
-  return new Decimal(value ?? 0);
-}
-```
-
-### 5. Idempotency Strategy
-Each table uses Prisma `upsert`:
-```typescript
-await prisma.user.upsert({
-  where: { legacyId: sqliteUser.id },
-  update: { /* all fields */ },
-  create: { 
-    id: uuid(),
-    legacyId: sqliteUser.id,
-    /* all fields */
-  },
+// Image reorder
+const reorderImagesSchema = z.object({
+  images: z.array(z.object({
+    id: z.string(),
+    sortOrder: z.number()
+  }))
 });
 ```
 
-### 6. Error Handling & Reporting
-- Wrap each table migration in try/catch
-- Continue on error (don't stop the whole migration)
-- Collect error details per table
-- Print summary at the end
-- Exit code 1 if any errors occurred
+## Response Shapes
 
-### 7. NPM Script
-Add to `nextjs/package.json`:
-```json
-"migrate:sqlite": "tsx scripts/migrate-sqlite-to-pg.ts"
+### Bill (full)
+```typescript
+interface BillResponse {
+  id: string;
+  date: string;
+  billNumber: string | null;
+  type: string | null;
+  vendor: string | null;
+  item: string | null;
+  comment: string | null;
+  brutto19: number;
+  brutto7: number;
+  brutto0: number;
+  amount: number;
+  nettoAmount: number;
+  status: BillStatus;
+  ocrStatus: OcrStatus;
+  ocrFields: string[] | null;
+  email: string;
+  role: string;
+  images: BillImage[];
+  motiveAllocations: MotiveAllocation[];
+  categoryAllocations: CategoryAllocation[];
+}
 ```
 
-### 8. Environment Variables
-- `SQLITE_PATH` - Path to SQLite database (default: `../../data/vbudget.db`)
-- `DATABASE_URL` - PostgreSQL connection string (required)
+## Error Cases
+- `400` — Invalid input (Zod validation failed)
+- `401` — Not authenticated
+- `403` — Not authorized (wrong project or insufficient role)
+- `404` — Bill/image not found
+- `409` — OCR analysis already in progress
+- `413` — File too large
+- `500` — Server error
+
+## Frontend Integration
+
+### API Client (`nextjs/lib/api/bills.ts`)
+Already exists with all method signatures — just needs the actual API routes to work.
+
+### Components Needing Connection
+- `BillList.tsx` — Uses `useBills()` hook → needs `GET /api/bills`
+- `BillForm.tsx` — Submit → needs `POST /api/bills` or `PUT /api/bills/[id]`
+- `BillDetailHeader.tsx` — Actions → needs `PATCH /api/bills/[id]/status`, `POST /api/bills/[id]/analyse`
+- `ImageGallery.tsx` — Image ops → needs image CRUD endpoints
+- `OcrFieldVerification.tsx` — Verify → needs `PATCH /api/bills/[id]/verify-field`
+
+## Implementation Order
+
+1. **Prisma client singleton** — Ensure `lib/prisma.ts` exists
+2. **Auth helper** — Create `lib/auth-session.ts` to get current user with project
+3. **File upload utility** — Create `lib/upload.ts` with formidable wrapper
+4. **Core bill routes** — `GET/POST /api/bills`, `GET/PUT/DELETE /api/bills/[id]`
+5. **Image routes** — Upload, delete, replace, reorder
+6. **OCR routes** — Analyse, status, verify-field
+7. **Status route** — PATCH /api/bills/[id]/status
+8. **Reference routes** — Motives, categories
+9. **File serving** — `/uploads/[...path]`
+10. **Edit log** — GET /api/bills/log
 
 ## Checklist
 
-- [ ] Add `better-sqlite3` and `@types/better-sqlite3` to devDependencies
-- [ ] Create migration script at `/nextjs/scripts/migrate-sqlite-to-pg.ts`
-- [ ] Implement ID mapping for all tables
-- [ ] Implement all 18 table migrations in correct order
-- [ ] Handle all data type transformations (boolean, datetime, json)
-- [ ] Use upsert for idempotency
-- [ ] Add proper error handling with per-table reporting
-- [ ] Add `npm run migrate:sqlite` script
-- [ ] Print final summary with row counts
-- [ ] Exit with code 1 on any errors
-- [ ] Test the migration script
+### API Implementation
+- [ ] All CRUD endpoints return proper error responses
+- [ ] All endpoints verify project access
+- [ ] Admin-only endpoints check role
+- [ ] File uploads validate type and size
+- [ ] Image cleanup on delete
+- [ ] Edit logging on all mutations
+- [ ] Bill number generation works
+- [ ] Draft auto-promotion works
+- [ ] OCR field stripping works
+- [ ] Allocation defaults work
+
+### Security
+- [ ] All endpoints use auth() from @/auth
+- [ ] Project scoping enforced
+- [ ] File serving checks project access
+- [ ] No SQL injection (use Prisma)
+- [ ] Input validation with Zod
+
+### Integration
+- [ ] Frontend hooks work with new APIs
+- [ ] Image gallery displays correctly
+- [ ] File uploads work end-to-end
+- [ ] OCR analysis triggers correctly

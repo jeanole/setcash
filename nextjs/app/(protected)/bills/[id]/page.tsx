@@ -2,6 +2,7 @@
 
 import { use, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import BillDetailHeader from '@/components/bills/BillDetailHeader';
 import ImageGallery from '@/components/bills/ImageGallery';
 import AllocationWidget from '@/components/bills/AllocationWidget';
@@ -121,8 +122,9 @@ export default function BillDetailPage({ params }: BillDetailPageProps) {
     await reorderImages(reordered);
   };
 
-  // Check if user is admin (simplified)
-  const isAdmin = true; // TODO: Get from auth context
+  // Check if user is admin from session
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.role === 'admin' || session?.user?.role === 'superadmin';
   const hasOcrEnabled = true; // TODO: Get from project settings
 
   if (isLoading) {

@@ -11,6 +11,14 @@ WORKDIR /app
 
 COPY . .
 
+# Set build-time env vars (values don't matter for build, only for runtime)
+ENV DATABASE_URL=postgresql://dummy:dummy@localhost:5432/dummy
+ENV NEXTAUTH_SECRET=dummy-build-secret-not-for-production-use-only
+ENV GOOGLE_CLIENT_ID=dummy-google-client-id
+ENV GOOGLE_CLIENT_SECRET=dummy-google-client-secret
+ENV SESSION_SECRET=dummy-build-secret-not-for-production-use-only
+ENV OCR_ENCRYPTION_SECRET=dummy-build-secret-not-for-production-use-only
+
 # Generate Prisma client before build
 RUN npx prisma generate
 
