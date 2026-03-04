@@ -62,8 +62,7 @@ const results: MigrationResult[] = [];
 // Data Type Helpers
 // ============================================================================
 
-function toBoolean(value: number | null): boolean | null {
-  if (value === null) return null;
+function toBoolean(value: number | null): boolean {
   return value === 1;
 }
 
@@ -82,8 +81,7 @@ function toJson(value: string | null): any {
   }
 }
 
-function toDecimal(value: number | null): Decimal | null {
-  if (value === null) return null;
+function toDecimal(value: number | null): Decimal {
   return new Decimal(value ?? 0);
 }
 
@@ -96,7 +94,7 @@ async function migrate() {
   console.log('  SQLite to PostgreSQL Migration');
   console.log('═══════════════════════════════════════════════════════');
   console.log(`SQLite: ${SQLITE_PATH}`);
-  console.log(`PostgreSQL: ${DATABASE_URL.replace(/\/\/.*@/, '//***@')}`);
+  console.log(`PostgreSQL: ${(DATABASE_URL || '').replace(/\/\/.*@/, '//***@')}`);
   console.log('');
 
   // Connect to SQLite
@@ -210,7 +208,7 @@ async function migrateUsers(sqlite: Database.Database, prisma: PrismaClient) {
           update: {
             email: row.email,
             passwordHash: row.hash,
-            isSuperAdmin: toBoolean(row.super_admin) || toBoolean(row.admin),
+            isSuperAdmin: toBoolean(row.super_admin) || toBoolean(row.admin) || false,
             isActive: true,
           },
           create: {
@@ -218,7 +216,7 @@ async function migrateUsers(sqlite: Database.Database, prisma: PrismaClient) {
             legacyId: row.id,
             email: row.email,
             passwordHash: row.hash,
-            isSuperAdmin: toBoolean(row.super_admin) || toBoolean(row.admin),
+            isSuperAdmin: toBoolean(row.super_admin) || toBoolean(row.admin) || false,
             isActive: true,
           },
         });
