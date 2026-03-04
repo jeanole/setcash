@@ -61,158 +61,113 @@
 ## Tech Design (Solution Architect)
 
 ### Overview
-The Bills Feature provides a complete expense management workflow within vBudget. Users can upload receipts, view their expense history, and admins can review/approve bills. The feature supports multiple images per bill, manual AI analysis trigger, and per-field verification.
+PROJ-7 ports the **existing Bills feature** from the Express/Vanilla JS app to Next.js. The existing implementation provides full functionality including multi-image upload, OCR verification, admin workflows, and allocation management.
+
+**Existing Code to Port:**
+- Backend: `routes/bills.js` (1000+ lines) - Complete REST API
+- Frontend: `public/js/bills.js`, `public/js/allocation-widget.js`, `public/js/gallery.js`
+- Helpers: `routes/helpers.js` - Allocation saving logic
+
+### Existing API to Port
+
+| Express Route | Next.js Route | Purpose |
+|---------------|---------------|---------|
+| `GET /api/bills` | `app/api/bills/route.ts` | List bills with allocations, images |
+| `POST /upload` | `app/api/bills/route.ts` | Create bill with images |
+| `PUT /api/bills/:id` | `app/api/bills/[id]/route.ts` | Update bill fields |
+| `PATCH /api/bills/:id/verify-field` | `app/api/bills/[id]/verify-field/route.ts` | Accept/reject OCR field |
+| `DELETE /api/bills/:id` | `app/api/bills/[id]/route.ts` | Delete bill + cleanup images |
+| `POST /api/bills/bulk-delete` | `app/api/bills/bulk-delete/route.ts` | Bulk delete bills |
+| `POST /api/bills/:id/images` | `app/api/bills/[id]/images/route.ts` | Add images to bill |
+| `PUT /api/bills/:id/images/:imageId` | `app/api/bills/[id]/images/[imageId]/route.ts` | Replace/crop image |
+| `DELETE /api/bills/:id/images/:imageId` | `app/api/bills/[id]/images/[imageId]/route.ts` | Delete single image |
+| `GET /api/bills/log` | `app/api/bills/log/route.ts` | Get edit history |
+| `GET /uploads/*` | `public/uploads/` or route handler | Serve uploaded images |
 
 ### Component Structure
 
 ```
-Bills List Page (/bills)
+Bills List (/bills)
 ├── Page Header
 │   ├── Title "Bills"
-│   └── "Upload New Bill" Button → links to /bills/new
-├── Filters Bar (future iteration)
-│   ├── Status filter tabs (All | Pending | Approved | Rejected | Paid)
-│   └── Date range picker
+│   └── "Upload New Bill" Button
+├── Filter Tabs (All | Pending | Approved | Rejected | Paid)
 ├── Bills Table
-│   ├── Columns: Date | Vendor | Amount | Status | Actions
-│   ├── Pagination Controls (25 per page)
-│   ├── Empty State (when no bills)
-│   └── Loading Skeleton
-└── Upload Shortcut Button (PROJ-3 component reused)
+│   ├── Columns: Date | Vendor | Amount | Status | Motive/Category | Actions
+│   ├── Bulk select checkbox
+│   ├── Pagination (25 per page)
+│   └── Empty State
+└── Upload Shortcut Button (PROJ-3)
 
-New Bill Page (/bills/new)
-├── Form Container
-│   ├── Image Upload Zone
-│   │   ├── Drop zone for files
-│   │   ├── File type validation (jpg/png/webp/pdf)
-│   │   ├── Size validation (max 10MB)
-│   │   └── Preview thumbnails
-│   ├── Date Input
-│   ├── Vendor Input
-│   ├── Amount Input (with currency formatting)
-│   ├── Description Textarea
-│   ├── Motive Select (single for MVP)
-│   ├── Category Select (single for MVP)
-│   └── Submit / Cancel Buttons
-└── Validation Messages
+New Bill (/bills/new)
+├── Upload Form
+│   ├── Image Upload Zone (drag-drop, multiple)
+│   ├── Date, Vendor, Amount fields (brutto19/7/0)
+│   ├── Description
+│   ├── Allocation Widget (motive/category split)
+│   └── Submit/Cancel
 
-Bill Detail Page (/bills/[id])
-├── Back Navigation → /bills
-├── Bill Header
-│   ├── Bill ID & Date
-│   ├── Status Badge
-│   └── Total Amount
-├── Image Gallery
-│   ├── Thumbnail Grid (clickable)
-│   └── Lightbox Modal (full-size view)
-├── Bill Information Card
-│   ├── Vendor, Amount, Description
-│   ├── Motive & Category
-│   └── Submitted By
-├── AI Analysis Section (if analyzed)
-│   ├── Extracted Fields Table
-│   │   ├── Field name | Value | Confidence | Actions
-│   │   └── Per-field Accept/Reject toggles
-│   └── "Re-analyse" Button (admin only)
-├── Admin Actions Panel (admin only)
-│   ├── Approve Button
-│   ├── Reject Button
-│   └── Mark as Paid Button
-└── History Timeline
-    ├── EditLog entries (newest first)
-    └── Status change history
+Bill Detail (/bills/[id])
+├── Back link → /bills
+├── Header (ID, Date, Status, Amount)
+├── Image Gallery (thumbnails, sortable, cropper)
+├── Bill Info (vendor, amounts, allocations)
+├── AI Analysis (extracted fields, verify/reject)
+├── Admin Actions (approve/reject/paid)
+└── History Timeline (editlog entries)
 ```
 
-### Data Model (Conceptual)
+### Key Features to Port
 
-The Bills feature works with these core data types:
+**From routes/bills.js:**
+1. **Bill Number Generation** - Auto format (1.01, 1.02...)
+2. **Draft Auto-promotion** - Draft → Confirmed when complete
+3. **OCR Field Stripping** - Remove verified fields from ocr_fields JSON
+4. **Allocation Defaults** - 100% to Default/Uncategorized if none specified
+5. **Image Cleanup** - Delete files on bill/image deletion
+6. **Legacy Column Sync** - Keep bills.filename/file synced with first image
 
-**Bill**
-- Unique ID (UUID)
-- Project association (for multi-tenancy)
-- Submitter (user email)
-- Date of expense
-- Vendor name
-- Amounts (gross, net, VAT breakdown)
-- Description/comment
-- Status (confirmed → pending → approved/rejected → paid)
-- OCR analysis status and extracted fields
-- Creation timestamp
+**From public/js/*.js:**
+1. Table sorting, filtering, bulk operations
+2. Allocation widget with percentage validation
+3. Image gallery with Cropper.js integration
+4. Status workflow UI
 
-**Bill Image**
-- Unique ID (UUID)
-- Associated bill
-- File path in storage
-- Filename for display
-- Sort order for gallery
-- Upload timestamp
+### Data Model
 
-**Bill-Motive Link** (for future allocation widget)
-- Links bills to motives with percentage
-- MVP: 100% single motive
-
-**Bill-Category Link** (for future allocation widget)
-- Links bills to categories with percentage
-- MVP: 100% single category
-
-**EditLog / History**
-- Timestamp of change
-- User who made the change
-- What changed (field-level diff)
-- Source (user action or AI)
+Already in `schema.prisma`:
+- **Bill** - Core expense data, amounts, status, OCR
+- **BillImage** - Multiple images per bill
+- **BillMotive/BillCategory** - Junction tables with percentages
+- **EditLog** - Audit trail
 
 ### Tech Decisions
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
-| **Image Storage** | Filesystem (`public/uploads/`) | Simple, fast, no external dependencies. For production scale, could migrate to S3-compatible storage later. |
-| **Image Serving** | Direct via `/uploads/` path | Next.js public folder serves static files efficiently. No need for API route overhead. |
-| **Pagination** | Cursor-based | Better performance with large datasets, consistent ordering when new bills added during browsing. |
-| **Form Handling** | Next.js Server Actions | Type-safe, progressive enhancement, handles file uploads via multipart. |
-| **State Management** | React Server Components + URL params | No client-side state library needed. Filters and pagination via URL query params for shareable links. |
-| **Lightbox** | Custom modal component | Keeps bundle size small, matches app design system. Can enhance with pinch-to-zoom later. |
-| **AI Integration** | Route Handler (`/api/bills/[id]/analyse`) | Async processing, handles external OCR API calls, logs results to editlog. |
-
-### Page Routes
-
-| Route | Access | Purpose |
-|-------|--------|---------|
-| `/bills` | Protected | List all bills for user's project |
-| `/bills/new` | Protected | Upload new bill form |
-| `/bills/[id]` | Protected | View bill detail, admin actions |
-| `/api/bills` | Protected (API) | CRUD operations for bills |
-| `/api/bills/[id]/analyse` | Admin only | Trigger OCR/AI analysis |
-| `/api/bills/[id]/images` | Protected (API) | Upload/retrieve bill images |
+| **API Layer** | Route Handlers | Port existing Express logic to App Router |
+| **File Uploads** | `formidable` | Multer equivalent for Next.js |
+| **Image Storage** | Keep `data/uploads/` | PROJ-6 migration handles paths |
+| **Allocation Widget** | Port existing | Complex UI already built |
+| **Gallery** | Cropper.js | Existing integration works |
 
 ### Dependencies
 
-No new major dependencies required. Uses existing stack:
-- `@prisma/client` - Database queries
-- `next-auth` - Authentication/session
-- `zod` - Form validation (already in project)
-- Native browser APIs - File upload, image preview
+- `formidable` - File upload handling
+- `cropperjs` - Image cropping (already used)
 
-### Security Considerations
+### Security (from existing)
 
-- File upload validation: whitelist extensions, size limits
-- Project-scoped queries: all bill queries filtered by `projectId` from session
-- Role-based actions: admin checks on approve/reject/analyse endpoints
-- Image access: images served from public folder; rely on obfuscated filenames for privacy
+- Project-scoped queries via session
+- File type whitelist (jpg/png/webp/pdf)
+- 10MB size limit
+- Max 10 images per bill
 
-### Performance Considerations
+### Migration Strategy
 
-- Pagination: 25 bills per page to keep initial load fast
-- Image optimization: Next.js Image component for thumbnails
-- Database indexes: `projectId`, `status`, `date` for efficient filtering
-- Server Components: bill list renders on server, reducing client JS
-
-### Future Enhancements (Post-MVP)
-
-- **Allocation Widget**: Split bills across multiple motives/categories with percentage UI
-- **Automatic OCR**: Trigger AI analysis on upload (configurable per project)
-- **Bulk Actions**: Approve/reject multiple bills at once
-- **Advanced Filters**: Date range, amount range, vendor search
-- **Receipt Templates**: Pre-fill based on vendor history
+1. **API Routes** - Port endpoints to `app/api/bills/**`
+2. **Pages** - Port UI to `app/(protected)/bills/`
+3. **Components** - Port allocation widget, gallery
 
 ## QA Test Results
 _To be added by /qa_
