@@ -181,3 +181,9 @@ _To be added by /deploy_
 |----|----------|-------|--------|
 | [CR-6](CR-6-camera-upload-bills.md) | High | Add Camera Capture to Bill Upload | Pending Review |
 | [CR-7](CR-7-image-crop-overlay.md) | Medium | Add Image Crop Feature with Overlay Buttons | Pending Review |
+
+## Open Bug Reports
+
+| ID | Severity | Title | Status |
+|----|----------|-------|--------|
+| [BUG-9](BUG-9-duplicate-image-upload-sections.md) | High | Duplicate Image Upload Sections on New Bill Page | Open |
