@@ -1,6 +1,6 @@
 # PROJ-7: Bills Feature
 
-## Status: In Progress
+## Status: Change Requested
 **Created:** 2026-03-01
 **Last Updated:** 2026-03-01
 
@@ -174,3 +174,9 @@ _To be added by /qa_
 
 ## Deployment
 _To be added by /deploy_
+
+## Change Requests
+
+| ID | Priority | Title | Status |
+|----|----------|-------|--------|
+| [CR-6](CR-6-camera-upload-bills.md) | High | Add Camera Capture to Bill Upload | Pending Review |

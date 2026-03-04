@@ -1,6 +1,6 @@
 # vBudget — Project Index
 
-**Next Available IDs:** PROJ-14 · BUG-9 · CR-6
+**Next Available IDs:** PROJ-14 · BUG-9 · CR-7
 
 | ID | Type | Title | Status | Priority | Feature | Date |
 |----|------|-------|--------|----------|---------|------|
@@ -30,3 +30,4 @@
 | [PROJ-11](PROJ-11-reports-exports.md) | Feature | Reports & Exports | Planned | — | PROJ-5, PROJ-6, PROJ-9 | 2026-03-01 |
 | [PROJ-12](PROJ-12-integrations.md) | Feature | Integrations (Google Sheets + Telegram) | Planned | — | PROJ-5, PROJ-10 | 2026-03-01 |
 | [PROJ-13](PROJ-13-production-cutover.md) | Feature | Production Cutover | Planned | — | PROJ-4–12 | 2026-03-01 |
+| [CR-6](CR-6-camera-upload-bills.md) | CR | Add Camera Capture to Bill Upload | Pending Review | High | PROJ-7 | 2026-03-04 |
