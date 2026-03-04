@@ -11,7 +11,8 @@
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
     "db:generate": "prisma generate",
-    "db:seed": "prisma db seed"
+    "db:seed": "prisma db seed",
+    "migrate:sqlite": "tsx scripts/migrate-sqlite-to-pg.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -28,12 +29,16 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4.0.0",
     "@types/bcryptjs": "^3.0.0",
+    "@types/better-sqlite3": "^7.6.12",
     "@types/node": "^20.17.6",
+    "@types/uuid": "^10.0.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "prisma": "^5.22.0",
+    "better-sqlite3": "^11.8.1",
     "tailwindcss": "^4.0.0",
     "tsx": "^4.19.2",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "uuid": "^11.0.5"
   }
 }
