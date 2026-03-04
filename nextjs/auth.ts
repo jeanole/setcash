@@ -17,6 +17,8 @@ declare module 'next-auth' {
       name?: string | null;
       role: 'user' | 'admin' | 'superadmin';
       currentProjectId: string | null;
+      currentProjectRole: 'user' | 'admin' | 'owner' | null;
+      currentProjectName: string | null;
     };
   }
 }
@@ -26,6 +28,8 @@ declare module '@auth/core/jwt' {
     id: string;
     role: 'user' | 'admin' | 'superadmin';
     currentProjectId: string | null;
+    currentProjectRole: 'user' | 'admin' | 'owner' | null;
+    currentProjectName: string | null;
   }
 }
 
@@ -156,12 +160,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           const membership = u.memberships?.find(
             (m) => m.projectId === currentProjectId
           );
-          token.role =
-            (membership?.role as 'user' | 'admin') ?? 'user';
+          const projectRole = (membership?.role as 'user' | 'admin' | 'owner') ?? 'user';
+          token.role = projectRole;
+          token.currentProjectRole = projectRole;
+          
+          // Fetch project name (this would need to be fetched from DB in a real implementation)
+          // For now, we'll leave it null and it can be hydrated on the client
+          token.currentProjectName = null;
         }
 
         if (token.role === 'superadmin') {
           token.currentProjectId = null;
+          token.currentProjectRole = null;
+          token.currentProjectName = null;
         }
       }
       return token;
@@ -174,9 +185,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (session.user) {
         session.user.id = token.id as string;
         session.user.role = token.role as 'user' | 'admin' | 'superadmin';
-        session.user.currentProjectId = token.currentProjectId as
-          | string
-          | null;
+        session.user.currentProjectId = token.currentProjectId as string | null;
+        session.user.currentProjectRole = token.currentProjectRole as 'user' | 'admin' | 'owner' | null;
+        session.user.currentProjectName = token.currentProjectName as string | null;
       }
       return session;
     },

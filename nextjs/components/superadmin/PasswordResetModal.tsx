@@ -24,6 +24,7 @@ export default function PasswordResetModal({
   const [newPassword, setNewPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Reset state when modal opens/closes
   useEffect(() => {
@@ -31,6 +32,7 @@ export default function PasswordResetModal({
       setStep('confirm');
       setNewPassword('');
       setCopied(false);
+      setError(null);
     }
   }, [isOpen]);
 
@@ -50,27 +52,18 @@ export default function PasswordResetModal({
     if (!user) return;
 
     setIsLoading(true);
+    setError(null);
     try {
-      // Mock API call - replace with actual API call
-      // const response = await fetch(`/api/admin/users/${encodeURIComponent(user.email)}`, {
-      //   method: 'PUT',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({ resetPassword: true }),
-      // });
-      // const data = await response.json();
-      
-      // For now, simulate API response
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      const generatedPassword = generateSecurePassword();
-      
-      setNewPassword(generatedPassword);
+      // Call the API through parent handler
+      const password = await onConfirmReset(user.email);
+      setNewPassword(password);
       setStep('display');
-    } catch (error) {
-      console.error('Failed to reset password:', error);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to reset password');
     } finally {
       setIsLoading(false);
     }
-  }, [user]);
+  }, [user, onConfirmReset]);
 
   const handleCopy = useCallback(async () => {
     try {
@@ -86,6 +79,7 @@ export default function PasswordResetModal({
     setStep('confirm');
     setNewPassword('');
     setCopied(false);
+    setError(null);
     onClose();
   }, [onClose]);
 
@@ -125,6 +119,11 @@ export default function PasswordResetModal({
               <p className="text-sm text-slate-500 mt-2">
                 A new secure password will be generated. This action cannot be undone.
               </p>
+              {error && (
+                <div className="mt-3 p-3 bg-rose-50 border border-rose-200 rounded-lg text-sm text-rose-700">
+                  {error}
+                </div>
+              )}
             </div>
           ) : (
             <div className="space-y-4">
@@ -216,30 +215,4 @@ export default function PasswordResetModal({
       </div>
     </div>
   );
-}
-
-// Generate a secure random password (12+ chars, mixed case + digits)
-function generateSecurePassword(): string {
-  const length = 16;
-  const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-  const lowercase = 'abcdefghijklmnopqrstuvwxyz';
-  const digits = '0123456789';
-  const all = uppercase + lowercase + digits;
-
-  // Ensure at least one of each type
-  let password = '';
-  password += uppercase[Math.floor(Math.random() * uppercase.length)];
-  password += lowercase[Math.floor(Math.random() * lowercase.length)];
-  password += digits[Math.floor(Math.random() * digits.length)];
-
-  // Fill the rest randomly
-  for (let i = 3; i < length; i++) {
-    password += all[Math.floor(Math.random() * all.length)];
-  }
-
-  // Shuffle the password
-  return password
-    .split('')
-    .sort(() => Math.random() - 0.5)
-    .join('');
 }

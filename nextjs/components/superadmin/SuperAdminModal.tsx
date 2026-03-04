@@ -7,59 +7,15 @@ import ProjectsTab from './ProjectsTab';
 import UsersTab from './UsersTab';
 import MembersSubModal from './MembersSubModal';
 import PasswordResetModal from './PasswordResetModal';
+import ToastContainer from './ToastContainer';
 import { Project, User, TabType } from './types';
+import { useSuperAdminApi, apiFetch } from './useSuperAdminApi';
 
 interface SuperAdminModalProps {
   isOpen: boolean;
   onClose: () => void;
   currentUserEmail: string;
 }
-
-// Mock data for development
-const mockProjects: Project[] = [
-  {
-    id: '1',
-    name: 'Project Alpha',
-    subtitle: 'Main development project',
-    createdAt: '2024-01-15T10:00:00Z',
-    memberCount: 5,
-  },
-  {
-    id: '2',
-    name: 'Project Beta',
-    subtitle: null,
-    createdAt: '2024-02-20T14:30:00Z',
-    memberCount: 3,
-  },
-  {
-    id: '3',
-    name: 'Project Gamma',
-    subtitle: 'Internal tools',
-    createdAt: '2024-03-10T09:15:00Z',
-    memberCount: 8,
-  },
-];
-
-const mockUsers: User[] = [
-  {
-    id: '1',
-    email: 'admin@example.com',
-    isSuperAdmin: true,
-    projectCount: 3,
-  },
-  {
-    id: '2',
-    email: 'user1@example.com',
-    isSuperAdmin: false,
-    projectCount: 2,
-  },
-  {
-    id: '3',
-    email: 'user2@example.com',
-    isSuperAdmin: false,
-    projectCount: 1,
-  },
-];
 
 export default function SuperAdminModal({ isOpen, onClose, currentUserEmail }: SuperAdminModalProps) {
   const [activeTab, setActiveTab] = useState<TabType>('projects');
@@ -72,6 +28,8 @@ export default function SuperAdminModal({ isOpen, onClose, currentUserEmail }: S
   const [resetPasswordUser, setResetPasswordUser] = useState<User | null>(null);
   const [isPasswordResetModalOpen, setIsPasswordResetModalOpen] = useState(false);
 
+  const { toasts, showToast, removeToast, handleApiError } = useSuperAdminApi();
+
   // Fetch data when modal opens
   useEffect(() => {
     if (isOpen) {
@@ -83,38 +41,26 @@ export default function SuperAdminModal({ isOpen, onClose, currentUserEmail }: S
   const fetchProjects = useCallback(async () => {
     setIsLoadingProjects(true);
     try {
-      // Mock API call - replace with actual API
-      // const response = await fetch('/api/admin/projects');
-      // const data = await response.json();
-      // setProjects(data);
-
-      // Simulate API delay
-      await new Promise((resolve) => setTimeout(resolve, 300));
-      setProjects(mockProjects);
+      const data = await apiFetch<Project[]>('/api/admin/projects');
+      setProjects(data);
     } catch (error) {
-      console.error('Failed to fetch projects:', error);
+      handleApiError(error, 'Failed to fetch projects');
     } finally {
       setIsLoadingProjects(false);
     }
-  }, []);
+  }, [handleApiError]);
 
   const fetchUsers = useCallback(async () => {
     setIsLoadingUsers(true);
     try {
-      // Mock API call - replace with actual API
-      // const response = await fetch('/api/admin/users');
-      // const data = await response.json();
-      // setUsers(data);
-
-      // Simulate API delay
-      await new Promise((resolve) => setTimeout(resolve, 300));
-      setUsers(mockUsers);
+      const data = await apiFetch<User[]>('/api/admin/users');
+      setUsers(data);
     } catch (error) {
-      console.error('Failed to fetch users:', error);
+      handleApiError(error, 'Failed to fetch users');
     } finally {
       setIsLoadingUsers(false);
     }
-  }, []);
+  }, [handleApiError]);
 
   // Handle escape key
   useEffect(() => {
@@ -133,18 +79,14 @@ export default function SuperAdminModal({ isOpen, onClose, currentUserEmail }: S
   }, [isOpen, onClose, isMembersModalOpen, isPasswordResetModalOpen]);
 
   const handleDeleteProject = useCallback(async (id: string) => {
-    // Mock API call - replace with actual API
-    // await fetch(`/api/admin/projects/${id}`, { method: 'DELETE' });
-
-    // Simulate API delay
-    await new Promise((resolve) => setTimeout(resolve, 300));
-
-    // Refresh projects
-    await fetchProjects();
-
-    // Show success toast (to be implemented with actual toast system)
-    console.log('Project deleted successfully');
-  }, [fetchProjects]);
+    try {
+      await apiFetch(`/api/admin/projects/${id}`, { method: 'DELETE' });
+      await fetchProjects();
+      showToast('Project deleted successfully');
+    } catch (error) {
+      handleApiError(error, 'Failed to delete project');
+    }
+  }, [fetchProjects, showToast, handleApiError]);
 
   const handleOpenMembers = useCallback((project: Project) => {
     setSelectedProject(project);
@@ -157,36 +99,29 @@ export default function SuperAdminModal({ isOpen, onClose, currentUserEmail }: S
   }, []);
 
   const handleToggleAdmin = useCallback(async (email: string, isSuperAdmin: boolean) => {
-    // Mock API call - replace with actual API
-    // await fetch(`/api/admin/users/${encodeURIComponent(email)}`, {
-    //   method: 'PUT',
-    //   headers: { 'Content-Type': 'application/json' },
-    //   body: JSON.stringify({ isSuperAdmin }),
-    // });
-
-    // Simulate API delay
-    await new Promise((resolve) => setTimeout(resolve, 300));
-
-    // Refresh users
-    await fetchUsers();
-
-    // Show success toast
-    console.log(`Admin privileges ${isSuperAdmin ? 'granted' : 'revoked'} for ${email}`);
-  }, [fetchUsers]);
+    try {
+      await apiFetch(`/api/admin/users/${encodeURIComponent(email)}`, {
+        method: 'PUT',
+        body: JSON.stringify({ isSuperAdmin }),
+      });
+      await fetchUsers();
+      showToast(`Admin privileges ${isSuperAdmin ? 'granted' : 'revoked'}`);
+    } catch (error) {
+      handleApiError(error, 'Failed to update admin privileges');
+    }
+  }, [fetchUsers, showToast, handleApiError]);
 
   const handleDeleteUser = useCallback(async (email: string) => {
-    // Mock API call - replace with actual API
-    // await fetch(`/api/admin/users/${encodeURIComponent(email)}`, { method: 'DELETE' });
-
-    // Simulate API delay
-    await new Promise((resolve) => setTimeout(resolve, 300));
-
-    // Refresh users
-    await fetchUsers();
-
-    // Show success toast
-    console.log(`User ${email} deleted successfully`);
-  }, [fetchUsers]);
+    try {
+      await apiFetch(`/api/admin/users/${encodeURIComponent(email)}`, {
+        method: 'DELETE',
+      });
+      await fetchUsers();
+      showToast('User deleted successfully');
+    } catch (error) {
+      handleApiError(error, 'Failed to delete user');
+    }
+  }, [fetchUsers, showToast, handleApiError]);
 
   const handleResetPassword = useCallback((user: User) => {
     setResetPasswordUser(user);
@@ -199,19 +134,22 @@ export default function SuperAdminModal({ isOpen, onClose, currentUserEmail }: S
   }, []);
 
   const handleConfirmResetPassword = useCallback(async (email: string): Promise<string> => {
-    // Mock API call - replace with actual API
-    // const response = await fetch(`/api/admin/users/${encodeURIComponent(email)}`, {
-    //   method: 'PUT',
-    //   headers: { 'Content-Type': 'application/json' },
-    //   body: JSON.stringify({ resetPassword: true }),
-    // });
-    // const data = await response.json();
-    // return data.password;
-
-    // For now, return a mock password
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    return 'MockPassword123!';
-  }, []);
+    const response = await apiFetch<{ ok: boolean; password?: string }>(
+      `/api/admin/users/${encodeURIComponent(email)}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify({ resetPassword: true }),
+      }
+    );
+    
+    if (!response.password) {
+      throw new Error('Password was not returned from server');
+    }
+    
+    await fetchUsers();
+    showToast('Password reset successfully');
+    return response.password;
+  }, [fetchUsers, showToast]);
 
   if (!isOpen) return null;
 
@@ -323,6 +261,9 @@ export default function SuperAdminModal({ isOpen, onClose, currentUserEmail }: S
         onClose={handleClosePasswordReset}
         onConfirmReset={handleConfirmResetPassword}
       />
+
+      {/* Toast Notifications */}
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
     </>
   );
 }

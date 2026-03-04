@@ -120,3 +120,6 @@ export interface Allocation {
   name: string;
   percentage: number;
 }
+
+// Re-export settings types
+export * from './types/settings';

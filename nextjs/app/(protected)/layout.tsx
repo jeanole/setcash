@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react';
 import { redirect } from 'next/navigation';
-import { SessionProvider } from 'next-auth/react';
 import { auth } from '../../auth';
 import AppShell from '@/components/layout/AppShell';
+import ClientSessionProvider from '@/components/providers/ClientSessionProvider';
 
 // ---------------------------------------------------------------------------
 // Protected layout — server-side session guard
@@ -21,9 +21,18 @@ export default async function ProtectedLayout({
     redirect('/login');
   }
 
+  const currentUser = session.user
+    ? {
+        email: session.user.email || '',
+        role: (session.user.role as 'user' | 'admin' | 'superadmin') || 'user',
+      }
+    : null;
+
   return (
-    <SessionProvider session={session}>
-      <AppShell>{children}</AppShell>
-    </SessionProvider>
+    <AppShell currentUser={currentUser}>
+      <ClientSessionProvider session={session}>
+        {children}
+      </ClientSessionProvider>
+    </AppShell>
   );
 }
