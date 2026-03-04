@@ -1,6 +1,6 @@
 # vBudget — Project Index
 
-**Next Available IDs:** PROJ-14 · BUG-12 · CR-8
+**Next Available IDs:** PROJ-18 · BUG-12 · CR-8
 
 | ID | Type | Title | Status | Priority | Feature | Date |
 |----|------|-------|--------|----------|---------|------|
@@ -24,14 +24,18 @@
 | [PROJ-5](PROJ-5-nextauth-authentication.md) | Feature | NextAuth.js Authentication | Complete | — | PROJ-4 | 2026-03-03 |
 | [PROJ-6](PROJ-6-sqlite-postgres-migration.md) | Feature | SQLite → PostgreSQL Data Migration Script | Complete | — | PROJ-4 | 2026-03-01 |
 | [PROJ-7](PROJ-7-bills-feature.md) | Feature | Bills Feature | In Progress | — | PROJ-5, PROJ-6 | 2026-03-01 |
-| [PROJ-8](PROJ-8-budget-matrix.md) | Feature | Budget Matrix | Planned | — | PROJ-5, PROJ-6 | 2026-03-01 |
-| [PROJ-9](PROJ-9-categories-motives.md) | Feature | Categories & Motives Admin Pages | Planned | — | PROJ-5, PROJ-6 | 2026-03-01 |
-| [PROJ-10](PROJ-10-members-projects-settings.md) | Feature | Members, Projects & Settings | Planned | — | PROJ-5, PROJ-6 | 2026-03-01 |
-| [PROJ-11](PROJ-11-reports-exports.md) | Feature | Reports & Exports | Planned | — | PROJ-5, PROJ-6, PROJ-9 | 2026-03-01 |
-| [PROJ-12](PROJ-12-integrations.md) | Feature | Integrations (Google Sheets + Telegram) | Planned | — | PROJ-5, PROJ-10 | 2026-03-01 |
+| [PROJ-8](PROJ-8-budget-matrix.md) | Feature | Budget Matrix | In Progress | — | PROJ-5, PROJ-6 | 2026-03-01 |
+| [PROJ-9](PROJ-9-categories-motives.md) | Feature | Categories & Motives Admin Pages | In Progress | — | PROJ-5, PROJ-6 | 2026-03-01 |
+| [PROJ-10](PROJ-10-members-projects-settings.md) | Feature | Members, Projects & Settings | In Progress | — | PROJ-5, PROJ-6 | 2026-03-01 |
+| [PROJ-11](PROJ-11-reports-exports.md) | Feature | Reports & Exports | In Progress | — | PROJ-5, PROJ-6, PROJ-9 | 2026-03-01 |
+| [PROJ-12](PROJ-12-integrations.md) | Feature | Integrations (Google Sheets + Telegram) | In Progress | — | PROJ-5, PROJ-10 | 2026-03-04 |
 | [PROJ-13](PROJ-13-production-cutover.md) | Feature | Production Cutover | Planned | — | PROJ-4–12 | 2026-03-01 |
 | [CR-6](CR-6-camera-upload-bills.md) | CR | Add Camera Capture to Bill Upload | Deployed | High | PROJ-7 | 2026-03-04 |
 | [CR-7](CR-7-image-crop-overlay.md) | CR | Add Image Crop Feature with Overlay Buttons | Deployed | Medium | PROJ-7 | 2026-03-04 |
 | [BUG-9](BUG-9-duplicate-image-upload-sections.md) | Bug | Duplicate Image Upload Sections on New Bill Page | Resolved | High | PROJ-7 | 2026-03-04 |
 | [BUG-10](BUG-10-hardcoded-isadmin-exposes-admin-ui.md) | Bug | Hardcoded isAdmin Flag Exposes Admin UI to All Users | Resolved | Critical | PROJ-7 | 2026-03-04 |
 | [BUG-11](BUG-11-missing-rate-limiting.md) | Bug | Missing Rate Limiting on Bill Creation and Re-analysis | Resolved | Medium | PROJ-7 | 2026-03-04 |
+| [PROJ-14](PROJ-14-spending-overview.md) | Feature | Spending Overview | In Progress | — | PROJ-7, PROJ-9 | 2026-03-04 |
+| [PROJ-15](PROJ-15-vgeld-advance-money.md) | Feature | V-Geld (Advance Money) | In Progress | — | PROJ-7 | 2026-03-04 |
+| [PROJ-16](PROJ-16-notifications-system.md) | Feature | Notifications System | In Progress | — | PROJ-5, PROJ-10 | 2026-03-04 |
+| [PROJ-17](PROJ-17-super-admin.md) | Feature | Super-Admin | In Progress | — | PROJ-5, PROJ-10 | 2026-03-04 |
