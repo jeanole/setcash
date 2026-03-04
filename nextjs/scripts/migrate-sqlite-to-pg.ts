@@ -43,7 +43,7 @@ const vgeldIdMap: Map<number, string> = new Map();
 const editLogIdMap: Map<number, string> = new Map();
 const ocrLogIdMap: Map<number, string> = new Map();
 const notificationIdMap: Map<number, string> = new Map();
-const telegramLinkIdMap: Map<number, string> = new Map();
+
 
 // ============================================================================
 // Migration Results Tracking
@@ -62,7 +62,8 @@ const results: MigrationResult[] = [];
 // Data Type Helpers
 // ============================================================================
 
-function toBoolean(value: number | null): boolean {
+function toBoolean(value: number | null): boolean | null {
+  if (value === null) return null;
   return value === 1;
 }
 
@@ -81,7 +82,8 @@ function toJson(value: string | null): any {
   }
 }
 
-function toDecimal(value: number | null): Decimal {
+function toDecimal(value: number | null): Decimal | null {
+  if (value === null) return null;
   return new Decimal(value ?? 0);
 }
 
@@ -1033,7 +1035,6 @@ async function migrateTelegramLinks(sqlite: Database.Database, prisma: PrismaCli
           },
         });
         
-        telegramLinkIdMap.set(row.id, link.id);
         result.inserted++;
       } catch (err: any) {
         result.errors++;
