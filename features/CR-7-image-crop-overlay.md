@@ -64,4 +64,7 @@ The cropping feature is essential for the bill upload workflow. Receipts often n
 - [ ] Responsive crop modal (60vh height on desktop)
 
 ## Resolution
-**Status:** Pending Review
+**Status:** Deployed
+**Resolved Date:** 2026-03-04
+**Fixed In:** commit with CropModal component
+**Fix Description:** Created CropModal component with Cropper.js integration. Added overlay buttons (Download, Crop, Delete) to ImageGallery with semi-transparent dark background styling.

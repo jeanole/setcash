@@ -39,4 +39,7 @@ From `public/index.html` lines 324-335:
 - [ ] Graceful fallback on desktop (behaves like regular file picker)
 
 ## Resolution
-**Status:** Pending Review
+**Status:** Deployed
+**Resolved Date:** 2026-03-04
+**Fixed In:** commit with `cropperjs` integration
+**Fix Description:** Added green "Take Photo" button with `capture="environment"` to BillImageUpload component. Images processed through new CropModal component.
