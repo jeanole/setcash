@@ -47,7 +47,7 @@ const isAdmin = session?.user?.role === 'admin' || session?.user?.role === 'supe
 ## Resolution
 **Status:** Resolved  
 **Resolved Date:** 2026-03-04  
-**Fixed In:** _Pending_  
+**Fixed In:** 0493f33  
 **Fix Description:**
 - Replaced hardcoded `isAdmin = true` with `useSession()` hook from `next-auth/react`
 - `isAdmin` now correctly checks `session?.user?.role === 'admin' || session?.user?.role === 'superadmin'`
