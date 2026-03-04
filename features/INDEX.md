@@ -32,4 +32,4 @@
 | [PROJ-13](PROJ-13-production-cutover.md) | Feature | Production Cutover | Planned | — | PROJ-4–12 | 2026-03-01 |
 | [CR-6](CR-6-camera-upload-bills.md) | CR | Add Camera Capture to Bill Upload | Pending Review | High | PROJ-7 | 2026-03-04 |
 | [CR-7](CR-7-image-crop-overlay.md) | CR | Add Image Crop Feature with Overlay Buttons | Pending Review | Medium | PROJ-7 | 2026-03-04 |
-| [BUG-9](BUG-9-duplicate-image-upload-sections.md) | Bug | Duplicate Image Upload Sections on New Bill Page | Open | High | PROJ-7 | 2026-03-04 |
+| [BUG-9](BUG-9-duplicate-image-upload-sections.md) | Bug | Duplicate Image Upload Sections on New Bill Page | Resolved | High | PROJ-7 | 2026-03-04 |

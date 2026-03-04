@@ -186,4 +186,4 @@ _To be added by /deploy_
 
 | ID | Severity | Title | Status |
 |----|----------|-------|--------|
-| [BUG-9](BUG-9-duplicate-image-upload-sections.md) | High | Duplicate Image Upload Sections on New Bill Page | Open |
+| [BUG-9](BUG-9-duplicate-image-upload-sections.md) | High | Duplicate Image Upload Sections on New Bill Page | Resolved |

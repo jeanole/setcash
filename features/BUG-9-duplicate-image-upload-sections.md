@@ -45,7 +45,7 @@ The original vBudget app positioned the photo upload at the top of the upload fo
 ---
 
 ## Resolution
-**Status:** Open | In Progress | Resolved | Won't Fix
-**Resolved Date:** —
-**Fixed In:** — *(commit hash or PR)*
-**Fix Description:** —
+**Status:** Resolved
+**Resolved Date:** 2026-03-04
+**Fixed In:** Commit removing duplicate image section
+**Fix Description:** Removed image upload from BillForm.tsx and moved the working one from page.tsx to the top of the form, right after the header/result message.
