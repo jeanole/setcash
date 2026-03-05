@@ -175,7 +175,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     // ------------------------------------------------------------------
     // JWT callback — runs on sign-in and session refresh
     // ------------------------------------------------------------------
-    async jwt({ token, user, trigger }) {
+    async jwt({ token, user, trigger, session }) {
       // Get user email for DB lookups
       const userEmail = token.email || (user as { email?: string })?.email;
 
@@ -235,10 +235,44 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
 
       // ------------------------------------------------------------------
-      // Re-fetch current project from DB on every request to keep session in sync
-      // This ensures project switching is reflected immediately
+      // Handle session update trigger from client (e.g., after project switch)
+      // The session parameter contains data passed from updateSession()
       // ------------------------------------------------------------------
-      if (token.id && token.role !== 'superadmin' && userEmail) {
+      if (trigger === 'update' && session && token.id && userEmail) {
+        try {
+          // If the update includes a projectId, fetch the new project details
+          const updatedProjectId = (session as { currentProjectId?: string }).currentProjectId;
+          
+          // Always re-fetch from DB on update to ensure consistency
+          const dbUser = await prisma.user.findUnique({
+            where: { id: token.id as string },
+            select: { defaultProjectId: true },
+          });
+
+          if (dbUser?.defaultProjectId) {
+            const projectDetails = await getCurrentProjectDetails(
+              userEmail,
+              dbUser.defaultProjectId
+            );
+            token.currentProjectId = projectDetails.currentProjectId;
+            token.currentProjectRole = projectDetails.currentProjectRole;
+            token.currentProjectName = projectDetails.currentProjectName;
+            
+            // Update the token role to match the project role
+            if (projectDetails.currentProjectRole) {
+              token.role = projectDetails.currentProjectRole;
+            }
+          }
+        } catch (error) {
+          console.error('Error updating project in JWT callback:', error);
+          // Keep existing token values on error
+        }
+      }
+      // ------------------------------------------------------------------
+      // Re-fetch current project from DB on every request to keep session in sync
+      // This ensures project switching is reflected even without explicit update
+      // ------------------------------------------------------------------
+      else if (token.id && token.role !== 'superadmin' && userEmail) {
         try {
           const dbUser = await prisma.user.findUnique({
             where: { id: token.id as string },
@@ -246,8 +280,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           });
 
           if (dbUser?.defaultProjectId) {
-            // Only re-fetch if project changed or trigger is 'update'
-            if (trigger === 'update' || dbUser.defaultProjectId !== token.currentProjectId) {
+            // Only re-fetch if project changed
+            if (dbUser.defaultProjectId !== token.currentProjectId) {
               const projectDetails = await getCurrentProjectDetails(
                 userEmail,
                 dbUser.defaultProjectId

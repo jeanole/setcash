@@ -125,16 +125,20 @@ The recommended fix combines approaches 2 and 3: re-fetch from DB in JWT callbac
 
 2. **Updated JWT callback** (`auth.ts`):
    - Added `email` to JWT token for DB lookups
-   - Re-fetches `defaultProjectId` from database on every request
-   - When project changes or `trigger === 'update'`, refreshes project context
+   - Added explicit handling for `trigger === 'update'` with session data
+   - Re-fetches `defaultProjectId` from database on every request when project changes
    - Updates `currentProjectId`, `currentProjectRole`, `currentProjectName`, and `role`
 
 3. **Updated session callback** (`auth.ts`):
    - Added `email` to session user object
 
 4. **Updated client-side hook** (`useProjects.ts`):
-   - Added `useSession().update()` call after successful project switch
-   - Triggers JWT refresh to get updated project context
+   - Pass project data from API response to `updateSession()`
+   - Changed navigation from `window.location.reload()` to `window.location.href = '/dashboard'`
+   - Applied same fix to `createProject()` function
+
+5. **Fixed import path** (`switch/route.ts`):
+   - Changed `../../../../auth` to `@/auth`
 
 ### Technical Details
 

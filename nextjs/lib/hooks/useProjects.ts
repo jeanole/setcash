@@ -60,17 +60,27 @@ export function useProjects() {
       const newProject = await response.json();
       toast.success(`Project "${name}" created`);
       
-      // Switch to new project and redirect
-      await fetch('/api/projects/switch', {
+      // Switch to new project
+      const switchResponse = await fetch('/api/projects/switch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ projectId: newProject.id }),
       });
 
-      // Trigger session update to refresh JWT with new project context
-      await updateSession();
+      if (!switchResponse.ok) {
+        throw new Error('Project created but failed to switch');
+      }
 
-      window.location.href = '/';
+      const switchData = await switchResponse.json();
+
+      // Trigger session update to refresh JWT with new project context
+      await updateSession({
+        currentProjectId: switchData.currentProjectId,
+        currentProjectRole: switchData.currentProjectRole,
+        currentProjectName: switchData.currentProjectName,
+      });
+
+      window.location.href = '/dashboard';
       return true;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to create project');
@@ -90,11 +100,21 @@ export function useProjects() {
         throw new Error('Failed to switch project');
       }
 
-      // Trigger session update to refresh JWT with new project context
-      await updateSession();
+      // Get the response data with new project info
+      const data = await response.json();
 
-      toast.success('Project switched');
-      window.location.reload();
+      // Trigger session update to refresh JWT with new project context
+      // This will trigger the JWT callback with trigger: 'update'
+      await updateSession({
+        currentProjectId: data.currentProjectId,
+        currentProjectRole: data.currentProjectRole,
+        currentProjectName: data.currentProjectName,
+      });
+
+      toast.success(`Switched to ${data.currentProjectName || 'project'}`);
+      
+      // Navigate to dashboard after successful switch
+      window.location.href = '/dashboard';
       return true;
     } catch (err) {
       toast.error('Failed to switch project');
