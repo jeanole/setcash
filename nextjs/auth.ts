@@ -26,11 +26,59 @@ declare module 'next-auth' {
 declare module '@auth/core/jwt' {
   interface JWT {
     id: string;
+    email: string;
     role: 'user' | 'admin' | 'owner' | 'superadmin';
     currentProjectId: string | null;
     currentProjectRole: 'user' | 'admin' | 'owner' | null;
     currentProjectName: string | null;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Helper: Fetch current project details from database
+// ---------------------------------------------------------------------------
+
+async function getCurrentProjectDetails(
+  userEmail: string,
+  defaultProjectId: string | null
+): Promise<{
+  currentProjectId: string | null;
+  currentProjectRole: 'user' | 'admin' | 'owner' | null;
+  currentProjectName: string | null;
+}> {
+  if (!defaultProjectId) {
+    return {
+      currentProjectId: null,
+      currentProjectRole: null,
+      currentProjectName: null,
+    };
+  }
+
+  const membership = await prisma.projectMember.findUnique({
+    where: {
+      projectId_userEmail: {
+        projectId: defaultProjectId,
+        userEmail,
+      },
+    },
+    include: {
+      project: true,
+    },
+  });
+
+  if (!membership) {
+    return {
+      currentProjectId: null,
+      currentProjectRole: null,
+      currentProjectName: null,
+    };
+  }
+
+  return {
+    currentProjectId: defaultProjectId,
+    currentProjectRole: membership.role as 'user' | 'admin' | 'owner',
+    currentProjectName: membership.project.name,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -127,7 +175,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     // ------------------------------------------------------------------
     // JWT callback — runs on sign-in and session refresh
     // ------------------------------------------------------------------
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
+      // Get user email for DB lookups
+      const userEmail = token.email || (user as { email?: string })?.email;
+
       if (user) {
         // Initial sign-in — enrich token from the authorized user object
         const u = user as {
@@ -139,6 +190,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         };
 
         token.id = u.id;
+        token.email = u.email;
 
         // Derive role
         if (u.isSuperAdmin) {
@@ -164,9 +216,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           token.role = projectRole;
           token.currentProjectRole = projectRole;
           
-          // Fetch project name (this would need to be fetched from DB in a real implementation)
-          // For now, we'll leave it null and it can be hydrated on the client
-          token.currentProjectName = null;
+          // Fetch project name from DB during sign-in
+          if (currentProjectId && userEmail) {
+            const projectDetails = await getCurrentProjectDetails(userEmail, currentProjectId);
+            token.currentProjectId = projectDetails.currentProjectId;
+            token.currentProjectRole = projectDetails.currentProjectRole;
+            token.currentProjectName = projectDetails.currentProjectName;
+          } else {
+            token.currentProjectName = null;
+          }
         }
 
         if (token.role === 'superadmin') {
@@ -175,6 +233,46 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           token.currentProjectName = null;
         }
       }
+
+      // ------------------------------------------------------------------
+      // Re-fetch current project from DB on every request to keep session in sync
+      // This ensures project switching is reflected immediately
+      // ------------------------------------------------------------------
+      if (token.id && token.role !== 'superadmin' && userEmail) {
+        try {
+          const dbUser = await prisma.user.findUnique({
+            where: { id: token.id as string },
+            select: { defaultProjectId: true },
+          });
+
+          if (dbUser?.defaultProjectId) {
+            // Only re-fetch if project changed or trigger is 'update'
+            if (trigger === 'update' || dbUser.defaultProjectId !== token.currentProjectId) {
+              const projectDetails = await getCurrentProjectDetails(
+                userEmail,
+                dbUser.defaultProjectId
+              );
+              token.currentProjectId = projectDetails.currentProjectId;
+              token.currentProjectRole = projectDetails.currentProjectRole;
+              token.currentProjectName = projectDetails.currentProjectName;
+              
+              // Update the token role to match the project role
+              if (projectDetails.currentProjectRole) {
+                token.role = projectDetails.currentProjectRole;
+              }
+            }
+          } else {
+            // No default project set
+            token.currentProjectId = null;
+            token.currentProjectRole = null;
+            token.currentProjectName = null;
+          }
+        } catch (error) {
+          console.error('Error refreshing project in JWT callback:', error);
+          // Keep existing token values on error
+        }
+      }
+
       return token;
     },
 
@@ -184,6 +282,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.id as string;
+        session.user.email = token.email as string;
         session.user.role = token.role as 'user' | 'admin' | 'superadmin';
         session.user.currentProjectId = token.currentProjectId as string | null;
         session.user.currentProjectRole = token.currentProjectRole as 'user' | 'admin' | 'owner' | null;

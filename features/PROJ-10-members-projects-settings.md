@@ -711,5 +711,11 @@ During investigation of build issues, the following code concerns were noted:
 
 **Recommendation:** Fix environment issues and re-run complete QA test plan before deploying to production.
 
+## Open Bug Reports
+
+| ID | Severity | Title | Status |
+|----|----------|-------|--------|
+| [BUG-13](BUG-13-project-switching-not-updating-session.md) | Critical | Project Switching Does Not Update Session | Resolved |
+
 ## Deployment
 _To be added by /deploy_
