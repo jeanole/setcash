@@ -26,7 +26,7 @@ declare module 'next-auth' {
 declare module '@auth/core/jwt' {
   interface JWT {
     id: string;
-    role: 'user' | 'admin' | 'superadmin';
+    role: 'user' | 'admin' | 'owner' | 'superadmin';
     currentProjectId: string | null;
     currentProjectRole: 'user' | 'admin' | 'owner' | null;
     currentProjectName: string | null;

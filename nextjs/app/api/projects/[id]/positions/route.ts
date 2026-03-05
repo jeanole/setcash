@@ -120,7 +120,7 @@ export async function POST(
     return NextResponse.json({ ...position, memberCount: 0 }, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: error.errors[0].message }, { status: 400 });
+      return NextResponse.json({ error: error.issues[0].message }, { status: 400 });
     }
     console.error('Error creating position:', error);
     return NextResponse.json({ error: 'Failed to create position' }, { status: 500 });

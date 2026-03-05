@@ -1,6 +1,6 @@
 # vBudget — Project Index
 
-**Next Available IDs:** PROJ-18 · BUG-12 · CR-9
+**Next Available IDs:** PROJ-18 · BUG-13 · CR-9
 
 | ID | Type | Title | Status | Priority | Feature | Date |
 |----|------|-------|--------|----------|---------|------|
@@ -40,3 +40,4 @@
 | [PROJ-16](PROJ-16-notifications-system.md) | Feature | Notifications System | In Progress | — | PROJ-5, PROJ-10 | 2026-03-04 |
 | [PROJ-17](PROJ-17-super-admin.md) | Feature | Super-Admin | Change Requested | — | PROJ-5, PROJ-10 | 2026-03-04 |
 | [CR-8](CR-8-create-user-button-super-admin.md) | CR | Add Create User Button to Super Admin Users Tab | Pending Review | Medium | PROJ-17 | 2026-03-04 |
+| [BUG-12](BUG-12-docker-test-container-build-fails.md) | Bug | Docker Test Container Build Fails with TypeScript Errors | Resolved | High | PROJ-4 | 2026-03-05 |

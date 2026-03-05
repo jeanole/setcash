@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
+import { prisma } from '@/lib/db';
 import ProjectIdentityForm from '@/components/settings/ProjectIdentityForm';
 
 export default async function GeneralSettingsPage() {
@@ -29,14 +30,24 @@ export default async function GeneralSettingsPage() {
     );
   }
 
-  // Fetch current project details
-  const response = await fetch(`${process.env.NEXTAUTH_URL}/api/projects/${currentProjectId}`, {
-    headers: {
-      'Cookie': `next-auth.session-token=${session.sessionToken}`,
-    },
-  });
+  // Fetch current project details directly using prisma
+  let project;
+  try {
+    project = await prisma.project.findUnique({
+      where: { id: currentProjectId },
+    });
 
-  if (!response.ok) {
+    if (!project) {
+      return (
+        <div className="bg-rose-50 border border-rose-200 rounded-lg p-6">
+          <h3 className="text-lg font-medium text-rose-800">Project Not Found</h3>
+          <p className="mt-2 text-sm text-rose-700">
+            The selected project could not be found.
+          </p>
+        </div>
+      );
+    }
+  } catch (error) {
     return (
       <div className="bg-rose-50 border border-rose-200 rounded-lg p-6">
         <h3 className="text-lg font-medium text-rose-800">Error Loading Project</h3>
@@ -46,8 +57,6 @@ export default async function GeneralSettingsPage() {
       </div>
     );
   }
-
-  const project = await response.json();
 
   return (
     <ProjectIdentityForm

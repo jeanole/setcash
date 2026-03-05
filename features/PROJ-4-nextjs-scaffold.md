@@ -457,6 +457,12 @@ first real pages are built.
 - **BUG-6 (Low):** AC-10 placeholder text split across HTML elements, em-dash absent. Visual intent is met.
 - **BUG-8 (Low):** Prisma libssl detection warning during Docker build. Non-blocking, cosmetic.
 
+## Open Bug Reports
+
+| ID | Severity | Title | Status |
+|----|----------|-------|--------|
+| [BUG-12](BUG-12-docker-test-container-build-fails.md) | High | Docker Test Container Build Fails with TypeScript Errors | Resolved |
+
 ### Summary
 - **Acceptance Criteria:** 11/11 passed (9 clean, 2 with Low caveats)
 - **Edge Cases:** 4/4 passed

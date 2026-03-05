@@ -18,6 +18,9 @@ export const db =
         : ['error'],
   });
 
+// Export prisma as alias for db (for compatibility with existing code)
+export const prisma = db;
+
 if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = db;
 }
