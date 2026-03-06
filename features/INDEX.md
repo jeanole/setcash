@@ -43,4 +43,4 @@
 | [BUG-12](BUG-12-docker-test-container-build-fails.md) | Bug | Docker Test Container Build Fails with TypeScript Errors | Resolved | High | PROJ-4 | 2026-03-05 |
 | [BUG-13](BUG-13-project-switching-not-updating-session.md) | Bug | Project Switching Does Not Update Session | Resolved | Critical | PROJ-10 | 2026-03-05 |
 | [BUG-14](BUG-14-mobile-menu-not-working.md) | Bug | Mobile Navigation Menu Not Working | Resolved | Critical | PROJ-4 | 2026-03-06 |
-| [BUG-15](BUG-15-budget-matrix-sql-column-error.md) | Bug | Budget Matrix SQL Query Uses Wrong Column Names | Open | Critical | PROJ-8 | 2026-03-06 |
+| [BUG-15](BUG-15-budget-matrix-sql-column-error.md) | Bug | Budget Matrix SQL Query Uses Wrong Column Names | Resolved | Critical | PROJ-8 | 2026-03-06 |

@@ -1,6 +1,6 @@
 # BUG-15: Budget Matrix SQL Query Uses Wrong Column Names
 
-## Status: Open
+## Status: Resolved
 **Reported:** 2026-03-06
 **Severity:** Critical
 **Skill Tag:** [Backend]
@@ -88,10 +88,28 @@ Note: PostgreSQL identifiers are case-insensitive unless quoted. Use double quot
 
 ## Fixed In
 
-_To be filled when resolved_
+Commit: `bug(BUG-15): Fix Budget Matrix SQL column names`
+Date: 2026-03-06
 
 ---
 
 ## Resolution Notes
 
-_To be filled when resolved_
+### Changes Made
+
+Updated `/api/budget-matrix/route.ts` to use camelCase column names with double quotes:
+
+**Before (broken):**
+- `bm.motive_id` → `bm."motiveId"`
+- `b.netto_amount` → `b."nettoAmount"`
+- `bm.bill_id` → `bm."billId"`
+- `b.project_id` → `b."projectId"`
+- `bc.category_id` → `bc."categoryId"`
+- `bc.bill_id` → `bc."billId"`
+
+**Fixed Queries:**
+1. Motive spending query
+2. Category spending query
+3. Cell spending query (motive × category intersection)
+
+**Note:** PostgreSQL identifiers are case-insensitive unless quoted. Double quotes are required for camelCase identifiers used by Prisma.
