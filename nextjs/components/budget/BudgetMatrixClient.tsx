@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import BudgetMatrixTable from './BudgetMatrixTable';
 import type { BudgetMatrixResponse, BudgetCellUpdate } from '@/lib/types';
+import { useRouter } from 'next/navigation';
 
 interface BudgetMatrixClientProps extends BudgetMatrixResponse {
   isAdmin: boolean;
@@ -12,7 +13,11 @@ interface Toast {
   id: string;
   message: string;
   type: 'success' | 'error';
+  onRetry?: () => void;
+  isRetrying?: boolean;
 }
+
+const PENDING_CHANGES_KEY = 'budgetMatrix_pendingChanges';
 
 export default function BudgetMatrixClient({
   motives,
@@ -24,6 +29,7 @@ export default function BudgetMatrixClient({
   cellSpending: initialCellSpending,
   isAdmin,
 }: BudgetMatrixClientProps) {
+  const router = useRouter();
   const [matrix, setMatrix] = useState<Record<string, number>>(initialMatrix);
   const [motiveSpending] = useState<Record<string, number>>(initialMotiveSpending);
   const [categorySpending] = useState<Record<string, number>>(initialCategorySpending);
@@ -33,12 +39,41 @@ export default function BudgetMatrixClient({
   const [isSaving, setIsSaving] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
 
-  const showToast = useCallback((message: string, type: 'success' | 'error') => {
+  // Restore pending changes from localStorage on mount
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    try {
+      const pendingChanges = localStorage.getItem(PENDING_CHANGES_KEY);
+      if (pendingChanges) {
+        const { matrix: savedMatrix, modifiedCells: savedModifiedCells, timestamp } = JSON.parse(pendingChanges);
+        
+        // Check if changes are recent (within last 24 hours)
+        const changeAge = Date.now() - timestamp;
+        if (changeAge < 24 * 60 * 60 * 1000) {
+          setMatrix(savedMatrix);
+          setModifiedCells(new Set(savedModifiedCells));
+          showToast('Restored unsaved changes from previous session', 'success');
+        }
+        
+        // Clear the stored changes
+        localStorage.removeItem(PENDING_CHANGES_KEY);
+      }
+    } catch (e) {
+      console.error('Error restoring pending changes:', e);
+    }
+  }, []);
+
+  const showToast = useCallback((message: string, type: 'success' | 'error', onRetry?: () => void) => {
     const id = Math.random().toString(36).substring(7);
-    setToasts((prev) => [...prev, { id, message, type }]);
+    setToasts((prev) => [...prev, { id, message, type, onRetry }]);
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 3000);
+    }, type === 'error' && onRetry ? 10000 : 5000); // Longer timeout for retryable errors
+  }, []);
+
+  const dismissToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
   const getCellKey = useCallback((categoryId: string, motiveId: string): string => {
@@ -67,23 +102,19 @@ export default function BudgetMatrixClient({
     setEditingCell(null);
   }, []);
 
-  const handleSave = useCallback(async () => {
-    if (!isAdmin || modifiedCells.size === 0) return;
+  const performSave = useCallback(async (updates: BudgetCellUpdate[], retryToastId?: string) => {
+    if (!isAdmin || updates.length === 0) return;
 
     setIsSaving(true);
+    
+    // Mark toast as retrying if applicable
+    if (retryToastId) {
+      setToasts((prev) =>
+        prev.map((t) => (t.id === retryToastId ? { ...t, isRetrying: true } : t))
+      );
+    }
 
     try {
-      const updates: BudgetCellUpdate[] = [];
-
-      for (const cellKey of modifiedCells) {
-        const [categoryId, motiveId] = cellKey.split('_');
-        updates.push({
-          categoryId,
-          motiveId,
-          amount: matrix[cellKey] || 0,
-        });
-      }
-
       const response = await fetch('/api/budget-matrix/bulk-update', {
         method: 'POST',
         headers: {
@@ -92,23 +123,80 @@ export default function BudgetMatrixClient({
         body: JSON.stringify({ updates }),
       });
 
+      if (response.status === 401) {
+        // Session expired - save changes to localStorage and redirect to login
+        const pendingChanges = {
+          matrix,
+          modifiedCells: Array.from(modifiedCells),
+          timestamp: Date.now(),
+        };
+        localStorage.setItem(PENDING_CHANGES_KEY, JSON.stringify(pendingChanges));
+        
+        // Redirect to login with return URL
+        const returnUrl = encodeURIComponent('/budget');
+        router.push(`/login?returnUrl=${returnUrl}`);
+        return;
+      }
+
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.error || 'Failed to save changes');
       }
 
       setModifiedCells(new Set());
+      
+      // Remove retry toast if it was a retry
+      if (retryToastId) {
+        dismissToast(retryToastId);
+      }
+      
       showToast('Budget matrix saved successfully', 'success');
     } catch (error) {
       console.error('Error saving budget matrix:', error);
-      showToast(
-        error instanceof Error ? error.message : 'Failed to save changes',
-        'error'
-      );
+      
+      const errorMessage = error instanceof Error ? error.message : 'Failed to save changes';
+      
+      // Remove retry toast if it was a retry (we'll show a new one)
+      if (retryToastId) {
+        dismissToast(retryToastId);
+      }
+      
+      // Show toast with retry button
+      showToast(errorMessage, 'error', () => {
+        performSave(updates);
+      });
     } finally {
       setIsSaving(false);
+      // Clear retrying state from all toasts
+      setToasts((prev) =>
+        prev.map((t) => ({ ...t, isRetrying: false }))
+      );
     }
-  }, [isAdmin, modifiedCells, matrix, showToast]);
+  }, [isAdmin, matrix, modifiedCells, router, showToast, dismissToast]);
+
+  const handleSave = useCallback(async () => {
+    if (!isAdmin || modifiedCells.size === 0) return;
+
+    const updates: BudgetCellUpdate[] = [];
+
+    for (const cellKey of modifiedCells) {
+      const [categoryId, motiveId] = cellKey.split('_');
+      updates.push({
+        categoryId,
+        motiveId,
+        amount: matrix[cellKey] || 0,
+      });
+    }
+
+    await performSave(updates);
+  }, [isAdmin, modifiedCells, matrix, performSave]);
+
+  const handleRetry = useCallback((toastId: string) => {
+    const toast = toasts.find((t) => t.id === toastId);
+    if (toast?.onRetry) {
+      toast.onRetry();
+    }
+  }, [toasts]);
 
   const hasChanges = modifiedCells.size > 0;
 
@@ -177,6 +265,12 @@ export default function BudgetMatrixClient({
           <div className="w-3 h-3 rounded-full bg-slate-300"></div>
           <span className="text-slate-600">No budget</span>
         </div>
+        {isAdmin && (
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-amber-400 ring-2 ring-amber-400"></div>
+            <span className="text-slate-600">Unsaved changes</span>
+          </div>
+        )}
       </div>
 
       {/* Matrix table */}
@@ -189,6 +283,7 @@ export default function BudgetMatrixClient({
         cellSpending={cellSpending}
         isAdmin={isAdmin}
         editingCell={editingCell}
+        modifiedCells={modifiedCells}
         onEditStart={handleEditStart}
         onEditSave={handleEditSave}
         onEditCancel={handleEditCancel}
@@ -202,6 +297,7 @@ export default function BudgetMatrixClient({
             className={`
               px-4 py-3 rounded-lg shadow-lg text-sm font-medium
               transition-all duration-300 animate-in slide-in-from-bottom-2
+              flex items-center gap-3
               ${
                 toast.type === 'success'
                   ? 'bg-green-100 text-green-800 border border-green-200'
@@ -209,7 +305,29 @@ export default function BudgetMatrixClient({
               }
             `}
           >
-            {toast.message}
+            <span className="flex-1">{toast.message}</span>
+            {toast.type === 'error' && toast.onRetry && (
+              <button
+                onClick={() => handleRetry(toast.id)}
+                disabled={toast.isRetrying}
+                className={`
+                  px-3 py-1 rounded text-xs font-semibold
+                  ${toast.isRetrying
+                    ? 'bg-rose-200 text-rose-400 cursor-not-allowed'
+                    : 'bg-rose-800 text-white hover:bg-rose-900'
+                  }
+                `}
+              >
+                {toast.isRetrying ? 'Retrying...' : 'Retry'}
+              </button>
+            )}
+            <button
+              onClick={() => dismissToast(toast.id)}
+              className="text-slate-400 hover:text-slate-600 ml-1"
+              aria-label="Dismiss"
+            >
+              ×
+            </button>
           </div>
         ))}
       </div>

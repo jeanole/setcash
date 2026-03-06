@@ -12,6 +12,7 @@ interface BudgetMatrixTableProps {
   cellSpending: Record<string, number>;
   isAdmin: boolean;
   editingCell: string | null;
+  modifiedCells?: Set<string>;
   onEditStart: (categoryId: string, motiveId: string) => void;
   onEditSave: (categoryId: string, motiveId: string, value: number) => void;
   onEditCancel: () => void;
@@ -34,6 +35,7 @@ export default function BudgetMatrixTable({
   cellSpending,
   isAdmin,
   editingCell,
+  modifiedCells = new Set(),
   onEditStart,
   onEditSave,
   onEditCancel,
@@ -150,6 +152,8 @@ export default function BudgetMatrixTable({
                   const spent = cellSpending[cellKey] || 0;
                   const isEditing = editingCell === cellKey;
 
+                  const isModified = modifiedCells.has(cellKey);
+
                   return (
                     <td
                       key={motive.id}
@@ -160,6 +164,7 @@ export default function BudgetMatrixTable({
                         spent={spent}
                         isEditing={isEditing}
                         isAdmin={isAdmin}
+                        isModified={isModified}
                         onEditStart={() => onEditStart(category.id, motive.id)}
                         onEditSave={(value) => onEditSave(category.id, motive.id, value)}
                         onEditCancel={onEditCancel}

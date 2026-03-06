@@ -45,3 +45,10 @@
 | [BUG-14](BUG-14-mobile-menu-not-working.md) | Bug | Mobile Navigation Menu Not Working | Resolved | Critical | PROJ-4 | 2026-03-06 |
 | [BUG-15](BUG-15-budget-matrix-sql-column-error.md) | Bug | Budget Matrix SQL Query Uses Wrong Column Names | Resolved | Critical | PROJ-8 | 2026-03-06 |
 | [BUG-16](BUG-16-budget-prisma-enum-error.md) | Bug | Budget Page Crashes with Prisma Enum Error | Resolved | Critical | PROJ-8 | 2026-03-06 |
+| [BUG-17](BUG-17-budget-unsaved-changes-indicator.md) | Bug | Missing Visual Indicator for Unsaved Cell Changes | Resolved | Medium | PROJ-8 | 2026-03-06 |
+| [BUG-18](BUG-18-budget-skeleton-loader.md) | Bug | Missing Skeleton Loader During Data Fetch | Resolved | Low | PROJ-8 | 2026-03-06 |
+| [BUG-19](BUG-19-budget-motive-deletion-handling.md) | Bug | No Graceful Handling if Motive Deleted Mid-Session | Resolved | Low | PROJ-8 | 2026-03-06 |
+| [BUG-20](BUG-20-budget-large-number-overflow.md) | Bug | Very Large Numbers Overflow Cell Layout | Resolved | Medium | PROJ-8 | 2026-03-06 |
+| [BUG-21](BUG-21-budget-network-retry.md) | Bug | Network Failure Shows Error But No Retry Button | Resolved | Low | PROJ-8 | 2026-03-06 |
+| [BUG-22](BUG-22-budget-session-timeout.md) | Bug | Session Timeout During Edit Not Handled Gracefully | Resolved | Medium | PROJ-8 | 2026-03-06 |
+| [BUG-23](BUG-23-budget-floating-point-precision.md) | Bug | Potential Floating Point Precision Issues | Resolved | Low | PROJ-8 | 2026-03-06 |

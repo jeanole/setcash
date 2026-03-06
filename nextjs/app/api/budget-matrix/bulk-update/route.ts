@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/db';
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 
 const bulkUpdateSchema = z.object({
   updates: z.array(
@@ -88,6 +89,23 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Handle foreign key constraint violations (motive/category deleted mid-session)
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === 'P2003') {
+        return NextResponse.json(
+          { error: 'Some items were modified by another user. Please refresh.' },
+          { status: 409 }
+        );
+      }
+      if (error.code === 'P2025') {
+        return NextResponse.json(
+          { error: 'Some items were modified by another user. Please refresh.' },
+          { status: 409 }
+        );
+      }
+    }
+
     console.error('Error updating budget matrix:', error);
     return NextResponse.json(
       { error: 'Internal server error' },

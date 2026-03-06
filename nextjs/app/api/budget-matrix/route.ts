@@ -113,21 +113,23 @@ export async function GET(req: NextRequest) {
       GROUP BY bm."motiveId", bc."categoryId"
     `;
 
-    // Convert spending results to lookup maps
+    // Convert spending results to lookup maps with 2-decimal precision
+    const roundToTwo = (value: number): number => Math.round(value * 100) / 100;
+
     const motiveSpending: Record<string, number> = {};
     for (const row of motiveSpendingRaw) {
-      motiveSpending[row.motiveId] = Number(row.spent);
+      motiveSpending[row.motiveId] = roundToTwo(Number(row.spent));
     }
 
     const categorySpending: Record<string, number> = {};
     for (const row of categorySpendingRaw) {
-      categorySpending[row.categoryId] = Number(row.spent);
+      categorySpending[row.categoryId] = roundToTwo(Number(row.spent));
     }
 
     const cellSpending: Record<string, number> = {};
     for (const row of cellSpendingRaw) {
       const key = `${row.categoryId}_${row.motiveId}`;
-      cellSpending[key] = Number(row.spent);
+      cellSpending[key] = roundToTwo(Number(row.spent));
     }
 
     return NextResponse.json({
