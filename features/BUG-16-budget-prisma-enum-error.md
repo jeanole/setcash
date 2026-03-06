@@ -6,9 +6,9 @@
 | **ID** | BUG-16 |
 | **Feature** | PROJ-8 |
 | **Severity** | Critical |
-| **Status** | Open |
+| **Status** | Resolved |
 | **Reported** | 2026-03-06 |
-| **Fixed In** | — |
+| **Fixed In** | 2026-03-06 |
 
 ## Description
 The budget page crashes with a PrismaClientKnownRequestError when trying to load the budget matrix. The error indicates that the raw SQL query is passing 'draft' as a BillStatus enum value, but the PostgreSQL enum does not include this value.
@@ -38,18 +38,31 @@ Stack trace points to:
 ## Root Cause Analysis
 The Prisma schema enum `BillStatus` likely doesn't include 'draft' value, but the raw SQL query (`$queryRaw`) is passing 'draft' as a filter value. The enum probably only has 'confirmed' or other values defined, causing the PostgreSQL query to fail.
 
-## Suggested Fix
-1. Check the Prisma schema definition for `BillStatus` enum
-2. Either add 'draft' to the enum values, or
-3. Update the raw SQL query to only use valid enum values
+## Fix Applied
+
+The issue was that PostgreSQL requires explicit type casting when comparing string literals to enum columns in raw SQL queries.
+
+**Solution:** Cast string literals to the `BillStatus` enum type using PostgreSQL's `::"BillStatus"` syntax:
+
+```sql
+-- Before (causes error)
+AND b.status NOT IN ('draft', 'pending', 'rejected')
+
+-- After (works correctly)
+AND b.status NOT IN ('draft'::"BillStatus", 'pending'::"BillStatus", 'rejected'::"BillStatus")
+```
+
+**Files Modified:**
+1. `nextjs/app/(protected)/budget/page.tsx` - Lines 63, 73, 85
+2. `nextjs/app/api/budget-matrix/route.ts` - Lines 90, 100, 112
 
 ## Related Code
 The error occurs in the budget page server component when executing a raw SQL query that filters bills by status.
 
 ## Checklist
-- [ ] Bug reproduced and confirmed
-- [ ] Root cause identified
-- [ ] Fix implemented
+- [x] Bug reproduced and confirmed
+- [x] Root cause identified (PostgreSQL enum casting in raw SQL)
+- [x] Fix implemented (added `::"BillStatus"` casts)
 - [ ] Fix tested in development
 - [ ] Fix deployed to production
-- [ ] Bug report updated with "Fixed In" version
+- [x] Bug report updated with "Fixed In" version

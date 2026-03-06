@@ -87,7 +87,7 @@ export async function GET(req: NextRequest) {
       FROM "BillMotive" bm 
       JOIN "Bill" b ON b.id = bm."billId"
       WHERE b."projectId" = ${projectId}
-        AND b.status NOT IN ('draft', 'pending', 'rejected')
+        AND b.status NOT IN ('draft'::"BillStatus", 'pending'::"BillStatus", 'rejected'::"BillStatus")
       GROUP BY bm."motiveId"
     `;
 
@@ -97,7 +97,7 @@ export async function GET(req: NextRequest) {
       FROM "BillCategory" bc 
       JOIN "Bill" b ON b.id = bc."billId"
       WHERE b."projectId" = ${projectId}
-        AND b.status NOT IN ('draft', 'pending', 'rejected')
+        AND b.status NOT IN ('draft'::"BillStatus", 'pending'::"BillStatus", 'rejected'::"BillStatus")
       GROUP BY bc."categoryId"
     `;
 
@@ -109,7 +109,7 @@ export async function GET(req: NextRequest) {
       JOIN "BillCategory" bc ON bc."billId" = bm."billId"
       JOIN "Bill" b ON b.id = bm."billId"
       WHERE b."projectId" = ${projectId}
-        AND b.status NOT IN ('draft', 'pending', 'rejected')
+        AND b.status NOT IN ('draft'::"BillStatus", 'pending'::"BillStatus", 'rejected'::"BillStatus")
       GROUP BY bm."motiveId", bc."categoryId"
     `;
 

@@ -60,7 +60,7 @@ async function getBudgetMatrixData(projectId: string): Promise<BudgetMatrixRespo
     FROM "BillMotive" bm 
     JOIN "Bill" b ON b.id = bm."billId"
     WHERE b."projectId" = ${projectId}
-      AND b.status NOT IN ('draft', 'pending', 'rejected')
+      AND b.status NOT IN ('draft'::"BillStatus", 'pending'::"BillStatus", 'rejected'::"BillStatus")
     GROUP BY bm."motiveId"
   `;
 
@@ -70,7 +70,7 @@ async function getBudgetMatrixData(projectId: string): Promise<BudgetMatrixRespo
     FROM "BillCategory" bc 
     JOIN "Bill" b ON b.id = bc."billId"
     WHERE b."projectId" = ${projectId}
-      AND b.status NOT IN ('draft', 'pending', 'rejected')
+      AND b.status NOT IN ('draft'::"BillStatus", 'pending'::"BillStatus", 'rejected'::"BillStatus")
     GROUP BY bc."categoryId"
   `;
 
@@ -82,7 +82,7 @@ async function getBudgetMatrixData(projectId: string): Promise<BudgetMatrixRespo
     JOIN "BillCategory" bc ON bc."billId" = bm."billId"
     JOIN "Bill" b ON b.id = bm."billId"
     WHERE b."projectId" = ${projectId}
-      AND b.status NOT IN ('draft', 'pending', 'rejected')
+      AND b.status NOT IN ('draft'::"BillStatus", 'pending'::"BillStatus", 'rejected'::"BillStatus")
     GROUP BY bm."motiveId", bc."categoryId"
   `;
 

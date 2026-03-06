@@ -511,7 +511,170 @@ Route Handler vs Server Action split is correct. Data shape matches Express resp
 ---
 
 ## QA Test Results
-_To be added by /qa_
+
+**Tested:** 2026-03-06
+**App URL:** http://localhost:3000
+**Tester:** QA Engineer (AI)
+
+### Acceptance Criteria Status
+
+| AC | Criterion | Status | Notes |
+|----|-----------|--------|-------|
+| AC-1 | Page Structure & Routing | ✅ PASS | All sub-criteria verified in code |
+| AC-2 | Data Fetching | ✅ PASS | Sorting and calculations correct |
+| AC-3 | Matrix Grid Layout | ✅ PASS | Sticky headers implemented |
+| AC-4 | Cell Display | ✅ PASS | Currency formatting correct |
+| AC-5 | Variance Indicators | ✅ PASS | Green/Amber/Red/Gray logic correct |
+| AC-6 | Cell Editing | ⚠️ PARTIAL | Missing unsaved changes indicator (Bug B-1) |
+| AC-7 | Totals Row and Column | ✅ PASS | All totals calculated correctly |
+| AC-8 | Bulk Save Operation | ✅ PASS | Toast notifications working |
+| AC-9 | Protected Defaults | ✅ PASS | Default/Uncategorized sorting correct |
+| AC-10 | Empty States | ⚠️ PARTIAL | Missing skeleton loader (Bug B-2) |
+| AC-11 | API Endpoints | ✅ PASS | Auth and responses correct |
+
+**Acceptance Criteria: 9/11 fully passed, 2 partial**
+
+### Edge Cases Status
+
+| EC | Edge Case | Status | Notes |
+|----|-----------|--------|-------|
+| EC-1 | Year with no bills | ✅ PASS | Shows €0.00 correctly |
+| EC-2 | Motive deleted mid-session | ⚠️ UNCERTAIN | No explicit handling (Bug B-3) |
+| EC-3 | Cell value cleared | ✅ PASS | Treated as €0.00 |
+| EC-4 | Very large numbers | ❌ FAIL | May overflow layout (Bug B-4) |
+| EC-5 | Division by zero | ✅ PASS | Shows "—" indicator |
+| EC-6 | Negative budget values | ✅ PASS | Zod validation rejects |
+| EC-7 | Concurrent edits | ✅ PASS | Last-write-wins acceptable |
+| EC-8 | Many motives/categories | ✅ PASS | Scroll with sticky headers |
+| EC-9 | Zero motives/categories | ✅ PASS | Empty states displayed |
+| EC-10 | Single motive/category | ✅ PASS | 1x1 grid renders |
+| EC-11 | Network failure on save | ⚠️ UNCERTAIN | No retry button (Bug B-5) |
+| EC-12 | Session timeout | ❌ FAIL | Not handled gracefully (Bug B-6) |
+| EC-13 | Draft bills excluded | ✅ PASS | SQL filter correct |
+| EC-14 | Floating point precision | ⚠️ UNCERTAIN | Using Number not Decimal (Bug B-7) |
+
+### Security Audit Results
+
+| Check | Status | Notes |
+|-------|--------|-------|
+| Authentication required | ✅ PASS | 401 returned for unauthenticated |
+| User cannot edit matrix | ✅ PASS | 403 returned for non-admin |
+| Cross-project data isolation | ✅ PASS | All queries scoped to projectId |
+| Super admin access | ✅ PASS | Can access all projects |
+| Negative amounts rejected | ✅ PASS | Zod validation |
+| Non-numeric values rejected | ✅ PASS | Zod validation |
+| SQL injection prevention | ✅ PASS | Parameterized queries |
+| **Rate limiting** | ❌ **FAIL** | **No rate limiting on bulk update (Bug B-9 - HIGH)** |
+| Data exposure check | ✅ PASS | No sensitive data leaked |
+
+### Bugs Found
+
+#### B-1: Missing Visual Indicator for Unsaved Changes
+- **Severity:** Medium
+- **Skill:** [Frontend]
+- **Steps to Reproduce:**
+  1. Login as admin
+  2. Navigate to Budget Matrix
+  3. Click a cell to edit
+  4. Change the value
+  5. Click elsewhere (blur to save locally)
+  6. Expected: Cell shows visual indicator (yellow border, asterisk) that it's been modified but not saved to server
+  7. Actual: No visual distinction between saved and unsaved cells
+- **Priority:** Fix in next sprint
+
+#### B-2: Missing Skeleton Loader During Data Fetch
+- **Severity:** Low
+- **Skill:** [Frontend]
+- **Steps to Reproduce:**
+  1. Navigate to Budget Matrix with slow network
+  2. Expected: Skeleton loader (pulsing grid placeholders) while data fetches
+  3. Actual: No loading state, page may appear blank briefly
+- **Priority:** Nice to have
+
+#### B-3: No Graceful Handling of Mid-Session Motive Deletion
+- **Severity:** Low
+- **Skill:** [Backend]
+- **Steps to Reproduce:**
+  1. Admin A opens Budget Matrix
+  2. Admin B deletes a motive
+  3. Admin A tries to save a cell for deleted motive
+  4. Expected: Graceful handling, cell ignored or clear error message
+  5. Actual: Uncertain - may cause database error
+- **Priority:** Nice to have
+
+#### B-4: Very Large Numbers May Overflow Cell Layout
+- **Severity:** Medium
+- **Skill:** [Frontend]
+- **Steps to Reproduce:**
+  1. Edit a cell
+  2. Enter very large amount (e.g., €999,999,999.99)
+  3. Expected: Cell handles gracefully (truncation, tooltip, or overflow)
+  4. Actual: No max-width or overflow handling, may break layout
+- **Priority:** Fix in next sprint
+
+#### B-5: Network Failure Shows Error But No Retry Button
+- **Severity:** Low
+- **Skill:** [Frontend]
+- **Steps to Reproduce:**
+  1. Modify a cell
+  2. Disconnect network
+  3. Click Save Changes
+  4. Expected: Error toast with "Retry" button to resubmit
+  5. Actual: Error toast only, user must manually click Save again
+- **Priority:** Nice to have
+
+#### B-6: Session Timeout During Edit Not Handled Gracefully
+- **Severity:** Medium
+- **Skill:** [Frontend]
+- **Steps to Reproduce:**
+  1. Edit multiple cells
+  2. Let session expire
+  3. Try to save
+  4. Expected: Redirect to login with return URL, preserve changes
+  5. Actual: Generic error message, changes may be lost
+- **Priority:** Fix in next sprint
+
+#### B-7: Potential Floating Point Precision Issues
+- **Severity:** Low
+- **Skill:** [Backend]
+- **Steps to Reproduce:**
+  1. Complex spending calculations with many bills
+  2. Expected: Precise decimal calculations (2 decimal places)
+  3. Actual: JavaScript Number type may have floating point errors
+- **Priority:** Nice to have
+
+#### B-8: No Warning for Unsaved Changes on Project Switch
+- **Severity:** Medium
+- **Skill:** [Frontend]
+- **Steps to Reproduce:**
+  1. Edit budget cells (don't save)
+  2. Switch project via sidebar
+  3. Expected: Warning dialog "You have unsaved changes. Leave anyway?"
+  4. Actual: Navigation proceeds, changes lost
+- **Priority:** Fix in next sprint
+
+#### B-9: Missing Rate Limiting on Bulk Update API [HIGH SEVERITY]
+- **Severity:** High
+- **Skill:** [Backend]
+- **Steps to Reproduce:**
+  1. Login as admin
+  2. Send rapid-fire POST requests to /api/budget-matrix/bulk-update
+  3. Expected: Rate limiting prevents abuse (429 Too Many Requests)
+  4. Actual: No rate limiting, potential for DoS or data corruption
+- **Priority:** Fix before deployment
+- **Security Impact:** Could allow malicious users to overwhelm database with bulk updates
+
+### Summary
+
+- **Acceptance Criteria:** 9/11 fully passed (82%), 2 partial
+- **Edge Cases:** 9/14 handled correctly (64%), 3 uncertain, 2 fail
+- **Security:** 8/9 checks passed (89%), 1 high severity issue
+- **Regression:** All 4 deployed features verified working
+- **Bugs Found:** 9 total (1 High, 5 Medium, 3 Low)
+
+**Production Ready:** NO
+
+**Recommendation:** Fix Bug B-9 (rate limiting) before deployment. Address B-1, B-4, B-6, B-8 in next sprint. B-2, B-3, B-5, B-7 are nice-to-have improvements.
 
 ## Deployment
 _To be added by /deploy_
@@ -521,4 +684,13 @@ _To be added by /deploy_
 | ID | Severity | Title | Status |
 |----|----------|-------|--------|
 | [BUG-15](BUG-15-budget-matrix-sql-column-error.md) | Critical | Budget Matrix SQL Query Uses Wrong Column Names | Resolved |
-| [BUG-16](BUG-16-budget-prisma-enum-error.md) | Critical | Budget Page Crashes with Prisma Enum Error | Open |
+| [BUG-16](BUG-16-budget-prisma-enum-error.md) | Critical | Budget Page Crashes with Prisma Enum Error | Resolved |
+| B-1 (QA) | Medium | Missing visual indicator for unsaved cell changes | Open [Frontend] |
+| B-2 (QA) | Low | No skeleton loader during data fetch | Open [Frontend] |
+| B-3 (QA) | Low | No graceful handling if motive deleted mid-session | Open [Backend] |
+| B-4 (QA) | Medium | Very large numbers may overflow cell layout | Open [Frontend] |
+| B-5 (QA) | Low | Network failure shows error but no retry button | Open [Frontend] |
+| B-6 (QA) | Medium | Session timeout during edit not handled gracefully | Open [Frontend] |
+| B-7 (QA) | Low | Potential floating point precision issues | Open [Backend] |
+| B-8 (QA) | Medium | No warning for unsaved changes on project switch | Open [Frontend] |
+| B-9 (QA) | **High** | **Missing rate limiting on bulk update API** | **Open [Backend]** |

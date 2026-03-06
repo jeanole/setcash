@@ -1,92 +1,175 @@
-# QA Test Plan — PROJ-10: Members, Projects & Settings
+# QA Test Plan
 
 ## Feature
-PROJ-10: Members, Projects & Settings
-Spec: features/PROJ-10-members-projects-settings.md
+PROJ-8: Budget Matrix
+Spec: /mnt/c/Users/jensmoeller/code/vbudget/features/PROJ-8-budget-matrix.md
 
 ## Context Summary
-- App URL: http://localhost:3001
-- Admin: admin@example.com / admin123
-- Previous QA (2026-03-04) was BLOCKED by disk full + missing AUTH_SECRET
-- BUG-13 (project switching not updating session) was found and fixed since last QA
-- SSR role guards JUST added to /settings/members and /settings/positions pages — primary focus
-- All API routes fully implemented with Zod validation and Prisma
-- Session uses JWT strategy; project context stored in JWT token
+Budget Matrix is a Next.js/PostgreSQL feature that displays a matrix of Categories (rows) vs Motives (columns) with budget allocations and actual spending calculations. Two critical bugs (BUG-15, BUG-16) were recently fixed - SQL column names and PostgreSQL enum casting.
 
-## Test Accounts
-- admin@example.com / admin123 (seed default — superadmin)
-- Create a regular user via registration: user@example.com / user123
+**Key Files:**
+- `nextjs/app/(protected)/budget/page.tsx` - Server Component with spending queries
+- `nextjs/app/api/budget-matrix/route.ts` - API route handler
+- `nextjs/app/api/budget-matrix/bulk-update/route.ts` - Bulk update endpoint
+- `nextjs/components/budget/BudgetMatrixClient.tsx` - Client component with editing
+- `nextjs/components/budget/BudgetMatrixTable.tsx` - Table display with sticky headers
+- `nextjs/components/budget/BudgetMatrixCell.tsx` - Individual cell with variance indicators
+
+## User Guidance
+Test accounts: http://localhost:3000
+- Admin/Owner user: Can view and edit budget matrix
+- Regular user: View-only access
+- Super admin: Full access to all projects
+
+Scope: Full testing - all acceptance criteria, edge cases, security audit
 
 ## Acceptance Criteria to Test
 
-### General Settings Tab
-- AC-GEN-1: Page loads at /settings with project title and subtitle inputs
-- AC-GEN-2: Save updates project name
-- AC-GEN-3: Empty title shows validation error
-- AC-GEN-4: Subtitle can be cleared
+### AC-1: Page Structure & Routing
+- [ ] Page route `/budget` renders correctly
+- [ ] Matrix layout: Categories as rows, Motives as columns
+- [ ] Header displays "Budget Matrix" title
+- [ ] Page accessible from sidebar navigation
 
-### Members Tab SSR Role Guard (NEWLY ADDED — primary focus)
-- AC-MEM-0: Regular user accessing /settings/members directly → redirected to /settings
-- AC-MEM-1: Admin/owner can access /settings/members normally
+### AC-2: Data Fetching
+- [ ] Motives fetched and sorted ("Default" first, then alphabetical)
+- [ ] Categories fetched and sorted ("Uncategorized" first, then alphabetical)
+- [ ] Budget matrix cells loaded correctly
+- [ ] Spending calculations (motive, category, cell) computed correctly
 
-### Members Management
-- AC-MEM-2: Members table shows email, role badge, position, actions
-- AC-MEM-3: Invite Member opens modal with email/role/position fields
-- AC-MEM-4: Invite existing user → creates membership + notification
-- AC-MEM-5: Invite non-existent email → error "User not found"
-- AC-MEM-6: Invite already-member → error "already a member"
-- AC-MEM-7: Role dropdown updates member role
-- AC-MEM-8: Only owners can promote to owner role
-- AC-MEM-9: Admin cannot change owner's role
-- AC-MEM-10: Cannot remove last owner
-- AC-MEM-11: Remove member works with confirmation
-- AC-MEM-12: Position dropdown updates member position
+### AC-3: Matrix Grid Layout
+- [ ] Fixed header row with motive names as column headers
+- [ ] Leftmost column displays category names as row headers
+- [ ] Sticky header row and sticky first column work on scroll
+- [ ] Horizontal/vertical scroll for many motives/categories
 
-### Positions Tab SSR Role Guard (NEWLY ADDED — primary focus)
-- AC-POS-0: Regular user accessing /settings/positions directly → redirected to /settings
-- AC-POS-1: Admin/owner can access /settings/positions normally
+### AC-4: Cell Display
+- [ ] Each cell shows budget amount (top) and spent amount (bottom)
+- [ ] Currency format: €X.XXX,XX (German locale)
+- [ ] Empty/zero cells show €0.00 or placeholder
+- [ ] Variance indicator visible (percentage badge)
 
-### Positions Management
-- AC-POS-2: Positions list shows all positions including protected "Misc"
-- AC-POS-3: "Misc" has no edit/delete buttons
-- AC-POS-4: Add new position
-- AC-POS-5: Duplicate name → error
-- AC-POS-6: Cannot create "misc" (case insensitive)
-- AC-POS-7: Rename position inline
-- AC-POS-8: Delete position → members become unassigned
+### AC-5: Variance Indicators
+- [ ] Green: Spent ≤ 80% of budget
+- [ ] Amber/Yellow: 80% < Spent ≤ 100% of budget
+- [ ] Red: Spent > 100% of budget
+- [ ] Gray: No budget set (budget = 0)
 
-### Projects Tab
-- AC-PROJ-1: All projects listed with name, role, member count
-- AC-PROJ-2: Current project highlighted
-- AC-PROJ-3: Create new project → switches and redirects to dashboard
-- AC-PROJ-4: Switch project → session + sidebar update (BUG-13 regression)
-- AC-PROJ-5: Resign from project (non-owner)
-- AC-PROJ-6: Owner cannot resign
-- AC-PROJ-7: Delete project (owner, single member)
-- AC-PROJ-8: Delete with multiple members → blocked
+### AC-6: Cell Editing (Admin/Owner)
+- [ ] Click-to-edit activates inline input
+- [ ] Number input accepts decimal values
+- [ ] Enter key triggers save
+- [ ] Escape key cancels edit
+- [ ] Blur triggers save
+- [ ] Visual indicator for unsaved changes
 
-## Edge Cases
-- EC-1: Owner self-demote as last owner → blocked
-- EC-2: Unauthenticated direct URL to /settings/members → redirect to /login
-- EC-3: Invite with owner role as admin → blocked
-- EC-4: Delete current project → session cleared, redirect
-- EC-5: Delete project with 2+ members → blocked
+### AC-7: Totals Row and Column
+- [ ] Bottom row shows motive totals
+- [ ] Rightmost column shows category totals
+- [ ] Bottom-right corner shows grand total
+- [ ] Both budget and spent amounts in totals
 
-## Security Audit
-1. Authorization bypass: GET /settings/members as regular user (direct URL) — now SSR-guarded
-2. Authorization bypass: GET /settings/positions as regular user (direct URL) — now SSR-guarded
-3. IDOR: Modify members of project user doesn't belong to (API level)
-4. Role escalation: POST /api/projects/[id]/members with role=owner as admin
-5. Role escalation: Try to remove last owner via DELETE
-6. XSS: Inject script tag in project name or position name
-7. Input validation: Project name > 100 chars, position name > 50 chars
-8. Session check: After project switch, JWT correctly reflects new project role
+### AC-8: Bulk Save Operation
+- [ ] "Save Changes" button enabled only when cells modified
+- [ ] Button disabled with loading state during save
+- [ ] Success toast notification on successful save
+- [ ] Error handling with retry option on failure
 
-## Regression Tests
-- PROJ-5: Login/logout still works
-- PROJ-7: Bills page still accessible for admin
-- BUG-13: Project switch correctly updates session (critical regression)
+### AC-9: Protected Defaults
+- [ ] "Default" motive appears first in columns
+- [ ] "Uncategorized" category appears first in rows
+- [ ] Protected items handled correctly
 
-## How to Test
-Use curl for API tests, check page behavior via HTTP requests examining redirects.
-For UI behavior, test via curl with session cookies and check response codes/redirects.
+### AC-10: Empty States
+- [ ] Empty state when no motives: link to Settings > Motives
+- [ ] Empty state when no categories: link to Settings > Categories
+- [ ] Skeleton loader while data fetches
+
+### AC-11: API Endpoints
+- [ ] GET /api/budget-matrix returns complete data
+- [ ] POST /api/budget-matrix/bulk-update saves changes (admin only)
+- [ ] Proper error responses for unauthorized access
+
+## Edge Cases to Test
+
+### Data Edge Cases
+- [ ] **Year with no bills**: All spent cells show €0.00
+- [ ] **Motive deleted mid-session**: Save handles gracefully
+- [ ] **Cell value cleared**: Treated as €0.00
+- [ ] **Very large numbers**: Cells don't overflow layout
+- [ ] **Division by zero**: Budget=0 but spending exists shows "∞" or "Over budget"
+- [ ] **Negative budget values**: Validate and reject
+- [ ] **Concurrent edits**: Last-write-wins acceptable
+
+### UI Edge Cases
+- [ ] **Many motives/categories**: Scroll with sticky headers
+- [ ] **Zero motives**: Display empty state
+- [ ] **Zero categories**: Display empty state
+- [ ] **Single motive/category**: Matrix renders correctly (1x1)
+- [ ] **Network failure during save**: Error message with retry
+- [ ] **Session timeout during edit**: Redirect to login
+
+### Calculation Edge Cases
+- [ ] **Draft bills excluded**: Only confirmed/approved/paid bills in spending
+- [ ] **Bills with 0% allocation**: Contribute 0 to spending
+- [ ] **Partial allocations**: Unallocated portion not in matrix
+- [ ] **Floating point precision**: Decimal calculations correct
+
+### Permission Edge Cases
+- [ ] **User role viewing matrix**: Read-only, no edit controls
+- [ ] **Admin demoted to user**: Save fails with auth error
+- [ ] **Project switch while editing**: Warn about unsaved changes
+
+## Security Audit Scope
+
+### Authentication
+- [ ] Cannot access /budget without login
+- [ ] Cannot access /api/budget-matrix without login
+- [ ] Cannot access /api/budget-matrix/bulk-update without login
+
+### Authorization
+- [ ] User cannot edit matrix (API returns 403)
+- [ ] User cannot access other projects' data
+- [ ] Admin can only edit their project's matrix
+- [ ] Super admin can access all projects
+
+### Input Validation
+- [ ] Negative amounts rejected
+- [ ] Non-numeric values rejected
+- [ ] XSS attempts in budget values blocked
+- [ ] SQL injection attempts blocked (motiveId, categoryId)
+
+### Rate Limiting
+- [ ] Bulk save has rate limiting
+- [ ] Excessive requests handled gracefully
+
+### Data Exposure
+- [ ] API doesn't expose sensitive data
+- [ ] Response doesn't include other projects' data
+
+## Regression Test Scope
+
+### Related Deployed Features
+- [ ] PROJ-5 (NextAuth): Login/logout works
+- [ ] PROJ-7 (Bills): Bills list still functional
+- [ ] PROJ-9 (Categories/Motives): Settings pages work
+- [ ] PROJ-10 (Members): Project switching works
+
+## Responsive / Cross-Browser Scope
+
+### Breakpoints
+- [ ] 375px (mobile): Table scrolls horizontally
+- [ ] 768px (tablet): Layout adapts
+- [ ] 1440px (desktop): Full layout
+
+### Browsers
+- [ ] Chrome
+- [ ] Firefox
+- [ ] Safari
+
+## Bug Report Template
+Reference: /mnt/c/Users/jensmoeller/code/vbudget/.claude/skills/qa/test-template.md
+
+Tag bugs with:
+- Severity: Critical | High | Medium | Low
+- Skill: [Frontend] | [Backend] | [Architecture] | [Deploy]
