@@ -97,9 +97,15 @@ Date: 2026-03-06
 
 ### Changes Made
 
-Updated `/api/budget-matrix/route.ts` to use camelCase column names with double quotes:
+Fixed SQL column names in **two files**:
 
-**Before (broken):**
+**File 1: `/api/budget-matrix/route.ts`**
+Updated raw SQL queries to use camelCase column names with double quotes.
+
+**File 2: `/app/(protected)/budget/page.tsx`** (Server Component)
+Same fix applied to the `getBudgetMatrixData()` function.
+
+**Column Name Changes:**
 - `bm.motive_id` → `bm."motiveId"`
 - `b.netto_amount` → `b."nettoAmount"`
 - `bm.bill_id` → `bm."billId"`
