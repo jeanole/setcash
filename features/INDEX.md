@@ -27,7 +27,7 @@
 | [PROJ-8](PROJ-8-budget-matrix.md) | Feature | Budget Matrix | Complete | — | PROJ-5, PROJ-6 | 2026-03-01 |
 | [PROJ-9](PROJ-9-categories-motives.md) | Feature | Categories & Motives Admin Pages | Complete | — | PROJ-5, PROJ-6 | 2026-03-01 |
 | [PROJ-10](PROJ-10-members-projects-settings.md) | Feature | Members, Projects & Settings | Complete | — | PROJ-5, PROJ-6 | 2026-03-01 |
-| [PROJ-11](PROJ-11-reports-exports.md) | Feature | Reports & Exports | In Progress | — | PROJ-5, PROJ-6, PROJ-9 | 2026-03-01 |
+| [PROJ-11](PROJ-11-reports-exports.md) | Feature | Reports & Exports | Complete | — | PROJ-5, PROJ-6, PROJ-9 | 2026-03-01 |
 | [PROJ-12](PROJ-12-integrations.md) | Feature | Integrations (Google Sheets + Telegram) | In Progress | — | PROJ-5, PROJ-10 | 2026-03-04 |
 | [PROJ-13](PROJ-13-production-cutover.md) | Feature | Production Cutover | Planned | — | PROJ-4–12 | 2026-03-01 |
 | [CR-6](CR-6-camera-upload-bills.md) | CR | Add Camera Capture to Bill Upload | Deployed | High | PROJ-7 | 2026-03-04 |
