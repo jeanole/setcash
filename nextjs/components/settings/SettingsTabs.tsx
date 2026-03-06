@@ -14,6 +14,8 @@ const TABS: Tab[] = [
   { id: 'general', label: 'General', href: '/settings', roles: ['user', 'admin', 'owner', 'superadmin'] },
   { id: 'members', label: 'Members', href: '/settings/members', roles: ['admin', 'owner', 'superadmin'] },
   { id: 'positions', label: 'Positions', href: '/settings/positions', roles: ['admin', 'owner', 'superadmin'] },
+  { id: 'motives', label: 'Motives', href: '/settings/motives', roles: ['admin', 'owner', 'superadmin'] },
+  { id: 'categories', label: 'Categories', href: '/settings/categories', roles: ['admin', 'owner', 'superadmin'] },
   { id: 'projects', label: 'Projects', href: '/settings/projects', roles: ['user', 'admin', 'owner', 'superadmin'] },
 ];
 

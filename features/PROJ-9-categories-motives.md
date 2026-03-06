@@ -1,8 +1,8 @@
 # PROJ-9: Categories & Motives Admin Pages
 
-## Status: Planned
+## Status: Complete
 **Created:** 2026-03-01
-**Last Updated:** 2026-03-04
+**Last Updated:** 2026-03-06
 
 ## Overview
 Admin-only management pages for project-level Motives (primary budget axis) and Categories (secondary budget axis). These pages allow project admins to define the allocation structure used when categorizing bills and tracking spending against budgets.
