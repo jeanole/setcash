@@ -1,0 +1,18 @@
+services:
+  vbudget-test:
+    build: .
+    image: vbudget:test
+    container_name: vbudget-test
+    restart: unless-stopped
+    ports:
+      - "5001:3000"
+    volumes:
+      - ./data-test:/app/data
+    environment:
+      - NODE_ENV=production
+    networks:
+      - vbudget-test-net
+
+networks:
+  vbudget-test-net:
+    driver: bridge
