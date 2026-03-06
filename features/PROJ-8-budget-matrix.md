@@ -515,3 +515,9 @@ _To be added by /qa_
 
 ## Deployment
 _To be added by /deploy_
+
+## Open Bug Reports
+
+| ID | Severity | Title | Status |
+|----|----------|-------|--------|
+| [BUG-15](BUG-15-budget-matrix-sql-column-error.md) | Critical | Budget Matrix SQL Query Uses Wrong Column Names | Open |
