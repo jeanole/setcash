@@ -1,18 +1,22 @@
-import { getCurrentUser } from '@/lib/auth/session';
+'use client';
+
 import SignOutButton from '@/components/auth/SignOutButton';
+import { Menu } from 'lucide-react';
 
 interface HeaderProps {
   title?: string;
+  user?: {
+    email: string;
+  } | null;
+  onMenuToggle?: () => void;
 }
 
 // ---------------------------------------------------------------------------
-// Header — server component
-// Shows authenticated user's initials avatar, email, and sign-out button
+// Header — client component
+// Shows hamburger menu (mobile), page title, and user controls
 // ---------------------------------------------------------------------------
 
-export default async function Header({ title }: HeaderProps) {
-  const user = await getCurrentUser();
-
+export default function Header({ title, user, onMenuToggle }: HeaderProps) {
   // Derive initials from email (first character, uppercase)
   const initials = user?.email
     ? user.email.charAt(0).toUpperCase()
@@ -23,6 +27,16 @@ export default async function Header({ title }: HeaderProps) {
       className="h-14 border-b border-slate-200 bg-white flex items-center px-4 md:px-6 shrink-0 shadow-sm"
       aria-label="Page header"
     >
+      {/* Hamburger menu button - mobile only */}
+      <button
+        type="button"
+        onClick={onMenuToggle}
+        className="lg:hidden mr-3 p-2 -ml-2 rounded-lg hover:bg-slate-100 transition-colors"
+        aria-label="Open navigation menu"
+      >
+        <Menu className="w-5 h-5 text-slate-600" />
+      </button>
+
       {/* Page title */}
       <h1 className="text-base font-semibold text-slate-800">
         {title ?? 'vBudget'}

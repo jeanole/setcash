@@ -51,7 +51,8 @@
       "Bash(docker-compose -f docker-compose.test.yml up -d)",
       "Bash(docker ps --format \"table {{.Names}}\\\\t{{.Status}}\\\\t{{.Ports}}\")",
       "Bash(ls /c/Users/jensmoeller/code/vbudget/nextjs/app/\\\\\\(protected\\\\\\)/dashboard/)",
-      "Bash(ls /c/Users/jensmoeller/code/vbudget/nextjs/app/\\\\\\(public\\\\\\)/)"
+      "Bash(ls /c/Users/jensmoeller/code/vbudget/nextjs/app/\\\\\\(public\\\\\\)/)",
+      "Bash(wc -l /c/Users/jensmoeller/code/vbudget/routes/*.js)"
     ]
   }
 }

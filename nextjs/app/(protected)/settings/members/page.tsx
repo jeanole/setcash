@@ -1,78 +1,29 @@
-'use client';
+import { redirect } from 'next/navigation';
+import { auth } from '@/auth';
+import MembersPageClient from '@/components/settings/MembersPageClient';
 
-import { useState } from 'react';
-import { useSession } from 'next-auth/react';
-import { UserPlus } from 'lucide-react';
-import SettingsSection from '@/components/settings/SettingsSection';
-import MembersTable from '@/components/settings/MembersTable';
-import InviteMemberModal from '@/components/settings/InviteMemberModal';
-import { useMembers } from '@/lib/hooks/useMembers';
-import { usePositions } from '@/lib/hooks/usePositions';
+export default async function MembersSettingsPage() {
+  const session = await auth();
 
-export default function MembersSettingsPage() {
-  const { data: session } = useSession();
-  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
-
-  const currentProjectId = session?.user?.currentProjectId as string | undefined;
-  const currentUserRole = (session?.user?.role as 'user' | 'admin' | 'owner' | 'superadmin') || 'user';
-
-  if (!currentProjectId) {
-    return (
-      <div className="bg-amber-50 border border-amber-200 rounded-lg p-6">
-        <h3 className="text-lg font-medium text-amber-800">No Project Selected</h3>
-        <p className="mt-2 text-sm text-amber-700">
-          Please select a project to manage its members.
-        </p>
-        <a
-          href="/settings/projects"
-          className="mt-4 inline-block px-4 py-2 bg-amber-600 text-white rounded-md text-sm font-medium hover:bg-amber-700"
-        >
-          Go to Projects
-        </a>
-      </div>
-    );
+  if (!session?.user) {
+    redirect('/login');
   }
 
-  const { members, isLoading: membersLoading, inviteMember, updateMemberRole, updateMemberPosition, removeMember } =
-    useMembers({ projectId: currentProjectId });
-  const { positions, isLoading: positionsLoading } = usePositions({ projectId: currentProjectId });
+  const projectRole = session.user.currentProjectRole;
+  const isAdmin = projectRole === 'admin' || projectRole === 'owner';
+  const isSuperAdmin = session.user.role === 'superadmin';
 
-  const isLoading = membersLoading || positionsLoading;
+  if (!isAdmin && !isSuperAdmin) {
+    redirect('/settings');
+  }
 
-  return (
-    <>
-      <SettingsSection
-        title="Members"
-        description={`Manage project members and their roles. ${members.length} member(s) total.`}
-      >
-        <div className="mb-4 flex justify-end">
-          <button
-            onClick={() => setIsInviteModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md font-medium hover:bg-indigo-700 transition-colors"
-          >
-            <UserPlus className="w-4 h-4" />
-            Invite Member
-          </button>
-        </div>
+  const currentProjectId = session.user.currentProjectId;
 
-        <MembersTable
-          members={members}
-          positions={positions}
-          isLoading={isLoading}
-          currentUserRole={currentUserRole}
-          onUpdateRole={updateMemberRole}
-          onUpdatePosition={updateMemberPosition}
-          onRemove={removeMember}
-        />
-      </SettingsSection>
+  if (!currentProjectId) {
+    redirect('/settings/projects');
+  }
 
-      <InviteMemberModal
-        isOpen={isInviteModalOpen}
-        positions={positions}
-        currentUserRole={currentUserRole}
-        onClose={() => setIsInviteModalOpen(false)}
-        onInvite={inviteMember}
-      />
-    </>
-  );
+  const currentUserRole = (projectRole ?? session.user.role) as 'user' | 'admin' | 'owner' | 'superadmin';
+
+  return <MembersPageClient projectId={currentProjectId} currentUserRole={currentUserRole} />;
 }

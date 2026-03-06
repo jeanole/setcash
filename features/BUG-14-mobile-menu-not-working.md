@@ -1,6 +1,6 @@
 # BUG-14: Mobile Navigation Menu Not Working
 
-## Status: Open
+## Status: Resolved
 **Reported:** 2026-03-06
 **Severity:** Critical
 **Skill Tag:** [Frontend]
@@ -53,10 +53,40 @@ No menu button is visible on mobile view. Users cannot access the navigation men
 
 ## Fixed In
 
-_To be filled when resolved_
+Commit: `bug(BUG-14): Fix mobile navigation menu`
+Date: 2026-03-06
 
 ---
 
 ## Resolution Notes
 
-_To be filled when resolved_
+### Changes Made
+
+1. **Header.tsx** — Added hamburger menu button (mobile only)
+   - Converted to client component
+   - Added `onMenuToggle` prop
+   - Menu button visible only on mobile (`lg:hidden`)
+   - Uses `Menu` icon from lucide-react
+
+2. **Sidebar.tsx** — Added mobile drawer overlay
+   - Added `isMobileOpen` and `onClose` props
+   - Mobile drawer with backdrop (`bg-black/50`)
+   - Slides from left (280px width)
+   - Close button (X icon) in header
+   - ESC key handler to close
+   - Body scroll lock when open
+   - Nav links close drawer on click
+
+3. **AppShell.tsx** — Added state management
+   - Converted to client component
+   - Manages `isMobileMenuOpen` state
+   - Passes toggle/close handlers to Header and Sidebar
+
+### Verification Checklist
+- [x] Header shows hamburger button on mobile
+- [x] Clicking hamburger opens mobile drawer
+- [x] Backdrop click closes drawer
+- [x] Nav link click closes drawer
+- [x] Close button (X) works
+- [x] ESC key closes drawer
+- [x] Desktop layout unchanged
