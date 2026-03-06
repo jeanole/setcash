@@ -155,7 +155,7 @@ export default function CategoriesList({
                   onKeyDown={handleKeyDown}
                   autoFocus
                   maxLength={100}
-                  className="flex-1 px-2 py-1 text-sm border border-slate-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="flex-1 px-2 py-1 text-sm border border-slate-300 rounded focus:outline-none focus:ring-2 focus:ring-[#7C6AF6]"
                   placeholder="Category name"
                 />
                 <input
@@ -165,7 +165,7 @@ export default function CategoriesList({
                   onKeyDown={handleBudgetKeyDown}
                   min={0}
                   step={0.01}
-                  className="w-28 px-2 py-1 text-sm border border-slate-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-28 px-2 py-1 text-sm border border-slate-300 rounded focus:outline-none focus:ring-2 focus:ring-[#7C6AF6]"
                   placeholder="Budget"
                 />
                 <button
@@ -190,7 +190,7 @@ export default function CategoriesList({
                       className={`text-left ${
                         isProtected(category.name)
                           ? 'cursor-default font-medium text-slate-600'
-                          : 'cursor-pointer hover:text-indigo-600 font-medium text-slate-700'
+                          : 'cursor-pointer hover:text-[#7C6AF6] font-medium text-slate-700'
                       }`}
                       disabled={isProtected(category.name)}
                     >
@@ -209,7 +209,7 @@ export default function CategoriesList({
                     className={`text-sm ${
                       isProtected(category.name)
                         ? 'text-slate-400 cursor-default'
-                        : 'text-slate-600 hover:text-indigo-600 cursor-pointer'
+                        : 'text-slate-600 hover:text-[#7C6AF6] cursor-pointer'
                     }`}
                   >
                     {formatCurrency(category.budget)}
@@ -239,7 +239,7 @@ export default function CategoriesList({
               placeholder="Category name"
               maxLength={100}
               autoFocus
-              className="flex-1 px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="flex-1 px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#7C6AF6]"
             />
             <input
               type="number"
@@ -248,7 +248,7 @@ export default function CategoriesList({
               placeholder="Budget (€)"
               min={0}
               step={0.01}
-              className="w-28 px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-28 px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#7C6AF6]"
             />
             <button
               type="submit"
@@ -271,7 +271,7 @@ export default function CategoriesList({
         ) : (
           <button
             onClick={() => setIsAdding(true)}
-            className="flex items-center gap-2 w-full px-4 py-3 text-sm font-medium text-indigo-600 bg-indigo-50 rounded-lg border border-dashed border-indigo-200 hover:bg-indigo-100 transition-colors"
+            className="flex items-center gap-2 w-full px-4 py-3 text-sm font-medium text-[#7C6AF6] bg-violet-50 rounded-lg border border-dashed border-violet-200 hover:bg-violet-100 transition-colors"
           >
             <Plus className="w-4 h-4" />
             Add Category

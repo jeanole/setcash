@@ -31,7 +31,7 @@ export default function MembersPageClient({ projectId, currentUserRole }: Member
         <div className="mb-4 flex justify-end">
           <button
             onClick={() => setIsInviteModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md font-medium hover:bg-indigo-700 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-[#7C6AF6] text-white rounded-md font-medium hover:bg-[#6C5CE7] transition-colors"
           >
             <UserPlus className="w-4 h-4" />
             Invite Member

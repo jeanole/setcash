@@ -232,8 +232,8 @@ export default function CropModal({
               onClick={handleSave}
               disabled={isLoading || !file || !file.type.startsWith('image/') || !cropperLoaded}
               className={cn(
-                'px-4 py-2 bg-indigo-600 text-white font-medium rounded-lg transition-colors',
-                'hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed',
+                'px-4 py-2 bg-[#7C6AF6] text-white font-medium rounded-lg transition-colors',
+                'hover:bg-[#6C5CE7] disabled:opacity-50 disabled:cursor-not-allowed',
                 'flex items-center gap-2'
               )}
             >

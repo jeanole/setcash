@@ -122,7 +122,7 @@ export const statusColors: Record<string, { bg: string; text: string; border: st
  * OCR status display mapping
  */
 export const ocrStatusDisplay: Record<string, { label: string; color: string }> = {
-  pending: { label: 'Analysing...', color: 'text-indigo-600' },
+  pending: { label: 'Analysing...', color: 'text-[#7C6AF6]' },
   done: { label: 'AI - check', color: 'text-amber-600' },
   failed: { label: 'Failed', color: 'text-rose-600' },
 };

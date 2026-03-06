@@ -168,8 +168,8 @@ export default function SuperAdminModal({ isOpen, onClose, currentUserEmail }: S
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-white">
             <div className="flex items-center gap-3">
-              <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-indigo-100">
-                <Shield className="w-5 h-5 text-indigo-600" />
+              <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-violet-100">
+                <Shield className="w-5 h-5 text-[#7C6AF6]" />
               </div>
               <div>
                 <h2 className="text-xl font-semibold text-slate-800">Super Admin</h2>
@@ -193,7 +193,7 @@ export default function SuperAdminModal({ isOpen, onClose, currentUserEmail }: S
                 className={cn(
                   'flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2',
                   activeTab === 'projects'
-                    ? 'border-indigo-600 text-indigo-600'
+                    ? 'border-[#7C6AF6] text-[#7C6AF6]'
                     : 'border-transparent text-slate-600 hover:text-slate-800 hover:bg-slate-100'
                 )}
                 aria-selected={activeTab === 'projects'}
@@ -210,7 +210,7 @@ export default function SuperAdminModal({ isOpen, onClose, currentUserEmail }: S
                 className={cn(
                   'flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2',
                   activeTab === 'users'
-                    ? 'border-indigo-600 text-indigo-600'
+                    ? 'border-[#7C6AF6] text-[#7C6AF6]'
                     : 'border-transparent text-slate-600 hover:text-slate-800 hover:bg-slate-100'
                 )}
                 aria-selected={activeTab === 'users'}

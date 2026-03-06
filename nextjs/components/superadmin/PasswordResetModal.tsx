@@ -152,7 +152,7 @@ export default function PasswordResetModal({
                       'px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2',
                       copied
                         ? 'bg-emerald-100 text-emerald-700'
-                        : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                        : 'bg-[#7C6AF6] text-white hover:bg-[#6C5CE7]'
                     )}
                     aria-label="Copy password to clipboard"
                   >
@@ -188,7 +188,7 @@ export default function PasswordResetModal({
               <button
                 onClick={handleConfirm}
                 disabled={isLoading}
-                className="px-4 py-2 bg-indigo-600 text-white font-medium rounded-lg transition-colors hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2"
+                className="px-4 py-2 bg-[#7C6AF6] text-white font-medium rounded-lg transition-colors hover:bg-[#6C5CE7] disabled:opacity-50 flex items-center gap-2"
               >
                 {isLoading ? (
                   <>
@@ -206,7 +206,7 @@ export default function PasswordResetModal({
           ) : (
             <button
               onClick={handleClose}
-              className="px-4 py-2 bg-indigo-600 text-white font-medium rounded-lg transition-colors hover:bg-indigo-700"
+              className="px-4 py-2 bg-[#7C6AF6] text-white font-medium rounded-lg transition-colors hover:bg-[#6C5CE7]"
             >
               Close
             </button>

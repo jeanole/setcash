@@ -164,7 +164,7 @@ export default function BillDetailPage({ params }: BillDetailPageProps) {
         </h2>
         <button
           onClick={() => router.push('/bills')}
-          className="text-indigo-600 hover:text-indigo-700 font-medium"
+          className="text-[#7C6AF6] hover:text-[#7C6AF6] font-medium"
         >
           Back to Bills
         </button>
@@ -344,7 +344,7 @@ export default function BillDetailPage({ params }: BillDetailPageProps) {
       <div className="fixed bottom-6 right-6 lg:hidden">
         <button
           onClick={() => router.push(`/bills/${bill.id}/edit`)}
-          className="w-14 h-14 bg-indigo-600 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-indigo-700 transition-colors"
+          className="w-14 h-14 bg-[#7C6AF6] text-white rounded-full shadow-lg flex items-center justify-center hover:bg-[#6C5CE7] transition-colors"
           aria-label="Edit bill"
         >
           <svg

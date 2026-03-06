@@ -49,7 +49,7 @@ function getEventBadge(changes: EditLog['changes'], source: string) {
   // AI source
   if (source === 'ai') {
     return (
-      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-800">
+      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-violet-100 text-[#7C6AF6]">
         AI
       </span>
     );
@@ -101,7 +101,7 @@ export default function BillHistoryTimeline({ logs }: BillHistoryTimelineProps) 
                 className={cn(
                   'absolute left-0 top-0 w-4 h-4 rounded-full border-2',
                   log.source === 'ai'
-                    ? 'bg-indigo-100 border-indigo-400'
+                    ? 'bg-violet-100 border-[#7C6AF6]'
                     : log.changes?._event === 'created'
                     ? 'bg-emerald-100 border-emerald-400'
                     : log.changes?._event === 'verified'

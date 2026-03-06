@@ -134,7 +134,7 @@ export default function UsersTab({
                 e.stopPropagation();
                 onResetPassword(row);
               }}
-              className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+              className="p-2 text-[#7C6AF6] hover:bg-violet-50 rounded-lg transition-colors"
               aria-label={`Reset password for ${row.email}`}
               title="Reset Password"
             >

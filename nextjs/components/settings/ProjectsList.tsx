@@ -60,7 +60,7 @@ export default function ProjectsList({
         <p className="text-slate-600">You are not a member of any projects yet.</p>
         <a
           href="/settings/projects"
-          className="mt-4 inline-block px-4 py-2 bg-indigo-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700"
+          className="mt-4 inline-block px-4 py-2 bg-[#7C6AF6] text-white rounded-md text-sm font-medium hover:bg-[#6C5CE7]"
         >
           Create Your First Project
         </a>
@@ -83,7 +83,7 @@ export default function ProjectsList({
             key={project.id}
             className={`p-4 rounded-lg border ${
               project.isCurrent
-                ? 'bg-indigo-50 border-indigo-200'
+                ? 'bg-violet-50 border-violet-200'
                 : 'bg-white border-slate-200'
             }`}
           >
@@ -92,7 +92,7 @@ export default function ProjectsList({
                 <div className="flex items-center gap-2">
                   <h3 className="font-semibold text-slate-900">{project.name}</h3>
                   {project.isCurrent && (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-800">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-violet-100 text-[#7C6AF6]">
                       <Check className="w-3 h-3 mr-1" />
                       Current
                     </span>
@@ -113,7 +113,7 @@ export default function ProjectsList({
                 {!project.isCurrent && (
                   <button
                     onClick={() => onSwitch(project.id)}
-                    className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-indigo-600 bg-indigo-50 rounded-md hover:bg-indigo-100 transition-colors"
+                    className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-[#7C6AF6] bg-violet-50 rounded-md hover:bg-violet-100 transition-colors"
                   >
                     <SwitchCamera className="w-4 h-4" />
                     Switch

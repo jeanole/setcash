@@ -106,7 +106,7 @@ export default function InviteMemberModal({
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="user@example.com"
-              className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#7C6AF6] focus:border-[#7C6AF6]"
             />
             <p className="mt-1 text-xs text-slate-500">
               User must already have an account to be invited
@@ -121,7 +121,7 @@ export default function InviteMemberModal({
               id="invite-role"
               value={role}
               onChange={(e) => setRole(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#7C6AF6] focus:border-[#7C6AF6]"
             >
               {ROLES.map((r) => (
                 <option key={r.value} value={r.value} disabled={r.value === 'owner' && !canInviteOwner}>
@@ -139,7 +139,7 @@ export default function InviteMemberModal({
               id="invite-position"
               value={positionId}
               onChange={(e) => setPositionId(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#7C6AF6] focus:border-[#7C6AF6]"
             >
               <option value="none">— None —</option>
               {positions.map((pos) => (
@@ -161,7 +161,7 @@ export default function InviteMemberModal({
             <button
               type="submit"
               disabled={isLoading}
-              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-[#7C6AF6] text-white rounded-md font-medium hover:bg-[#6C5CE7] disabled:opacity-50 transition-colors"
             >
               <UserPlus className="w-4 h-4" />
               {isLoading ? 'Inviting...' : 'Invite'}

@@ -207,7 +207,7 @@ export default function BillImageUpload({
         className={cn(
           'relative border-2 border-dashed rounded-xl p-8 text-center transition-colors',
           isDragging
-            ? 'border-indigo-500 bg-indigo-50'
+            ? 'border-[#7C6AF6] bg-violet-50'
             : 'border-slate-200 hover:border-slate-300 bg-slate-50'
         )}
       >
@@ -223,7 +223,7 @@ export default function BillImageUpload({
         <svg
           className={cn(
             'w-12 h-12 mx-auto mb-3 transition-colors',
-            isDragging ? 'text-indigo-500' : 'text-slate-300'
+            isDragging ? 'text-[#7C6AF6]' : 'text-slate-300'
           )}
           fill="none"
           stroke="currentColor"
@@ -330,7 +330,7 @@ export default function BillImageUpload({
           {/* Upload button */}
           <button
             onClick={handleUpload}
-            className="w-full py-2.5 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition-colors"
+            className="w-full py-2.5 bg-[#7C6AF6] text-white font-medium rounded-lg hover:bg-[#6C5CE7] transition-colors"
           >
             Upload {files.length} file{files.length !== 1 ? 's' : ''}
           </button>

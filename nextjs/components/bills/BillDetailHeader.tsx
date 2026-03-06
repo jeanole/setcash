@@ -39,7 +39,7 @@ export default function BillDetailHeader({
       {/* Back button */}
       <button
         onClick={() => router.push('/bills')}
-        className="inline-flex items-center text-sm text-slate-600 hover:text-slate-900 transition-colors"
+        className="inline-flex items-center text-sm text-zinc-600 hover:text-zinc-900 transition-colors"
       >
         <svg
           className="w-4 h-4 mr-1"
@@ -58,39 +58,39 @@ export default function BillDetailHeader({
       </button>
 
       {/* Header card */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+      <div className="bg-white rounded-xl border border-[var(--vb-card-border)] shadow-[var(--vb-shadow-sm)] p-6">
         <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
           {/* Left side - Info */}
           <div className="space-y-2">
             <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="text-2xl font-bold text-slate-900">
+              <h1 className="text-2xl font-bold text-zinc-900 font-mono-numbers">
                 Bill {bill.billNumber || `#${bill.id}`}
               </h1>
               {isDraft && <BillStatusBadge status="draft" isDraft />}
               <BillStatusBadge status={bill.status} />
             </div>
 
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-600">
-              <span>{formatDate(bill.date)}</span>
-              <span className="text-slate-300">•</span>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-zinc-600">
+              <span className="font-mono-numbers">{formatDate(bill.date)}</span>
+              <span className="text-zinc-300">•</span>
               <span>{bill.email}</span>
-              <span className="text-slate-300">•</span>
+              <span className="text-zinc-300">•</span>
               <span>{bill.type || 'Kauf'}</span>
             </div>
 
             <div className="pt-2">
-              <p className="text-slate-900 font-medium">{bill.vendor || 'No vendor'}</p>
-              {bill.item && <p className="text-slate-600">{bill.item}</p>}
+              <p className="text-zinc-900 font-medium">{bill.vendor || 'No vendor'}</p>
+              {bill.item && <p className="text-zinc-600">{bill.item}</p>}
             </div>
 
             {/* Amount summary */}
             <div className="flex items-baseline gap-2 pt-2">
-              <span className="text-2xl font-bold text-slate-900">
+              <span className="text-2xl font-bold text-zinc-900 font-mono-numbers">
                 {formatCurrency(total)}
               </span>
-              <span className="text-slate-500">brutto</span>
-              <span className="text-slate-300">|</span>
-              <span className="text-slate-600">
+              <span className="text-zinc-500">brutto</span>
+              <span className="text-zinc-300">|</span>
+              <span className="text-zinc-600 font-mono-numbers">
                 {formatCurrency(bill.nettoAmount)} netto
               </span>
             </div>
@@ -107,7 +107,7 @@ export default function BillDetailHeader({
                   'inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-colors',
                   bill.ocrStatus === 'done'
                     ? 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100'
-                    : 'bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100',
+                    : 'bg-violet-50 text-[#7C6AF6] border border-violet-200 hover:bg-violet-100',
                   isAnalysing && 'opacity-50 cursor-not-allowed'
                 )}
               >
@@ -227,7 +227,7 @@ export default function BillDetailHeader({
             {/* Delete button */}
             <button
               onClick={onDelete}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg font-medium text-sm hover:bg-slate-200 transition-colors"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-zinc-100 text-zinc-700 rounded-lg font-medium text-sm hover:bg-zinc-200 transition-colors"
             >
               <svg
                 className="w-4 h-4"
@@ -249,9 +249,9 @@ export default function BillDetailHeader({
 
         {/* Comment */}
         {bill.comment && (
-          <div className="mt-4 pt-4 border-t border-slate-100">
-            <p className="text-sm text-slate-600">
-              <span className="font-medium text-slate-700">Comment:</span>{' '}
+          <div className="mt-4 pt-4 border-t border-zinc-100">
+            <p className="text-sm text-zinc-600">
+              <span className="font-medium text-zinc-700">Comment:</span>{' '}
               {bill.comment}
             </p>
           </div>

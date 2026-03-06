@@ -84,7 +84,7 @@ export default function ProjectsTab({
               e.stopPropagation();
               onOpenMembers(row);
             }}
-            className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+            className="p-2 text-[#7C6AF6] hover:bg-violet-50 rounded-lg transition-colors"
             aria-label={`Manage members for ${row.name}`}
             title="Members"
           >

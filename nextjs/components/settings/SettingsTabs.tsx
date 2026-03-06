@@ -45,7 +45,7 @@ export default function SettingsTabs({ userRole }: SettingsTabsProps) {
             className={cn(
               'px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap',
               isActive(tab)
-                ? 'border-indigo-600 text-indigo-600'
+                ? 'border-[#7C6AF6] text-[#7C6AF6]'
                 : 'border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300'
             )}
           >

@@ -151,7 +151,7 @@ export default async function BudgetPage() {
   const data = await getBudgetMatrixData(projectId);
 
   return (
-    <div className="p-6 max-w-[1600px] mx-auto">
+    <div className="p-6 max-w-[1600px] mx-auto bg-[var(--vb-content-bg)]">
       <SettingsSection
         title="Budget Matrix"
         description="Manage your budget allocation across motives and categories. Click on any cell to edit the budget amount."

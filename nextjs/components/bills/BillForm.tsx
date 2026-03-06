@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, FormEvent } from 'react';
+import dynamic from 'next/dynamic';
 import { Bill, AllocationOption, Allocation } from '@/lib/types';
 import {
   formatDateForInput,
@@ -10,6 +11,9 @@ import {
   cn,
 } from '@/lib/utils';
 import AllocationWidget from './AllocationWidget';
+
+const CinematicButton = dynamic(() => import('@/components/cinematic/CinematicButton'), { ssr: false });
+const ClapperboardToast = dynamic(() => import('@/components/cinematic/ClapperboardToast'), { ssr: false });
 
 interface BillFormProps {
   initialData?: Partial<Bill>;
@@ -53,6 +57,7 @@ export default function BillForm({
   });
 
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [showClapper, setShowClapper] = useState(false);
 
   const totalAmount = calculateTotal(
     formData.brutto19,
@@ -94,6 +99,10 @@ export default function BillForm({
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (validationErrors.length > 0) return;
+    // Trigger clapperboard easter egg on ~1/3 submits
+    if (Math.random() < 1 / 3) {
+      setShowClapper(true);
+    }
     onSubmit(formData);
   };
 
@@ -112,13 +121,13 @@ export default function BillForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {/* Basic Info */}
-      <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-        <h2 className="text-lg font-semibold text-slate-900 mb-4">Basic Information</h2>
+      <section className="bg-white rounded-xl border border-[var(--vb-card-border)] shadow-[var(--vb-shadow-sm)] p-6">
+        <h2 className="text-lg font-semibold text-zinc-900 mb-4">Basic Information</h2>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Date */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
+            <label className="block text-sm font-medium text-zinc-700 mb-1">
               Date <span className="text-rose-500">*</span>
             </label>
             <input
@@ -126,19 +135,19 @@ export default function BillForm({
               required
               value={formData.date}
               onChange={(e) => updateField('date', e.target.value)}
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-colors"
+              className="w-full px-3 py-2 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-[#7C6AF6]/20 focus:border-[#7C6AF6] outline-none transition-colors font-mono-numbers"
             />
           </div>
 
           {/* Type */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
+            <label className="block text-sm font-medium text-zinc-700 mb-1">
               Type
             </label>
             <select
               value={formData.type}
               onChange={(e) => updateField('type', e.target.value)}
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-colors bg-white"
+              className="w-full px-3 py-2 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-[#7C6AF6]/20 focus:border-[#7C6AF6] outline-none transition-colors bg-white"
             >
               <option value="Kauf">Kauf</option>
               <option value="Rechnung">Rechnung</option>
@@ -149,7 +158,7 @@ export default function BillForm({
 
           {/* Vendor */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
+            <label className="block text-sm font-medium text-zinc-700 mb-1">
               Vendor <span className="text-rose-500">*</span>
             </label>
             <input
@@ -158,13 +167,13 @@ export default function BillForm({
               value={formData.vendor}
               onChange={(e) => updateField('vendor', e.target.value)}
               placeholder="Store or company name"
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-colors"
+              className="w-full px-3 py-2 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-[#7C6AF6]/20 focus:border-[#7C6AF6] outline-none transition-colors"
             />
           </div>
 
           {/* Item */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
+            <label className="block text-sm font-medium text-zinc-700 mb-1">
               Item
             </label>
             <input
@@ -172,14 +181,14 @@ export default function BillForm({
               value={formData.item}
               onChange={(e) => updateField('item', e.target.value)}
               placeholder="What was purchased"
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-colors"
+              className="w-full px-3 py-2 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-[#7C6AF6]/20 focus:border-[#7C6AF6] outline-none transition-colors"
             />
           </div>
         </div>
 
         {/* Comment */}
         <div className="mt-4">
-          <label className="block text-sm font-medium text-slate-700 mb-1">
+          <label className="block text-sm font-medium text-zinc-700 mb-1">
             Comment
           </label>
           <textarea
@@ -187,23 +196,23 @@ export default function BillForm({
             onChange={(e) => updateField('comment', e.target.value)}
             placeholder="Additional notes..."
             rows={3}
-            className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-colors resize-y"
+            className="w-full px-3 py-2 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-[#7C6AF6]/20 focus:border-[#7C6AF6] outline-none transition-colors resize-y"
           />
         </div>
       </section>
 
       {/* Amounts */}
-      <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-        <h2 className="text-lg font-semibold text-slate-900 mb-4">Amounts</h2>
+      <section className="bg-white rounded-xl border border-[var(--vb-card-border)] shadow-[var(--vb-shadow-sm)] p-6">
+        <h2 className="text-lg font-semibold text-zinc-900 mb-4">Amounts</h2>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {/* Brutto 19% */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
+            <label className="block text-sm font-medium text-zinc-700 mb-1">
               19% VAT (Brutto)
             </label>
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400">
                 €
               </span>
               <input
@@ -212,22 +221,22 @@ export default function BillForm({
                 step="0.01"
                 value={formData.brutto19 || ''}
                 onChange={(e) => updateNumberField('brutto19', e.target.value)}
-                className="w-full pl-8 pr-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-colors"
+                className="w-full pl-8 pr-3 py-2 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-[#7C6AF6]/20 focus:border-[#7C6AF6] outline-none transition-colors font-mono-numbers"
                 placeholder="0.00"
               />
             </div>
-            <p className="mt-1 text-xs text-slate-500">
-              Netto: {formatCurrency(formData.brutto19 / 1.19)}
+            <p className="mt-1 text-xs text-zinc-500">
+              Netto: <span className="font-mono-numbers">{formatCurrency(formData.brutto19 / 1.19)}</span>
             </p>
           </div>
 
           {/* Brutto 7% */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
+            <label className="block text-sm font-medium text-zinc-700 mb-1">
               7% VAT (Brutto)
             </label>
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400">
                 €
               </span>
               <input
@@ -236,22 +245,22 @@ export default function BillForm({
                 step="0.01"
                 value={formData.brutto7 || ''}
                 onChange={(e) => updateNumberField('brutto7', e.target.value)}
-                className="w-full pl-8 pr-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-colors"
+                className="w-full pl-8 pr-3 py-2 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-[#7C6AF6]/20 focus:border-[#7C6AF6] outline-none transition-colors font-mono-numbers"
                 placeholder="0.00"
               />
             </div>
-            <p className="mt-1 text-xs text-slate-500">
-              Netto: {formatCurrency(formData.brutto7 / 1.07)}
+            <p className="mt-1 text-xs text-zinc-500">
+              Netto: <span className="font-mono-numbers">{formatCurrency(formData.brutto7 / 1.07)}</span>
             </p>
           </div>
 
           {/* Brutto 0% */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
+            <label className="block text-sm font-medium text-zinc-700 mb-1">
               0% VAT (Brutto)
             </label>
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400">
                 €
               </span>
               <input
@@ -260,27 +269,27 @@ export default function BillForm({
                 step="0.01"
                 value={formData.brutto0 || ''}
                 onChange={(e) => updateNumberField('brutto0', e.target.value)}
-                className="w-full pl-8 pr-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-colors"
+                className="w-full pl-8 pr-3 py-2 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-[#7C6AF6]/20 focus:border-[#7C6AF6] outline-none transition-colors font-mono-numbers"
                 placeholder="0.00"
               />
             </div>
-            <p className="mt-1 text-xs text-slate-500">
-              Netto: {formatCurrency(formData.brutto0)}
+            <p className="mt-1 text-xs text-zinc-500">
+              Netto: <span className="font-mono-numbers">{formatCurrency(formData.brutto0)}</span>
             </p>
           </div>
         </div>
 
         {/* Total */}
-        <div className="mt-6 p-4 bg-slate-50 rounded-lg">
+        <div className="mt-6 p-4 bg-zinc-50 rounded-lg">
           <div className="flex justify-between items-center">
-            <span className="text-sm font-medium text-slate-700">Total Brutto:</span>
-            <span className="text-lg font-semibold text-slate-900">
+            <span className="text-sm font-medium text-zinc-700">Total Brutto:</span>
+            <span className="text-lg font-semibold text-zinc-900 font-mono-numbers">
               {formatCurrency(totalAmount)}
             </span>
           </div>
           <div className="flex justify-between items-center mt-1">
-            <span className="text-sm text-slate-500">Total Netto:</span>
-            <span className="text-base font-medium text-slate-700">
+            <span className="text-sm text-zinc-500">Total Netto:</span>
+            <span className="text-base font-medium text-zinc-700 font-mono-numbers">
               {formatCurrency(nettoAmount)}
             </span>
           </div>
@@ -288,12 +297,12 @@ export default function BillForm({
       </section>
 
       {/* Allocations */}
-      <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-        <h2 className="text-lg font-semibold text-slate-900 mb-4">Allocations</h2>
+      <section className="bg-white rounded-xl border border-[var(--vb-card-border)] shadow-[var(--vb-shadow-sm)] p-6">
+        <h2 className="text-lg font-semibold text-zinc-900 mb-4">Allocations</h2>
 
         <div className="space-y-6">
           <div>
-            <h3 className="text-sm font-medium text-slate-700 mb-2">Motive Allocation</h3>
+            <h3 className="text-sm font-medium text-zinc-700 mb-2">Motive Allocation</h3>
             <AllocationWidget
               type="motive"
               options={motives}
@@ -303,8 +312,8 @@ export default function BillForm({
             />
           </div>
 
-          <div className="pt-4 border-t border-slate-100">
-            <h3 className="text-sm font-medium text-slate-700 mb-2">Category Allocation</h3>
+          <div className="pt-4 border-t border-zinc-100">
+            <h3 className="text-sm font-medium text-zinc-700 mb-2">Category Allocation</h3>
             <AllocationWidget
               type="category"
               options={categories}
@@ -335,23 +344,27 @@ export default function BillForm({
         <button
           type="button"
           onClick={() => window.history.back()}
-          className="px-4 py-2 text-sm font-medium text-slate-700 hover:text-slate-900 transition-colors"
+          className="px-4 py-2 text-sm font-medium text-zinc-700 hover:text-zinc-900 transition-colors"
         >
           Cancel
         </button>
-        <button
-          type="submit"
-          disabled={isSubmitting || validationErrors.length > 0}
-          className={cn(
-            'px-6 py-2 bg-indigo-600 text-white font-medium rounded-lg transition-colors',
-            isSubmitting || validationErrors.length > 0
-              ? 'opacity-50 cursor-not-allowed'
-              : 'hover:bg-indigo-700'
-          )}
-        >
-          {isSubmitting ? 'Saving...' : initialData?.id ? 'Save Changes' : 'Create Bill'}
-        </button>
+        <CinematicButton>
+          <button
+            type="submit"
+            disabled={isSubmitting || validationErrors.length > 0}
+            className={cn(
+              'px-6 py-2 bg-[#7C6AF6] text-white font-medium rounded-lg transition-colors',
+              isSubmitting || validationErrors.length > 0
+                ? 'opacity-50 cursor-not-allowed'
+                : 'hover:bg-[#6C5CE7]'
+            )}
+          >
+            {isSubmitting ? 'Saving...' : initialData?.id ? 'Save Changes' : 'Create Bill'}
+          </button>
+        </CinematicButton>
       </div>
+
+      <ClapperboardToast show={showClapper} onComplete={() => setShowClapper(false)} />
     </form>
   );
 }

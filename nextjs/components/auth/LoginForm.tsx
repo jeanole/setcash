@@ -152,7 +152,7 @@ export default function LoginForm() {
       <div className="flex flex-col items-center mb-6">
         {/* Monogram */}
         <div
-          className="w-12 h-12 rounded-full bg-indigo-600 flex items-center justify-center text-white text-lg font-bold mb-3"
+          className="w-12 h-12 rounded-full bg-[#7C6AF6] flex items-center justify-center text-white text-lg font-bold mb-3"
           style={rise(300, 300)}
           aria-hidden="true"
         >
@@ -251,7 +251,7 @@ export default function LoginForm() {
           <button
             type="submit"
             disabled={isDisabled}
-            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg py-2.5 text-sm font-semibold transition-colors flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+            className="w-full bg-[#7C6AF6] hover:bg-[#6C5CE7] text-white rounded-lg py-2.5 text-sm font-semibold transition-colors flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
             aria-busy={loading}
           >
             {loading ? (

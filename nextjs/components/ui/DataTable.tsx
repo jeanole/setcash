@@ -55,10 +55,10 @@ export default function DataTable<T>({
   const renderSortIndicator = (column: Column<T>) => {
     if (!sortable || !column.sortable) return null;
     if (sortColumn !== column.key) {
-      return <span className="ml-1 text-slate-300 opacity-0 group-hover:opacity-100">↕</span>;
+      return <span className="ml-1 text-zinc-300 opacity-0 group-hover:opacity-100">↕</span>;
     }
     return (
-      <span className="ml-1 text-indigo-600">
+      <span className="ml-1 text-[#7C6AF6]">
         {sortDir === 'asc' ? '↑' : '↓'}
       </span>
     );
@@ -66,15 +66,15 @@ export default function DataTable<T>({
 
   if (isLoading) {
     return (
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-[var(--vb-card-border)] shadow-[var(--vb-shadow-sm)] overflow-hidden">
         <div className="animate-pulse">
           {[...Array(5)].map((_, i) => (
-            <div key={i} className="flex items-center gap-4 p-4 border-b border-slate-100">
-              <div className="w-4 h-4 bg-slate-200 rounded" />
-              <div className="flex-1 h-4 bg-slate-200 rounded" />
-              <div className="w-24 h-4 bg-slate-200 rounded" />
-              <div className="w-20 h-4 bg-slate-200 rounded" />
-              <div className="w-16 h-4 bg-slate-200 rounded" />
+            <div key={i} className="flex items-center gap-4 p-4 border-b border-zinc-100">
+              <div className="w-4 h-4 bg-zinc-200 rounded" />
+              <div className="flex-1 h-4 bg-zinc-200 rounded" />
+              <div className="w-24 h-4 bg-zinc-200 rounded" />
+              <div className="w-20 h-4 bg-zinc-200 rounded" />
+              <div className="w-16 h-4 bg-zinc-200 rounded" />
             </div>
           ))}
         </div>
@@ -84,23 +84,23 @@ export default function DataTable<T>({
 
   if (data.length === 0) {
     return (
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-8 text-center">
-        <p className="text-slate-500">{emptyMessage}</p>
+      <div className="bg-white rounded-xl border border-[var(--vb-card-border)] shadow-[var(--vb-shadow-sm)] p-8 text-center">
+        <p className="text-zinc-500">{emptyMessage}</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+    <div className="bg-white rounded-xl border border-[var(--vb-card-border)] shadow-[var(--vb-shadow-sm)] overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full">
-          <thead className="bg-slate-50 border-b border-slate-200">
+          <thead className="bg-zinc-50 border-b border-[var(--vb-card-border)]">
             <tr>
               {selectable && (
                 <th className="px-3 py-3 w-10">
                   <input
                     type="checkbox"
-                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                    className="rounded border-zinc-300 text-[#7C6AF6] focus:ring-[#7C6AF6]"
                     checked={allSelected}
                     ref={(input) => {
                       if (input) input.indeterminate = someSelected;
@@ -114,8 +114,8 @@ export default function DataTable<T>({
                 <th
                   key={column.key}
                   className={cn(
-                    'px-3 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider',
-                    sortable && column.sortable && 'cursor-pointer hover:text-slate-700 group'
+                    'px-3 py-3 text-left text-[10.5px] font-semibold text-zinc-400 uppercase tracking-[0.1em]',
+                    sortable && column.sortable && 'cursor-pointer hover:text-zinc-600 group'
                   )}
                   style={{ width: column.width }}
                   onClick={() => handleSort(column)}
@@ -128,7 +128,7 @@ export default function DataTable<T>({
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-zinc-100">
             {data.map((row) => {
               const rowId = keyExtractor(row);
               const isSelected = selectedIds.includes(rowId);
@@ -137,8 +137,8 @@ export default function DataTable<T>({
                   key={rowId}
                   className={cn(
                     'transition-colors',
-                    isSelected && 'bg-indigo-50/50',
-                    onRowClick && 'cursor-pointer hover:bg-slate-50'
+                    isSelected && 'bg-violet-50/40',
+                    onRowClick && 'cursor-pointer hover:bg-violet-50/40'
                   )}
                   onClick={() => onRowClick?.(row)}
                 >
@@ -146,7 +146,7 @@ export default function DataTable<T>({
                     <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
-                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                        className="rounded border-zinc-300 text-[#7C6AF6] focus:ring-[#7C6AF6]"
                         checked={isSelected}
                         onChange={(e) => onSelect?.(rowId, e.target.checked)}
                         aria-label={`Select row ${rowId}`}

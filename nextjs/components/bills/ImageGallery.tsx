@@ -183,7 +183,7 @@ export default function ImageGallery({
             onDragEnd={handleDragEnd}
             className={cn(
               'relative group aspect-square rounded-lg overflow-hidden border border-slate-200 cursor-grab active:cursor-grabbing',
-              dragOverIndex === index && 'ring-2 ring-indigo-500 ring-offset-2',
+              dragOverIndex === index && 'ring-2 ring-[#7C6AF6] ring-offset-2',
               draggedIndex === index && 'opacity-50'
             )}
           >
@@ -335,7 +335,7 @@ export default function ImageGallery({
 
             {/* Order indicator */}
             {!readOnly && (
-              <div className="absolute top-2 left-2 w-6 h-6 bg-indigo-600 text-white text-xs rounded-full flex items-center justify-center font-medium">
+              <div className="absolute top-2 left-2 w-6 h-6 bg-[#7C6AF6] text-white text-xs rounded-full flex items-center justify-center font-medium">
                 {index + 1}
               </div>
             )}

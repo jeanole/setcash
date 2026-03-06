@@ -77,11 +77,11 @@ export default function BudgetMatrixTable({
   // Empty states
   if (motives.length === 0) {
     return (
-      <div className="text-center py-12 bg-slate-50 rounded-lg border border-slate-200">
-        <p className="text-slate-600 mb-2">No motives configured</p>
+      <div className="text-center py-12 bg-zinc-50 rounded-lg border border-[var(--vb-card-border)]">
+        <p className="text-zinc-600 mb-2">No motives configured</p>
         <a
           href="/settings/motives"
-          className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+          className="text-[#7C6AF6] hover:text-[#6C5CE7] text-sm font-medium"
         >
           Go to Settings to add motives →
         </a>
@@ -91,11 +91,11 @@ export default function BudgetMatrixTable({
 
   if (categories.length === 0) {
     return (
-      <div className="text-center py-12 bg-slate-50 rounded-lg border border-slate-200">
-        <p className="text-slate-600 mb-2">No categories configured</p>
+      <div className="text-center py-12 bg-zinc-50 rounded-lg border border-[var(--vb-card-border)]">
+        <p className="text-zinc-600 mb-2">No categories configured</p>
         <a
           href="/settings/categories"
-          className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+          className="text-[#7C6AF6] hover:text-[#6C5CE7] text-sm font-medium"
         >
           Go to Settings to add categories →
         </a>
@@ -104,30 +104,30 @@ export default function BudgetMatrixTable({
   }
 
   return (
-    <div className="overflow-auto max-h-[calc(100vh-200px)] border border-slate-200 rounded-lg">
+    <div className="overflow-auto max-h-[calc(100vh-200px)] border border-[var(--vb-card-border)] rounded-lg">
       <table className="w-full border-collapse">
         <thead>
-          <tr className="bg-slate-50">
+          <tr className="bg-zinc-50">
             {/* Corner cell - sticky */}
-            <th className="sticky top-0 left-0 z-20 bg-slate-100 p-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider border-b border-r border-slate-200 min-w-[160px]">
+            <th className="sticky top-0 left-0 z-20 bg-zinc-100 p-3 text-left text-[10.5px] font-semibold text-zinc-400 uppercase tracking-[0.1em] border-b border-r border-[var(--vb-card-border)] min-w-[160px]">
               Category / Motive
             </th>
             {/* Motive columns - sticky header */}
             {motives.map((motive) => (
               <th
                 key={motive.id}
-                className="sticky top-0 z-10 bg-slate-50 p-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider border-b border-r border-slate-200 min-w-[140px]"
+                className="sticky top-0 z-10 bg-zinc-50 p-3 text-left text-[10.5px] font-semibold text-zinc-400 uppercase tracking-[0.1em] border-b border-r border-[var(--vb-card-border)] min-w-[140px]"
               >
-                <div className="font-semibold text-slate-700">{motive.name}</div>
-                <div className="text-slate-400 mt-1">
+                <div className="font-semibold text-zinc-700">{motive.name}</div>
+                <div className="text-zinc-400 mt-1 font-mono-numbers">
                   {formatCurrency(calculateMotiveTotal(motive.id))}
                 </div>
               </th>
             ))}
             {/* Total column - sticky header and right */}
-            <th className="sticky top-0 right-0 z-20 bg-slate-100 p-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider border-b border-l border-slate-200 min-w-[140px]">
-              <div className="font-semibold text-slate-700">Total</div>
-              <div className="text-slate-400 mt-1">{formatCurrency(grandTotal)}</div>
+            <th className="sticky top-0 right-0 z-20 bg-zinc-100 p-3 text-left text-[10.5px] font-semibold text-zinc-400 uppercase tracking-[0.1em] border-b border-l border-[var(--vb-card-border)] min-w-[140px]">
+              <div className="font-semibold text-zinc-700">Total</div>
+              <div className="text-zinc-400 mt-1 font-mono-numbers">{formatCurrency(grandTotal)}</div>
             </th>
           </tr>
         </thead>
@@ -137,11 +137,11 @@ export default function BudgetMatrixTable({
             const categorySpent = calculateCategorySpentTotal(category.id);
 
             return (
-              <tr key={category.id} className="hover:bg-slate-50">
+              <tr key={category.id} className="hover:bg-violet-50/40">
                 {/* Category name - sticky first column */}
-                <td className="sticky left-0 z-10 bg-white p-3 border-b border-r border-slate-200 font-medium text-sm text-slate-700 min-w-[160px]">
+                <td className="sticky left-0 z-10 bg-white p-3 border-b border-r border-[var(--vb-card-border)] font-medium text-sm text-zinc-700 min-w-[160px]">
                   <div>{category.name}</div>
-                  <div className="text-xs text-slate-400 mt-1">
+                  <div className="text-xs text-zinc-400 mt-1 font-mono-numbers">
                     {formatCurrency(categoryTotal)}
                   </div>
                 </td>
@@ -157,7 +157,7 @@ export default function BudgetMatrixTable({
                   return (
                     <td
                       key={motive.id}
-                      className="p-2 border-b border-r border-slate-200 min-w-[140px]"
+                      className="p-2 border-b border-r border-[var(--vb-card-border)] min-w-[140px]"
                     >
                       <BudgetMatrixCell
                         budget={budget}
@@ -173,11 +173,11 @@ export default function BudgetMatrixTable({
                   );
                 })}
                 {/* Category total cell - sticky right */}
-                <td className="sticky right-0 z-10 bg-slate-50 p-3 border-b border-l border-slate-200 min-w-[140px]">
-                  <div className="text-sm font-medium text-slate-700 tabular-nums">
+                <td className="sticky right-0 z-10 bg-zinc-50 p-3 border-b border-l border-[var(--vb-card-border)] min-w-[140px]">
+                  <div className="text-sm font-medium text-zinc-700 font-mono-numbers">
                     {formatCurrency(categoryTotal)}
                   </div>
-                  <div className="text-xs text-slate-500 tabular-nums mt-1">
+                  <div className="text-xs text-zinc-500 font-mono-numbers mt-1">
                     {formatCurrency(categorySpent)}
                   </div>
                 </td>
@@ -185,8 +185,8 @@ export default function BudgetMatrixTable({
             );
           })}
           {/* Total row */}
-          <tr className="bg-slate-50 font-semibold">
-            <td className="sticky left-0 bottom-0 z-20 bg-slate-100 p-3 border-t border-r border-slate-200 text-sm text-slate-700">
+          <tr className="bg-zinc-50 font-semibold">
+            <td className="sticky left-0 bottom-0 z-20 bg-zinc-100 p-3 border-t border-r border-[var(--vb-card-border)] text-sm text-zinc-700">
               Total
             </td>
             {motives.map((motive) => {
@@ -196,23 +196,23 @@ export default function BudgetMatrixTable({
               return (
                 <td
                   key={motive.id}
-                  className="sticky bottom-0 z-10 bg-slate-100 p-3 border-t border-r border-slate-200"
+                  className="sticky bottom-0 z-10 bg-zinc-100 p-3 border-t border-r border-[var(--vb-card-border)]"
                 >
-                  <div className="text-sm text-slate-700 tabular-nums">
+                  <div className="text-sm text-zinc-700 font-mono-numbers">
                     {formatCurrency(motiveTotal)}
                   </div>
-                  <div className="text-xs text-slate-500 tabular-nums mt-1">
+                  <div className="text-xs text-zinc-500 font-mono-numbers mt-1">
                     {formatCurrency(motiveSpent)}
                   </div>
                 </td>
               );
             })}
             {/* Grand total cell - sticky bottom and right */}
-            <td className="sticky right-0 bottom-0 z-30 bg-slate-200 p-3 border-t border-l border-slate-300">
-              <div className="text-sm font-bold text-slate-800 tabular-nums">
+            <td className="sticky right-0 bottom-0 z-30 bg-zinc-200 p-3 border-t border-l border-zinc-300">
+              <div className="text-sm font-bold text-zinc-800 font-mono-numbers">
                 {formatCurrency(grandTotal)}
               </div>
-              <div className="text-xs text-slate-600 tabular-nums mt-1">
+              <div className="text-xs text-zinc-600 font-mono-numbers mt-1">
                 {formatCurrency(grandSpentTotal)}
               </div>
             </td>

@@ -24,7 +24,7 @@ const formatCurrency = (amount: number) => {
 // Get variance color based on spent vs budget
 const getVarianceStyle = (budget: number, spent: number): string => {
   if (budget === 0) {
-    return 'bg-slate-50 text-slate-400';
+    return 'bg-zinc-50 text-zinc-400';
   }
 
   const percentUsed = (spent / budget) * 100;
@@ -110,7 +110,7 @@ export default function BudgetMatrixCell({
 
   if (isEditing) {
     return (
-      <div className="p-2 bg-blue-50 border-2 border-blue-400 rounded">
+      <div className="p-2 bg-violet-50 border-2 border-[#7C6AF6] rounded">
         <input
           type="number"
           value={editValue}
@@ -120,7 +120,7 @@ export default function BudgetMatrixCell({
           min="0"
           step="0.01"
           autoFocus
-          className="w-full px-2 py-1 text-sm border border-slate-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full px-2 py-1 text-sm border border-zinc-300 rounded focus:outline-none focus:ring-2 focus:ring-[#7C6AF6] font-mono-numbers"
         />
       </div>
     );
@@ -132,7 +132,7 @@ export default function BudgetMatrixCell({
       title={`Budget: ${formatCurrency(budget)}\nSpent: ${formatCurrency(spent)}`}
       className={`
         p-2 rounded cursor-pointer transition-colors relative overflow-hidden
-        ${isAdmin ? 'hover:bg-slate-100' : ''}
+        ${isAdmin ? 'hover:bg-[rgba(124,106,246,0.06)]' : ''}
         ${varianceStyle}
         ${isModified ? 'ring-2 ring-amber-400 ring-inset' : ''}
       `}
@@ -142,17 +142,17 @@ export default function BudgetMatrixCell({
         <div className="absolute top-1 right-1 w-2 h-2 bg-amber-500 rounded-full" title="Unsaved changes" />
       )}
       <div className="flex flex-col gap-1">
-        <span className="text-sm font-medium tabular-nums truncate block" title={formatCurrency(budget)}>
+        <span className="text-sm font-medium tabular-nums truncate block font-mono-numbers" title={formatCurrency(budget)}>
           {formatCurrencyTruncated(budget)}
         </span>
         <div className="flex items-center justify-between min-w-0">
-          <span className="text-xs text-slate-500 tabular-nums truncate" title={formatCurrency(spent)}>
+          <span className="text-xs text-zinc-500 tabular-nums truncate font-mono-numbers" title={formatCurrency(spent)}>
             {formatCurrencyTruncated(spent)}
           </span>
           <span
             className={`
               text-xs font-medium tabular-nums px-1.5 py-0.5 rounded-full shrink-0 ml-1
-              ${budget === 0 ? 'bg-slate-200 text-slate-500' : ''}
+              ${budget === 0 ? 'bg-zinc-200 text-zinc-500' : ''}
               ${budget > 0 && spent <= budget * 0.8 ? 'bg-green-200 text-green-700' : ''}
               ${budget > 0 && spent > budget * 0.8 && spent <= budget ? 'bg-amber-200 text-amber-700' : ''}
               ${budget > 0 && spent > budget ? 'bg-rose-200 text-rose-700' : ''}
