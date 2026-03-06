@@ -123,3 +123,23 @@ export interface Allocation {
 
 // Re-export settings types
 export * from './types/settings';
+
+// ============================================================================
+// Budget Matrix Type Definitions
+// ============================================================================
+
+export interface BudgetMatrixResponse {
+  motives: Motive[];
+  categories: Category[];
+  matrix: Record<string, number>;
+  grandTotal: number;
+  motiveSpending: Record<string, number>;
+  categorySpending: Record<string, number>;
+  cellSpending: Record<string, number>;
+}
+
+export interface BudgetCellUpdate {
+  motiveId: string;
+  categoryId: string;
+  amount: number;
+}

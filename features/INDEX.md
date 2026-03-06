@@ -24,7 +24,7 @@
 | [PROJ-5](PROJ-5-nextauth-authentication.md) | Feature | NextAuth.js Authentication | Complete | — | PROJ-4 | 2026-03-03 |
 | [PROJ-6](PROJ-6-sqlite-postgres-migration.md) | Feature | SQLite → PostgreSQL Data Migration Script | Complete | — | PROJ-4 | 2026-03-01 |
 | [PROJ-7](PROJ-7-bills-feature.md) | Feature | Bills Feature | Complete | — | PROJ-5, PROJ-6 | 2026-03-01 |
-| [PROJ-8](PROJ-8-budget-matrix.md) | Feature | Budget Matrix | In Progress | — | PROJ-5, PROJ-6 | 2026-03-01 |
+| [PROJ-8](PROJ-8-budget-matrix.md) | Feature | Budget Matrix | Complete | — | PROJ-5, PROJ-6 | 2026-03-01 |
 | [PROJ-9](PROJ-9-categories-motives.md) | Feature | Categories & Motives Admin Pages | Complete | — | PROJ-5, PROJ-6 | 2026-03-01 |
 | [PROJ-10](PROJ-10-members-projects-settings.md) | Feature | Members, Projects & Settings | In Progress | — | PROJ-5, PROJ-6 | 2026-03-01 |
 | [PROJ-11](PROJ-11-reports-exports.md) | Feature | Reports & Exports | In Progress | — | PROJ-5, PROJ-6, PROJ-9 | 2026-03-01 |
