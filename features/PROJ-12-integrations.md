@@ -779,6 +779,53 @@ nextjs/
 - Existing `telegram_link_codes` table → `TelegramLinkCode` model
 - Project settings keys remain compatible
 
+## Architecture Review
+**Reviewed:** 2026-03-06 | **Verdict:** Critical bot lifecycle issue must be resolved before build
+
+### 🚨 Telegram Bot Lifecycle in Next.js (Critical)
+The spec proposes storing bot instances in a module-level `activeBots` Map. This works in Express (a long-running process) but **breaks in Next.js** where:
+- Route Handlers can be serverless functions with cold starts
+- Module-level state does not persist across requests in production
+- Hot-reload in development destroys and recreates module state
+
+**Fix options (pick one):**
+
+**Option A — Custom Next.js Server (Recommended for this project):**
+Add a `server.ts` file that bootstraps bots outside the Next.js request lifecycle:
+```typescript
+// server.ts (next to package.json)
+import { createServer } from "http";
+import next from "next";
+import { initAllBots } from "@/lib/telegram/bot";
+
+const app = next({ dev: process.env.NODE_ENV !== "production" });
+app.prepare().then(() => {
+  initAllBots(); // Start all enabled bots once
+  createServer(app.getRequestHandler()).listen(3000);
+});
+```
+This is the same pattern as the Express `server.js` bootstrap — minimal change, maximum compatibility.
+
+**Option B — Separate Worker Process (More robust, more complex):**
+Run a dedicated `worker.ts` process alongside Next.js that manages all bots. Communicate via DB state (poll `ProjectSettings.telegramEnabled` every 30s).
+
+**Option C — Defer Telegram to Phase 2:**
+Ship Google Sheets integration now (no lifecycle issues) and implement Telegram after the production cutover.
+
+**Recommendation:** Option A — it mirrors the existing Express pattern exactly and requires minimal new infrastructure.
+
+### ✅ Google Sheets — No Issues
+- Route Handler for sync (binary/streaming response) ✅
+- Service Account auth pattern identical to Express `google.js` ✅
+- Data queries port directly from `routes/exports.js` ✅
+- Three-tab sheet structure preserved ✅
+
+### ✅ User Linking Flow — No Issues
+- 6-char code generation/validation identical to Express ✅
+- `TelegramLink` / `TelegramLinkCode` Prisma models match SQLite schema ✅
+
+---
+
 ## QA Test Results
 _To be added by /qa_
 

@@ -1,6 +1,6 @@
 # vBudget — Project Index
 
-**Next Available IDs:** PROJ-18 · BUG-14 · CR-9
+**Next Available IDs:** PROJ-18 · BUG-15 · CR-9
 
 | ID | Type | Title | Status | Priority | Feature | Date |
 |----|------|-------|--------|----------|---------|------|
@@ -23,7 +23,7 @@
 | [PROJ-4](PROJ-4-nextjs-scaffold.md) | Feature | Next.js App Scaffold + PostgreSQL + Docker | Deployed | — | — | 2026-03-01 |
 | [PROJ-5](PROJ-5-nextauth-authentication.md) | Feature | NextAuth.js Authentication | Complete | — | PROJ-4 | 2026-03-03 |
 | [PROJ-6](PROJ-6-sqlite-postgres-migration.md) | Feature | SQLite → PostgreSQL Data Migration Script | Complete | — | PROJ-4 | 2026-03-01 |
-| [PROJ-7](PROJ-7-bills-feature.md) | Feature | Bills Feature | In Progress | — | PROJ-5, PROJ-6 | 2026-03-01 |
+| [PROJ-7](PROJ-7-bills-feature.md) | Feature | Bills Feature | Complete | — | PROJ-5, PROJ-6 | 2026-03-01 |
 | [PROJ-8](PROJ-8-budget-matrix.md) | Feature | Budget Matrix | In Progress | — | PROJ-5, PROJ-6 | 2026-03-01 |
 | [PROJ-9](PROJ-9-categories-motives.md) | Feature | Categories & Motives Admin Pages | In Progress | — | PROJ-5, PROJ-6 | 2026-03-01 |
 | [PROJ-10](PROJ-10-members-projects-settings.md) | Feature | Members, Projects & Settings | In Progress | — | PROJ-5, PROJ-6 | 2026-03-01 |
@@ -42,3 +42,4 @@
 | [CR-8](CR-8-create-user-button-super-admin.md) | CR | Add Create User Button to Super Admin Users Tab | Pending Review | Medium | PROJ-17 | 2026-03-04 |
 | [BUG-12](BUG-12-docker-test-container-build-fails.md) | Bug | Docker Test Container Build Fails with TypeScript Errors | Resolved | High | PROJ-4 | 2026-03-05 |
 | [BUG-13](BUG-13-project-switching-not-updating-session.md) | Bug | Project Switching Does Not Update Session | Resolved | Critical | PROJ-10 | 2026-03-05 |
+| [BUG-14](BUG-14-mobile-menu-not-working.md) | Bug | Mobile Navigation Menu Not Working | Open | Critical | PROJ-4 | 2026-03-06 |

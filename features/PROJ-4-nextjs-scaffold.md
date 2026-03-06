@@ -462,6 +462,7 @@ first real pages are built.
 | ID | Severity | Title | Status |
 |----|----------|-------|--------|
 | [BUG-12](BUG-12-docker-test-container-build-fails.md) | High | Docker Test Container Build Fails with TypeScript Errors | Resolved |
+| [BUG-14](BUG-14-mobile-menu-not-working.md) | Critical | Mobile Navigation Menu Not Working | Open |
 
 ### Summary
 - **Acceptance Criteria:** 11/11 passed (9 clean, 2 with Low caveats)

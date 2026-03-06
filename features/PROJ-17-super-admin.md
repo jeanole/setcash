@@ -563,6 +563,33 @@ All critical bugs have been resolved. Frontend components now use real API calls
 
 ---
 
+## Architecture Review
+**Reviewed:** 2026-03-06 | **Verdict:** Nested modal UX issue — already captured in CR-8 area, but broader concern
+
+### ⚠️ Nested Modal (Modal-in-Modal) UX Pattern
+The spec uses a fullscreen modal (Super Admin panel) with a nested sub-modal (`MembersSubModal`) for per-project member management. This pattern has known UX issues:
+- Focus management is complex (which Escape closes which layer?)
+- No visual "back" button — users lose orientation
+- Accessibility concerns (screen readers, keyboard nav)
+
+**Current state:** This is already implemented and QA-passed with mock data. The UX works functionally but is not ideal.
+
+**Recommended improvement (for next iteration):**
+Replace the nested sub-modal with a secondary view inside the fullscreen panel itself — a "drill-down" pattern:
+- Projects list → click "Members" → replaces the tab content with a members view + "← Back to Projects" header
+- This is simpler (one modal layer), no z-index stacking, natural navigation
+
+This is a low-priority UX improvement, not a blocker for CR-8 or production deployment.
+
+### ✅ Everything Else — Production Ready
+- All API routes properly guard with `role === 'superadmin'` ✅
+- Mock data replaced with real API calls (BUG-PROJ17-1 fixed) ✅
+- bcrypt password hashing ✅
+- Self-delete protection ✅
+- Cascade delete logic ✅
+
+---
+
 ## Change Requests
 
 ### CR-8: Add Create User Button to Super Admin Users Tab

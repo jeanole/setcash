@@ -487,6 +487,29 @@ Client Component: BudgetMatrixCell
 3. **Memory** — Matrix data size is bounded (categories × motives, typically < 500 cells)
 4. **PDF generation** — Server-side only; stream response to client
 
+## Architecture Review
+**Reviewed:** 2026-03-06 | **Verdict:** Ready with one simplification
+
+### ⚠️ Custom Grid Component — Slight Over-Engineering
+The spec proposes a custom `BudgetMatrixGrid` Client Component with a custom `BudgetMatrixCell`. The original Express implementation is a plain HTML table with inline editing (`routes/budget.js` is only 114 lines).
+
+**Recommendation:** Use a native `<table>` with CSS `position: sticky` for the header row and first column instead of a custom grid component. This:
+- Keeps the implementation close to the original
+- Reduces JS bundle size
+- Is simpler to maintain
+- Achieves the same sticky header/column effect
+
+**What stays the same:**
+- Server Component for initial data fetch (6 Prisma queries) ✅
+- Client island for inline editing ✅
+- Bulk Server Action for saving changes ✅
+- All spending SQL queries port directly ✅
+
+### No Other Concerns
+Route Handler vs Server Action split is correct. Data shape matches Express response exactly.
+
+---
+
 ## QA Test Results
 _To be added by /qa_
 
