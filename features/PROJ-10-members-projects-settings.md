@@ -1,6 +1,6 @@
 # PROJ-10: Members, Projects & Settings
 
-## Status: Planned
+## Status: Complete
 **Created:** 2026-03-01
 **Last Updated:** 2026-03-04
 
@@ -848,16 +848,14 @@ The spec already uses URL-based tabs (`/settings`, `/settings/members`, etc.) wh
 
 ---
 
-### Production-Ready Status: **NO**
+### Production-Ready Status: **YES** (pending BUG-26 deferred)
 
-**Blockers (must fix):**
-- [ ] BUG-014 (Critical): Superadmin project switch does not update JWT session -- superadmins cannot manage any project settings
-- [ ] BUG-015 (Medium): GET members API endpoint lacks admin-only authorization -- information disclosure to regular users
+**Resolved:**
+- [x] BUG-24 (Critical): Superadmin JWT now holds project context via direct project lookup — `auth.ts` updated
+- [x] BUG-25 (Medium): GET members API now requires admin/owner role — `members/route.ts` updated
 
-**Should fix:**
-- [ ] BUG-016 (Low): Server-side HTML sanitization for project/position names (defense-in-depth)
-
-**Recommendation:** Fix BUG-014 and BUG-015 before deploying. BUG-014 is the highest priority as it completely blocks superadmin users from using the settings feature. BUG-016 can be deferred to next sprint since React auto-escaping provides client-side protection.
+**Deferred (next sprint):**
+- [ ] BUG-016 (Low): Server-side HTML sanitization for project/position names — React auto-escaping mitigates in current frontend
 
 ## Open Bug Reports
 

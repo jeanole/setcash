@@ -1,6 +1,6 @@
 # vBudget — Project Index
 
-**Next Available IDs:** PROJ-18 · BUG-17 · CR-9
+**Next Available IDs:** PROJ-18 · BUG-26 · CR-9
 
 | ID | Type | Title | Status | Priority | Feature | Date |
 |----|------|-------|--------|----------|---------|------|
@@ -26,7 +26,7 @@
 | [PROJ-7](PROJ-7-bills-feature.md) | Feature | Bills Feature | Complete | — | PROJ-5, PROJ-6 | 2026-03-01 |
 | [PROJ-8](PROJ-8-budget-matrix.md) | Feature | Budget Matrix | Complete | — | PROJ-5, PROJ-6 | 2026-03-01 |
 | [PROJ-9](PROJ-9-categories-motives.md) | Feature | Categories & Motives Admin Pages | Complete | — | PROJ-5, PROJ-6 | 2026-03-01 |
-| [PROJ-10](PROJ-10-members-projects-settings.md) | Feature | Members, Projects & Settings | In Progress | — | PROJ-5, PROJ-6 | 2026-03-01 |
+| [PROJ-10](PROJ-10-members-projects-settings.md) | Feature | Members, Projects & Settings | Complete | — | PROJ-5, PROJ-6 | 2026-03-01 |
 | [PROJ-11](PROJ-11-reports-exports.md) | Feature | Reports & Exports | In Progress | — | PROJ-5, PROJ-6, PROJ-9 | 2026-03-01 |
 | [PROJ-12](PROJ-12-integrations.md) | Feature | Integrations (Google Sheets + Telegram) | In Progress | — | PROJ-5, PROJ-10 | 2026-03-04 |
 | [PROJ-13](PROJ-13-production-cutover.md) | Feature | Production Cutover | Planned | — | PROJ-4–12 | 2026-03-01 |
@@ -52,3 +52,5 @@
 | [BUG-21](BUG-21-budget-network-retry.md) | Bug | Network Failure Shows Error But No Retry Button | Resolved | Low | PROJ-8 | 2026-03-06 |
 | [BUG-22](BUG-22-budget-session-timeout.md) | Bug | Session Timeout During Edit Not Handled Gracefully | Resolved | Medium | PROJ-8 | 2026-03-06 |
 | [BUG-23](BUG-23-budget-floating-point-precision.md) | Bug | Potential Floating Point Precision Issues | Resolved | Low | PROJ-8 | 2026-03-06 |
+| [BUG-24](BUG-24-superadmin-jwt-project-switch.md) | Bug | Superadmin JWT Not Updating on Project Switch | Resolved | Critical | PROJ-10 | 2026-03-06 |
+| [BUG-25](BUG-25-members-get-missing-admin-auth.md) | Bug | GET Members API Missing Admin-Only Authorization | Resolved | Medium | PROJ-10 | 2026-03-06 |

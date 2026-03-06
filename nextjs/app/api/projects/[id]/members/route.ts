@@ -33,8 +33,14 @@ export async function GET(
       },
     });
 
-    if (!membership) {
+    const isSuperAdmin = session.user.role === 'superadmin';
+
+    if (!membership && !isSuperAdmin) {
       return NextResponse.json({ error: 'Not a member of this project' }, { status: 403 });
+    }
+
+    if (membership && membership.role === 'user' && !isSuperAdmin) {
+      return NextResponse.json({ error: 'Forbidden: admin or owner role required' }, { status: 403 });
     }
 
     const members = await prisma.projectMember.findMany({

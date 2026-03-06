@@ -81,6 +81,23 @@ async function getCurrentProjectDetails(
   };
 }
 
+// Superadmins bypass membership — look up project directly
+async function getSuperAdminProjectDetails(projectId: string | null): Promise<{
+  currentProjectId: string | null;
+  currentProjectName: string | null;
+}> {
+  if (!projectId) return { currentProjectId: null, currentProjectName: null };
+
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { id: true, name: true },
+  });
+
+  if (!project) return { currentProjectId: null, currentProjectName: null };
+
+  return { currentProjectId: project.id, currentProjectName: project.name };
+}
+
 // ---------------------------------------------------------------------------
 // Custom error classes for CredentialsProvider (NextAuth v5)
 // The `code` property surfaces as result.error in the client when
@@ -195,6 +212,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         // Derive role
         if (u.isSuperAdmin) {
           token.role = 'superadmin';
+          // Superadmins can hold a project context — look up project directly (bypass membership)
+          if (u.defaultProjectId) {
+            const projectDetails = await getSuperAdminProjectDetails(u.defaultProjectId);
+            token.currentProjectId = projectDetails.currentProjectId;
+            token.currentProjectRole = 'admin'; // superadmin acts as admin in any project
+            token.currentProjectName = projectDetails.currentProjectName;
+          } else {
+            token.currentProjectId = null;
+            token.currentProjectRole = null;
+            token.currentProjectName = null;
+          }
         } else {
           // Determine currentProjectId: prefer defaultProjectId,
           // else the single membership's project, else null
@@ -215,7 +243,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           const projectRole = (membership?.role as 'user' | 'admin' | 'owner') ?? 'user';
           token.role = projectRole;
           token.currentProjectRole = projectRole;
-          
+
           // Fetch project name from DB during sign-in
           if (currentProjectId && userEmail) {
             const projectDetails = await getCurrentProjectDetails(userEmail, currentProjectId);
@@ -226,12 +254,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             token.currentProjectName = null;
           }
         }
-
-        if (token.role === 'superadmin') {
-          token.currentProjectId = null;
-          token.currentProjectRole = null;
-          token.currentProjectName = null;
-        }
       }
 
       // ------------------------------------------------------------------
@@ -240,59 +262,60 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       // ------------------------------------------------------------------
       if (trigger === 'update' && session && token.id && userEmail) {
         try {
-          // If the update includes a projectId, fetch the new project details
-          const updatedProjectId = (session as { currentProjectId?: string }).currentProjectId;
-          
-          // Always re-fetch from DB on update to ensure consistency
           const dbUser = await prisma.user.findUnique({
             where: { id: token.id as string },
-            select: { defaultProjectId: true },
+            select: { defaultProjectId: true, isSuperAdmin: true },
           });
 
           if (dbUser?.defaultProjectId) {
-            const projectDetails = await getCurrentProjectDetails(
-              userEmail,
-              dbUser.defaultProjectId
-            );
-            token.currentProjectId = projectDetails.currentProjectId;
-            token.currentProjectRole = projectDetails.currentProjectRole;
-            token.currentProjectName = projectDetails.currentProjectName;
-            
-            // Update the token role to match the project role
-            if (projectDetails.currentProjectRole) {
-              token.role = projectDetails.currentProjectRole;
+            if (dbUser.isSuperAdmin) {
+              // Superadmin: look up project directly (no membership required)
+              const projectDetails = await getSuperAdminProjectDetails(dbUser.defaultProjectId);
+              token.currentProjectId = projectDetails.currentProjectId;
+              token.currentProjectRole = 'admin';
+              token.currentProjectName = projectDetails.currentProjectName;
+            } else {
+              const projectDetails = await getCurrentProjectDetails(userEmail, dbUser.defaultProjectId);
+              token.currentProjectId = projectDetails.currentProjectId;
+              token.currentProjectRole = projectDetails.currentProjectRole;
+              token.currentProjectName = projectDetails.currentProjectName;
+              if (projectDetails.currentProjectRole) {
+                token.role = projectDetails.currentProjectRole;
+              }
             }
           }
         } catch (error) {
           console.error('Error updating project in JWT callback:', error);
-          // Keep existing token values on error
         }
       }
       // ------------------------------------------------------------------
       // Re-fetch current project from DB on every request to keep session in sync
       // This ensures project switching is reflected even without explicit update
       // ------------------------------------------------------------------
-      else if (token.id && token.role !== 'superadmin' && userEmail) {
+      else if (token.id && userEmail) {
         try {
           const dbUser = await prisma.user.findUnique({
             where: { id: token.id as string },
-            select: { defaultProjectId: true },
+            select: { defaultProjectId: true, isSuperAdmin: true },
           });
 
           if (dbUser?.defaultProjectId) {
             // Only re-fetch if project changed
             if (dbUser.defaultProjectId !== token.currentProjectId) {
-              const projectDetails = await getCurrentProjectDetails(
-                userEmail,
-                dbUser.defaultProjectId
-              );
-              token.currentProjectId = projectDetails.currentProjectId;
-              token.currentProjectRole = projectDetails.currentProjectRole;
-              token.currentProjectName = projectDetails.currentProjectName;
-              
-              // Update the token role to match the project role
-              if (projectDetails.currentProjectRole) {
-                token.role = projectDetails.currentProjectRole;
+              if (dbUser.isSuperAdmin) {
+                // Superadmin: look up project directly (no membership required)
+                const projectDetails = await getSuperAdminProjectDetails(dbUser.defaultProjectId);
+                token.currentProjectId = projectDetails.currentProjectId;
+                token.currentProjectRole = 'admin';
+                token.currentProjectName = projectDetails.currentProjectName;
+              } else {
+                const projectDetails = await getCurrentProjectDetails(userEmail, dbUser.defaultProjectId);
+                token.currentProjectId = projectDetails.currentProjectId;
+                token.currentProjectRole = projectDetails.currentProjectRole;
+                token.currentProjectName = projectDetails.currentProjectName;
+                if (projectDetails.currentProjectRole) {
+                  token.role = projectDetails.currentProjectRole;
+                }
               }
             }
           } else {
