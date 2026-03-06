@@ -521,3 +521,4 @@ _To be added by /deploy_
 | ID | Severity | Title | Status |
 |----|----------|-------|--------|
 | [BUG-15](BUG-15-budget-matrix-sql-column-error.md) | Critical | Budget Matrix SQL Query Uses Wrong Column Names | Resolved |
+| [BUG-16](BUG-16-budget-prisma-enum-error.md) | Critical | Budget Page Crashes with Prisma Enum Error | Open |
