@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
+import dynamic from 'next/dynamic';
 import AppShell from '@/components/layout/AppShell';
 import BillList from '@/components/bills/BillList';
 import BillFilters from '@/components/bills/BillFilters';
@@ -11,12 +12,14 @@ import { useBills, useFilteredBills } from '@/lib/hooks/useBills';
 import { FilterState, SortState, Bill } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
+const CinematicButton = dynamic(() => import('@/components/cinematic/CinematicButton'), { ssr: false });
+
 const BILLS_PER_PAGE = 25;
 
 export default function BillsPage() {
   const router = useRouter();
   const { bills, logs, isLoading, error, refetch, deleteBill, bulkDelete } = useBills();
-  
+
   const [filters, setFilters] = useState<FilterState>({
     person: '',
     motive: '',
@@ -32,16 +35,14 @@ export default function BillsPage() {
   const [page, setPage] = useState(1);
   const [resultMessage, setResultMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Extract unique filter options from bills
   const filterOptions = useMemo(() => {
     const persons = [...new Set(bills.map((b) => b.email))].sort();
     const roles = [...new Set(bills.map((b) => b.role || 'Misc'))].sort();
     const types = [...new Set(bills.map((b) => b.type || 'Kauf'))].sort();
-    
-    // Get motives and categories from bill allocations
+
     const motivesMap = new Map<string, { id: string; name: string }>();
     const categoriesMap = new Map<string, { id: string; name: string }>();
-    
+
     bills.forEach((bill) => {
       bill.motiveAllocations?.forEach((a) => {
         motivesMap.set(a.motiveId, { id: a.motiveId, name: a.name });
@@ -60,7 +61,6 @@ export default function BillsPage() {
     };
   }, [bills]);
 
-  // Apply filters, sorting, and pagination
   const { bills: filteredBills, totalItems, totalPages } = useFilteredBills(
     bills,
     filters,
@@ -69,7 +69,6 @@ export default function BillsPage() {
     BILLS_PER_PAGE
   );
 
-  // Check if user is admin from session
   const { data: session } = useSession();
   const isAdmin = session?.user?.role === 'admin' || session?.user?.role === 'superadmin';
 
@@ -98,32 +97,24 @@ export default function BillsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold text-slate-900">Bills</h1>
+          <h1 className="text-[22px] font-semibold text-zinc-800">Bills</h1>
           {draftCount > 0 && (
             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-700">
               {draftCount} draft
             </span>
           )}
         </div>
-        <button
-          onClick={() => router.push('/bills/new')}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
-        >
-          <svg
-            className="w-4 h-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
+        <CinematicButton>
+          <button
+            onClick={() => router.push('/bills/new')}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-[var(--vb-accent)] text-white font-medium rounded-lg hover:bg-[var(--vb-accent-hover)] active:scale-[0.97] transition-all shadow-sm"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M12 4v16m8-8H4"
-            />
-          </svg>
-          Upload New Bill
-        </button>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Upload New Bill
+          </button>
+        </CinematicButton>
       </div>
 
       {/* Result message */}
@@ -154,38 +145,19 @@ export default function BillsPage() {
       )}
 
       {/* Filters */}
-      <BillFilters
-        filters={filters}
-        onChange={setFilters}
-        options={filterOptions}
-      />
+      <BillFilters filters={filters} onChange={setFilters} options={filterOptions} />
 
       {/* Stats */}
-      <div className="flex items-center justify-between text-sm text-slate-500">
+      <div className="flex items-center justify-between text-sm text-zinc-500">
         <span>
           Showing {filteredBills.length} of {bills.length} bills
           {totalItems !== bills.length && ` (${totalItems} filtered)`}
         </span>
         {isLoading && (
           <span className="flex items-center gap-2">
-            <svg
-              className="animate-spin w-4 h-4"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
-              <circle
-                className="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                strokeWidth="4"
-              />
-              <path
-                className="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-              />
+            <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
             </svg>
             Loading...
           </span>
@@ -193,12 +165,7 @@ export default function BillsPage() {
       </div>
 
       {/* Bill list */}
-      <BillList
-        bills={filteredBills}
-        onDelete={handleDelete}
-        isAdmin={isAdmin}
-        isLoading={isLoading}
-      />
+      <BillList bills={filteredBills} onDelete={handleDelete} isAdmin={isAdmin} isLoading={isLoading} />
 
       {/* Pagination */}
       <Pagination

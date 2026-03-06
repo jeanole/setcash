@@ -26,7 +26,7 @@ export default function AppShell({ children, title, currentUser }: AppShellProps
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50">
+    <div className="flex h-screen overflow-hidden bg-[var(--vb-content-bg)]">
       <Sidebar
         currentUser={currentUser}
         isMobileOpen={isMobileMenuOpen}
@@ -39,10 +39,12 @@ export default function AppShell({ children, title, currentUser }: AppShellProps
           onMenuToggle={handleMenuToggle}
         />
         <main
-          className="flex-1 overflow-y-auto p-4 md:p-6"
+          className="flex-1 overflow-y-auto"
           aria-label="Page content"
         >
-          {children}
+          <div className="max-w-7xl mx-auto px-4 md:px-6 pb-8 pt-6">
+            {children}
+          </div>
         </main>
       </div>
     </div>

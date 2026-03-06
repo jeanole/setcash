@@ -1,18 +1,47 @@
 @import "tailwindcss";
 
 /* ---------------------------------------------------------------------------
-   vBudget design tokens — match existing style.css custom properties
+   vBudget design tokens — Atelier design system
    --------------------------------------------------------------------------- */
 
 :root {
-  --vb-ring: 0 0 0 3px rgba(99, 102, 241, 0.22);
+  /* Sidebar */
+  --vb-sidebar-bg: #18181B;
+  --vb-sidebar-hover: rgba(255,255,255,0.06);
+  --vb-sidebar-active: rgba(255,255,255,0.1);
+  --vb-sidebar-border: rgba(255,255,255,0.08);
+  --vb-sidebar-text: #A1A1AA;
+  --vb-sidebar-text-active: #FAFAFA;
+  --vb-sidebar-accent: #7C6AF6;
+
+  /* Content */
+  --vb-content-bg: #F8F7F4;
+  --vb-card-bg: #FFFFFF;
+  --vb-card-border: rgba(39,39,42,0.08);
+
+  /* Text */
+  --vb-text-primary: #27272A;
+  --vb-text-secondary: #71717A;
+  --vb-text-muted: #A1A1AA;
+
+  /* Accent */
+  --vb-accent: #7C6AF6;
+  --vb-accent-hover: #6C5CE7;
+  --vb-accent-light: rgba(124,106,246,0.08);
+  --vb-accent-ring: 0 0 0 3px rgba(124,106,246,0.22);
+
+  /* Header */
+  --vb-header-bg: rgba(248,247,244,0.85);
+
+  /* Shadows */
+  --vb-ring: 0 0 0 3px rgba(124,106,246,0.22);
   --vb-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06), 0 1px 1px rgba(15, 23, 42, 0.04);
   --vb-shadow-lg: 0 12px 28px rgba(15, 23, 42, 0.12), 0 2px 6px rgba(15, 23, 42, 0.06);
   --vb-shadow-xl: 0 18px 44px rgba(15, 23, 42, 0.16), 0 4px 10px rgba(15, 23, 42, 0.08);
 }
 
 /* ---------------------------------------------------------------------------
-   Base body styles — radial gradient background (indigo + emerald accents)
+   Base body styles — warm cream background with violet + emerald radial gradients
    --------------------------------------------------------------------------- */
 
 html {
@@ -20,17 +49,28 @@ html {
 }
 
 body {
+  font-family: var(--font-bricolage), sans-serif;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background-color: var(--vb-content-bg);
   background-image:
-    radial-gradient(900px 500px at 10% -10%, rgba(99, 102, 241, 0.08), transparent 60%),
-    radial-gradient(700px 400px at 110% 0%, rgba(16, 185, 129, 0.06), transparent 55%);
+    radial-gradient(900px 500px at 10% -10%, rgba(124, 106, 246, 0.07), transparent 60%),
+    radial-gradient(700px 400px at 110% 0%, rgba(16, 185, 129, 0.05), transparent 55%);
   background-attachment: fixed;
 }
 
 /* ---------------------------------------------------------------------------
-   Focus rings — consistent indigo outline across all interactive elements
+   Monospace numbers — DM Mono for all financial data
+   --------------------------------------------------------------------------- */
+
+.font-mono-numbers {
+  font-family: var(--font-dm-mono), monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------------------
+   Focus rings — consistent violet outline across all interactive elements
    --------------------------------------------------------------------------- */
 
 a:focus-visible,
@@ -129,4 +169,31 @@ textarea:focus-visible {
     opacity: 1;
     transform: translateX(0);
   }
+}
+
+/* ---------------------------------------------------------------------------
+   Cinematic Easter Egg Animations
+   --------------------------------------------------------------------------- */
+
+@keyframes particle-burst {
+  0% { transform: translate(0, 0) scale(1); opacity: 1; }
+  100% { transform: translate(var(--dx), var(--dy)) scale(0); opacity: 0; }
+}
+
+@keyframes film-tick {
+  0% { opacity: 0; transform: translateY(4px); }
+  60% { opacity: 1; transform: translateY(-1px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes clapper-entry {
+  0% { transform: translateY(-120%); }
+  25% { transform: translateY(24px); }
+  75% { transform: translateY(24px); }
+  100% { transform: translateY(-120%); }
+}
+
+@keyframes clapper-arm {
+  0% { transform-origin: left; transform: rotate(-35deg); }
+  100% { transform-origin: left; transform: rotate(0deg); }
 }
