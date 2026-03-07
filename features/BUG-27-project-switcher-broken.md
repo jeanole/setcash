@@ -1,6 +1,6 @@
 # BUG-27: Project Switcher Broken — Selected Project Not Reflected in Title or Menubar
 
-**Status:** Open
+**Status:** Resolved
 **Reported:** 2026-03-07
 **Severity:** Critical
 **Skill Tag:** [Frontend] [Backend] [Architecture]
@@ -129,7 +129,7 @@ No backend changes. No new packages. No schema changes.
 
 ## Resolution
 
-**Status:** Open
-**Resolved Date:** —
-**Fixed In:** —
-**Fix Description:** —
+**Status:** Resolved
+**Resolved Date:** 2026-03-07
+**Fixed In:** fix(BUG-27): Add ProjectSwitcher to sidebar for quick project switching (be5e3b9)
+**Fix Description:** Created `ProjectSwitcher.tsx` client component — displays current project name + role badge in the sidebar. Multi-project users get a dropdown (ChevronDown) to switch projects via the existing `useProjects` hook. Added to both desktop and mobile sidebar variants. No backend changes needed.

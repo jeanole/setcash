@@ -56,4 +56,4 @@
 | [BUG-25](BUG-25-members-get-missing-admin-auth.md) | Bug | GET Members API Missing Admin-Only Authorization | Resolved | Medium | PROJ-10 | 2026-03-06 |
 | [PROJ-18](PROJ-18-atelier-ui-cinematic-effects.md) | Feature | Atelier UI + Cinematic Effects | In Progress | — | PROJ-4, PROJ-7 | 2026-03-07 |
 | [BUG-26](BUG-26-budget-billstatus-enum-draft.md) | Bug | Budget Page Crashes with Invalid BillStatus Enum Value "draft" | Resolved | Critical | PROJ-8 | 2026-03-07 |
-| [BUG-27](BUG-27-project-switcher-broken.md) | Bug | Project Switcher Broken — Selected Project Not Reflected in Title or Menubar | Open | Critical | — | 2026-03-07 |
+| [BUG-27](BUG-27-project-switcher-broken.md) | Bug | Project Switcher Broken — Selected Project Not Reflected in Title or Menubar | Resolved | Critical | — | 2026-03-07 |
