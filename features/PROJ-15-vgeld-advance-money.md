@@ -692,5 +692,11 @@ None.
 - **Production Ready:** YES
 - **Recommendation:** Deploy
 
+## Open Bug Reports
+
+| ID | Severity | Title | Status |
+|----|----------|-------|--------|
+| [BUG-30](BUG-30-vgeld-balance-400-no-project.md) | Medium | V-Geld Balance Sidebar Widget Returns 400 When No Project Selected | Open |
+
 ## Deployment
 _To be added by /deploy_
