@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react';
 import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import dynamic from 'next/dynamic';
 import { cn, formatCurrency } from '@/lib/utils';
 import { Shield, X } from 'lucide-react';
@@ -78,10 +79,18 @@ const NAV_ITEMS: NavItem[] = [
 
 function VGeldBalance() {
   const pathname = usePathname();
+  const { data: session } = useSession();
   const [balance, setBalance] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  const hasProject = !!session?.user?.currentProjectId;
+
   useEffect(() => {
+    if (!hasProject) {
+      setBalance(null);
+      setIsLoading(false);
+      return;
+    }
     let cancelled = false;
     setIsLoading(true);
     fetch('/api/vgeld/balance')
@@ -96,7 +105,7 @@ function VGeldBalance() {
         if (!cancelled) setIsLoading(false);
       });
     return () => { cancelled = true; };
-  }, [pathname]);
+  }, [pathname, hasProject]);
 
   return (
     <div

@@ -1,6 +1,6 @@
 # BUG-30: V-Geld Balance Sidebar Widget Returns 400 When No Project Selected
 
-**Status:** Open
+**Status:** Resolved
 **Reported:** 2026-03-07
 **Severity:** Medium
 **Skill Tag:** [Frontend]
@@ -46,7 +46,7 @@ Fix options:
 
 ## Resolution
 
-**Status:** Open
-**Resolved Date:** —
-**Fixed In:** —
-**Fix Description:** —
+**Status:** Resolved
+**Resolved Date:** 2026-03-07
+**Fixed In:** fix(BUG-30): Guard VGeldBalance sidebar fetch when no project selected
+**Fix Description:** Added `useSession` to the `VGeldBalance` component in `Sidebar.tsx`. Before fetching `/api/vgeld/balance`, the component now checks `session.user.currentProjectId`. If no project is selected, it sets balance to `null` and stops loading without making the API call, preventing the 400 error in the browser console.

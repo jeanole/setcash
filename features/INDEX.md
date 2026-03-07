@@ -60,4 +60,4 @@
 | CR-9 | CR | Budget Matrix Express Parity — Inline Motives/Categories, Cell UX, Visuals | Pending Review | High | PROJ-8 | 2026-03-07 |
 | [BUG-28](BUG-28-motive-category-allocation-refuses-selection.md) | Bug | Motive/Category Allocation Widget Refuses Selection on New Bill | Resolved | High | PROJ-7 | 2026-03-07 |
 | [BUG-29](BUG-29-new-bill-not-saved-or-not-shown.md) | Bug | New Bill Not Saved or Not Appearing in Bills Table | Resolved | High | PROJ-7 | 2026-03-07 |
-| [BUG-30](BUG-30-vgeld-balance-400-no-project.md) | Bug | V-Geld Balance Sidebar Widget Returns 400 When No Project Selected | Open | Medium | PROJ-15 | 2026-03-07 |
+| [BUG-30](BUG-30-vgeld-balance-400-no-project.md) | Bug | V-Geld Balance Sidebar Widget Returns 400 When No Project Selected | Resolved | Medium | PROJ-15 | 2026-03-07 |

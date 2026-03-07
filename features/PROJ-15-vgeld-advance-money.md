@@ -696,7 +696,7 @@ None.
 
 | ID | Severity | Title | Status |
 |----|----------|-------|--------|
-| [BUG-30](BUG-30-vgeld-balance-400-no-project.md) | Medium | V-Geld Balance Sidebar Widget Returns 400 When No Project Selected | Open |
+| [BUG-30](BUG-30-vgeld-balance-400-no-project.md) | Medium | V-Geld Balance Sidebar Widget Returns 400 When No Project Selected | Resolved |
 
 ## Deployment
 _To be added by /deploy_
