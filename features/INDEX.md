@@ -1,6 +1,6 @@
 # vBudget — Project Index
 
-**Next Available IDs:** PROJ-19 · BUG-28 · CR-10
+**Next Available IDs:** PROJ-19 · BUG-30 · CR-10
 
 | ID | Type | Title | Status | Priority | Feature | Date |
 |----|------|-------|--------|----------|---------|------|
@@ -58,3 +58,5 @@
 | [BUG-26](BUG-26-budget-billstatus-enum-draft.md) | Bug | Budget Page Crashes with Invalid BillStatus Enum Value "draft" | Resolved | Critical | PROJ-8 | 2026-03-07 |
 | [BUG-27](BUG-27-project-switcher-broken.md) | Bug | Project Switcher Broken — Selected Project Not Reflected in Title or Menubar | Resolved | Critical | — | 2026-03-07 |
 | CR-9 | CR | Budget Matrix Express Parity — Inline Motives/Categories, Cell UX, Visuals | Pending Review | High | PROJ-8 | 2026-03-07 |
+| [BUG-28](BUG-28-motive-category-allocation-refuses-selection.md) | Bug | Motive/Category Allocation Widget Refuses Selection on New Bill | Open | High | PROJ-7 | 2026-03-07 |
+| [BUG-29](BUG-29-new-bill-not-saved-or-not-shown.md) | Bug | New Bill Not Saved or Not Appearing in Bills Table | Open | High | PROJ-7 | 2026-03-07 |
