@@ -2,19 +2,28 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import BudgetMatrixTable from './BudgetMatrixTable';
+import ConfirmationDialog from '@/components/ui/ConfirmationDialog';
 import type { BudgetMatrixResponse, BudgetCellUpdate } from '@/lib/types';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 
 interface BudgetMatrixClientProps extends BudgetMatrixResponse {
   isAdmin: boolean;
+  projectId: string;
 }
 
-interface Toast {
+interface ToastItem {
   id: string;
   message: string;
   type: 'success' | 'error';
   onRetry?: () => void;
   isRetrying?: boolean;
+}
+
+interface DeleteConfirm {
+  type: 'motive' | 'category';
+  id: string;
+  name: string;
 }
 
 const PENDING_CHANGES_KEY = 'budgetMatrix_pendingChanges';
@@ -28,6 +37,7 @@ export default function BudgetMatrixClient({
   categorySpending: initialCategorySpending,
   cellSpending: initialCellSpending,
   isAdmin,
+  projectId,
 }: BudgetMatrixClientProps) {
   const router = useRouter();
   const [matrix, setMatrix] = useState<Record<string, number>>(initialMatrix);
@@ -37,17 +47,19 @@ export default function BudgetMatrixClient({
   const [editingCell, setEditingCell] = useState<string | null>(null);
   const [modifiedCells, setModifiedCells] = useState<Set<string>>(new Set());
   const [isSaving, setIsSaving] = useState(false);
-  const [toasts, setToasts] = useState<Toast[]>([]);
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirm | null>(null);
+  const [isMutating, setIsMutating] = useState(false);
 
   // Restore pending changes from localStorage on mount
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    
+
     try {
       const pendingChanges = localStorage.getItem(PENDING_CHANGES_KEY);
       if (pendingChanges) {
         const { matrix: savedMatrix, modifiedCells: savedModifiedCells, timestamp } = JSON.parse(pendingChanges);
-        
+
         // Check if changes are recent (within last 24 hours)
         const changeAge = Date.now() - timestamp;
         if (changeAge < 24 * 60 * 60 * 1000) {
@@ -55,7 +67,7 @@ export default function BudgetMatrixClient({
           setModifiedCells(new Set(savedModifiedCells));
           showToast('Restored unsaved changes from previous session', 'success');
         }
-        
+
         // Clear the stored changes
         localStorage.removeItem(PENDING_CHANGES_KEY);
       }
@@ -106,7 +118,7 @@ export default function BudgetMatrixClient({
     if (!isAdmin || updates.length === 0) return;
 
     setIsSaving(true);
-    
+
     // Mark toast as retrying if applicable
     if (retryToastId) {
       setToasts((prev) =>
@@ -131,7 +143,7 @@ export default function BudgetMatrixClient({
           timestamp: Date.now(),
         };
         localStorage.setItem(PENDING_CHANGES_KEY, JSON.stringify(pendingChanges));
-        
+
         // Redirect to login with return URL
         const returnUrl = encodeURIComponent('/budget');
         router.push(`/login?returnUrl=${returnUrl}`);
@@ -144,23 +156,23 @@ export default function BudgetMatrixClient({
       }
 
       setModifiedCells(new Set());
-      
+
       // Remove retry toast if it was a retry
       if (retryToastId) {
         dismissToast(retryToastId);
       }
-      
+
       showToast('Budget matrix saved successfully', 'success');
     } catch (error) {
       console.error('Error saving budget matrix:', error);
-      
+
       const errorMessage = error instanceof Error ? error.message : 'Failed to save changes';
-      
+
       // Remove retry toast if it was a retry (we'll show a new one)
       if (retryToastId) {
         dismissToast(retryToastId);
       }
-      
+
       // Show toast with retry button
       showToast(errorMessage, 'error', () => {
         performSave(updates);
@@ -192,11 +204,129 @@ export default function BudgetMatrixClient({
   }, [isAdmin, modifiedCells, matrix, performSave]);
 
   const handleRetry = useCallback((toastId: string) => {
-    const toast = toasts.find((t) => t.id === toastId);
-    if (toast?.onRetry) {
-      toast.onRetry();
+    const t = toasts.find((t) => t.id === toastId);
+    if (t?.onRetry) {
+      t.onRetry();
     }
   }, [toasts]);
+
+  // Motive CRUD handlers
+  const handleAddMotive = useCallback(async (name: string) => {
+    setIsMutating(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/motives`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to add motive');
+      }
+      toast.success(`Motive "${name}" added`);
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to add motive');
+    } finally {
+      setIsMutating(false);
+    }
+  }, [projectId, router]);
+
+  const handleRenameMotive = useCallback(async (id: string, name: string) => {
+    setIsMutating(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/motives/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to rename motive');
+      }
+      toast.success(`Motive renamed to "${name}"`);
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to rename motive');
+    } finally {
+      setIsMutating(false);
+    }
+  }, [projectId, router]);
+
+  const handleDeleteMotive = useCallback((id: string, name: string) => {
+    setDeleteConfirm({ type: 'motive', id, name });
+  }, []);
+
+  // Category CRUD handlers
+  const handleAddCategory = useCallback(async (name: string) => {
+    setIsMutating(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/categories`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to add category');
+      }
+      toast.success(`Category "${name}" added`);
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to add category');
+    } finally {
+      setIsMutating(false);
+    }
+  }, [projectId, router]);
+
+  const handleRenameCategory = useCallback(async (id: string, name: string) => {
+    setIsMutating(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/categories/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to rename category');
+      }
+      toast.success(`Category renamed to "${name}"`);
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to rename category');
+    } finally {
+      setIsMutating(false);
+    }
+  }, [projectId, router]);
+
+  const handleDeleteCategory = useCallback((id: string, name: string) => {
+    setDeleteConfirm({ type: 'category', id, name });
+  }, []);
+
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!deleteConfirm) return;
+    const { type, id, name } = deleteConfirm;
+    setDeleteConfirm(null);
+    setIsMutating(true);
+    try {
+      const url =
+        type === 'motive'
+          ? `/api/projects/${projectId}/motives/${id}`
+          : `/api/projects/${projectId}/categories/${id}`;
+      const res = await fetch(url, { method: 'DELETE' });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || `Failed to delete ${type}`);
+      }
+      toast.success(`${type === 'motive' ? 'Motive' : 'Category'} "${name}" deleted`);
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : `Failed to delete ${type}`);
+    } finally {
+      setIsMutating(false);
+    }
+  }, [deleteConfirm, projectId, router]);
 
   const hasChanges = modifiedCells.size > 0;
 
@@ -287,42 +417,61 @@ export default function BudgetMatrixClient({
         onEditStart={handleEditStart}
         onEditSave={handleEditSave}
         onEditCancel={handleEditCancel}
+        projectId={projectId}
+        isMutating={isMutating}
+        onAddMotive={handleAddMotive}
+        onRenameMotive={handleRenameMotive}
+        onDeleteMotive={handleDeleteMotive}
+        onAddCategory={handleAddCategory}
+        onRenameCategory={handleRenameCategory}
+        onDeleteCategory={handleDeleteCategory}
+      />
+
+      {/* Delete confirmation dialog */}
+      <ConfirmationDialog
+        isOpen={deleteConfirm !== null}
+        title={`Delete ${deleteConfirm?.type === 'motive' ? 'Motive' : 'Category'}`}
+        message={`Are you sure you want to delete "${deleteConfirm?.name}"? This will remove it from the budget matrix.`}
+        confirmText="Delete"
+        isDestructive={true}
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => setDeleteConfirm(null)}
       />
 
       {/* Toasts */}
       <div className="fixed bottom-4 right-4 z-50 space-y-2">
-        {toasts.map((toast) => (
+        {toasts.map((t) => (
           <div
-            key={toast.id}
+            key={t.id}
             className={`
               px-4 py-3 rounded-lg shadow-lg text-sm font-medium
               transition-all duration-300 animate-in slide-in-from-bottom-2
               flex items-center gap-3
               ${
-                toast.type === 'success'
+                t.type === 'success'
                   ? 'bg-green-100 text-green-800 border border-green-200'
                   : 'bg-rose-100 text-rose-800 border border-rose-200'
               }
             `}
           >
-            <span className="flex-1">{toast.message}</span>
-            {toast.type === 'error' && toast.onRetry && (
+            <span className="flex-1">{t.message}</span>
+            {t.type === 'error' && t.onRetry && (
               <button
-                onClick={() => handleRetry(toast.id)}
-                disabled={toast.isRetrying}
+                onClick={() => handleRetry(t.id)}
+                disabled={t.isRetrying}
                 className={`
                   px-3 py-1 rounded text-xs font-semibold
-                  ${toast.isRetrying
+                  ${t.isRetrying
                     ? 'bg-rose-200 text-rose-400 cursor-not-allowed'
                     : 'bg-rose-800 text-white hover:bg-rose-900'
                   }
                 `}
               >
-                {toast.isRetrying ? 'Retrying...' : 'Retry'}
+                {t.isRetrying ? 'Retrying...' : 'Retry'}
               </button>
             )}
             <button
-              onClick={() => dismissToast(toast.id)}
+              onClick={() => dismissToast(t.id)}
               className="text-slate-400 hover:text-slate-600 ml-1"
               aria-label="Dismiss"
             >

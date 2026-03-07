@@ -156,7 +156,7 @@ export default async function BudgetPage() {
         title="Budget Matrix"
         description="Manage your budget allocation across motives and categories. Click on any cell to edit the budget amount."
       >
-        <BudgetMatrixClient {...data} isAdmin={isAdmin} />
+        <BudgetMatrixClient {...data} isAdmin={isAdmin} projectId={projectId} />
       </SettingsSection>
     </div>
   );

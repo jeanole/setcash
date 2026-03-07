@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 
 interface BudgetMatrixCellProps {
   budget: number;
@@ -45,14 +45,7 @@ const getVarianceIndicator = (budget: number, spent: number): string => {
   }
 
   const percentUsed = Math.round((spent / budget) * 100);
-
-  if (percentUsed > 100) {
-    return `${percentUsed}%`;
-  } else if (percentUsed > 80) {
-    return `${percentUsed}%`;
-  } else {
-    return `${percentUsed}%`;
-  }
+  return `${percentUsed}%`;
 };
 
 export default function BudgetMatrixCell({
@@ -66,6 +59,14 @@ export default function BudgetMatrixCell({
   onEditCancel,
 }: BudgetMatrixCellProps) {
   const [editValue, setEditValue] = useState<string>(budget.toString());
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Select all text when editing starts
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.select();
+    }
+  }, [isEditing]);
 
   const handleClick = useCallback(() => {
     if (isAdmin && !isEditing) {
@@ -104,14 +105,19 @@ export default function BudgetMatrixCell({
   // Truncate large numbers for display
   const formatCurrencyTruncated = (amount: number) => {
     const formatted = formatCurrency(amount);
-    // For display purposes, we keep the full number but use CSS truncation
     return formatted;
   };
+
+  // Rich tooltip
+  const remaining = budget - spent;
+  const pct = budget > 0 ? Math.round((spent / budget) * 100) : 0;
+  const richTooltip = `Budget: ${formatCurrency(budget)}\nAusgaben: ${formatCurrency(spent)}\nVerbleibend: ${formatCurrency(remaining)}\nVerbraucht: ${pct}%`;
 
   if (isEditing) {
     return (
       <div className="p-2 bg-violet-50 border-2 border-[#7C6AF6] rounded">
         <input
+          ref={inputRef}
           type="number"
           value={editValue}
           onChange={(e) => setEditValue(e.target.value)}
@@ -129,7 +135,7 @@ export default function BudgetMatrixCell({
   return (
     <div
       onClick={handleClick}
-      title={`Budget: ${formatCurrency(budget)}\nSpent: ${formatCurrency(spent)}`}
+      title={richTooltip}
       className={`
         p-2 rounded cursor-pointer transition-colors relative overflow-hidden
         ${isAdmin ? 'hover:bg-[rgba(124,106,246,0.06)]' : ''}
