@@ -254,8 +254,11 @@ function AddTransferModal({ isOpen, onClose, onSuccess, projectId }: AddTransfer
 
 export default function VGeldPage() {
   const { data: session } = useSession();
+  const projectRole = session?.user?.currentProjectRole;
   const isAdmin =
-    session?.user?.role === 'admin' || session?.user?.role === 'superadmin';
+    projectRole === 'admin' ||
+    projectRole === 'owner' ||
+    session?.user?.role === 'superadmin';
   const currentUserEmail = session?.user?.email ?? '';
   const projectId = session?.user?.currentProjectId ?? '';
 
