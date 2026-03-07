@@ -1,6 +1,6 @@
 # vBudget — Project Index
 
-**Next Available IDs:** PROJ-19 · BUG-31 · CR-10
+**Next Available IDs:** PROJ-20 · BUG-31 · CR-10
 
 | ID | Type | Title | Status | Priority | Feature | Date |
 |----|------|-------|--------|----------|---------|------|
@@ -61,3 +61,4 @@
 | [BUG-28](BUG-28-motive-category-allocation-refuses-selection.md) | Bug | Motive/Category Allocation Widget Refuses Selection on New Bill | Resolved | High | PROJ-7 | 2026-03-07 |
 | [BUG-29](BUG-29-new-bill-not-saved-or-not-shown.md) | Bug | New Bill Not Saved or Not Appearing in Bills Table | Resolved | High | PROJ-7 | 2026-03-07 |
 | [BUG-30](BUG-30-vgeld-balance-400-no-project.md) | Bug | V-Geld Balance Sidebar Widget Returns 400 When No Project Selected | Resolved | Medium | PROJ-15 | 2026-03-07 |
+| [PROJ-19](PROJ-19-ocr-ai-bill-analysis-nextjs.md) | Feature | OCR / AI Bill Analysis (Next.js) | In Review | — | PROJ-7, PROJ-10 | 2026-03-08 |
