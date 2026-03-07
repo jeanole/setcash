@@ -47,6 +47,86 @@ Likely involves both frontend (UI trigger, title display) and backend (session u
 
 ---
 
+## Tech Design (Solution Architect)
+
+### Root Cause (confirmed by code analysis)
+
+The backend is **100% complete** — this is a frontend-only bug:
+
+- The session already exposes `currentProjectName`, `currentProjectId`, and `currentProjectRole` to every client component
+- `POST /api/projects/switch` works correctly
+- `useProjects` hook with `switchProject()` already exists and wires API + session refresh together
+- The only place to switch projects is buried in **Settings > Projects** — the Sidebar and Header never surface the current project name or a switcher
+
+The fix is: **add a project context block to the Sidebar** with the current project name and a dropdown to switch projects without leaving the page.
+
+---
+
+### A) Component Structure
+
+```
+Sidebar.tsx [MODIFY]
++-- Logo / App Title (existing)
++-- ProjectSwitcher [NEW CLIENT COMPONENT]
+|   +-- Current project name (bold)
+|   +-- Chevron icon (if user has >1 project)
+|   +-- Dropdown (opens on click, if >1 project)
+|       +-- Project list item × N
+|           +-- Project name
+|           +-- "Current" badge (active item)
+|           +-- Click to switch (inactive items)
++-- Nav items (existing, unchanged)
++-- Footer (existing, unchanged)
+```
+
+The `ProjectSwitcher` component sits between the logo and the nav links — exactly where the user expects a project context indicator in a multi-tenant app.
+
+---
+
+### B) Data Model
+
+No new data needed. Everything already exists in the session:
+
+| Field | Source | Used for |
+|-------|--------|----------|
+| `currentProjectName` | `session.user.currentProjectName` | Display active project name |
+| `currentProjectId` | `session.user.currentProjectId` | Highlight active project in dropdown |
+| `currentProjectRole` | `session.user.currentProjectRole` | (Optional) show role badge |
+| Project list | `GET /api/projects` (useProjects hook) | Populate dropdown |
+| Switch action | `POST /api/projects/switch` (useProjects hook) | Switch on click |
+
+---
+
+### C) Tech Decisions
+
+**Why frontend-only?**
+The session, API endpoint, and data-fetching hook all already work. Adding backend changes would be wasted effort.
+
+**Why a Sidebar dropdown (not a Header dropdown)?**
+The current project name is contextual navigation — it belongs with the nav, not the user account controls. The Sidebar has space below the logo. This also matches common patterns in Linear, Notion, and Vercel dashboards.
+
+**Why reuse `useProjects` hook?**
+The hook already handles fetching the project list, calling the switch API, and refreshing the session token. No new logic needed.
+
+**What happens after switching?**
+After `switchProject()` completes, `router.refresh()` (Next.js) re-runs all Server Components on the current page, loading the new project's data automatically. No full page reload needed.
+
+**What if the user has only one project?**
+The switcher renders as a plain label with no chevron or dropdown — no interaction available.
+
+---
+
+### D) New Files
+
+| File | Action |
+|------|--------|
+| `nextjs/components/layout/ProjectSwitcher.tsx` | NEW — dropdown component |
+| `nextjs/components/layout/Sidebar.tsx` | MODIFY — embed ProjectSwitcher |
+
+No backend changes. No new packages. No schema changes.
+
+---
+
 ## Resolution
 
 **Status:** Open
