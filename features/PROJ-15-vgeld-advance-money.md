@@ -404,8 +404,186 @@ When a transfer is created or deleted:
 2. **Admin Summary Sorting:** Sort by email alphabetically or by remaining balance? (Recommended: email for predictability)
 3. **Transfer List Pagination:** If a user has many transfers (>50), implement pagination? (Recommended: implement if needed, not in MVP)
 
-## QA Test Results
-_To be added by /qa_
+## QA Test Results (Round 1)
+
+**Tested:** 2026-03-07
+**App URL:** http://localhost:3001 (Next.js dev server)
+**Tester:** QA Engineer (AI)
+**Branch:** `to_nextjs`
+
+### Pre-Test Findings
+
+The entire PROJ-15 V-Geld feature has **not been implemented** in the Next.js app. The Prisma schema includes the `Vgeld` model (confirmed in `nextjs/prisma/schema.prisma` lines 248-262), and the migration script (`nextjs/scripts/migrate-sqlite-to-pg.ts`) handles V-Geld data migration, but no API routes, pages, or sidebar integration exist.
+
+**What exists (Express reference, NOT ported):**
+- `routes/vgeld.js` -- Express backend with 5 endpoints
+- `public/js/vgeld.js` -- Express frontend JS module
+
+**What does NOT exist in Next.js:**
+- `nextjs/app/api/vgeld/route.ts` -- MISSING
+- `nextjs/app/api/vgeld/[id]/route.ts` -- MISSING
+- `nextjs/app/api/vgeld/analysis/route.ts` -- MISSING
+- `nextjs/app/api/vgeld/balance/route.ts` -- MISSING
+- `nextjs/app/(protected)/vgeld/page.tsx` -- MISSING
+- Sidebar V-Geld balance display -- MISSING
+- Sidebar navigation link to V-Geld -- MISSING
+
+### Acceptance Criteria Status
+
+#### AC-1: Sidebar Balance Display
+- [ ] BUG: No V-Geld balance shown in sidebar -- component has no reference to V-Geld (BUG-R1-1)
+- [ ] BUG: No V-Geld navigation link in sidebar NAV_ITEMS array (BUG-R1-2)
+
+#### AC-2: Page Route /vgeld
+- [ ] BUG: Page does not exist -- returns 404 (BUG-R1-3)
+- [ ] BUG: No protected route at `/app/(protected)/vgeld/page.tsx` (BUG-R1-3)
+
+#### AC-3: User View (Transfer History)
+- [ ] BUG: Cannot test -- page does not exist (BUG-R1-3)
+
+#### AC-4: Admin View (Summary Table)
+- [ ] BUG: Cannot test -- page does not exist (BUG-R1-3)
+
+#### AC-5: Add Transfer Modal (Admin Only)
+- [ ] BUG: Cannot test -- page and API do not exist (BUG-R1-3, BUG-R1-5)
+
+#### AC-6: Delete Transfer (Admin Only)
+- [ ] BUG: Cannot test -- page and API do not exist (BUG-R1-3, BUG-R1-6)
+
+### API Endpoint Tests
+
+All tested with valid authenticated session (admin@example.com):
+
+| Endpoint | Method | Expected | Actual | Result |
+|----------|--------|----------|--------|--------|
+| `/api/vgeld` | GET | 200 with transfers | 404 Not Found | FAIL |
+| `/api/vgeld` | POST | 200 with `{ok,id}` | 404 Not Found | FAIL |
+| `/api/vgeld/test-id` | DELETE | 200 with `{ok}` | 404 Not Found | FAIL |
+| `/api/vgeld/analysis` | GET | 200 with summaries | 404 Not Found | FAIL |
+| `/api/vgeld/balance` | GET | 200 with `{balance}` | 404 Not Found | FAIL |
+
+### Security Audit Results
+
+Security testing is not possible because the feature does not exist. The authentication middleware correctly redirects unauthenticated requests (307 to login), which is a positive finding for the overall app.
+
+- [x] Authentication middleware: Unauthenticated API requests correctly return 307 redirect to login
+- [ ] Authorization: Cannot test -- endpoints do not exist
+- [ ] Input validation: Cannot test -- endpoints do not exist
+- [ ] Rate limiting: Cannot test -- endpoints do not exist
+- [ ] Cross-project isolation: Cannot test -- endpoints do not exist
+
+### Edge Cases Status
+
+All edge cases are untestable because the feature has not been implemented:
+
+- [ ] Negative balance display -- untestable
+- [ ] Delete making balance negative -- untestable
+- [ ] Non-member recipient -- untestable
+- [ ] Zero V-Geld display -- untestable
+- [ ] Very large amounts -- untestable
+- [ ] Decimal amounts -- untestable
+- [ ] Project switch updates balance -- untestable
+- [ ] Empty from field defaults to "External" -- untestable
+- [ ] Special characters in from field -- untestable
+
+### Regression Test Results
+
+Verified that existing features are unaffected:
+
+- [x] Bills API (`GET /api/bills`) returns 200 with valid data
+- [x] Authentication (login/logout) works correctly
+- [x] Sidebar navigation renders Bills, Budget, Reports, Settings links
+- [x] Security headers present (X-Frame-Options, X-Content-Type-Options, HSTS, Referrer-Policy)
+
+### Bugs Found
+
+#### BUG-R1-1: V-Geld Balance Missing from Sidebar [Frontend]
+- **Severity:** Critical
+- **Steps to Reproduce:**
+  1. Log in to the Next.js app at http://localhost:3001
+  2. Look at the sidebar navigation
+  3. Expected: V-Geld balance displayed as "V-Geld: X,XXX.XX"
+  4. Actual: No V-Geld balance or link anywhere in the sidebar
+- **Root Cause:** `nextjs/components/layout/Sidebar.tsx` has no V-Geld references. The `NAV_ITEMS` array only contains Bills, Budget, Reports, Settings.
+- **Priority:** Fix before deployment
+
+#### BUG-R1-2: V-Geld Navigation Link Missing from Sidebar [Frontend]
+- **Severity:** Critical
+- **Steps to Reproduce:**
+  1. Log in to the Next.js app
+  2. Inspect sidebar navigation items
+  3. Expected: "V-Geld" link in sidebar navigation
+  4. Actual: No V-Geld link exists
+- **Root Cause:** `NAV_ITEMS` in Sidebar.tsx does not include a V-Geld entry
+- **Priority:** Fix before deployment
+
+#### BUG-R1-3: V-Geld Page Does Not Exist [Frontend]
+- **Severity:** Critical
+- **Steps to Reproduce:**
+  1. Navigate to http://localhost:3001/vgeld
+  2. Expected: V-Geld management page with transfer history and admin summary
+  3. Actual: 404 "This page could not be found"
+- **Root Cause:** No file exists at `nextjs/app/(protected)/vgeld/page.tsx`
+- **Priority:** Fix before deployment
+
+#### BUG-R1-4: GET /api/vgeld Endpoint Does Not Exist [Backend]
+- **Severity:** Critical
+- **Steps to Reproduce:**
+  1. Authenticate as admin
+  2. `curl -b cookies http://localhost:3001/api/vgeld`
+  3. Expected: 200 with array of V-Geld transfers
+  4. Actual: 404 Not Found (Next.js default 404 page)
+- **Root Cause:** No file at `nextjs/app/api/vgeld/route.ts`
+- **Priority:** Fix before deployment
+
+#### BUG-R1-5: POST /api/vgeld Endpoint Does Not Exist [Backend]
+- **Severity:** Critical
+- **Steps to Reproduce:**
+  1. Authenticate as admin
+  2. `curl -X POST -b cookies http://localhost:3001/api/vgeld -H "Content-Type: application/json" -d '{"amount":100,"to":"user@example.com"}'`
+  3. Expected: 200 with `{ ok: true, id: "..." }`
+  4. Actual: 404 Not Found
+- **Root Cause:** No file at `nextjs/app/api/vgeld/route.ts`
+- **Priority:** Fix before deployment
+
+#### BUG-R1-6: DELETE /api/vgeld/[id] Endpoint Does Not Exist [Backend]
+- **Severity:** Critical
+- **Steps to Reproduce:**
+  1. Authenticate as admin
+  2. `curl -X DELETE -b cookies http://localhost:3001/api/vgeld/some-uuid`
+  3. Expected: 200 with `{ ok: true }`
+  4. Actual: 404 Not Found
+- **Root Cause:** No file at `nextjs/app/api/vgeld/[id]/route.ts`
+- **Priority:** Fix before deployment
+
+#### BUG-R1-7: GET /api/vgeld/analysis Endpoint Does Not Exist [Backend]
+- **Severity:** Critical
+- **Steps to Reproduce:**
+  1. Authenticate as admin
+  2. `curl -b cookies http://localhost:3001/api/vgeld/analysis`
+  3. Expected: 200 with array of user V-Geld summaries
+  4. Actual: 404 Not Found
+- **Root Cause:** No file at `nextjs/app/api/vgeld/analysis/route.ts`
+- **Priority:** Fix before deployment
+
+#### BUG-R1-8: GET /api/vgeld/balance Endpoint Does Not Exist [Backend]
+- **Severity:** Critical
+- **Steps to Reproduce:**
+  1. Authenticate as admin
+  2. `curl -b cookies http://localhost:3001/api/vgeld/balance`
+  3. Expected: 200 with `{ balance: number }`
+  4. Actual: 404 Not Found
+- **Root Cause:** No file at `nextjs/app/api/vgeld/balance/route.ts`
+- **Priority:** Fix before deployment
+
+### Summary
+- **Acceptance Criteria:** 0/6 passed (entire feature not implemented)
+- **Bugs Found:** 8 total (8 critical, 0 high, 0 medium, 0 low)
+  - Frontend: 3 (sidebar balance, sidebar nav link, page)
+  - Backend: 5 (all 5 API endpoints missing)
+- **Security:** Cannot assess -- no endpoints to test
+- **Production Ready:** NO
+- **Recommendation:** The entire V-Geld feature must be implemented from scratch in the Next.js app. The Prisma `Vgeld` model already exists in the schema, and the Express implementation in `routes/vgeld.js` serves as a reference for the port. All 5 API route handlers, the page component, and the sidebar integration need to be built.
 
 ## Deployment
 _To be added by /deploy_

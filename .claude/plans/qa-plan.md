@@ -1,175 +1,142 @@
 # QA Test Plan
 
 ## Feature
-PROJ-8: Budget Matrix
-Spec: /mnt/c/Users/jensmoeller/code/vbudget/features/PROJ-8-budget-matrix.md
+PROJ-15: V-Geld (Advance Money)
+Spec: features/PROJ-15-vgeld-advance-money.md
 
 ## Context Summary
-Budget Matrix is a Next.js/PostgreSQL feature that displays a matrix of Categories (rows) vs Motives (columns) with budget allocations and actual spending calculations. Two critical bugs (BUG-15, BUG-16) were recently fixed - SQL column names and PostgreSQL enum casting.
+V-Geld is a cash advance tracking feature. Users receive advance money (V-Geld) and their balance is calculated as received minus spent (from confirmed bills). The feature needs to be ported from Express (`routes/vgeld.js`, `public/js/vgeld.js`) to Next.js.
 
-**Key Files:**
-- `nextjs/app/(protected)/budget/page.tsx` - Server Component with spending queries
-- `nextjs/app/api/budget-matrix/route.ts` - API route handler
-- `nextjs/app/api/budget-matrix/bulk-update/route.ts` - Bulk update endpoint
-- `nextjs/components/budget/BudgetMatrixClient.tsx` - Client component with editing
-- `nextjs/components/budget/BudgetMatrixTable.tsx` - Table display with sticky headers
-- `nextjs/components/budget/BudgetMatrixCell.tsx` - Individual cell with variance indicators
+**Key Files to Check:**
+- `nextjs/app/api/vgeld/route.ts` - GET/POST API route handler
+- `nextjs/app/api/vgeld/[id]/route.ts` - DELETE route handler
+- `nextjs/app/api/vgeld/analysis/route.ts` - Analysis endpoint
+- `nextjs/app/api/vgeld/balance/route.ts` - Balance endpoint
+- `nextjs/app/(protected)/vgeld/page.tsx` - V-Geld page
+- `nextjs/components/layout/Sidebar.tsx` - Sidebar balance display
+- `nextjs/prisma/schema.prisma` - Vgeld model (confirmed exists)
 
-## User Guidance
-Test accounts: http://localhost:3000
-- Admin/Owner user: Can view and edit budget matrix
-- Regular user: View-only access
-- Super admin: Full access to all projects
+**Express Reference:**
+- `routes/vgeld.js` - Express V-Geld API routes
+- `public/js/vgeld.js` - Frontend JS module
 
-Scope: Full testing - all acceptance criteria, edge cases, security audit
+## Pre-Test Checks
+
+1. Verify Next.js API routes exist at `nextjs/app/api/vgeld/`
+2. Verify Next.js page exists at `nextjs/app/(protected)/vgeld/`
+3. Verify sidebar component displays V-Geld balance
+4. Verify Prisma schema has Vgeld model
 
 ## Acceptance Criteria to Test
 
-### AC-1: Page Structure & Routing
-- [ ] Page route `/budget` renders correctly
-- [ ] Matrix layout: Categories as rows, Motives as columns
-- [ ] Header displays "Budget Matrix" title
-- [ ] Page accessible from sidebar navigation
+### AC-1: Sidebar Balance Display
+- [ ] Current user's V-Geld balance shown in sidebar
+- [ ] Balance formula: Total Received - Total Spent (confirmed bills only)
+- [ ] Balance updates on project switch
+- [ ] Format: "V-Geld: X,XXX.XX" with euro symbol and 2 decimals
+- [ ] Negative balances in red text
+- [ ] Zero balance shows "0.00"
 
-### AC-2: Data Fetching
-- [ ] Motives fetched and sorted ("Default" first, then alphabetical)
-- [ ] Categories fetched and sorted ("Uncategorized" first, then alphabetical)
-- [ ] Budget matrix cells loaded correctly
-- [ ] Spending calculations (motive, category, cell) computed correctly
+### AC-2: Page Route /vgeld
+- [ ] V-Geld page accessible from sidebar navigation
+- [ ] Page uses protected layout (requires auth)
+- [ ] Page displays within main content area
+- [ ] Loading skeleton while data fetches
+- [ ] Empty state: "No V-Geld transfers recorded"
 
-### AC-3: Matrix Grid Layout
-- [ ] Fixed header row with motive names as column headers
-- [ ] Leftmost column displays category names as row headers
-- [ ] Sticky header row and sticky first column work on scroll
-- [ ] Horizontal/vertical scroll for many motives/categories
+### AC-3: User View (Transfer History)
+- [ ] List of V-Geld transfers received by current user
+- [ ] Each transfer shows: Date (DD.MM.YYYY), Amount, From, Created By
+- [ ] Sorted by date descending (newest first)
+- [ ] Empty state for no transfers
 
-### AC-4: Cell Display
-- [ ] Each cell shows budget amount (top) and spent amount (bottom)
-- [ ] Currency format: €X.XXX,XX (German locale)
-- [ ] Empty/zero cells show €0.00 or placeholder
-- [ ] Variance indicator visible (percentage badge)
+### AC-4: Admin View (Summary Table)
+- [ ] All User V-Geld Summary Table
+- [ ] Columns: User, Received, Spent, Remaining, % Used
+- [ ] Negative remaining in red
+- [ ] High usage (>80%) in orange
+- [ ] Zero usage shows "0%"
+- [ ] "Add V-Geld Transfer" button
 
-### AC-5: Variance Indicators
-- [ ] Green: Spent ≤ 80% of budget
-- [ ] Amber/Yellow: 80% < Spent ≤ 100% of budget
-- [ ] Red: Spent > 100% of budget
-- [ ] Gray: No budget set (budget = 0)
+### AC-5: Add Transfer Modal (Admin Only)
+- [ ] Modal triggered by button
+- [ ] Form: Amount (required, >0), To (dropdown of members), From (optional, default "External")
+- [ ] Zod validation on both client and server
+- [ ] Success: modal closes, list/table refreshes, sidebar updates
+- [ ] Error: inline validation errors
 
-### AC-6: Cell Editing (Admin/Owner)
-- [ ] Click-to-edit activates inline input
-- [ ] Number input accepts decimal values
-- [ ] Enter key triggers save
-- [ ] Escape key cancels edit
-- [ ] Blur triggers save
-- [ ] Visual indicator for unsaved changes
+### AC-6: Delete Transfer (Admin Only)
+- [ ] Delete button per row (admin only)
+- [ ] Confirmation dialog
+- [ ] On confirm: delete, refresh, update sidebar balance
+- [ ] On cancel: close dialog, no action
+- [ ] Deleting causing negative balance is allowed
 
-### AC-7: Totals Row and Column
-- [ ] Bottom row shows motive totals
-- [ ] Rightmost column shows category totals
-- [ ] Bottom-right corner shows grand total
-- [ ] Both budget and spent amounts in totals
-
-### AC-8: Bulk Save Operation
-- [ ] "Save Changes" button enabled only when cells modified
-- [ ] Button disabled with loading state during save
-- [ ] Success toast notification on successful save
-- [ ] Error handling with retry option on failure
-
-### AC-9: Protected Defaults
-- [ ] "Default" motive appears first in columns
-- [ ] "Uncategorized" category appears first in rows
-- [ ] Protected items handled correctly
-
-### AC-10: Empty States
-- [ ] Empty state when no motives: link to Settings > Motives
-- [ ] Empty state when no categories: link to Settings > Categories
-- [ ] Skeleton loader while data fetches
-
-### AC-11: API Endpoints
-- [ ] GET /api/budget-matrix returns complete data
-- [ ] POST /api/budget-matrix/bulk-update saves changes (admin only)
-- [ ] Proper error responses for unauthorized access
-
-## Edge Cases to Test
-
-### Data Edge Cases
-- [ ] **Year with no bills**: All spent cells show €0.00
-- [ ] **Motive deleted mid-session**: Save handles gracefully
-- [ ] **Cell value cleared**: Treated as €0.00
-- [ ] **Very large numbers**: Cells don't overflow layout
-- [ ] **Division by zero**: Budget=0 but spending exists shows "∞" or "Over budget"
-- [ ] **Negative budget values**: Validate and reject
-- [ ] **Concurrent edits**: Last-write-wins acceptable
-
-### UI Edge Cases
-- [ ] **Many motives/categories**: Scroll with sticky headers
-- [ ] **Zero motives**: Display empty state
-- [ ] **Zero categories**: Display empty state
-- [ ] **Single motive/category**: Matrix renders correctly (1x1)
-- [ ] **Network failure during save**: Error message with retry
-- [ ] **Session timeout during edit**: Redirect to login
-
-### Calculation Edge Cases
-- [ ] **Draft bills excluded**: Only confirmed/approved/paid bills in spending
-- [ ] **Bills with 0% allocation**: Contribute 0 to spending
-- [ ] **Partial allocations**: Unallocated portion not in matrix
-- [ ] **Floating point precision**: Decimal calculations correct
-
-### Permission Edge Cases
-- [ ] **User role viewing matrix**: Read-only, no edit controls
-- [ ] **Admin demoted to user**: Save fails with auth error
-- [ ] **Project switch while editing**: Warn about unsaved changes
+### API Tests
+| Endpoint | Method | Auth | Expected |
+|----------|--------|------|----------|
+| `/api/vgeld` | GET | Project Access | 200 with array of transfers |
+| `/api/vgeld` | POST | Project Admin | 200 with `{ ok: true, id }` |
+| `/api/vgeld/[id]` | DELETE | Project Admin | 200 with `{ ok: true }` |
+| `/api/vgeld/analysis` | GET | Project Access | 200 with user summaries |
+| `/api/vgeld/balance` | GET | Project Access | 200 with `{ balance: number }` |
 
 ## Security Audit Scope
 
 ### Authentication
-- [ ] Cannot access /budget without login
-- [ ] Cannot access /api/budget-matrix without login
-- [ ] Cannot access /api/budget-matrix/bulk-update without login
+- [ ] Cannot access /api/vgeld without login (401)
+- [ ] Cannot access /api/vgeld/analysis without login (401)
+- [ ] Cannot access /api/vgeld/balance without login (401)
+- [ ] Cannot access /vgeld page without login (redirect to login)
 
 ### Authorization
-- [ ] User cannot edit matrix (API returns 403)
-- [ ] User cannot access other projects' data
-- [ ] Admin can only edit their project's matrix
-- [ ] Super admin can access all projects
+- [ ] Non-admin cannot POST /api/vgeld (403)
+- [ ] Non-admin cannot DELETE /api/vgeld/[id] (403)
+- [ ] Cross-project isolation (cannot access other project V-Geld)
 
 ### Input Validation
-- [ ] Negative amounts rejected
-- [ ] Non-numeric values rejected
-- [ ] XSS attempts in budget values blocked
-- [ ] SQL injection attempts blocked (motiveId, categoryId)
+- [ ] Negative amount rejected
+- [ ] Zero amount rejected
+- [ ] Non-numeric amount rejected
+- [ ] XSS in `from` field blocked
+- [ ] SQL injection in `to` field blocked
+- [ ] Non-member recipient rejected (400)
+- [ ] Max length on `from` field (100 chars)
 
 ### Rate Limiting
-- [ ] Bulk save has rate limiting
-- [ ] Excessive requests handled gracefully
+- [ ] POST endpoint rate-limited
+- [ ] DELETE endpoint rate-limited
 
-### Data Exposure
-- [ ] API doesn't expose sensitive data
-- [ ] Response doesn't include other projects' data
+## Edge Cases to Test
+- [ ] Negative balance display
+- [ ] Delete making balance negative (allowed)
+- [ ] Non-member recipient (400 error)
+- [ ] Zero V-Geld (sidebar shows 0.00)
+- [ ] V-Geld with no bills (full remaining)
+- [ ] Very large amounts (formatting)
+- [ ] Decimal amounts (2 decimal places)
+- [ ] Project switch updates balance
+- [ ] Empty from field defaults to "External"
+- [ ] Special characters in from field (XSS prevention)
 
 ## Regression Test Scope
-
-### Related Deployed Features
-- [ ] PROJ-5 (NextAuth): Login/logout works
-- [ ] PROJ-7 (Bills): Bills list still functional
-- [ ] PROJ-9 (Categories/Motives): Settings pages work
-- [ ] PROJ-10 (Members): Project switching works
+- [ ] Bills feature still works
+- [ ] Budget matrix still works
+- [ ] Sidebar navigation works
+- [ ] Authentication works
+- [ ] Project switching works
 
 ## Responsive / Cross-Browser Scope
 
 ### Breakpoints
-- [ ] 375px (mobile): Table scrolls horizontally
-- [ ] 768px (tablet): Layout adapts
-- [ ] 1440px (desktop): Full layout
+- [ ] 375px (mobile)
+- [ ] 768px (tablet)
+- [ ] 1440px (desktop)
 
 ### Browsers
 - [ ] Chrome
 - [ ] Firefox
 - [ ] Safari
 
-## Bug Report Template
-Reference: /mnt/c/Users/jensmoeller/code/vbudget/.claude/skills/qa/test-template.md
-
-Tag bugs with:
-- Severity: Critical | High | Medium | Low
-- Skill: [Frontend] | [Backend] | [Architecture] | [Deploy]
+## Commit Message
+`test(PROJ-15): QA Round 1 results`
