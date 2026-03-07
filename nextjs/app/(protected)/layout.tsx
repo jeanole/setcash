@@ -29,10 +29,10 @@ export default async function ProtectedLayout({
     : null;
 
   return (
-    <AppShell currentUser={currentUser}>
-      <ClientSessionProvider session={session}>
+    <ClientSessionProvider session={session}>
+      <AppShell currentUser={currentUser}>
         {children}
-      </ClientSessionProvider>
-    </AppShell>
+      </AppShell>
+    </ClientSessionProvider>
   );
 }
