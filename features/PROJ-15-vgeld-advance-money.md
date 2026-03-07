@@ -824,5 +824,40 @@ None.
 - **Production Ready:** YES (no critical or high bugs)
 - **Recommendation:** Deploy. Fix BUG-R3-1 (owner role check) in next sprint -- it mirrors a pre-existing pattern from PROJ-7.
 
+## QA Test Results (Round 4)
+
+**Tested:** 2026-03-07
+**App URL:** Code review only (no live server)
+**Tester:** QA Engineer (AI) -- auto-fix verification
+**Branch:** `to_nextjs`
+
+### BUG-R3-1 Fix Verification: isAdmin check uses currentProjectRole + owner [Frontend]
+
+- [x] PASS: `vgeld/page.tsx` line 257 reads `session?.user?.currentProjectRole` (was `session?.user?.role`)
+- [x] PASS: `isAdmin` includes `projectRole === 'owner'` (was missing)
+- [x] PASS: Still includes `session?.user?.role === 'superadmin'` fallback
+- [x] PASS: Pattern matches `budget/page.tsx` line 148 exactly: `projectRole === 'admin' || projectRole === 'owner' || session.user.role === 'superadmin'`
+
+**Verdict:** FIXED
+
+### BUG-R3-2 Fix Verification: Zod schema constraints [Backend]
+
+- [x] PASS: `api/vgeld/route.ts` line 12 has `.multipleOf(0.01, 'Amount must have at most 2 decimal places')` on `amount`
+- [x] PASS: `api/vgeld/route.ts` line 14 has `.max(100, 'From must be 100 characters or fewer')` on `from`
+- [x] PASS: Both constraints are chained correctly in the Zod schema
+
+**Verdict:** FIXED
+
+### TypeScript Build
+
+- [x] PASS: `npx tsc --noEmit` completes with zero errors
+
+### Summary
+- **Bug Fixes Verified:** 2/2 confirmed fixed
+- **TypeScript:** Pass -- zero compilation errors
+- **New Bugs Found:** 0
+- **Production Ready:** YES
+- **Recommendation:** Deploy
+
 ## Deployment
 _To be added by /deploy_
