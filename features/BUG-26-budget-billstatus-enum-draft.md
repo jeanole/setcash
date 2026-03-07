@@ -1,6 +1,6 @@
 # BUG-26: Budget Page Crashes with Invalid BillStatus Enum Value "draft"
 
-**Status:** Open
+**Status:** Resolved
 **Reported:** 2026-03-07
 **Severity:** Critical
 **Skill Tag:** [Backend]
@@ -64,7 +64,7 @@ Fix should update the raw query to use the correct cased enum value (e.g. `DRAFT
 
 ## Resolution
 
-**Status:** Open
-**Resolved Date:** —
-**Fixed In:** —
-**Fix Description:** —
+**Status:** Resolved
+**Resolved Date:** 2026-03-07
+**Fixed In:** fix(BUG-26): Add missing draft value to BillStatus PostgreSQL enum
+**Fix Description:** Created Prisma migration `20260307000000_add_draft_to_billstatus` that adds the missing `draft` value to the PostgreSQL `"BillStatus"` enum via `ALTER TYPE "BillStatus" ADD VALUE IF NOT EXISTS 'draft'`. No code changes were needed — the raw SQL queries already used the correct casting syntax.

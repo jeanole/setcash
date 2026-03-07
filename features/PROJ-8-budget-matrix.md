@@ -694,4 +694,4 @@ _To be added by /deploy_
 | B-7 (QA) | Low | Potential floating point precision issues | Open [Backend] |
 | B-8 (QA) | Medium | No warning for unsaved changes on project switch | Open [Frontend] |
 | B-9 (QA) | **High** | **Missing rate limiting on bulk update API** | **Open [Backend]** |
-| [BUG-26](BUG-26-budget-billstatus-enum-draft.md) | Critical | Budget Page Crashes with Invalid BillStatus Enum Value "draft" | Open |
+| [BUG-26](BUG-26-budget-billstatus-enum-draft.md) | Critical | Budget Page Crashes with Invalid BillStatus Enum Value "draft" | Resolved |
