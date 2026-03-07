@@ -1,11 +1,11 @@
 # BUG-31 — Images Not Visible After Upload in New Bill Form
 
-**Status:** Open
+**Status:** Resolved
 **Severity:** High
 **Feature:** [PROJ-7](PROJ-7-bills-feature.md)
 **Filed:** 2026-03-08
 **Skill:** [Frontend]
-**Fixed In:** —
+**Fixed In:** fix(BUG-31,BUG-32)
 
 ---
 

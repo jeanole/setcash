@@ -62,5 +62,5 @@
 | [BUG-29](BUG-29-new-bill-not-saved-or-not-shown.md) | Bug | New Bill Not Saved or Not Appearing in Bills Table | Resolved | High | PROJ-7 | 2026-03-07 |
 | [BUG-30](BUG-30-vgeld-balance-400-no-project.md) | Bug | V-Geld Balance Sidebar Widget Returns 400 When No Project Selected | Resolved | Medium | PROJ-15 | 2026-03-07 |
 | [PROJ-19](PROJ-19-ocr-ai-bill-analysis-nextjs.md) | Feature | OCR / AI Bill Analysis (Next.js) | In Review | — | PROJ-7, PROJ-10 | 2026-03-08 |
-| [BUG-31](BUG-31-images-not-visible-after-upload.md) | Bug | Images Not Visible After Upload in New Bill Form | Open | High | PROJ-7 | 2026-03-08 |
-| [BUG-32](BUG-32-view-bill-detail-error.md) | Bug | Clicking View on Bills Table Produces Error | Open | High | PROJ-7 | 2026-03-08 |
+| [BUG-31](BUG-31-images-not-visible-after-upload.md) | Bug | Images Not Visible After Upload in New Bill Form | Resolved | High | PROJ-7 | 2026-03-08 |
+| [BUG-32](BUG-32-view-bill-detail-error.md) | Bug | Clicking View on Bills Table Produces Error | Resolved | High | PROJ-7 | 2026-03-08 |

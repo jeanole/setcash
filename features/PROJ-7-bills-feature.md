@@ -189,8 +189,8 @@ _To be added by /deploy_
 | [BUG-9](BUG-9-duplicate-image-upload-sections.md) | High | Duplicate Image Upload Sections on New Bill Page | Resolved |
 | [BUG-28](BUG-28-motive-category-allocation-refuses-selection.md) | High | Motive/Category Allocation Widget Refuses Selection on New Bill | Resolved |
 | [BUG-29](BUG-29-new-bill-not-saved-or-not-shown.md) | High | New Bill Not Saved or Not Appearing in Bills Table | Resolved |
-| [BUG-31](BUG-31-images-not-visible-after-upload.md) | High | Images Not Visible After Upload in New Bill Form | Open |
-| [BUG-32](BUG-32-view-bill-detail-error.md) | High | Clicking View on Bills Table Produces Error | Open |
+| [BUG-31](BUG-31-images-not-visible-after-upload.md) | High | Images Not Visible After Upload in New Bill Form | Resolved |
+| [BUG-32](BUG-32-view-bill-detail-error.md) | High | Clicking View on Bills Table Produces Error | Resolved |
 
 
 ---

@@ -1,11 +1,11 @@
 # BUG-32 — Clicking "View" on Bills Table Produces Error
 
-**Status:** Open
+**Status:** Resolved
 **Severity:** High
 **Feature:** [PROJ-7](PROJ-7-bills-feature.md)
 **Filed:** 2026-03-08
 **Skill:** [Frontend]
-**Fixed In:** —
+**Fixed In:** fix(BUG-31,BUG-32)
 
 ---
 
