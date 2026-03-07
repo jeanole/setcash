@@ -1,6 +1,6 @@
 # PROJ-8: Budget Matrix
 
-## Status: Complete
+## Status: Change Requested
 **Created:** 2026-03-01
 **Last Updated:** 2026-03-06
 
@@ -695,3 +695,52 @@ _To be added by /deploy_
 | B-8 (QA) | Medium | No warning for unsaved changes on project switch | Open [Frontend] |
 | B-9 (QA) | **High** | **Missing rate limiting on bulk update API** | **Open [Backend]** |
 | [BUG-26](BUG-26-budget-billstatus-enum-draft.md) | Critical | Budget Page Crashes with Invalid BillStatus Enum Value "draft" | Resolved |
+
+## Change Requests
+
+### CR-9: Budget Matrix Express Parity — Interactive Motives/Categories, Cell UX, Visual Appearance
+**Requested:** 2026-03-07 | **Priority:** High | **Status:** Pending Review
+
+**Current Behavior:**
+The Next.js budget matrix is functional but stripped-down compared to the original Express app. Key missing capabilities:
+- Motives and categories can only be created/renamed/deleted via dedicated Settings pages (not inline in the matrix)
+- Cells show budget and spent amounts but have no color-coded status (ok/warn/over/neg)
+- No hover tooltip showing budget, spent, remaining, and % consumed per cell
+- The matrix does not indicate live totals as you type — totals only update on save
+- Column/row header focus behavior is missing (select-all on focus, format on blur)
+- Visual appearance differs significantly from the Express original
+
+**Desired Behavior:**
+Bring the Next.js budget matrix to full parity with the original Express app:
+
+1. **Inline motive management (columns):** An "+ Add motive" input directly in the matrix header row. Pencil icon to rename inline (Enter confirms, Esc cancels). × button to delete with confirm dialog.
+2. **Inline category management (rows):** An "+ Add category" input row at the bottom of the matrix. Pencil rename + × delete same as above.
+3. **Cell color coding:**
+   - `bm-cell-ok` (green tint): spending > 0, < 80% of budget
+   - `bm-cell-warn` (amber tint): spending ≥ 80% of budget
+   - `bm-cell-over` (red tint): spending ≥ 100% of budget
+   - `bm-cell-neg` (gray tint): spending exists but budget is 0
+4. **Cell hover tooltip:** Shows "Budget / Ausgaben / Verbleibend / Verbraucht %" for each cell, row total, and column total.
+5. **Live totals:** Row totals and column totals update as you type in cells (before saving).
+6. **Cell focus behavior:** On focus, show raw number and select all. On blur, reformat with comma-decimal (e.g., `1,234.56`).
+7. **Horizontal scroll with sticky corner:** First column (category names) stays fixed; matrix scrolls right. Uses `scroll-padding-left` equal to sticky corner width.
+8. **Visual appearance alignment:** Match the overall look of the Express original (header styling, cell borders, font sizes).
+
+**Rationale:**
+The Express app is the production reference. Users switching to the Next.js app expect the same interactivity. Inline motive/category management is a core workflow — forcing users to leave the matrix to add a column is a significant UX regression.
+
+**Proposed Acceptance Criteria:**
+- [ ] "+ Add motive" button/input in the header row creates a new motive inline
+- [ ] Pencil rename of motive works inline (Enter/Esc) in the header row
+- [ ] × delete motive shows confirm dialog, then removes the column
+- [ ] "+ Add category" button/input at bottom of matrix creates a new category row inline
+- [ ] Pencil rename of category works inline in the row header
+- [ ] × delete category shows confirm dialog, then removes the row
+- [ ] Cells have color classes based on spent vs budget percentage (ok/warn/over/neg)
+- [ ] Hovering a cell shows tooltip with budget, spent, remaining, % consumed
+- [ ] Row and column totals update live as user types (before save)
+- [ ] Cell focus: show raw number + select all; blur: reformat to locale string
+- [ ] Matrix scrolls horizontally with category column sticky (does not scroll)
+- [ ] Visual appearance matches Express original closely
+
+**Resolution:** Pending
