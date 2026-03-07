@@ -7,6 +7,7 @@ import dynamic from 'next/dynamic';
 import { cn } from '@/lib/utils';
 import { Shield, X } from 'lucide-react';
 import SuperAdminModal from '@/components/superadmin/SuperAdminModal';
+import ProjectSwitcher from '@/components/layout/ProjectSwitcher';
 
 const FilmRollNav = dynamic(() => import('@/components/cinematic/FilmRollNav'), { ssr: false });
 
@@ -192,6 +193,7 @@ export default function Sidebar({ currentUser, isMobileOpen, onClose }: SidebarP
           <span className="text-xl font-bold text-zinc-50 tracking-tight">vBudget</span>
           <p className="text-xs text-zinc-500 mt-0.5">expense tracker</p>
         </div>
+        <ProjectSwitcher />
         <nav className="flex-1 px-3 py-4 space-y-1" aria-label="Main menu">
           <NavLinks
             isActive={isActive}
@@ -226,6 +228,7 @@ export default function Sidebar({ currentUser, isMobileOpen, onClose }: SidebarP
                 <X className="w-5 h-5 text-zinc-400" />
               </button>
             </div>
+            <ProjectSwitcher onClose={onClose} />
             <nav className="flex-1 px-3 py-4 space-y-1" aria-label="Mobile main menu">
               <NavLinks
                 isActive={isActive}
