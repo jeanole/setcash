@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 import { Shield, X } from 'lucide-react';
 import SuperAdminModal from '@/components/superadmin/SuperAdminModal';
 import ProjectSwitcher from '@/components/layout/ProjectSwitcher';
@@ -44,6 +44,15 @@ function ReportsIcon({ className }: { className?: string }) {
   );
 }
 
+function VGeldIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+    </svg>
+  );
+}
+
 function SettingsIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -58,8 +67,60 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Bills', href: '/bills', icon: BillsIcon },
   { label: 'Budget', href: '/budget', icon: BudgetIcon },
   { label: 'Reports', href: '/reports', icon: ReportsIcon },
+  { label: 'V-Geld', href: '/vgeld', icon: VGeldIcon },
   { label: 'Settings', href: '/settings', icon: SettingsIcon },
 ];
+
+// ============================================================================
+// V-Geld Balance Widget
+// Fetches the current user's balance from /api/vgeld/balance and displays it.
+// ============================================================================
+
+function VGeldBalance() {
+  const pathname = usePathname();
+  const [balance, setBalance] = useState<number | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setIsLoading(true);
+    fetch('/api/vgeld/balance')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!cancelled && data && typeof data.balance === 'number') {
+          setBalance(data.balance);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [pathname]);
+
+  return (
+    <div
+      className="mx-3 mb-2 rounded-lg px-3 py-2 bg-white/5 border border-white/8"
+      aria-label="Your V-Geld balance"
+    >
+      <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-[0.12em] mb-0.5">
+        V-Geld Balance
+      </p>
+      {isLoading ? (
+        <div className="h-4 w-20 bg-white/10 rounded animate-pulse" />
+      ) : balance === null ? (
+        <p className="text-xs text-zinc-500">—</p>
+      ) : (
+        <p className={cn(
+          'text-sm font-semibold font-mono',
+          balance < 0 ? 'text-rose-500' : 'text-zinc-100'
+        )}>
+          {formatCurrency(balance)}
+        </p>
+      )}
+    </div>
+  );
+}
 
 interface SidebarProps {
   currentUser?: {
@@ -144,6 +205,7 @@ function NavLinks({
       <FilmRollNav>
         {mainItems}
       </FilmRollNav>
+      <VGeldBalance />
       {settingsSection}
     </>
   );
