@@ -9,9 +9,9 @@ import { z } from 'zod';
 
 // Validation schema for creating a V-Geld transfer
 const createVgeldSchema = z.object({
-  amount: z.number().positive('Amount must be a positive number'),
+  amount: z.number().positive('Amount must be a positive number').multipleOf(0.01, 'Amount must have at most 2 decimal places'),
   to: z.string().min(1, 'Recipient is required'),
-  from: z.string().optional(),
+  from: z.string().max(100, 'From must be 100 characters or fewer').optional(),
 });
 
 // GET /api/vgeld - List all V-Geld transfers for current project
