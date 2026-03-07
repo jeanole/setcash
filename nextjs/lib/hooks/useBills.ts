@@ -16,7 +16,7 @@ export function useBills() {
     try {
       const [billsData, logsData] = await Promise.all([
         api.getBills(),
-        api.getEditLogs(),
+        api.getEditLogs().catch(() => [] as EditLog[]),
       ]);
       setBills(billsData);
       setLogs(logsData);
@@ -77,7 +77,7 @@ export function useBill(id: string | null) {
     try {
       const [billData, logsData] = await Promise.all([
         api.getBill(id),
-        api.getEditLogs(),
+        api.getEditLogs().catch(() => [] as EditLog[]),
       ]);
       setBill(billData);
       setLogs(logsData.filter((l) => l.billId === id));

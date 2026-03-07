@@ -126,6 +126,7 @@ export default function NewBillPage() {
             filename: f.name,
             file: URL.createObjectURL(f),
           }))}
+          onRemoveExisting={(index) => setPendingFiles((prev) => prev.filter((_, i) => i !== index))}
         />
       </div>
 

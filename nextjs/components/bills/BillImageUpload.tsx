@@ -7,6 +7,7 @@ import CropModal from './CropModal';
 interface BillImageUploadProps {
   onUpload: (files: File[]) => void;
   existingImages?: { id: string; filename: string; file: string }[];
+  onRemoveExisting?: (index: number) => void;
   maxFiles?: number;
   maxSizeMB?: number;
 }
@@ -17,6 +18,7 @@ const ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.pdf'];
 export default function BillImageUpload({
   onUpload,
   existingImages = [],
+  onRemoveExisting,
   maxFiles = 10,
   maxSizeMB = 10,
 }: BillImageUploadProps) {
@@ -259,6 +261,57 @@ export default function BillImageUpload({
         </div>
       )}
 
+      {/* Existing images thumbnails */}
+      {existingImages.length > 0 && (
+        <div className="space-y-2">
+          <h4 className="text-sm font-medium text-slate-700">
+            Uploaded images ({existingImages.length})
+          </h4>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {existingImages.map((image, index) => (
+              <div
+                key={image.id}
+                className="relative aspect-square rounded-lg border border-slate-200 overflow-hidden bg-slate-100"
+              >
+                <img
+                  src={image.file}
+                  alt={image.filename}
+                  className="w-full h-full object-cover"
+                />
+
+                {/* Filename overlay */}
+                <div className="absolute inset-x-0 bottom-0 bg-black/70 text-white text-xs p-2">
+                  <p className="truncate">{image.filename}</p>
+                </div>
+
+                {/* Remove button */}
+                {onRemoveExisting && (
+                  <button
+                    onClick={() => onRemoveExisting(index)}
+                    className="absolute top-2 right-2 p-1 bg-rose-500 rounded text-white hover:bg-rose-600 transition-colors"
+                    aria-label="Remove image"
+                  >
+                    <svg
+                      className="w-3 h-3"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M6 18L18 6M6 6l12 12"
+                      />
+                    </svg>
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Selected files preview */}
       {files.length > 0 && (
         <div className="space-y-2">
@@ -335,13 +388,6 @@ export default function BillImageUpload({
             Upload {files.length} file{files.length !== 1 ? 's' : ''}
           </button>
         </div>
-      )}
-
-      {/* Existing images info */}
-      {existingImages.length > 0 && (
-        <p className="text-sm text-slate-500">
-          {existingImages.length} image{existingImages.length !== 1 ? 's' : ''} already uploaded
-        </p>
       )}
 
       {/* Crop Modal */}

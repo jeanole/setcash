@@ -243,8 +243,7 @@ export default function BillDetailPage({ params }: BillDetailPageProps) {
             <h3 className="text-sm font-medium text-slate-700 mb-4">Add More Images</h3>
             <BillImageUpload
               onUpload={uploadImages}
-              existingImages={bill.images || []}
-              maxFiles={10}
+              maxFiles={10 - (bill.images?.length || 0)}
             />
           </div>
         </div>
