@@ -1,6 +1,6 @@
 # vBudget — Project Index
 
-**Next Available IDs:** PROJ-18 · BUG-26 · CR-9
+**Next Available IDs:** PROJ-19 · BUG-27 · CR-9
 
 | ID | Type | Title | Status | Priority | Feature | Date |
 |----|------|-------|--------|----------|---------|------|
@@ -54,3 +54,5 @@
 | [BUG-23](BUG-23-budget-floating-point-precision.md) | Bug | Potential Floating Point Precision Issues | Resolved | Low | PROJ-8 | 2026-03-06 |
 | [BUG-24](BUG-24-superadmin-jwt-project-switch.md) | Bug | Superadmin JWT Not Updating on Project Switch | Resolved | Critical | PROJ-10 | 2026-03-06 |
 | [BUG-25](BUG-25-members-get-missing-admin-auth.md) | Bug | GET Members API Missing Admin-Only Authorization | Resolved | Medium | PROJ-10 | 2026-03-06 |
+| [PROJ-18](PROJ-18-atelier-ui-cinematic-effects.md) | Feature | Atelier UI + Cinematic Effects | In Progress | — | PROJ-4, PROJ-7 | 2026-03-07 |
+| [BUG-26](BUG-26-budget-billstatus-enum-draft.md) | Bug | Budget Page Crashes with Invalid BillStatus Enum Value "draft" | Open | Critical | PROJ-8 | 2026-03-07 |
