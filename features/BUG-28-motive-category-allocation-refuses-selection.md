@@ -1,6 +1,6 @@
 # BUG-28: Motive/Category Allocation Widget Refuses Selection on New Bill
 
-**Status:** Open
+**Status:** Resolved
 **Reported:** 2026-03-07
 **Severity:** High
 **Skill Tag:** [Frontend]
@@ -41,7 +41,9 @@ Related: BUG-29 (bill save/display failure) — both discovered during new bill 
 
 ## Resolution
 
-**Status:** Open
-**Resolved Date:** —
-**Fixed In:** — *(commit hash or PR)*
-**Fix Description:** —
+**Status:** Resolved
+**Resolved Date:** 2026-03-07
+**Fixed In:** fix(BUG-28,BUG-29): Fix allocation widget feedback loop and bill save error surfacing
+**Fix Description:** Two changes to `nextjs/components/bills/AllocationWidget.tsx`:
+1. Changed the `updateParent` filter from `.filter((r) => r.id && r.percentage > 0)` to `.filter((r) => r.id)` — rows with `percentage: 0` (newly selected but not yet allocated) are now included in the parent `value`, so they survive the re-render cycle.
+2. Added an `isInternalUpdate` ref (`useRef<boolean>(false)`) that is set to `true` before every internal `setRows` call (`addRow`, `removeRow`, `updateRow`). The `useEffect` that syncs `rows` from the external `value` prop checks this ref and skips the re-sync when the change originated from within the component, breaking the destructive feedback loop.

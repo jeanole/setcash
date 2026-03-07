@@ -38,18 +38,17 @@ export default function NewBillPage() {
         data.append('photos', file);
       });
 
-      const response = await api.createBill(data);
+      // api.createBill uses fetchWithError which throws on non-ok responses,
+      // including the API error message in the thrown Error.
+      await api.createBill(data);
 
-      if (response.ok) {
-        setResult({ type: 'success', message: 'Bill created successfully!' });
-        // Redirect after a short delay
-        setTimeout(() => {
-          router.push('/bills');
-        }, 1000);
-      } else {
-        throw new Error('Failed to create bill');
-      }
+      setResult({ type: 'success', message: 'Bill created successfully!' });
+      // Redirect after a short delay
+      setTimeout(() => {
+        router.push('/bills');
+      }, 1000);
     } catch (err) {
+      console.error('Bill creation failed:', err);
       setResult({
         type: 'error',
         message: err instanceof Error ? err.message : 'Failed to create bill',

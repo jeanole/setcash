@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { AllocationOption, Allocation } from '@/lib/types';
 import { formatCurrency, cn } from '@/lib/utils';
 
@@ -31,8 +31,15 @@ export default function AllocationWidget({
   // Internal state for the editable rows (excluding default)
   const [rows, setRows] = useState<{ id: string; percentage: number }[]>([]);
 
-  // Sync with external value
+  // Ref to prevent the useEffect from overwriting rows when the change originated internally
+  const isInternalUpdate = useRef<boolean>(false);
+
+  // Sync with external value — skip when the change was triggered by this component
   useEffect(() => {
+    if (isInternalUpdate.current) {
+      isInternalUpdate.current = false;
+      return;
+    }
     const nonDefaultRows = value
       .filter((a) => a.name !== defaultName)
       .map((a) => ({ id: a.id, percentage: a.percentage }));
@@ -50,12 +57,14 @@ export default function AllocationWidget({
 
   const addRow = () => {
     if (readOnly) return;
+    isInternalUpdate.current = true;
     setRows([...rows, { id: '', percentage: 0 }]);
   };
 
   const removeRow = (index: number) => {
     if (readOnly) return;
     const newRows = rows.filter((_, i) => i !== index);
+    isInternalUpdate.current = true;
     setRows(newRows);
     updateParent(newRows);
   };
@@ -68,13 +77,14 @@ export default function AllocationWidget({
     } else {
       newRows[index].percentage = Math.max(0, Math.min(100, Math.round(Number(val) || 0)));
     }
+    isInternalUpdate.current = true;
     setRows(newRows);
     updateParent(newRows);
   };
 
   const updateParent = (currentRows: { id: string; percentage: number }[]) => {
     const allocations: Allocation[] = currentRows
-      .filter((r) => r.id && r.percentage > 0)
+      .filter((r) => r.id)
       .map((r) => {
         const opt = options.find((o) => o.id === r.id);
         return { id: r.id, name: opt?.name || '', percentage: r.percentage };

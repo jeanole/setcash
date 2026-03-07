@@ -1,6 +1,6 @@
 # BUG-29: New Bill Not Saved or Not Appearing in Bills Table
 
-**Status:** Open
+**Status:** Resolved
 **Reported:** 2026-03-07
 **Severity:** High
 **Skill Tag:** [Frontend]
@@ -47,7 +47,7 @@ Related: BUG-28 (motive/category allocation refuses selection) — both discover
 
 ## Resolution
 
-**Status:** Open
-**Resolved Date:** —
-**Fixed In:** — *(commit hash or PR)*
-**Fix Description:** —
+**Status:** Resolved
+**Resolved Date:** 2026-03-07
+**Fixed In:** fix(BUG-28,BUG-29): Fix allocation widget feedback loop and bill save error surfacing
+**Fix Description:** Improved error surfacing in `nextjs/app/(protected)/bills/new/page.tsx`. The `api.createBill` wrapper (`fetchWithError`) already throws with the API's error message on non-ok HTTP responses, so the redundant `response.ok` else branch (which referenced `response.status`/`response.json()`/`response.statusText` — properties absent from the typed return value) was removed. A `console.error` call was added in the catch block so all bill creation failures are logged to the browser console with full error detail. The existing `result` state already surfaces the error message in the UI via the rose-colored banner.
