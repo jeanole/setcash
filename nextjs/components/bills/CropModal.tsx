@@ -73,6 +73,19 @@ export default function CropModal({
     img.onload = () => {
       // Initialize Cropper.js v2
       cropperRef.current = new Cropper!(img);
+
+      // Expand the default tiny selection to fill most of the canvas
+      requestAnimationFrame(() => {
+        const cropper = cropperRef.current;
+        if (!cropper) return;
+        const canvas = cropper.getCropperCanvas();
+        const selection = cropper.getCropperSelection();
+        if (canvas && selection) {
+          const { width, height } = canvas.getBoundingClientRect();
+          const pad = Math.round(Math.min(width, height) * 0.05);
+          selection.$change(pad, pad, width - pad * 2, height - pad * 2);
+        }
+      });
     };
 
     return () => {
@@ -173,9 +186,9 @@ export default function CropModal({
         </div>
 
         {/* Cropper Area */}
-        <div className="flex-1 bg-slate-900 min-h-[50vh] max-h-[60vh] relative">
+        <div className="flex-1 bg-slate-900 min-h-[50vh] max-h-[60vh] relative overflow-hidden">
           {file && file.type.startsWith('image/') ? (
-            <div className="w-full h-full flex items-center justify-center p-4">
+            <div className="absolute inset-0 flex items-center justify-center p-4">
               {!cropperLoaded ? (
                 <div className="text-white flex items-center gap-2">
                   <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">

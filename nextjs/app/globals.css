@@ -197,3 +197,12 @@ textarea:focus-visible {
   0% { transform-origin: left; transform: rotate(-35deg); }
   100% { transform-origin: left; transform: rotate(0deg); }
 }
+
+/* ---------------------------------------------------------------------------
+   Cropper.js v2 — make the canvas fill the modal crop area
+   --------------------------------------------------------------------------- */
+
+cropper-canvas {
+  width: 100% !important;
+  height: 100% !important;
+}

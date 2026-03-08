@@ -1,4 +1,4 @@
-# BUG-36: Uploaded Image Previews Displayed Too Small
+# BUG-36: Crop Selection Area Is Too Small in Crop Modal
 
 **Status:** Open
 **Reported:** 2026-03-08
@@ -11,23 +11,18 @@
 ## Description
 
 ### Expected Behavior
-Image previews in the upload component should be large enough to be clearly identifiable — users should be able to see what image they've selected before submitting.
+When the crop modal opens after selecting an image, the crop selection box should cover most of the image area so the user can immediately make a meaningful crop without having to resize from a tiny default.
 
 ### Actual Behavior
-The thumbnail previews of selected/uploaded images are displayed very small, making it difficult to verify the correct files were chosen.
+Cropper.js v2 initializes with a very small default selection box in the center of the image. The user must manually drag the handles to expand it before they can crop, which is tedious and unintuitive.
 
 ## Steps to Reproduce
 
-**New bill form:**
-1. Navigate to `/bills/new`
-2. Select one or more images via the file picker or drag-and-drop
-3. Observe the thumbnail previews — they appear very small
-
-**Bill detail page:**
-1. Navigate to `/bills/[id]`
-2. Scroll to the "Add More Images" section
-3. Select images
-4. Observe the thumbnail previews — they appear very small
+1. Navigate to `/bills/new` or `/bills/[id]`
+2. Select an image via the file picker or drag-and-drop
+3. The crop modal opens
+4. Observe: the crop selection box is very small (default Cropper.js v2 initial size)
+5. User must manually resize the selection to cover the desired area
 
 ## Environment
 
@@ -38,13 +33,18 @@ The thumbnail previews of selected/uploaded images are displayed very small, mak
 
 ## Additional Context
 
-The preview thumbnails are rendered inside `BillImageUpload` (`nextjs/components/bills/BillImageUpload.tsx`). The grid and image sizing CSS classes on the thumbnail container likely need to be increased. The `existingImages` thumbnail grid (added in BUG-31 fix) and the selected `files` preview list both appear affected.
+The `CropModal` component (`nextjs/components/bills/CropModal.tsx`) initializes Cropper.js v2 with `new Cropper(img)` and no configuration for the initial selection size. Cropper.js v2 defaults to a small centered selection.
+
+**Fix:** After Cropper initializes, call `getCropperCanvas()` and `getCropperSelection()` on the instance, then use `$change()` on the selection to fill most of the canvas area (with a small padding), using `requestAnimationFrame` to wait for the DOM to settle.
 
 ---
 
 ## Resolution
 
-**Status:** Open
-**Resolved Date:** —
+**Status:** Resolved
+**Resolved Date:** 2026-03-08
 **Fixed In:** — *(commit hash or PR)*
-**Fix Description:** —
+**Fix Description:** Two-part fix in `CropModal.tsx` and `globals.css`:
+1. Added `cropper-canvas { width: 100% !important; height: 100% !important; }` to `globals.css` so the Cropper.js v2 canvas element fills the modal area rather than sizing to the image's natural dimensions.
+2. Changed the cropper area inner wrapper from `w-full h-full` flex to `absolute inset-0` so it stretches to fill the fixed-height container reliably.
+3. After `new Cropper(img)`, used `requestAnimationFrame` + `getCropperSelection().$change()` to expand the initial selection to fill ~90% of the canvas (5% padding), replacing the default tiny centered box.
