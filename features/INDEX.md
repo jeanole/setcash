@@ -1,6 +1,6 @@
 # vBudget — Project Index
 
-**Next Available IDs:** PROJ-20 · BUG-37 · CR-11
+**Next Available IDs:** PROJ-20 · BUG-38 · CR-11
 
 | ID | Type | Title | Status | Priority | Feature | Date |
 |----|------|-------|--------|----------|---------|------|
@@ -69,3 +69,4 @@
 | [CR-10](CR-10-no-upload-button-new-bill.md) | CR | Remove Separate Upload Button from New Bill Form | Deployed | Medium | PROJ-7 | 2026-03-08 |
 | [BUG-35](BUG-35-add-more-images-upload-fails.md) | Bug | Add More Images Upload Fails on Bill Detail Page | Resolved | Critical | PROJ-7 | 2026-03-08 |
 | [BUG-36](BUG-36-image-preview-too-small.md) | Bug | Uploaded Image Previews Displayed Too Small | Resolved | Medium | PROJ-7 | 2026-03-08 |
+| [BUG-37](BUG-37-project-selection-no-effect.md) | Bug | Project Selection Has No Effect | Open | Critical | — | 2026-03-08 |
