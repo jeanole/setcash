@@ -9,7 +9,7 @@ import { IncomingMessage } from 'http';
 import fs from 'fs';
 import path from 'path';
 
-export const UPLOADS_DIR = path.join(process.cwd(), '..', 'data', 'uploads');
+export const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(process.cwd(), '..', 'data', 'uploads');
 
 export interface ParsedForm {
   fields: Fields;

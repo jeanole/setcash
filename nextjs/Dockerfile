@@ -55,6 +55,11 @@ COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.bin/prisma ./node_m
 COPY --from=builder --chown=nextjs:nodejs /app/dist/seed.js ./prisma/seed.js
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/bcryptjs ./node_modules/bcryptjs
 
+# Create uploads directory with correct ownership before dropping to non-root user
+RUN mkdir -p /app/data/uploads && chown nextjs:nodejs /app/data/uploads
+
+ENV UPLOADS_DIR=/app/data/uploads
+
 USER nextjs
 
 EXPOSE 3001
