@@ -258,44 +258,31 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
       // ------------------------------------------------------------------
       // Handle session update trigger from client (e.g., after project switch)
-      // The session parameter contains data passed from updateSession()
+      // Use the session data passed from updateSession() directly — it was
+      // validated server-side by POST /api/projects/switch before being sent.
       // ------------------------------------------------------------------
-      if (trigger === 'update' && session && token.id && userEmail) {
-        try {
-          const dbUser = await prisma.user.findUnique({
-            where: { id: token.id as string },
-            select: { defaultProjectId: true, isSuperAdmin: true },
-          });
-
-          if (dbUser?.defaultProjectId) {
-            if (dbUser.isSuperAdmin) {
-              // Superadmin: look up project directly (no membership required)
-              const projectDetails = await getSuperAdminProjectDetails(dbUser.defaultProjectId);
-              token.currentProjectId = projectDetails.currentProjectId;
-              token.currentProjectRole = 'admin';
-              token.currentProjectName = projectDetails.currentProjectName;
-            } else {
-              const projectDetails = await getCurrentProjectDetails(userEmail, dbUser.defaultProjectId);
-              token.currentProjectId = projectDetails.currentProjectId;
-              token.currentProjectRole = projectDetails.currentProjectRole;
-              token.currentProjectName = projectDetails.currentProjectName;
-              if (projectDetails.currentProjectRole) {
-                token.role = projectDetails.currentProjectRole;
-              }
-            }
+      if (trigger === 'update' && session) {
+        if ('currentProjectId' in session) {
+          token.currentProjectId = (session.currentProjectId as string | null) ?? null;
+        }
+        if ('currentProjectRole' in session) {
+          token.currentProjectRole = (session.currentProjectRole as 'user' | 'admin' | 'owner' | null) ?? null;
+          if (token.currentProjectRole) {
+            token.role = token.currentProjectRole;
           }
-        } catch (error) {
-          console.error('Error updating project in JWT callback:', error);
+        }
+        if ('currentProjectName' in session) {
+          token.currentProjectName = (session.currentProjectName as string | null) ?? null;
         }
       }
       // ------------------------------------------------------------------
       // Re-fetch current project from DB on every request to keep session in sync
-      // This ensures project switching is reflected even without explicit update
+      // Uses email for lookup (works for both credentials and Google OAuth users).
       // ------------------------------------------------------------------
-      else if (token.id && userEmail) {
+      else if (userEmail) {
         try {
           const dbUser = await prisma.user.findUnique({
-            where: { id: token.id as string },
+            where: { email: userEmail },
             select: { defaultProjectId: true, isSuperAdmin: true },
           });
 
@@ -318,12 +305,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                 }
               }
             }
-          } else {
-            // No default project set
+          } else if (dbUser && !dbUser.defaultProjectId) {
+            // User found but has no default project set
             token.currentProjectId = null;
             token.currentProjectRole = null;
             token.currentProjectName = null;
           }
+          // If dbUser is null (user not in DB yet), keep existing token values
         } catch (error) {
           console.error('Error refreshing project in JWT callback:', error);
           // Keep existing token values on error

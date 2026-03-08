@@ -38,7 +38,14 @@ N/A
 
 ## Resolution
 
-**Status:** Open
-**Resolved Date:** —
-**Fixed In:** — *(commit hash or PR)*
-**Fix Description:** —
+**Status:** Resolved
+**Resolved Date:** 2026-03-08
+**Fixed In:** fix(BUG-37)
+**Fix Description:**
+Three root causes fixed:
+
+1. **JWT `trigger === 'update'` block** (`auth.ts`): Was re-reading from DB using `token.id`, which is the Google OAuth provider ID for Google users (not the DB UUID). This caused silent token update failure. Fixed to use the `session` parameter data directly — it was already validated server-side by `/api/projects/switch`.
+
+2. **JWT `else if` block** (`auth.ts`): Was using `token.id` for DB user lookup (wrong for Google OAuth users). Changed to use `userEmail` which works for both credential and Google OAuth users. Also fixed an edge case where a null `dbUser` would incorrectly clear `currentProjectId`.
+
+3. **`/api/projects/switch` superadmin bypass**: Superadmins can now switch to any project without needing a `projectMember` record — they bypass the membership check and look up the project directly.

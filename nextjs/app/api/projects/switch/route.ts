@@ -19,21 +19,46 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { projectId } = switchSchema.parse(body);
 
-    // Verify user is a member of this project
-    const membership = await prisma.projectMember.findUnique({
-      where: {
-        projectId_userEmail: {
-          projectId,
-          userEmail: session.user.email,
-        },
-      },
-      include: {
-        project: true,
-      },
+    // Check if user is a superadmin (superadmins can switch to any project)
+    const dbUser = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      select: { isSuperAdmin: true },
     });
 
-    if (!membership) {
-      return NextResponse.json({ error: 'Not a member of this project' }, { status: 403 });
+    let projectName: string;
+    let projectRole: string;
+
+    if (dbUser?.isSuperAdmin) {
+      // Superadmin: verify project exists, bypass membership check
+      const project = await prisma.project.findUnique({
+        where: { id: projectId },
+        select: { name: true },
+      });
+
+      if (!project) {
+        return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+      }
+
+      projectName = project.name;
+      projectRole = 'admin';
+    } else {
+      // Regular user: verify membership
+      const membership = await prisma.projectMember.findUnique({
+        where: {
+          projectId_userEmail: {
+            projectId,
+            userEmail: session.user.email,
+          },
+        },
+        include: { project: true },
+      });
+
+      if (!membership) {
+        return NextResponse.json({ error: 'Not a member of this project' }, { status: 403 });
+      }
+
+      projectName = membership.project.name;
+      projectRole = membership.role;
     }
 
     // Update user's default project
@@ -44,8 +69,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       currentProjectId: projectId,
-      currentProjectRole: membership.role,
-      currentProjectName: membership.project.name,
+      currentProjectRole: projectRole,
+      currentProjectName: projectName,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
