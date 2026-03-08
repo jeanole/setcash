@@ -193,7 +193,7 @@ _To be added by /deploy_
 | [BUG-31](BUG-31-images-not-visible-after-upload.md) | High | Images Not Visible After Upload in New Bill Form | Resolved |
 | [BUG-32](BUG-32-view-bill-detail-error.md) | High | Clicking View on Bills Table Produces Error | Resolved |
 | [BUG-33](BUG-33-upload-not-working-after-crop-modal.md) | Critical | Upload Not Working After Crop Modal | Resolved |
-| [BUG-34](BUG-34-view-bill-error-in-table.md) | Critical | Clicking View in Bills Table Not Working | Open |
+| [BUG-34](BUG-34-view-bill-error-in-table.md) | Critical | Clicking View in Bills Table Not Working | Resolved |
 
 
 ---
@@ -858,3 +858,5 @@ RESULT: PASS
 No Critical or High severity bugs remain. The only new observation (OBS-1) is a pre-existing Low-severity cosmetic issue unrelated to the fixes under test.
 
 PIPELINE_RESULT: ready=YES bugs_frontend=0 bugs_backend=0
+
+| [BUG-35](BUG-35-add-more-images-upload-fails.md) | Critical | Add More Images Upload Fails on Bill Detail Page | Open |

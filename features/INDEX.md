@@ -1,6 +1,6 @@
 # vBudget — Project Index
 
-**Next Available IDs:** PROJ-20 · BUG-35 · CR-11
+**Next Available IDs:** PROJ-20 · BUG-36 · CR-11
 
 | ID | Type | Title | Status | Priority | Feature | Date |
 |----|------|-------|--------|----------|---------|------|
@@ -67,3 +67,4 @@
 | [BUG-33](BUG-33-upload-not-working-after-crop-modal.md) | Bug | Upload Not Working After Crop Modal | Resolved | Critical | PROJ-7 | 2026-03-08 |
 | [BUG-34](BUG-34-view-bill-error-in-table.md) | Bug | Clicking View in Bills Table Not Working | Resolved | Critical | PROJ-7 | 2026-03-08 |
 | [CR-10](CR-10-no-upload-button-new-bill.md) | CR | Remove Separate Upload Button from New Bill Form | Pending Review | Medium | PROJ-7 | 2026-03-08 |
+| [BUG-35](BUG-35-add-more-images-upload-fails.md) | Bug | Add More Images Upload Fails on Bill Detail Page | Open | Critical | PROJ-7 | 2026-03-08 |
