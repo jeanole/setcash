@@ -1,142 +1,47 @@
-# QA Test Plan
+# QA Test Plan — PROJ-7 Round 3
 
 ## Feature
-PROJ-15: V-Geld (Advance Money)
-Spec: features/PROJ-15-vgeld-advance-money.md
+Bills Feature — `features/PROJ-7-bills-feature.md`
 
 ## Context Summary
-V-Geld is a cash advance tracking feature. Users receive advance money (V-Geld) and their balance is calculated as received minus spent (from confirmed bills). The feature needs to be ported from Express (`routes/vgeld.js`, `public/js/vgeld.js`) to Next.js.
+- PROJ-7 is "Complete"; two prior QA rounds passed with production-ready verdict
+- Recent fixes in this session: BUG-31 (image thumbnails) and BUG-32 (bill view error)
+- BUG-31 fix: `BillImageUpload` now renders `existingImages` as thumbnails with remove buttons
+- BUG-32 fix: `useBill`/`useBills` hooks catch `getEditLogs()` errors gracefully (default to [])
+- Round 2 already verified: BUG-10 (isAdmin), BUG-11 (rate limiting) — do not re-test these
 
-**Key Files to Check:**
-- `nextjs/app/api/vgeld/route.ts` - GET/POST API route handler
-- `nextjs/app/api/vgeld/[id]/route.ts` - DELETE route handler
-- `nextjs/app/api/vgeld/analysis/route.ts` - Analysis endpoint
-- `nextjs/app/api/vgeld/balance/route.ts` - Balance endpoint
-- `nextjs/app/(protected)/vgeld/page.tsx` - V-Geld page
-- `nextjs/components/layout/Sidebar.tsx` - Sidebar balance display
-- `nextjs/prisma/schema.prisma` - Vgeld model (confirmed exists)
+## Scope
+Focused re-test: verify BUG-31 and BUG-32 fixes via code review, then spot-check key ACs.
 
-**Express Reference:**
-- `routes/vgeld.js` - Express V-Geld API routes
-- `public/js/vgeld.js` - Frontend JS module
+## BUG-31 Verification
+**File:** `nextjs/components/bills/BillImageUpload.tsx`
+- existingImages section renders a thumbnail grid (not plain text)
+- Each thumbnail shows img with src={image.file} and a filename overlay
+- Remove button is rendered when onRemoveExisting prop is provided
+- Remove button calls onRemoveExisting(index) on click
 
-## Pre-Test Checks
+**File:** `nextjs/app/(protected)/bills/new/page.tsx`
+- BillImageUpload receives onRemoveExisting callback
+- Callback removes entry from pendingFiles at the given index
 
-1. Verify Next.js API routes exist at `nextjs/app/api/vgeld/`
-2. Verify Next.js page exists at `nextjs/app/(protected)/vgeld/`
-3. Verify sidebar component displays V-Geld balance
-4. Verify Prisma schema has Vgeld model
+**File:** `nextjs/app/(protected)/bills/[id]/page.tsx`
+- Detail page no longer passes existingImages to BillImageUpload
+- Uses maxFiles={10 - (bill.images?.length || 0)} for slot calculation
 
-## Acceptance Criteria to Test
+## BUG-32 Verification
+**File:** `nextjs/lib/hooks/useBills.ts`
+- useBills.fetchBills() — getEditLogs() has .catch(() => [] as EditLog[])
+- useBill.fetchBill() — getEditLogs() has .catch(() => [] as EditLog[])
+- Promise.all still used but logs error won't cause the whole fetch to fail
 
-### AC-1: Sidebar Balance Display
-- [ ] Current user's V-Geld balance shown in sidebar
-- [ ] Balance formula: Total Received - Total Spent (confirmed bills only)
-- [ ] Balance updates on project switch
-- [ ] Format: "V-Geld: X,XXX.XX" with euro symbol and 2 decimals
-- [ ] Negative balances in red text
-- [ ] Zero balance shows "0.00"
+## Spot-check ACs
+- AC-5: Bill detail page loads (key page after BUG-32 fix)
+- AC-9: Bill history log renders as timeline
+- AC-3: New bill image upload — thumbnails visible after selecting and uploading files
 
-### AC-2: Page Route /vgeld
-- [ ] V-Geld page accessible from sidebar navigation
-- [ ] Page uses protected layout (requires auth)
-- [ ] Page displays within main content area
-- [ ] Loading skeleton while data fetches
-- [ ] Empty state: "No V-Geld transfers recorded"
+## TypeScript Check
+Run `npx tsc --noEmit` in `nextjs/` — zero errors expected
 
-### AC-3: User View (Transfer History)
-- [ ] List of V-Geld transfers received by current user
-- [ ] Each transfer shows: Date (DD.MM.YYYY), Amount, From, Created By
-- [ ] Sorted by date descending (newest first)
-- [ ] Empty state for no transfers
-
-### AC-4: Admin View (Summary Table)
-- [ ] All User V-Geld Summary Table
-- [ ] Columns: User, Received, Spent, Remaining, % Used
-- [ ] Negative remaining in red
-- [ ] High usage (>80%) in orange
-- [ ] Zero usage shows "0%"
-- [ ] "Add V-Geld Transfer" button
-
-### AC-5: Add Transfer Modal (Admin Only)
-- [ ] Modal triggered by button
-- [ ] Form: Amount (required, >0), To (dropdown of members), From (optional, default "External")
-- [ ] Zod validation on both client and server
-- [ ] Success: modal closes, list/table refreshes, sidebar updates
-- [ ] Error: inline validation errors
-
-### AC-6: Delete Transfer (Admin Only)
-- [ ] Delete button per row (admin only)
-- [ ] Confirmation dialog
-- [ ] On confirm: delete, refresh, update sidebar balance
-- [ ] On cancel: close dialog, no action
-- [ ] Deleting causing negative balance is allowed
-
-### API Tests
-| Endpoint | Method | Auth | Expected |
-|----------|--------|------|----------|
-| `/api/vgeld` | GET | Project Access | 200 with array of transfers |
-| `/api/vgeld` | POST | Project Admin | 200 with `{ ok: true, id }` |
-| `/api/vgeld/[id]` | DELETE | Project Admin | 200 with `{ ok: true }` |
-| `/api/vgeld/analysis` | GET | Project Access | 200 with user summaries |
-| `/api/vgeld/balance` | GET | Project Access | 200 with `{ balance: number }` |
-
-## Security Audit Scope
-
-### Authentication
-- [ ] Cannot access /api/vgeld without login (401)
-- [ ] Cannot access /api/vgeld/analysis without login (401)
-- [ ] Cannot access /api/vgeld/balance without login (401)
-- [ ] Cannot access /vgeld page without login (redirect to login)
-
-### Authorization
-- [ ] Non-admin cannot POST /api/vgeld (403)
-- [ ] Non-admin cannot DELETE /api/vgeld/[id] (403)
-- [ ] Cross-project isolation (cannot access other project V-Geld)
-
-### Input Validation
-- [ ] Negative amount rejected
-- [ ] Zero amount rejected
-- [ ] Non-numeric amount rejected
-- [ ] XSS in `from` field blocked
-- [ ] SQL injection in `to` field blocked
-- [ ] Non-member recipient rejected (400)
-- [ ] Max length on `from` field (100 chars)
-
-### Rate Limiting
-- [ ] POST endpoint rate-limited
-- [ ] DELETE endpoint rate-limited
-
-## Edge Cases to Test
-- [ ] Negative balance display
-- [ ] Delete making balance negative (allowed)
-- [ ] Non-member recipient (400 error)
-- [ ] Zero V-Geld (sidebar shows 0.00)
-- [ ] V-Geld with no bills (full remaining)
-- [ ] Very large amounts (formatting)
-- [ ] Decimal amounts (2 decimal places)
-- [ ] Project switch updates balance
-- [ ] Empty from field defaults to "External"
-- [ ] Special characters in from field (XSS prevention)
-
-## Regression Test Scope
-- [ ] Bills feature still works
-- [ ] Budget matrix still works
-- [ ] Sidebar navigation works
-- [ ] Authentication works
-- [ ] Project switching works
-
-## Responsive / Cross-Browser Scope
-
-### Breakpoints
-- [ ] 375px (mobile)
-- [ ] 768px (tablet)
-- [ ] 1440px (desktop)
-
-### Browsers
-- [ ] Chrome
-- [ ] Firefox
-- [ ] Safari
-
-## Commit Message
-`test(PROJ-15): QA Round 1 results`
+## Outcome
+Append a QA Round 3 Results section to `features/PROJ-7-bills-feature.md`.
+Commit: `test(PROJ-7): QA Round 3 — verify BUG-31 and BUG-32 fixes`

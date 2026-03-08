@@ -754,3 +754,104 @@ RESULT: PASS
 - Security Rate Limiting: Now PASS (rate limiting implemented)
 
 **Recommendation:** Ready for deployment after standard CI/CD pipeline.
+
+---
+
+## QA Round 3 Results
+
+**Tested:** 2026-03-08
+**App URL:** http://localhost:3001
+**Tester:** QA Engineer (AI)
+**Test Type:** Bug Fix Verification (Round 3 -- BUG-31 and BUG-32)
+
+### Summary
+
+| Category | Passed | Failed | Notes |
+|----------|--------|--------|-------|
+| BUG-31 Verification (Image Thumbnails) | 6 | 0 | All checks passed |
+| BUG-32 Verification (Bill View Error) | 3 | 0 | All checks passed |
+| AC Spot-checks | 3 | 0 | Detail page, history, new bill thumbnails |
+| TypeScript Compilation | 1 | 0 | Zero errors |
+
+**Production Ready:** YES
+
+---
+
+### BUG-31 Verification: Images Not Visible After Upload (High)
+
+**Expected:** Uploaded images appear as visual thumbnails (not plain text) in the new bill form, with remove buttons.
+
+| Test | File | What was checked | Result |
+|------|------|------------------|--------|
+| BUG-31-1 | BillImageUpload.tsx L264-313 | existingImages renders a CSS grid of thumbnails | PASS |
+| BUG-31-2 | BillImageUpload.tsx L278, L283-285 | Each thumbnail has img src={image.file} and filename overlay | PASS |
+| BUG-31-3 | BillImageUpload.tsx L288-308 | Remove button conditionally rendered when onRemoveExisting provided | PASS |
+| BUG-31-4 | BillImageUpload.tsx L290 | Remove button calls onRemoveExisting(index) on click | PASS |
+| BUG-31-5 | bills/new/page.tsx L122-131 | New bill page passes onRemoveExisting callback and maps pendingFiles to existingImages with createObjectURL | PASS |
+| BUG-31-6 | bills/[id]/page.tsx L244-248 | Detail page does not pass existingImages; uses maxFiles={10 - images.length} | PASS |
+
+**Result: PASS** -- BUG-31 fixed correctly.
+
+---
+
+### BUG-32 Verification: Clicking View on Bills Table Produces Error (High)
+
+**Expected:** getEditLogs() failure does not crash the bill list or detail page; it gracefully defaults to an empty array.
+
+| Test | File | What was checked | Result |
+|------|------|------------------|--------|
+| BUG-32-1 | useBills.ts L19 | useBills.fetchBills() has .catch(() => [] as EditLog[]) on getEditLogs() | PASS |
+| BUG-32-2 | useBills.ts L80 | useBill.fetchBill() has .catch(() => [] as EditLog[]) on getEditLogs() | PASS |
+| BUG-32-3 | useBills.ts L17-20, L78-81 | Promise.all still used, but getEditLogs .catch prevents rejection from propagating | PASS |
+
+**Result: PASS** -- BUG-32 fixed correctly.
+
+---
+
+### AC Spot-checks
+
+| Test | What was checked | Result |
+|------|------------------|--------|
+| AC-5 (Bill Detail Page) | Page uses useBill(id), handles loading/error states, renders all bill data | PASS |
+| AC-9 (Bill History Log) | BillHistoryTimeline renders sorted timeline with color-coded dots, badges, timestamps | PASS |
+| AC-3 (New Bill Thumbnails) | pendingFiles mapped to existingImages with createObjectURL for preview thumbnails | PASS |
+
+---
+
+### TypeScript Compilation
+
+| Test | Command | Result |
+|------|---------|--------|
+| tsc --noEmit | `cd nextjs && npx tsc --noEmit` | PASS (zero errors) |
+
+---
+
+### New Observations (Pre-existing, Not Regressions)
+
+#### OBS-1: formatCurrency Used for File Size Display (Low)
+- **Severity:** Low
+- **Skill Tag:** [Frontend]
+- **File:** `nextjs/components/bills/BillImageUpload.tsx`, line 355
+- **Description:** File size in the selected-files preview uses `formatCurrency(file.size / 1024 / 1024).replace('€', '')` which produces EUR-formatted output (e.g., "0,50  MB" with locale formatting artifacts) instead of a plain number format.
+- **Impact:** Cosmetic only -- file sizes display with minor formatting inconsistencies.
+- **Pre-existing:** Yes, not introduced by BUG-31/BUG-32 fixes.
+
+---
+
+### Final Assessment
+
+**Bugs Fixed Verification:** 2/2 passed (100%)
+
+| Bug | Severity | Status | Notes |
+|-----|----------|--------|-------|
+| BUG-31 | High | FIXED | Image thumbnails now visible after upload with remove functionality |
+| BUG-32 | High | FIXED | getEditLogs() errors caught gracefully; bill view no longer crashes |
+
+**AC Spot-checks:** 3/3 passed (100%)
+**TypeScript:** Zero compilation errors
+
+**Production Ready: YES**
+
+No Critical or High severity bugs remain. The only new observation (OBS-1) is a pre-existing Low-severity cosmetic issue unrelated to the fixes under test.
+
+PIPELINE_RESULT: ready=YES bugs_frontend=0 bugs_backend=0
