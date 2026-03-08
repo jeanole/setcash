@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import BillDetailHeader from '@/components/bills/BillDetailHeader';
@@ -10,15 +10,15 @@ import OcrFieldVerification from '@/components/bills/OcrFieldVerification';
 import BillHistoryTimeline from '@/components/bills/BillHistoryTimeline';
 import BillImageUpload from '@/components/bills/BillImageUpload';
 import { useBill, useBillOptions } from '@/lib/hooks/useBills';
-import { Allocation, BillImage } from '@/lib/types';
+import { BillImage } from '@/lib/types';
 import { formatCurrency, calculateTotal, cn } from '@/lib/utils';
 
 interface BillDetailPageProps {
-  params: Promise<{ id: string }>;
+  params: { id: string };
 }
 
 export default function BillDetailPage({ params }: BillDetailPageProps) {
-  const { id } = use(params);
+  const { id } = params;
   const router = useRouter();
   const {
     bill,

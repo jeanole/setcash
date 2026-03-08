@@ -1,6 +1,6 @@
 # BUG-34: Clicking View in Bills Table Not Working
 
-**Status:** Open
+**Status:** Resolved
 **Reported:** 2026-03-08
 **Severity:** Critical
 **Skill Tag:** [Frontend]
@@ -36,7 +36,7 @@ N/A
 
 ## Resolution
 
-**Status:** Open
-**Resolved Date:** —
-**Fixed In:** — *(commit hash or PR)*
-**Fix Description:** —
+**Status:** Resolved
+**Resolved Date:** 2026-03-08
+**Fixed In:** pending commit
+**Fix Description:** `BillDetailPage` used `use(params)` from React, but in Next.js 14 `params` is a plain synchronous object — not a Promise or React Context. React's `use()` throws `"An unsupported type was passed to use()"` for plain objects. Fixed by removing the `use()` wrapper and destructuring `params` directly: `const { id } = params`.
