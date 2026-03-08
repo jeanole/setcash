@@ -860,3 +860,4 @@ No Critical or High severity bugs remain. The only new observation (OBS-1) is a 
 PIPELINE_RESULT: ready=YES bugs_frontend=0 bugs_backend=0
 
 | [BUG-35](BUG-35-add-more-images-upload-fails.md) | Critical | Add More Images Upload Fails on Bill Detail Page | Open |
+| [BUG-36](BUG-36-image-preview-too-small.md) | Medium | Uploaded Image Previews Displayed Too Small | Open |
