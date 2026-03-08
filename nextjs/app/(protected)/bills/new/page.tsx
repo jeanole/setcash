@@ -120,13 +120,8 @@ export default function NewBillPage() {
       <div className="mb-6 bg-white rounded-xl border border-slate-200 shadow-sm p-6">
         <h2 className="text-lg font-semibold text-slate-900 mb-4">Images</h2>
         <BillImageUpload
-          onUpload={(files) => setPendingFiles((prev) => [...prev, ...files])}
-          existingImages={pendingFiles.map((f, i) => ({
-            id: `pending-${i}`,
-            filename: f.name,
-            file: URL.createObjectURL(f),
-          }))}
-          onRemoveExisting={(index) => setPendingFiles((prev) => prev.filter((_, i) => i !== index))}
+          selectedFiles={pendingFiles}
+          onSelectedFilesChange={setPendingFiles}
         />
       </div>
 

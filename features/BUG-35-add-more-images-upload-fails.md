@@ -42,7 +42,7 @@ The `BillImageUpload` component on the detail page calls `uploadImages` from `us
 
 ## Resolution
 
-**Status:** Open
-**Resolved Date:** —
+**Status:** Resolved
+**Resolved Date:** 2026-03-08
 **Fixed In:** — *(commit hash or PR)*
-**Fix Description:** —
+**Fix Description:** Root cause: `BillImageUpload` fired `onUpload` (typed `void`) fire-and-forget; errors from the async `uploadImages` hook landed in hook-internal state and were never shown to the user. Fix: redesigned `BillImageUpload` to expose `selectedFiles` + `onSelectedFilesChange` instead of `onUpload`. The detail page now owns `filesToUpload` state and renders an explicit Upload button with loading state, awaits the result, and shows success/error via the existing `result` banner.

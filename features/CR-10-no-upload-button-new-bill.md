@@ -33,4 +33,6 @@ The extra "Upload" step is redundant and confusing. In standard form UX, files s
 
 ## Resolution
 
-**Status:** Pending Review
+**Status:** Deployed
+**Resolved Date:** 2026-03-08
+**Notes:** Implemented as part of BUG-35 fix. `BillImageUpload` redesigned — no internal `onUpload` prop or Upload button. New bill page passes `selectedFiles={pendingFiles}` + `onSelectedFilesChange={setPendingFiles}`; files are included in the FormData on form submit. Also fixed object URL memory leak in the selected-files preview grid.

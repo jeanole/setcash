@@ -41,6 +41,8 @@ export default function BillDetailPage({ params }: BillDetailPageProps) {
   const { motives, categories } = useBillOptions();
   const [isAnalysing, setIsAnalysing] = useState(false);
   const [result, setResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [filesToUpload, setFilesToUpload] = useState<File[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
 
   // Poll for OCR status updates
   useEffect(() => {
@@ -242,9 +244,43 @@ export default function BillDetailPage({ params }: BillDetailPageProps) {
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
             <h3 className="text-sm font-medium text-slate-700 mb-4">Add More Images</h3>
             <BillImageUpload
-              onUpload={uploadImages}
+              selectedFiles={filesToUpload}
+              onSelectedFilesChange={setFilesToUpload}
               maxFiles={10 - (bill.images?.length || 0)}
             />
+            {filesToUpload.length > 0 && (
+              <button
+                onClick={async () => {
+                  setIsUploading(true);
+                  const ok = await uploadImages(filesToUpload);
+                  setIsUploading(false);
+                  if (ok) {
+                    setFilesToUpload([]);
+                    setResult({ type: 'success', message: `${filesToUpload.length} image${filesToUpload.length !== 1 ? 's' : ''} uploaded successfully` });
+                  } else {
+                    setResult({ type: 'error', message: 'Upload failed — please try again' });
+                  }
+                }}
+                disabled={isUploading}
+                className={cn(
+                  'mt-4 w-full py-2.5 bg-[#7C6AF6] text-white font-medium rounded-lg transition-colors',
+                  'hover:bg-[#6C5CE7] disabled:opacity-50 disabled:cursor-not-allowed',
+                  'flex items-center justify-center gap-2'
+                )}
+              >
+                {isUploading ? (
+                  <>
+                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    Uploading...
+                  </>
+                ) : (
+                  `Upload ${filesToUpload.length} file${filesToUpload.length !== 1 ? 's' : ''}`
+                )}
+              </button>
+            )}
           </div>
         </div>
 
