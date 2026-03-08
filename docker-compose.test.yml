@@ -6,6 +6,8 @@ services:
     ports:
       - "3001:3001"
     env_file: .env.test
+    volumes:
+      - vbudget-uploads-test:/app/data/uploads
     depends_on:
       postgres-test:
         condition: service_healthy
@@ -29,3 +31,4 @@ services:
 
 volumes:
   vbudget-pg-test-data:
+  vbudget-uploads-test:  # non-persistent: cleared when `docker-compose down -v`
