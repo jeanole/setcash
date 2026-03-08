@@ -1,8 +1,8 @@
 # PROJ-7: Bills Feature
 
-## Status: Change Requested
+## Status: In Progress
 **Created:** 2026-03-01
-**Last Updated:** 2026-03-06
+**Last Updated:** 2026-03-08
 
 ## Dependencies
 - Requires: PROJ-5 (NextAuth.js auth — protected routes)
@@ -174,6 +174,136 @@ _To be added by /qa_
 
 ## Deployment
 _To be added by /deploy_
+
+## Tech Design Revision (2026-03-08) — Full Architecture Review
+
+### What Was Found
+
+A deep code review identified the following root causes for the reported bugs, plus additional issues not yet reported:
+
+**Root Cause of BUG-35 (upload silent failure):**
+`BillImageUpload.onUpload` is typed as `(files: File[]) => void`. The component calls it fire-and-forget — it does not await the result. On the detail page, `onUpload` is the async `uploadImages` function. If it fails, `useBill` sets internal error state but the detail page never reads that state. The user sees files disappear with no feedback. Upload errors are completely silent.
+
+**Additional issues found (10 total):**
+1. Object URL memory leak on new-bill page (`URL.createObjectURL` called on every render, never revoked)
+2. Bulk delete in `BillList` calls N individual `DELETE` requests instead of the batch API
+3. Bills list is sorted twice — once in `useFilteredBills`, then again inside `BillList` (sorts current page slice only)
+4. OCR "Reject" and "Verify" are wired to the same handler — reject is not semantically distinct
+5. `verifiedFields` is hardcoded to `[]` — verified fields can briefly reappear before refetch completes
+6. `hasOcrEnabled` hardcoded to `true` — should come from project settings
+7. Stale closure bug in `handleDrop` (validateFiles not in `useCallback` deps)
+8. Image "Replace" in `ImageGallery` bypasses the crop flow (inconsistent with upload)
+9. `saveAllocations` function copy-pasted in 2 backend route files; `syncLegacyImageColumns` copy-pasted in 4
+10. Image upload route has no ownership check — any project member can upload to any bill
+
+---
+
+### Design Revision: What Changes
+
+#### 1. BillImageUpload Component — Redesign (Fixes BUG-35, BUG-36, CR-10, issues 1 and 7)
+
+The component has a fundamental responsibility conflict: it tries to be both a file **picker** (new bill page — no actual upload) and an **uploader** (detail page — calls API immediately). This is the root of BUG-35 and CR-10.
+
+**New design:** `BillImageUpload` becomes a pure **file picker + preview component** only.
+
+```
+BillImageUpload (redesigned)
+├── Camera button ("Take Photo")
+├── Drag-and-drop zone
+├── Crop Modal (sequences through each new file)
+├── Existing images preview grid  ← passed in as prop, removable
+└── Selected (new) files preview grid  ← parent owns this state
+    └── Bigger thumbnails: 2-col mobile, 3-col desktop (fixes BUG-36)
+```
+
+**Props change:**
+- **Remove:** `onUpload: (files: File[]) => void`
+- **Add:** `selectedFiles: File[]` + `onSelectedFilesChange: (files: File[]) => void`
+- **Remove:** internal `files` state (parent now owns it)
+- **Remove:** the "Upload N files" button (moved to parent pages)
+- **Fix:** URL.createObjectURL memory leak — revoke URLs in `useEffect` cleanup
+- **Fix:** stale closure in `handleDrop` — use `useRef` for current validation state
+
+#### 2. New Bill Page — Revised (Fixes CR-10)
+
+```
+New Bill Page (/bills/new)
+├── selectedFiles state  ← owned by page
+├── BillImageUpload
+│   ├── selectedFiles={selectedFiles}
+│   └── onSelectedFilesChange={setSelectedFiles}
+└── BillForm
+    └── Submit → FormData includes selectedFiles + all fields together (one step, no Upload button)
+```
+
+#### 3. Bill Detail Page — Revised (Fixes BUG-35)
+
+```
+Bill Detail Page (/bills/[id])
+├── ImageGallery (existing uploaded images — unchanged)
+└── "Add More Images" section
+    ├── filesToUpload state  ← owned by page
+    ├── BillImageUpload
+    │   ├── selectedFiles={filesToUpload}
+    │   └── onSelectedFilesChange={setFilesToUpload}
+    ├── [upload error banner — shown when uploadImages fails]
+    └── "Upload X files" button (disabled when 0 files or uploading)
+        ├── onClick: await uploadImages(filesToUpload), clear state on success
+        ├── isUploading state → spinner
+        └── uploadError state → error banner
+```
+
+#### 4. Bills List Page — Revised (Fixes issues 2 and 3)
+
+- Wire `BillList` `onBulkDelete` prop to the `bulkDelete` hook method (single batch API call)
+- Remove duplicate sort from `BillList` — sorting belongs only in `useFilteredBills`
+- `BillList` sort state removed; page-level `sort` state passed down
+
+---
+
+### What Stays The Same (No Changes Needed)
+
+| Component | Status |
+|-----------|--------|
+| All API route handlers | Solid — correct auth, Zod validation, project scoping |
+| `useBill` / `useBills` hooks | Solid — clean separation from UI |
+| `ImageGallery` | Solid — lightbox, drag-reorder, crop/delete/replace |
+| `AllocationWidget` | Solid — percentage math, default fill |
+| `BillDetailHeader` | Solid — admin actions, status guards |
+| `BillHistoryTimeline` | Solid — clean, no state |
+| `BillStatusBadge` | Solid — pure presentational |
+| `CropModal` | Solid — Cropper.js v2 integration |
+| `BillFilters` | Solid — clean controlled component |
+| `BillForm` | Solid — field management and validation |
+| `OcrFieldVerification` | Functional, but Reject/Verify are semantically identical (separate CR) |
+
+---
+
+### Deferred to Separate CRs (Architecture Issues, Lower Priority)
+
+| Issue | Severity | Recommendation |
+|-------|----------|---------------|
+| `saveAllocations` + `syncLegacyImageColumns` duplicated across route files | Medium | Extract to `lib/bills.ts` shared module |
+| GET /api/bills returns all bills with no pagination limit | Medium | Add server-side pagination (cursor-based) |
+| GET /api/bills/log returns all logs with no limit | Low | Add `billId` scoping + limit at the call site |
+| Image upload has no ownership check (any project member can upload to any bill) | Medium | Add `submittedByEmail === session.user.email OR isAdmin` guard |
+| OCR "Reject" should revert the field value, not just verify it | Low | Separate CR — needs UX decision |
+| `hasOcrEnabled` hardcoded to `true` | Low | Read from project settings once that feature exists |
+| `billNumber` generation is not atomic (race condition) | Low | Add DB-level sequence or unique constraint |
+
+---
+
+### Files That Change (This Sprint)
+
+```
+nextjs/components/bills/BillImageUpload.tsx  ← full redesign
+nextjs/app/(protected)/bills/new/page.tsx    ← use new BillImageUpload API
+nextjs/app/(protected)/bills/[id]/page.tsx  ← own upload state, show errors
+nextjs/app/(protected)/bills/page.tsx       ← wire bulkDelete, lift sort
+nextjs/components/bills/BillList.tsx        ← remove internal sort, add onBulkDelete prop
+```
+
+---
 
 ## Change Requests
 
