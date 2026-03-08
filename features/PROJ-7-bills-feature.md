@@ -191,7 +191,7 @@ _To be added by /deploy_
 | [BUG-29](BUG-29-new-bill-not-saved-or-not-shown.md) | High | New Bill Not Saved or Not Appearing in Bills Table | Resolved |
 | [BUG-31](BUG-31-images-not-visible-after-upload.md) | High | Images Not Visible After Upload in New Bill Form | Resolved |
 | [BUG-32](BUG-32-view-bill-detail-error.md) | High | Clicking View on Bills Table Produces Error | Resolved |
-| [BUG-33](BUG-33-upload-not-working-after-crop-modal.md) | Critical | Upload Not Working After Crop Modal | Open |
+| [BUG-33](BUG-33-upload-not-working-after-crop-modal.md) | Critical | Upload Not Working After Crop Modal | Resolved |
 
 
 ---

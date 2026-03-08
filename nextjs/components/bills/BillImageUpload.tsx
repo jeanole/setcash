@@ -117,11 +117,14 @@ export default function BillImageUpload({
       setFilesToProcess([]);
       setCurrentFileIndex(0);
 
-      // Add processed files to the files list
-      if (processedFilesRef.current.length > 0) {
-        setFiles((prev) => [...prev, ...processedFilesRef.current]);
-      }
+      // Snapshot ref before clearing — setFiles updater runs deferred,
+      // so reading processedFilesRef.current inside it would see []
+      const processed = [...processedFilesRef.current];
       processedFilesRef.current = [];
+
+      if (processed.length > 0) {
+        setFiles((prev) => [...prev, ...processed]);
+      }
     } else {
       // Process next file
       setCurrentFileIndex(nextIndex);
