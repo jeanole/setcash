@@ -7,6 +7,7 @@ import ProjectsTab from './ProjectsTab';
 import UsersTab from './UsersTab';
 import MembersSubModal from './MembersSubModal';
 import PasswordResetModal from './PasswordResetModal';
+import CreateUserModal from './CreateUserModal';
 import ToastContainer from './ToastContainer';
 import { Project, User, TabType } from './types';
 import { useSuperAdminApi, apiFetch } from './useSuperAdminApi';
@@ -27,6 +28,7 @@ export default function SuperAdminModal({ isOpen, onClose, currentUserEmail }: S
   const [isMembersModalOpen, setIsMembersModalOpen] = useState(false);
   const [resetPasswordUser, setResetPasswordUser] = useState<User | null>(null);
   const [isPasswordResetModalOpen, setIsPasswordResetModalOpen] = useState(false);
+  const [isCreateUserModalOpen, setIsCreateUserModalOpen] = useState(false);
 
   const { toasts, showToast, removeToast, handleApiError } = useSuperAdminApi();
 
@@ -67,7 +69,7 @@ export default function SuperAdminModal({ isOpen, onClose, currentUserEmail }: S
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isOpen) {
         // Don't close if nested modals are open
-        if (isMembersModalOpen || isPasswordResetModalOpen) {
+        if (isMembersModalOpen || isPasswordResetModalOpen || isCreateUserModalOpen) {
           return;
         }
         onClose();
@@ -76,7 +78,7 @@ export default function SuperAdminModal({ isOpen, onClose, currentUserEmail }: S
 
     window.addEventListener('keydown', handleEscape);
     return () => window.removeEventListener('keydown', handleEscape);
-  }, [isOpen, onClose, isMembersModalOpen, isPasswordResetModalOpen]);
+  }, [isOpen, onClose, isMembersModalOpen, isPasswordResetModalOpen, isCreateUserModalOpen]);
 
   const handleDeleteProject = useCallback(async (id: string) => {
     try {
@@ -132,6 +134,20 @@ export default function SuperAdminModal({ isOpen, onClose, currentUserEmail }: S
     setIsPasswordResetModalOpen(false);
     setResetPasswordUser(null);
   }, []);
+
+  const handleOpenCreateUser = useCallback(() => {
+    setIsCreateUserModalOpen(true);
+  }, []);
+
+  const handleCloseCreateUser = useCallback(() => {
+    setIsCreateUserModalOpen(false);
+  }, []);
+
+  const handleUserCreated = useCallback(async () => {
+    setIsCreateUserModalOpen(false);
+    await fetchUsers();
+    showToast('User created successfully');
+  }, [fetchUsers, showToast]);
 
   const handleConfirmResetPassword = useCallback(async (email: string): Promise<string> => {
     const response = await apiFetch<{ ok: boolean; password?: string }>(
@@ -242,6 +258,7 @@ export default function SuperAdminModal({ isOpen, onClose, currentUserEmail }: S
                 onToggleAdmin={handleToggleAdmin}
                 onDeleteUser={handleDeleteUser}
                 onResetPassword={handleResetPassword}
+                onCreateUser={handleOpenCreateUser}
               />
             )}
           </div>
@@ -260,6 +277,12 @@ export default function SuperAdminModal({ isOpen, onClose, currentUserEmail }: S
         user={resetPasswordUser}
         onClose={handleClosePasswordReset}
         onConfirmReset={handleConfirmResetPassword}
+      />
+
+      <CreateUserModal
+        isOpen={isCreateUserModalOpen}
+        onClose={handleCloseCreateUser}
+        onUserCreated={handleUserCreated}
       />
 
       {/* Toast Notifications */}

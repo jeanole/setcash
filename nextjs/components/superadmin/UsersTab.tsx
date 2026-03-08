@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { Shield, ShieldOff, KeyRound, Trash2 } from 'lucide-react';
+import { Shield, ShieldOff, KeyRound, Trash2, UserPlus } from 'lucide-react';
 import DataTable, { Column } from '@/components/ui/DataTable';
 import ConfirmationDialog from '@/components/ui/ConfirmationDialog';
 import RoleBadge from '@/components/ui/RoleBadge';
@@ -14,6 +14,7 @@ interface UsersTabProps {
   onToggleAdmin: (email: string, isSuperAdmin: boolean) => Promise<void>;
   onDeleteUser: (email: string) => Promise<void>;
   onResetPassword: (user: User) => void;
+  onCreateUser: () => void;
 }
 
 export default function UsersTab({
@@ -23,6 +24,7 @@ export default function UsersTab({
   onToggleAdmin,
   onDeleteUser,
   onResetPassword,
+  onCreateUser,
 }: UsersTabProps) {
   const [toggleDialog, setToggleDialog] = useState<{ isOpen: boolean; user: User | null }>({
     isOpen: false,
@@ -166,6 +168,19 @@ export default function UsersTab({
 
   return (
     <div className="flex flex-col h-full">
+      {/* Header row */}
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-sm text-slate-500">{users.length} user{users.length !== 1 ? 's' : ''}</p>
+        <button
+          onClick={onCreateUser}
+          className="flex items-center gap-2 px-4 py-2 bg-[#7C6AF6] text-white text-sm font-medium rounded-lg hover:bg-[#6C5CE7] transition-colors"
+          aria-label="Create new user"
+        >
+          <UserPlus className="w-4 h-4" />
+          Create User
+        </button>
+      </div>
+
       <div className="flex-1 overflow-auto">
         <DataTable
           columns={columns}
