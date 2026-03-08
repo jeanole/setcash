@@ -98,7 +98,7 @@ export default function ImageGallery({
   // Download image
   const handleDownload = (image: BillImage) => {
     const link = document.createElement('a');
-    link.href = `/uploads/${image.file}`;
+    link.href = `/api/uploads/${image.file}`;
     link.download = image.filename || 'image';
     document.body.appendChild(link);
     link.click();
@@ -111,7 +111,7 @@ export default function ImageGallery({
 
     try {
       // Fetch the current image as a blob
-      const resp = await fetch(`/uploads/${image.file}`);
+      const resp = await fetch(`/api/uploads/${image.file}`);
       if (!resp.ok) {
         console.error('Could not load image for cropping');
         return;
@@ -188,7 +188,7 @@ export default function ImageGallery({
             )}
           >
             <img
-              src={`/uploads/${image.file}`}
+              src={`/api/uploads/${image.file}`}
               alt={image.filename}
               className="w-full h-full object-cover"
               onClick={() => openLightbox(index)}
@@ -434,7 +434,7 @@ export default function ImageGallery({
 
           {/* Image */}
           <img
-            src={`/uploads/${images[lightboxIndex].file}`}
+            src={`/api/uploads/${images[lightboxIndex].file}`}
             alt={images[lightboxIndex].filename}
             className="max-w-full max-h-[85vh] object-contain"
             onClick={(e) => e.stopPropagation()}
