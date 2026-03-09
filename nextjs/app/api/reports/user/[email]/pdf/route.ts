@@ -13,8 +13,8 @@ import { UPLOADS_DIR } from '@/lib/upload';
 import fs from 'fs';
 import path from 'path';
 import { PassThrough } from 'stream';
-// @ts-ignore
-import PDFDocument from 'pdfkit';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const PDFDocument = require('pdfkit');
 
 export async function GET(
   req: NextRequest,

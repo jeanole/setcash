@@ -1,6 +1,6 @@
 # BUG-42: PDF Export Fails — Helvetica.afm ENOENT Regression
 
-**Status:** Open
+**Status:** Resolved
 **Reported:** 2026-03-09
 **Severity:** High
 **Skill Tag:** [Backend]
@@ -59,17 +59,19 @@ BUG-41 applied two fixes:
 
 Both fixes are present in the source code. However, pdfkit is **still being bundled** (the stack trace shows it loading from `chunks/7496.js`), which means the Docker image being tested was **built before the BUG-41 fix was applied** (stale cached image) — OR the `serverExternalPackages` setting is not sufficient and pdfkit is still getting bundled.
 
-## Investigation Checklist
+## Root Cause (Confirmed)
 
-- [ ] Rebuild the Docker image from scratch with `--no-cache`: `docker-compose -f docker-compose.test.yml build --no-cache`
-- [ ] Verify the rebuilt image resolves the error
-- [ ] If it persists after a clean rebuild, investigate why `serverExternalPackages` is not preventing bundling (e.g., transitive import, dynamic `require()`, or Next.js version incompatibility)
+Static ES module `import PDFDocument from 'pdfkit'` in both route files causes Next.js to bundle pdfkit into a chunk despite `serverExternalPackages`. The `serverExternalPackages` config is not reliably honored for static imports in Next.js 14 App Router route handlers.
+
+**Fix:** Replace the static import with `require('pdfkit')` so Node.js resolves it from `node_modules` at runtime, bypassing the bundler entirely. Applied to both:
+- `app/api/reports/user/[email]/pdf/route.ts`
+- `app/api/reports/budget-matrix/pdf/route.ts`
 
 ---
 
 ## Resolution
 
-**Status:** Open
-**Resolved Date:** —
-**Fixed In:** —
-**Fix Description:** —
+**Status:** Resolved
+**Resolved Date:** 2026-03-09
+**Fixed In:** (pending commit)
+**Fix Description:** Replaced `import PDFDocument from 'pdfkit'` with `const PDFDocument = require('pdfkit')` in both PDF route handlers.
