@@ -3,6 +3,7 @@ import { auth } from '@/auth';
 import { prisma } from '@/lib/db';
 import OcrSettingsForm from '@/components/settings/OcrSettingsForm';
 import type { ProjectOcrSettings } from '@/lib/api/settings';
+import { maskApiKey } from '@/lib/ocr';
 
 export default async function AiAnalysisSettingsPage() {
   const session = await auth();
@@ -56,7 +57,7 @@ export default async function AiAnalysisSettingsPage() {
     settings = {
       ocrEnabled: get('ocrEnabled') === 'true',
       ocrProvider: get('ocrProvider') ?? 'openai',
-      ocrApiKey: get('ocrApiKey') ?? null,
+      ocrApiKey: maskApiKey(get('ocrApiKey') || '') || null,
       ocrBaseUrl: get('ocrBaseUrl') ?? null,
     };
   } catch {

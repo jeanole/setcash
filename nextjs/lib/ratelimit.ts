@@ -47,10 +47,8 @@ function createRateLimiter(config: { limiter: ReturnType<typeof Ratelimit.slidin
     });
   }
 
-  // Log once in development that we're using mock rate limiting
-  if (process.env.NODE_ENV === 'development') {
-    console.warn(`[RateLimit] Using mock rate limiter for "${config.name}" - UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN not configured`);
-  }
+  // Always warn that we're using mock rate limiting — all requests will be allowed
+  console.warn('[RateLimit] UPSTASH_REDIS_REST_URL not set — using mock rate limiter. All requests will be allowed.');
 
   return new MockRatelimit();
 }

@@ -7,6 +7,7 @@
 import crypto from 'crypto';
 import path from 'path';
 import fs from 'fs';
+import { Prisma } from '@prisma/client';
 import { db as prisma } from '@/lib/db';
 import { UPLOADS_DIR, readFileForOCR } from '@/lib/upload';
 
@@ -314,7 +315,7 @@ export async function runOcrJob(billId: string, projectId: string): Promise<void
   const jobStart = Date.now();
   let resolvedProvider: string | null = null;
 
-  const writeLog = (
+  const writeLog = async (
     status: string,
     {
       fieldsWritten = null,
@@ -327,7 +328,7 @@ export async function runOcrJob(billId: string, projectId: string): Promise<void
     } = {}
   ) => {
     try {
-      prisma.ocrLog.create({
+      await prisma.ocrLog.create({
         data: {
           projectId,
           billId,
@@ -380,7 +381,7 @@ export async function runOcrJob(billId: string, projectId: string): Promise<void
 
     const label = errorType ? `${errorType}: ` : '';
     console.error(`[OCR] Bill ${billId}: FAILED — ${label}${reason}`);
-    writeLog('failed', { errorDetail: reason });
+    await writeLog('failed', { errorDetail: reason });
 
     try {
       await prisma.editLog.create({
@@ -518,8 +519,16 @@ export async function runOcrJob(billId: string, projectId: string): Promise<void
 
     for (const [field, check] of Object.entries(fieldChecks)) {
       if (check()) {
-        updates[field] = extracted[field as keyof OcrResult];
-        writtenFields.push(field);
+        if (field === 'date' && extracted.date) {
+          const d = new Date(extracted.date + 'T00:00:00.000Z');
+          if (!isNaN(d.getTime())) {
+            updates['date'] = d;
+            writtenFields.push(field);
+          }
+        } else {
+          updates[field] = extracted[field as keyof OcrResult];
+          writtenFields.push(field);
+        }
       } else if (extracted[field as keyof OcrResult] != null) {
         skippedFields.push(field);
       }
@@ -557,12 +566,12 @@ export async function runOcrJob(billId: string, projectId: string): Promise<void
       where: { id: billId },
       data: {
         ocrStatus: 'done',
-        ocrFields: finalFields ? JSON.stringify(finalFields) : undefined,
+        ocrFields: finalFields && finalFields.length > 0 ? finalFields : Prisma.DbNull,
       },
     });
 
     // 10. Write success log
-    writeLog('done', {
+    await writeLog('done', {
       fieldsWritten: finalFields,
       aiResponse: rawText,
     });
@@ -599,7 +608,7 @@ export async function runOcrJob(billId: string, projectId: string): Promise<void
     );
   } catch (e) {
     const errorType = (e as Error).name || 'Error';
-    fail((e as Error).message || 'Unknown error', errorType);
+    await fail((e as Error).message || 'Unknown error', errorType);
   }
 }
 

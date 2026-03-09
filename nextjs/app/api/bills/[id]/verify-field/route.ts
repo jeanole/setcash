@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { db as prisma } from '@/lib/db';
+import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 
 const ALLOWED_OCR_FIELDS = ['date', 'vendor', 'item', 'type', 'brutto19', 'brutto7', 'brutto0', 'amount', 'comment'];
@@ -75,8 +76,8 @@ export async function PATCH(
       await prisma.bill.update({
         where: { id },
         data: {
-          ocrFields: undefined,
-          ocrStatus: undefined,
+          ocrFields: Prisma.DbNull,
+          ocrStatus: null,
         },
       });
     } else {
