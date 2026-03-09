@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import dynamic from 'next/dynamic';
 import { cn, formatCurrency } from '@/lib/utils';
-import { Shield, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import SuperAdminModal from '@/components/superadmin/SuperAdminModal';
 import ProjectSwitcher from '@/components/layout/ProjectSwitcher';
 
@@ -177,33 +177,20 @@ function NavLinks({
       <p className="px-[14px] mb-2 text-[10px] font-semibold text-zinc-500 uppercase tracking-[0.12em]">
         Settings
       </p>
-      <a
-        href="/settings/system"
-        onClick={() => onClose?.()}
-        className={cn(
-          'flex items-center gap-3 py-2.5 rounded-lg text-[13.5px] font-medium transition-colors border-l-2 pl-[14px]',
-          isActive('/settings/system')
-            ? 'text-zinc-50 bg-white/10 border-[#7C6AF6]'
-            : 'text-zinc-400 hover:text-zinc-50 hover:bg-white/6 border-transparent'
-        )}
-      >
-        <svg
-          className={cn('w-5 h-5 shrink-0', isActive('/settings/system') ? 'opacity-100' : 'opacity-60')}
-          fill="none" stroke="currentColor" viewBox="0 0 24 24"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-            d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-        </svg>
-        System
-      </a>
       {isSuperAdmin && (
         <button
-          onClick={onOpenSuperAdmin}
+          onClick={() => { onClose?.(); onOpenSuperAdmin(); }}
           className="w-full flex items-center gap-3 py-2.5 rounded-lg text-[13.5px] font-medium transition-colors text-amber-400 hover:bg-white/6 hover:text-amber-300 border-l-2 border-transparent pl-[14px]"
           aria-label="Open Super Admin panel"
         >
-          <Shield className="w-5 h-5 shrink-0 opacity-60" />
-          Super Admin
+          <svg
+            className="w-5 h-5 shrink-0 opacity-60"
+            fill="none" stroke="currentColor" viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+          </svg>
+          System
         </button>
       )}
     </div>

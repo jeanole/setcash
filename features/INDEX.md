@@ -75,4 +75,4 @@
 | [BUG-40](BUG-40-ocr-date-prisma-datetime-error.md) | Bug | OCR Job Crashes with Prisma DateTime Error When Date Extracted | Resolved | High | PROJ-19 | 2026-03-09 |
 | [BUG-41](BUG-41-pdf-export-helvetica-afm-not-found.md) | Bug | User PDF Export Fails with ENOENT — Helvetica.afm Not Found in Docker | Resolved | High | PROJ-11 | 2026-03-09 |
 | [BUG-42](BUG-42-pdf-export-helvetica-afm-regression.md) | Bug | PDF Export Fails — Helvetica.afm ENOENT Regression | Resolved | High | PROJ-11 | 2026-03-09 |
-| [BUG-43](BUG-43-system-nav-visible-all-users-blank-error.md) | Bug | System Nav Item Visible to All Users and Produces Blank Error | Open | Critical | PROJ-17 | 2026-03-09 |
+| [BUG-43](BUG-43-system-nav-visible-all-users-blank-error.md) | Bug | System Nav Item Visible to All Users and Produces Blank Error | Resolved | Critical | PROJ-17 | 2026-03-09 |

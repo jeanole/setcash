@@ -1,6 +1,6 @@
 # BUG-43: System Nav Item Visible to All Users and Produces Blank Error
 
-**Status:** Open
+**Status:** Resolved
 **Reported:** 2026-03-09
 **Severity:** Critical
 **Skill Tag:** [Frontend]
@@ -58,7 +58,7 @@ The "Super Admin" button below it IS correctly guarded by `{isSuperAdmin && ...}
 
 ## Resolution
 
-**Status:** Open
-**Resolved Date:** —
-**Fixed In:** —
-**Fix Description:** —
+**Status:** Resolved
+**Resolved Date:** 2026-03-09
+**Fixed In:** (pending commit)
+**Fix Description:** Replaced the unguarded "System" `<a>` link and separate "Super Admin" button with a single `isSuperAdmin`-guarded "System" button that opens the Super Admin modal. Non-superadmins no longer see any system settings entry.
