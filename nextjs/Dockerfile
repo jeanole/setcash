@@ -55,6 +55,22 @@ COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.bin/prisma ./node_m
 COPY --from=builder --chown=nextjs:nodejs /app/dist/seed.js ./prisma/seed.js
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/bcryptjs ./node_modules/bcryptjs
 
+# Copy pdfkit with its font data files (not traced by Next.js standalone output)
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/pdfkit ./node_modules/pdfkit
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/fontkit ./node_modules/fontkit
+
+# Copy node-telegram-bot-api (not traced by Next.js standalone output)
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/node-telegram-bot-api ./node_modules/node-telegram-bot-api
+
+# Copy tsx for running the custom server
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/tsx ./node_modules/tsx
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.bin/tsx ./node_modules/.bin/tsx
+
+# Copy custom server source and lib
+COPY --from=builder --chown=nextjs:nodejs /app/server.ts ./server.ts
+COPY --from=builder --chown=nextjs:nodejs /app/lib ./lib
+COPY --from=builder --chown=nextjs:nodejs /app/tsconfig.json ./tsconfig.json
+
 # Create uploads directory with correct ownership before dropping to non-root user
 RUN mkdir -p /app/data/uploads && chown nextjs:nodejs /app/data/uploads
 
@@ -70,4 +86,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
 ENV PORT=3001
 ENV HOSTNAME="0.0.0.0"
 
-CMD ["sh", "-c", "node node_modules/prisma/build/index.js migrate deploy && node prisma/seed.js && node server.js"]
+CMD ["sh", "-c", "node node_modules/prisma/build/index.js migrate deploy && node prisma/seed.js && node_modules/.bin/tsx server.ts"]

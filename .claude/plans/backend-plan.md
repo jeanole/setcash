@@ -1,71 +1,154 @@
-# Backend Implementation Plan
+# Backend Implementation Plan — PROJ-12 (Telegram Integration)
 
 ## Feature
-BUG-16: Budget Page Crashes with Prisma Enum Error
+PROJ-12: Integrations (Google Sheets + Telegram)
+Spec: `features/PROJ-12-integrations.md`
+Scope: **Telegram only** (Google Sheets routes already exist)
 
 ## Context Summary
-The budget page crashes with a PrismaClientKnownRequestError when loading the budget matrix. The error is:
-```
-ERROR: invalid input value for enum "BillStatus": "draft"
-```
-
-The Prisma schema correctly defines the `BillStatus` enum with `draft` as a value:
-```prisma
-enum BillStatus {
-  draft
-  confirmed
-  pending
-  approved
-  rejected
-  paid
-}
-```
-
-The issue is in the raw SQL queries in:
-1. `nextjs/app/(protected)/budget/page.tsx` (lines 58-87)
-2. `nextjs/app/api/budget-matrix/route.ts` (lines 85-114)
-
-These queries use string literals directly:
-```sql
-AND b.status NOT IN ('draft', 'pending', 'rejected')
-```
-
-In PostgreSQL, when using `$queryRaw`, string literals must be explicitly cast to the enum type.
+- Prisma models `TelegramLink` and `TelegramLinkCode` already exist in schema
+- No Telegram API routes or lib files exist yet in Next.js
+- Express `routes/telegram.js` has full working implementation to port
+- `lib/upload.ts` has UPLOADS_DIR and file utilities
+- Auth pattern: `auth()` → `session.user.currentProjectId`, `session.user.currentProjectRole`
+- Admin check: `role === 'superadmin' || currentProjectRole in ['admin', 'owner']`
+- Rate limiting via `@upstash/ratelimit` with mock fallback
 
 ## User Decisions
-N/A - This is a bug fix, no user decisions needed.
+- **Scope:** Telegram only — skip Google Sheets test/status endpoints
+- **Code generation:** Use `crypto.randomBytes` for secure 6-char codes
+- **Token storage:** AES-256 encryption for bot tokens in ProjectSettings
+- **Dependencies:** Install `node-telegram-bot-api` + `@types/node-telegram-bot-api`
 
 ## Open Bug Reports to Address
-None - This is the only open bug for PROJ-8.
+None
 
-## Fix Required
-
-### Files to Modify
-
-1. **nextjs/app/(protected)/budget/page.tsx**
-   - Lines 58-65: Motive spending query
-   - Lines 68-75: Category spending query  
-   - Lines 78-87: Cell spending query
-
-2. **nextjs/app/api/budget-matrix/route.ts**
-   - Lines 85-92: Motive spending query
-   - Lines 95-102: Category spending query
-   - Lines 105-114: Cell spending query
-
-### Solution
-
-Cast string literals to the `BillStatus` enum type using PostgreSQL's `::"BillStatus"` syntax:
-
-```sql
-AND b.status NOT IN ('draft'::"BillStatus", 'pending'::"BillStatus", 'rejected'::"BillStatus")
+## Dependencies to Install
+```bash
+cd nextjs && npm install node-telegram-bot-api && npm install -D @types/node-telegram-bot-api
 ```
 
-Alternatively, use the `!=` operator with OR conditions which sometimes works better with Prisma's raw query parameter binding.
+## Files to Create
+
+### 1. `lib/telegram/encryption.ts` — Token encryption/decryption
+- AES-256-GCM encryption using `TELEGRAM_ENCRYPTION_KEY` env var
+- `encrypt(plaintext: string): string` → returns `iv:authTag:ciphertext` (hex)
+- `decrypt(encrypted: string): string` → reverses
+- Fail gracefully if env var not set (warn + store plaintext for dev)
+
+### 2. `lib/telegram/codes.ts` — Link code generation/validation
+- `generateLinkCode(userEmail: string, projectId: string): Promise<{ code: string; expires: Date }>`
+  - Delete existing codes for user+project first
+  - Generate 6-char alphanumeric code using `crypto.randomBytes`
+  - Insert into `TelegramLinkCode` with 10-min TTL
+- `validateLinkCode(code: string, projectId: string): Promise<{ userEmail: string } | null>`
+  - Check code exists, matches project, not expired
+  - Delete code on success (single-use)
+
+### 3. `lib/telegram/handlers.ts` — Bot message handlers
+Port from Express `routes/telegram.js`:
+- `handleStartCommand(bot, msg)` — Welcome message (German)
+- `handleLinkCommand(bot, msg, projectId)` — Validate code, create TelegramLink (upsert)
+- `handlePhoto(bot, msg, projectId)` — Check linked, download photo, create draft bill
+- `handleMediaGroup(bot, msg, projectId)` — Buffer album photos (1.5s), create one bill
+- `downloadTelegramFile(bot, fileId)` — Download to UPLOADS_DIR with `tg_` prefix
+- `createDraftBill(projectId, userEmail, photos, caption)` — Prisma version of Express createDraftBill
+  - Create bill with status `draft`, billNumber `TG-${timestamp}`
+  - Auto-assign Default motive + Uncategorized category (100% each)
+  - Attach images via BillImage records
+  - Fire-and-forget OCR if `ocrEnabled` setting is true
+
+### 4. `lib/telegram/bot.ts` — Bot instance management
+Port from Express, adapted for Next.js:
+- `activeBots: Map<string, TelegramBot>` — global singleton (use `globalThis` for dev HMR)
+- `startProjectBot(projectId: string): Promise<void>` — Decrypt token, create bot, register handlers, start polling
+- `stopProjectBot(projectId: string): void` — Stop polling, remove from map
+- `initAllBots(): Promise<void>` — Query all projects, start enabled bots
+- `isBotRunning(projectId: string): boolean`
+- Polling error handling: 409 → stop, others → log
+
+### 5. `nextjs/server.ts` — Custom Next.js server for bot lifecycle
+```typescript
+import { createServer } from 'http';
+import next from 'next';
+import { initAllBots } from './lib/telegram/bot';
+
+const dev = process.env.NODE_ENV !== 'production';
+const app = next({ dev });
+app.prepare().then(() => {
+  initAllBots();
+  createServer(app.getRequestHandler()).listen(3000);
+});
+```
+- Update `package.json` scripts: `"start": "node server.js"` (compiled), `"dev": "tsx server.ts"` or `npx ts-node server.ts`
+- Update `Dockerfile` to use custom server
+
+### 6. API Routes
+
+#### `app/api/telegram/link-code/route.ts` — GET
+- Auth: any authenticated user
+- Requires: currentProjectId, telegram enabled for project
+- Calls `generateLinkCode()`
+- Returns `{ code, expires }`
+- Rate limit: 5/min (reuse mock pattern from ratelimit.ts)
+
+#### `app/api/telegram/status/route.ts` — GET
+- Auth: any authenticated user
+- Returns `{ enabled, linked, linkedAt }` for current user+project
+
+#### `app/api/telegram/links/me/route.ts` — DELETE
+- Auth: any authenticated user
+- Deletes TelegramLink for current user+project
+- Returns `{ ok: true }`
+
+#### `app/api/admin/telegram/links/route.ts` — GET
+- Auth: admin/owner/superadmin
+- Returns all TelegramLink records for project (with user email, telegram ID, date)
+
+#### `app/api/admin/telegram/links/[id]/route.ts` — DELETE
+- Auth: admin/owner/superadmin
+- Deletes specific TelegramLink by ID
+- Returns `{ ok: true }`
+
+#### `app/api/admin/telegram/bot-status/route.ts` — GET
+- Auth: admin/owner/superadmin
+- Returns `{ running: boolean }` from activeBots map
+
+#### `app/api/admin/telegram/restart/route.ts` — POST
+- Auth: admin/owner/superadmin
+- Calls `startProjectBot(projectId)`
+- Returns `{ running: boolean }`
+
+## Auth Pattern (copy from existing routes)
+```typescript
+const session = await auth();
+if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+const projectId = session.user.currentProjectId;
+if (!projectId) return NextResponse.json({ error: 'No project selected' }, { status: 400 });
+
+// For admin routes:
+const isAdmin = session.user.role === 'superadmin'
+  || session.user.currentProjectRole === 'admin'
+  || session.user.currentProjectRole === 'owner';
+if (!isAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+```
+
+## Environment Variables
+```
+TELEGRAM_ENCRYPTION_KEY=  # 32-byte hex key for AES-256-GCM (generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
+```
+Add to `.env.example` and document.
 
 ## Checklist
-- [x] Bug reproduced and understood
-- [x] Root cause identified (PostgreSQL enum casting in raw SQL)
-- [ ] Fix implemented in budget/page.tsx
-- [ ] Fix implemented in api/budget-matrix/route.ts
-- [ ] Fix tested in development
-- [ ] Bug report updated with "Fixed In" version
+- [ ] Install `node-telegram-bot-api` + types
+- [ ] Create `lib/telegram/encryption.ts`
+- [ ] Create `lib/telegram/codes.ts`
+- [ ] Create `lib/telegram/handlers.ts`
+- [ ] Create `lib/telegram/bot.ts`
+- [ ] Create `server.ts` custom server
+- [ ] Update `package.json` start scripts
+- [ ] Update `Dockerfile` for custom server
+- [ ] Create all 7 API routes
+- [ ] Add `TELEGRAM_ENCRYPTION_KEY` to `.env.example`
+- [ ] Validate with `npx tsc --noEmit`
+- [ ] Commit: `feat(PROJ-12): Implement Telegram integration backend`
