@@ -150,3 +150,40 @@ export async function switchProject(projectId: string): Promise<void> {
     body: JSON.stringify({ projectId }),
   });
 }
+
+// ============================================================================
+// Project OCR Settings API
+// ============================================================================
+
+/** @deprecated Use ProjectOcrSettings */
+export type OcrSettings = ProjectOcrSettings;
+
+export interface ProjectOcrSettings {
+  ocrEnabled: boolean;
+  ocrProvider: string | null;
+  /** Masked API key (e.g. "...abc4") — never the plaintext value */
+  ocrApiKey: string | null;
+  ocrBaseUrl: string | null;
+}
+
+export interface UpdateProjectOcrSettingsData {
+  ocrEnabled?: boolean;
+  ocrProvider?: 'openai' | 'gemini' | 'claude' | 'custom';
+  /** Provide plaintext key to update; empty string to clear; omit to leave unchanged */
+  ocrApiKey?: string;
+  ocrBaseUrl?: string | null;
+}
+
+export async function getProjectOcrSettings(): Promise<ProjectOcrSettings> {
+  return fetchWithError<ProjectOcrSettings>(`${API_BASE}/project-settings`);
+}
+
+export async function updateProjectOcrSettings(
+  data: UpdateProjectOcrSettingsData
+): Promise<ProjectOcrSettings> {
+  return fetchWithError<ProjectOcrSettings>(`${API_BASE}/project-settings`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+}
