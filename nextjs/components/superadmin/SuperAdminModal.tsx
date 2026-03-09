@@ -173,7 +173,7 @@ export default function SuperAdminModal({ isOpen, onClose, currentUserEmail }: S
     <>
       {/* Main Modal */}
       <div
-        className="fixed inset-0 z-50 flex flex-col bg-black/70 animate-[fadeIn_0.2s_ease-out]"
+        className="fixed inset-0 z-[200] flex flex-col bg-black/70 animate-[fadeIn_0.2s_ease-out]"
         onClick={(e) => {
           if (e.target === e.currentTarget) {
             onClose();

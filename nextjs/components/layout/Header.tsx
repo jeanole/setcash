@@ -21,7 +21,7 @@ export default function Header({ title, user, onMenuToggle }: HeaderProps) {
 
   return (
     <header
-      className="h-14 border-b border-zinc-900/8 bg-[var(--vb-header-bg)] backdrop-blur-md flex items-center px-4 md:px-6 shrink-0 sticky top-0 z-[1000]"
+      className="h-14 border-b border-zinc-900/8 bg-[var(--vb-header-bg)] backdrop-blur-md flex items-center px-4 md:px-6 shrink-0 sticky top-0 z-40"
       aria-label="Page header"
     >
       <button

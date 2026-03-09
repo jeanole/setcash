@@ -152,7 +152,7 @@ export default function CreateUserModal({ isOpen, onClose, onUserCreated }: Crea
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 animate-[fadeIn_0.15s_ease-out]"
+      className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/70 animate-[fadeIn_0.15s_ease-out]"
       onClick={(e) => {
         if (e.target === e.currentTarget && step === 'form') {
           handleClose();

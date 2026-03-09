@@ -1,6 +1,6 @@
 # vBudget — Project Index
 
-**Next Available IDs:** PROJ-20 · BUG-44 · CR-11
+**Next Available IDs:** PROJ-20 · BUG-45 · CR-11
 
 | ID | Type | Title | Status | Priority | Feature | Date |
 |----|------|-------|--------|----------|---------|------|
@@ -76,3 +76,4 @@
 | [BUG-41](BUG-41-pdf-export-helvetica-afm-not-found.md) | Bug | User PDF Export Fails with ENOENT — Helvetica.afm Not Found in Docker | Resolved | High | PROJ-11 | 2026-03-09 |
 | [BUG-42](BUG-42-pdf-export-helvetica-afm-regression.md) | Bug | PDF Export Fails — Helvetica.afm ENOENT Regression | Resolved | High | PROJ-11 | 2026-03-09 |
 | [BUG-43](BUG-43-system-nav-visible-all-users-blank-error.md) | Bug | System Nav Item Visible to All Users and Produces Blank Error | Resolved | Critical | PROJ-17 | 2026-03-09 |
+| [BUG-44](BUG-44-header-overlaps-modals-z-index.md) | Bug | Header Renders on Top of Modals Due to z-index | Resolved | High | PROJ-18 | 2026-03-09 |
