@@ -1,6 +1,6 @@
 # vBudget — Project Index
 
-**Next Available IDs:** PROJ-20 · BUG-42 · CR-11
+**Next Available IDs:** PROJ-20 · BUG-43 · CR-11
 
 | ID | Type | Title | Status | Priority | Feature | Date |
 |----|------|-------|--------|----------|---------|------|
@@ -74,3 +74,4 @@
 | [BUG-39](BUG-39-upload-eacces-permission-denied-data-uploads.md) | Bug | Upload Fails with EACCES Permission Denied on /data/uploads | Resolved | Critical | PROJ-7 | 2026-03-08 |
 | [BUG-40](BUG-40-ocr-date-prisma-datetime-error.md) | Bug | OCR Job Crashes with Prisma DateTime Error When Date Extracted | Resolved | High | PROJ-19 | 2026-03-09 |
 | [BUG-41](BUG-41-pdf-export-helvetica-afm-not-found.md) | Bug | User PDF Export Fails with ENOENT — Helvetica.afm Not Found in Docker | Resolved | High | PROJ-11 | 2026-03-09 |
+| [BUG-42](BUG-42-pdf-export-helvetica-afm-regression.md) | Bug | PDF Export Fails — Helvetica.afm ENOENT Regression | Open | High | PROJ-11 | 2026-03-09 |

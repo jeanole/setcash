@@ -500,7 +500,8 @@ Reports Page (/reports)
 
 | ID | Severity | Title | Status |
 |----|----------|-------|--------|
-| [BUG-41](BUG-41-pdf-export-helvetica-afm-not-found.md) | High | User PDF Export Fails with ENOENT — Helvetica.afm Not Found in Docker | Open |
+| [BUG-41](BUG-41-pdf-export-helvetica-afm-not-found.md) | High | User PDF Export Fails with ENOENT — Helvetica.afm Not Found in Docker | Resolved |
+| [BUG-42](BUG-42-pdf-export-helvetica-afm-regression.md) | High | PDF Export Fails — Helvetica.afm ENOENT Regression | Open |
 
 ## QA Test Results
 _To be added by /qa_
