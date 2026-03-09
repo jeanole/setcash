@@ -1,6 +1,6 @@
 # vBudget — Project Index
 
-**Next Available IDs:** PROJ-20 · BUG-40 · CR-11
+**Next Available IDs:** PROJ-20 · BUG-41 · CR-11
 
 | ID | Type | Title | Status | Priority | Feature | Date |
 |----|------|-------|--------|----------|---------|------|
@@ -72,3 +72,4 @@
 | [BUG-37](BUG-37-project-selection-no-effect.md) | Bug | Project Selection Has No Effect | Resolved | Critical | — | 2026-03-08 |
 | [BUG-38](BUG-38-images-not-shown-bill-not-editable.md) | Bug | Images Not Shown in Bill Detail View / Bill Not Editable | Resolved | High | PROJ-7 | 2026-03-08 |
 | [BUG-39](BUG-39-upload-eacces-permission-denied-data-uploads.md) | Bug | Upload Fails with EACCES Permission Denied on /data/uploads | Resolved | Critical | PROJ-7 | 2026-03-08 |
+| [BUG-40](BUG-40-ocr-date-prisma-datetime-error.md) | Bug | OCR Job Crashes with Prisma DateTime Error When Date Extracted | Open | High | PROJ-19 | 2026-03-09 |

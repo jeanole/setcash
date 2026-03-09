@@ -209,6 +209,14 @@ model OcrLog {
 
 ---
 
+## Open Bug Reports
+
+| ID | Severity | Title | Status |
+|----|----------|-------|--------|
+| [BUG-40](BUG-40-ocr-date-prisma-datetime-error.md) | High | OCR Job Crashes with Prisma DateTime Error When Date Extracted | Open |
+
+---
+
 ## QA Test Results
 
 **Round:** 1
