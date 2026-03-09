@@ -73,4 +73,4 @@
 | [BUG-38](BUG-38-images-not-shown-bill-not-editable.md) | Bug | Images Not Shown in Bill Detail View / Bill Not Editable | Resolved | High | PROJ-7 | 2026-03-08 |
 | [BUG-39](BUG-39-upload-eacces-permission-denied-data-uploads.md) | Bug | Upload Fails with EACCES Permission Denied on /data/uploads | Resolved | Critical | PROJ-7 | 2026-03-08 |
 | [BUG-40](BUG-40-ocr-date-prisma-datetime-error.md) | Bug | OCR Job Crashes with Prisma DateTime Error When Date Extracted | Resolved | High | PROJ-19 | 2026-03-09 |
-| [BUG-41](BUG-41-pdf-export-helvetica-afm-not-found.md) | Bug | User PDF Export Fails with ENOENT — Helvetica.afm Not Found in Docker | Open | High | PROJ-11 | 2026-03-09 |
+| [BUG-41](BUG-41-pdf-export-helvetica-afm-not-found.md) | Bug | User PDF Export Fails with ENOENT — Helvetica.afm Not Found in Docker | Resolved | High | PROJ-11 | 2026-03-09 |

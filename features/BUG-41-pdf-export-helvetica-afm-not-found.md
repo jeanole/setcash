@@ -1,6 +1,6 @@
 # BUG-41: User PDF Export Fails with ENOENT — Helvetica.afm Not Found in Docker
 
-**Status:** Open
+**Status:** Resolved
 **Reported:** 2026-03-09
 **Severity:** High
 **Skill Tag:** [Backend] [Frontend]
@@ -64,7 +64,7 @@ Alternatively, copy font files into the build output via a `postbuild` script or
 
 ## Resolution
 
-**Status:** Open
-**Resolved Date:** —
-**Fixed In:** —
-**Fix Description:** —
+**Status:** Resolved
+**Resolved Date:** 2026-03-09
+**Fixed In:** 48c4590
+**Fix Description:** Added `pdfkit` and `fontkit` to `serverExternalPackages` in `nextjs/next.config.mjs` so Next.js does not bundle them. At runtime they are required from `node_modules` where their font data files are present.
