@@ -496,6 +496,12 @@ Reports Page (/reports)
 - **ZIP streaming:** Pipe archiver output directly to response
 - **Image handling:** Read files asynchronously, process sequentially in ZIP creation
 
+## Open Bug Reports
+
+| ID | Severity | Title | Status |
+|----|----------|-------|--------|
+| [BUG-41](BUG-41-pdf-export-helvetica-afm-not-found.md) | High | User PDF Export Fails with ENOENT — Helvetica.afm Not Found in Docker | Open |
+
 ## QA Test Results
 _To be added by /qa_
 
