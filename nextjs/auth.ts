@@ -286,8 +286,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             select: { defaultProjectId: true, isSuperAdmin: true },
           });
 
+          // Always sync superadmin role from DB — role may change while user is logged in
+          if (dbUser?.isSuperAdmin && token.role !== 'superadmin') {
+            token.role = 'superadmin';
+          }
+
           if (dbUser?.defaultProjectId) {
-            // Only re-fetch if project changed
+            // Only re-fetch project details if project changed
             if (dbUser.defaultProjectId !== token.currentProjectId) {
               if (dbUser.isSuperAdmin) {
                 // Superadmin: look up project directly (no membership required)
