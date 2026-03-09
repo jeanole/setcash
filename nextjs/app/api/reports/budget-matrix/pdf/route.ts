@@ -9,8 +9,8 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/db';
 import { PassThrough } from 'stream';
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const PDFDocument = require('pdfkit');
+// @ts-ignore
+import PDFDocument from 'pdfkit';
 
 export async function GET() {
   try {

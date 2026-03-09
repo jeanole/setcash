@@ -61,11 +61,14 @@ Both fixes are present in the source code. However, pdfkit is **still being bund
 
 ## Root Cause (Confirmed)
 
-Static ES module `import PDFDocument from 'pdfkit'` in both route files causes Next.js to bundle pdfkit into a chunk despite `serverExternalPackages`. The `serverExternalPackages` config is not reliably honored for static imports in Next.js 14 App Router route handlers.
+`serverExternalPackages: ['pdfkit', 'fontkit']` in `next.config.mjs` is not sufficient for Next.js 14 App Router route handlers — pdfkit is still bundled into webpack chunks. Two attempts were made:
 
-**Fix:** Replace the static import with `require('pdfkit')` so Node.js resolves it from `node_modules` at runtime, bypassing the bundler entirely. Applied to both:
-- `app/api/reports/user/[email]/pdf/route.ts`
-- `app/api/reports/budget-matrix/pdf/route.ts`
+1. **Attempt 1 (BUG-41 fix):** `serverExternalPackages` + Dockerfile COPY — pdfkit still bundled → ENOENT Helvetica.afm
+2. **Attempt 2:** Switch to `require('pdfkit')` — pdfkit still bundled, but webpack's ESM/CJS interop now returns a namespace object instead of the constructor → `TypeError: j is not a constructor`
+
+**Root cause:** `serverExternalPackages` is not honored in Next.js 14.2 App Router route handlers. The package must be added explicitly to webpack's `config.externals` array.
+
+**Fix:** Add `pdfkit` and `fontkit` to `config.externals` via the `webpack` callback in `next.config.mjs`. Restore static `import PDFDocument from 'pdfkit'` (webpack ESM interop handles CJS constructor correctly when the package is a true external).
 
 ---
 
@@ -74,4 +77,4 @@ Static ES module `import PDFDocument from 'pdfkit'` in both route files causes N
 **Status:** Resolved
 **Resolved Date:** 2026-03-09
 **Fixed In:** (pending commit)
-**Fix Description:** Replaced `import PDFDocument from 'pdfkit'` with `const PDFDocument = require('pdfkit')` in both PDF route handlers.
+**Fix Description:** Added `pdfkit` and `fontkit` to webpack `config.externals` in `next.config.mjs`. Restored static `import PDFDocument from 'pdfkit'` in both route handlers.

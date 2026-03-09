@@ -2,6 +2,13 @@
 const nextConfig = {
   output: 'standalone',
   serverExternalPackages: ['pdfkit', 'fontkit'],
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      const existing = Array.isArray(config.externals) ? config.externals : [config.externals].filter(Boolean);
+      config.externals = [...existing, 'pdfkit', 'fontkit'];
+    }
+    return config;
+  },
   async headers() {
     return [
       {
