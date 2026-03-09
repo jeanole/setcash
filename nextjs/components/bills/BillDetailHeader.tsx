@@ -68,6 +68,30 @@ export default function BillDetailHeader({
               </h1>
               {isDraft && <BillStatusBadge status="draft" isDraft />}
               <BillStatusBadge status={bill.status} />
+
+              {/* OCR status badges */}
+              {bill.ocrStatus === 'done' && (bill.ocrFields?.length ?? 0) > 0 && (
+                <span
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 border border-amber-200"
+                  aria-label="AI analysis complete — unverified fields present"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                  AI check
+                </span>
+              )}
+              {bill.ocrStatus === 'failed' && (
+                <span
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-700 border border-rose-200"
+                  aria-label="AI analysis failed"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  Analysis failed
+                </span>
+              )}
             </div>
 
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-zinc-600">

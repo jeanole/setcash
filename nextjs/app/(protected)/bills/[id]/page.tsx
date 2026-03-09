@@ -195,7 +195,22 @@ export default function BillDetailPage({ params }: BillDetailPageProps) {
 
   const { data: session } = useSession();
   const isAdmin = session?.user?.role === 'admin' || session?.user?.role === 'superadmin';
-  const hasOcrEnabled = true; // TODO: Get from project settings
+  const [hasOcrEnabled, setHasOcrEnabled] = useState(false);
+
+  // Fetch OCR enabled flag from project settings (admins only)
+  useEffect(() => {
+    if (!isAdmin) return;
+    fetch('/api/project-settings')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && typeof data.ocrEnabled === 'boolean') {
+          setHasOcrEnabled(data.ocrEnabled);
+        }
+      })
+      .catch(() => {
+        // silently ignore — feature stays disabled
+      });
+  }, [isAdmin]);
 
   if (isLoading) {
     return (
@@ -230,6 +245,8 @@ export default function BillDetailPage({ params }: BillDetailPageProps) {
   }
 
   const total = calculateTotal(bill.brutto19, bill.brutto7, bill.brutto0);
+  // Set of field names populated by OCR — used to apply amber highlight
+  const ocrFieldSet = new Set(bill.ocrFields || []);
   const formTotal = formData
     ? (formData.brutto19 || 0) + (formData.brutto7 || 0) + (formData.brutto0 || 0)
     : total;
@@ -356,7 +373,10 @@ export default function BillDetailPage({ params }: BillDetailPageProps) {
                       type="date"
                       value={formData.date}
                       onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7C6AF6] focus:border-transparent"
+                      className={cn(
+                        'w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7C6AF6] focus:border-transparent',
+                        ocrFieldSet.has('date') ? 'ring-2 ring-amber-300 border-amber-300' : 'border-slate-200'
+                      )}
                     />
                   </div>
                   <div>
@@ -364,7 +384,10 @@ export default function BillDetailPage({ params }: BillDetailPageProps) {
                     <select
                       value={formData.type}
                       onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7C6AF6] focus:border-transparent"
+                      className={cn(
+                        'w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7C6AF6] focus:border-transparent',
+                        ocrFieldSet.has('type') ? 'ring-2 ring-amber-300 border-amber-300' : 'border-slate-200'
+                      )}
                     >
                       <option value="Kauf">Kauf</option>
                       <option value="Reise">Reise</option>
@@ -380,7 +403,10 @@ export default function BillDetailPage({ params }: BillDetailPageProps) {
                     value={formData.vendor}
                     onChange={(e) => setFormData({ ...formData, vendor: e.target.value })}
                     placeholder="Vendor name"
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7C6AF6] focus:border-transparent"
+                    className={cn(
+                      'w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7C6AF6] focus:border-transparent',
+                      ocrFieldSet.has('vendor') ? 'ring-2 ring-amber-300 border-amber-300' : 'border-slate-200'
+                    )}
                   />
                 </div>
                 <div>
@@ -390,7 +416,10 @@ export default function BillDetailPage({ params }: BillDetailPageProps) {
                     value={formData.item}
                     onChange={(e) => setFormData({ ...formData, item: e.target.value })}
                     placeholder="Item description"
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7C6AF6] focus:border-transparent"
+                    className={cn(
+                      'w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7C6AF6] focus:border-transparent',
+                      ocrFieldSet.has('item') ? 'ring-2 ring-amber-300 border-amber-300' : 'border-slate-200'
+                    )}
                   />
                 </div>
                 <div>
@@ -400,7 +429,10 @@ export default function BillDetailPage({ params }: BillDetailPageProps) {
                     onChange={(e) => setFormData({ ...formData, comment: e.target.value })}
                     placeholder="Optional comment"
                     rows={2}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7C6AF6] focus:border-transparent resize-none"
+                    className={cn(
+                      'w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7C6AF6] focus:border-transparent resize-none',
+                      ocrFieldSet.has('comment') ? 'ring-2 ring-amber-300 border-amber-300' : 'border-slate-200'
+                    )}
                   />
                 </div>
               </div>
@@ -434,7 +466,10 @@ export default function BillDetailPage({ params }: BillDetailPageProps) {
                         onChange={(e) =>
                           setFormData({ ...formData, [field]: parseFloat(e.target.value) || 0 })
                         }
-                        className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7C6AF6] focus:border-transparent"
+                        className={cn(
+                          'flex-1 px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7C6AF6] focus:border-transparent',
+                          ocrFieldSet.has(field) ? 'ring-2 ring-amber-300 border-amber-300' : 'border-slate-200'
+                        )}
                         placeholder="0.00"
                       />
                     </div>
