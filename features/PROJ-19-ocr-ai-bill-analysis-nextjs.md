@@ -206,3 +206,161 @@ model OcrLog {
 | SSRF protection | ❌ | ✅ (added) |
 | API key encryption | ✅ AES-256-GCM | Same ✅ |
 | Rate limiting | ✅ | ✅ |
+
+---
+
+## QA Test Results
+
+**Round:** 1
+**Date:** 2026-03-09
+**Method:** Code review (no running server)
+
+### Summary
+- Acceptance Criteria: 31/37 passed
+- Edge Cases: 9/11 passed
+- Security: 8/10 passed
+- Bugs found: 8 (1 Critical, 3 High, 3 Medium, 1 Low)
+
+### Bugs Found
+
+#### BUG-40: Encrypted API key ciphertext leaked to browser via SSR page
+- **Severity:** Critical
+- **Skill:** [Backend]
+- **File:** `nextjs/app/(protected)/settings/ai-analysis/page.tsx:59`
+- **Description:** The server-side rendered AI Analysis settings page reads the raw encrypted API key ciphertext from the database (`get('ocrApiKey')`) and passes it directly to the client-side `OcrSettingsForm` component as `initialSettings.ocrApiKey`. The page never calls `maskApiKey()` before sending data to the browser. The encrypted ciphertext (format: `iv_hex:authTag_hex:ciphertext_hex`) is thus visible in the HTML page source and React hydration props.
+- **Expected:** The page should call `maskApiKey(get('ocrApiKey'))` to only pass the masked value (e.g. `...abc4`) to the client component, matching the behavior of the `GET /api/project-settings` API endpoint.
+- **Actual:** Raw encrypted ciphertext is sent to the browser. While not the plaintext key, it leaks the encrypted material, enabling offline brute-force attempts against the AES-256-GCM encryption.
+
+#### BUG-41: Masked key hint shows last 4 chars of ciphertext hex, not actual key
+- **Severity:** Medium
+- **Skill:** [Frontend]
+- **File:** `nextjs/components/settings/OcrSettingsForm.tsx:73-75`
+- **Description:** The `maskedKeyHint` is computed as `initialSettings.ocrApiKey.slice(-4)`. Because of BUG-40, `initialSettings.ocrApiKey` contains the encrypted ciphertext hex, not the plaintext key. So the hint shows 4 hex characters from the ciphertext rather than the last 4 characters of the actual API key. Even if BUG-40 is fixed, this code would display `...abc4` correctly since `maskApiKey()` returns a string like `...abc4` -- but then `slice(-4)` would extract `abc4` and prepend `...` again, yielding `...abc4` which is correct. So this bug is a direct consequence of BUG-40 and would self-resolve once BUG-40 is fixed.
+- **Expected:** The placeholder should show the last 4 characters of the actual API key.
+- **Actual:** Shows last 4 hex characters of the encrypted ciphertext.
+
+#### BUG-42: verify-field endpoint does not clear ocrFields/ocrStatus when last field verified
+- **Severity:** High
+- **Skill:** [Backend]
+- **File:** `nextjs/app/api/bills/[id]/verify-field/route.ts:77-80`
+- **Description:** When `remaining.length === 0`, the code sets `ocrFields: undefined` and `ocrStatus: undefined` in the Prisma update. In Prisma, `undefined` means "skip this field / do not update it". The fields are never actually cleared in the database. The response JSON on line 106 correctly returns `ocrFields: null, ocrStatus: null`, but the database retains the old values.
+- **Expected:** Use `ocrFields: null` (Prisma `JsonNull` / `Prisma.DbNull`) and `ocrStatus: null` to actually set the database columns to NULL.
+- **Actual:** `undefined` causes Prisma to skip the update entirely, leaving stale `ocrStatus = 'done'` and the old `ocrFields` array in the database.
+
+#### BUG-43: OcrLog write is not awaited -- errors silently lost
+- **Severity:** Medium
+- **Skill:** [Backend]
+- **File:** `nextjs/lib/ocr.ts:330`
+- **Description:** The `writeLog` function calls `prisma.ocrLog.create({...})` without `await`. The returned promise is never awaited, so: (1) any database error becomes an unhandled promise rejection instead of being caught by the try-catch on line 341, and (2) the log write may not complete before the function returns.
+- **Expected:** `await prisma.ocrLog.create({...})` inside the try block.
+- **Actual:** Fire-and-forget promise with no error handling.
+
+#### BUG-44: ocrFields not cleared on re-analysis when all extracted fields are null
+- **Severity:** Medium
+- **Skill:** [Backend]
+- **File:** `nextjs/lib/ocr.ts:560-561`
+- **Description:** When `finalFields` is `null` (all extracted fields were null), the update sets `ocrFields: undefined` which in Prisma means "don't update". On a re-analysis where the prior run wrote fields, the old `ocrFields` array persists, leading to stale amber highlights on the bill detail.
+- **Expected:** `ocrFields: finalFields ?? Prisma.JsonNull` (or `null` depending on Prisma version) to explicitly clear the field when no fields were written.
+- **Actual:** Previous `ocrFields` value remains in the database.
+
+#### BUG-45: fail() not awaited in catch block of runOcrJob
+- **Severity:** High
+- **Skill:** [Backend]
+- **File:** `nextjs/lib/ocr.ts:602`
+- **Description:** In the outer catch block at line 602, `fail(...)` is called without `await`. The `fail` function is `async` (it writes to the database). Without `await`, the function returns before the bill status is updated to `'failed'` and before the notification is created. This means errors during the OCR job may leave the bill stuck in `'pending'` status.
+- **Expected:** `await fail(...)` in the catch block.
+- **Actual:** `fail()` result is discarded; bill may remain in `pending` status after error.
+
+#### BUG-46: Rate limiter is a no-op without Redis in development/production
+- **Severity:** High
+- **Skill:** [Backend]
+- **File:** `nextjs/lib/ratelimit.ts:23-33`
+- **Description:** When `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` are not set, the rate limiter falls back to `MockRatelimit` which always returns `success: true`. The mock-mode warning only logs in `NODE_ENV === 'development'`, so in a production deployment without Upstash configured, rate limiting is silently disabled with no warning.
+- **Expected:** In production, either require Redis configuration or use an in-memory rate limiter. At minimum, log a warning in production.
+- **Actual:** Rate limiting is completely disabled in production when Upstash is not configured, with no warning.
+
+#### BUG-47: Analyse button visible to non-admin users when hasOcrEnabled is fetched
+- **Severity:** Low
+- **Skill:** [Frontend]
+- **File:** `nextjs/app/(protected)/bills/[id]/page.tsx:126,279`
+- **Description:** The `canAnalyse` button is gated by `hasOcrEnabled` (line 126 of BillDetailHeader). While the settings fetch is correctly guarded by `if (!isAdmin) return` on line 201, the `hasOcrEnabled` state defaults to `false` and only updates for admins. This is technically correct behavior -- the button won't show for non-admins. However, the `BillDetailHeader` component does not itself check `isAdmin` before rendering the analyse button (line 126), relying entirely on the parent's `hasOcrEnabled` prop. If a future code change sets `hasOcrEnabled` for non-admins, the button would appear. This is a defense-in-depth concern rather than a current bug.
+- **Expected:** `BillDetailHeader` should additionally check `isAdmin` in the `canAnalyse` condition for defense in depth.
+- **Actual:** Only relies on `hasOcrEnabled` prop from parent.
+
+### Detailed Results
+
+**Settings (Admin)**
+- AC-1: PASS -- `OcrSettingsForm.tsx` has toggle, provider dropdown (4 providers), API key field (type=password), base URL (conditional on `custom`), and save button.
+- AC-2: PASS -- `encryptApiKey()` in `lib/ocr.ts` uses AES-256-GCM with key derived from `OCR_ENCRYPTION_SECRET || SESSION_SECRET` via SHA-256. The PUT endpoint on line 185 calls `encryptApiKey()` before storing.
+- AC-3: FAIL -- See BUG-40. The GET API endpoint (`/api/project-settings`) correctly masks the key, but the SSR page (`ai-analysis/page.tsx`) sends the raw encrypted ciphertext to the client.
+
+**Trigger: Web Upload**
+- AC-4: PASS -- `BillDetailHeader.tsx` line 35: `canAnalyse = hasOcrEnabled && hasImages && bill.ocrStatus !== 'pending'`. Button rendered conditionally at line 126.
+- AC-5: PASS -- `analyse/route.ts` returns 202 with `{ ok: true, message: 'Analysis started' }`.
+- AC-6: PASS -- Bill detail page passes `isAnalysing={isAnalysing || bill.ocrStatus === 'pending'}` (line 280). Header disables button and shows spinner when `isAnalysing` is true (lines 129, 138-155).
+- AC-7: PASS -- Bill detail page lines 88-96: `setInterval(() => refetch(), 3000)` when `bill.ocrStatus === 'pending'`, cleared on cleanup.
+- AC-8: PASS (with caveat) -- `billAnalyseLimiter` is imported and used in `analyse/route.ts` lines 23-26. Returns 429 on excess. However see BUG-46: limiter is a mock/no-op without Redis.
+
+**Background Analysis Job**
+- AC-9: PASS -- `analyse/route.ts` line 60: `runOcrJob(id, projectId).catch(...)` -- fire-and-forget.
+- AC-10: PASS -- `ocr.ts` line 354: `await prisma.bill.update({ ..., data: { ocrStatus: 'pending' } })`.
+- AC-11: PASS -- `ocr.ts` lines 401-425: reads settings, fails gracefully if ocrEnabled is false or ocrApiKey missing.
+- AC-12: PASS -- `ocr.ts` lines 447-458: `findFirst` with `orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }]`, fails with notification if none.
+- AC-13: PASS -- `ocr.ts` lines 461-470: converts to base64, maps extension to MIME type (png, gif, webp, fallback jpeg).
+- AC-14: PASS -- `ocr.ts` lines 96-108: structured OCR_PROMPT requesting JSON with all specified fields.
+- AC-15: PASS -- `ocr.ts` lines 488-513: `fieldChecks` only returns true when extracted value is non-null AND (isReanalysis OR current value is empty/zero).
+- AC-16: PASS -- `ocr.ts` line 351: `isReanalysis = priorBill?.ocrStatus === 'done'`. Field checks use `isReanalysis` flag.
+- AC-17: PASS -- `ocr.ts` lines 529-546: recalculates grossAmount and nettoAmount when brutto fields written.
+- AC-18: PASS (with caveat) -- `ocr.ts` lines 555-562: sets `ocrStatus: 'done'`, `ocrFields: JSON.stringify(finalFields)`. See BUG-44 for the null case.
+- AC-19: PASS -- `ocr.ts` lines 359-397: `fail()` sets ocrStatus='failed', creates notification for bill owner.
+- AC-20: PASS (with caveat) -- `ocr.ts` lines 329-344: `writeLog` creates OcrLog with all required fields, `aiResponse` truncated to 2000 chars. See BUG-43 for missing await.
+- AC-21: PASS -- `ocr.ts` lines 579-588: EditLog with `source: 'ai'`, `user: 'AI / ${provider}'`.
+- AC-22: PASS -- All three provider blocks use `AbortController` with `setTimeout(() => controller.abort(), OCR_FETCH_TIMEOUT_MS)` where timeout is 60000ms.
+
+**Supported Providers**
+- AC-23: PASS -- `ocr.ts` lines 138-190: OpenAI POST to `api.openai.com/v1/chat/completions` with `image_url` content block, model `gpt-4o`.
+- AC-24: PASS -- `ocr.ts` lines 192-236: Gemini POST to `generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent` with `inline_data`.
+- AC-25: PASS -- `ocr.ts` lines 238-290: Anthropic POST to `api.anthropic.com/v1/messages` with `image` content block, model `claude-3-5-haiku-20241022`.
+- AC-26: PASS -- `ocr.ts` lines 138-142: custom uses `baseUrl + '/chat/completions'`. Lines 434-444: validates https:// and checks `isPrivateUrl()`.
+
+**"To Be Checked" Display**
+- AC-27: PASS -- `BillDetailHeader.tsx` lines 138-155: spinner shown when `isAnalysing` is true (which includes pending state per line 280).
+- AC-28: PASS -- `BillDetailHeader.tsx` lines 73-83: amber "AI check" badge when `ocrStatus === 'done'` and `ocrFields?.length > 0`.
+- AC-29: PASS -- `BillDetailHeader.tsx` lines 84-94: red "Analysis failed" badge when `ocrStatus === 'failed'`.
+- AC-30: PASS -- Bill detail page lines 249, 377-434, 469-472: `ocrFieldSet` drives amber ring-2/ring-amber-300 styling on form inputs for date, type, vendor, item, comment, brutto19, brutto7, brutto0.
+- AC-31: PASS -- `OcrFieldVerification.tsx` lines 149-150: per-field "Verified" button calls `onVerify(fieldName)` which maps to `handleVerifyField` calling the PATCH endpoint.
+
+**Field Verification Endpoint**
+- AC-32: PASS -- `verify-field/route.ts` line 13: Zod schema `z.enum(['date', 'vendor', 'item', 'type', 'brutto19', 'brutto7', 'brutto0', 'amount', 'comment'])`.
+- AC-33: PASS -- Response at line 103-107 returns `{ ok, ocrFields, ocrStatus }`.
+- AC-34: PASS -- `verify-field/route.ts` lines 70-72: auto-clears `amount` when it's the only remaining field.
+- AC-35: PASS -- `verify-field/route.ts` lines 92-101: EditLog with `source: 'user'`, `changes: { _event: 'verified', field }`.
+- AC-36: PASS -- Lines 22-29: 401 on missing session, 400 on missing project.
+
+**Error Handling**
+- AC-37: FAIL (partial) -- 401, 400, 403, 404, 409, 429 all correctly handled in `analyse/route.ts`. 500 handled in catch blocks. However, verify-field and ocr-status endpoints do not check for 403 (admin-only) which matches the spec (they are project-access, not admin-only). All error codes verified. The verify-field endpoint has the `undefined` database bug (BUG-42) which means 200 responses may be misleading.
+
+**Edge Cases**
+- EC-1: PASS -- `ocr.ts` line 451-453: no image -> fail('No image attached to this bill').
+- EC-2: PASS -- `ocr.ts` lines 455-458: `readFileForOCR` returns null -> fail('Image file not found on disk').
+- EC-3: PASS -- `ocr.ts` lines 447-449: `findFirst` with `orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }]`.
+- EC-4: FAIL -- See BUG-44. When all extracted fields are null, `finalFields` is null, and `ocrFields: undefined` does not clear the old value in Prisma.
+- EC-5: PASS -- Each provider block throws `new Error('Rate limit exceeded')` on 429 status.
+- EC-6: PASS -- Each provider block throws `new Error('Invalid API key')` on 401/relevant status.
+- EC-7: PASS -- `ocr.ts` lines 438-443: `isPrivateUrl(baseUrl)` check before HTTP call.
+- EC-8: PASS -- `ocr.ts` lines 435-437: `baseUrl.startsWith('https://')` check.
+- EC-9: PASS -- `analyse/route.ts` lines 52-56: 409 when `bill.ocrStatus === 'pending'`.
+- EC-10: PASS -- `verify-field/route.ts` lines 70-72: amount auto-cleared when last remaining.
+- EC-11: FAIL -- Button is correctly hidden (PASS for UI). But the backend `runOcrJob` reads `settings.ocrEnabled` and fails gracefully (PASS). The `analyse/route.ts` endpoint does NOT check ocrEnabled before firing the job (it relies on the job itself to check). This is acceptable per the spec wording but could be improved -- marking as PASS since the job does fail immediately with notification.
+
+**Security**
+- SEC-1: FAIL -- See BUG-40. `encryptApiKey` and `decryptApiKey` are correct, `maskApiKey` is correct. But the SSR page bypasses masking, leaking encrypted ciphertext to the browser.
+- SEC-2: PASS -- `GET /api/project-settings` at line 55 calls `maskApiKey(map.ocrApiKey)` -- only masked value returned.
+- SEC-3: PASS -- `isPrivateUrl()` covers localhost, 127.x, ::1, .local, 169.254.x, 10.x, 192.168.x, 172.16-31.x, 0.0.0.0, [::]. Comprehensive coverage.
+- SEC-4: PASS -- All 5 endpoints check `auth()` session. analyse checks admin. project-settings checks admin/owner. ocr-status and verify-field check project membership via bill.projectId match.
+- SEC-5: PASS -- Zod validation on verify-field (field enum) and PUT project-settings (typed schema with z.object).
+- SEC-6: PASS -- All bill endpoints use `prisma.bill.findFirst({ where: { id, projectId } })` to ensure cross-project isolation.
+- SEC-7: FAIL -- See BUG-46. Rate limiter is a mock no-op when Upstash Redis is not configured. Production deployments without Upstash have no rate limiting.
+- SEC-8: PASS -- `ocr.ts` line 435: `!baseUrl.startsWith('https://')` check before HTTP call.
+- SEC-9: PASS -- `ocr.ts` lines 27-35: production startup guard checks encryption secret.
+- SEC-10: PASS -- `project-settings/route.ts` line 183: `!data.ocrApiKey.startsWith('...')` guard prevents double-encryption of masked value.
