@@ -6,7 +6,7 @@
 // ============================================================================
 
 import crypto from 'crypto';
-import { prisma } from '@/lib/db';
+import { prisma } from '../db';
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
 const CODE_LENGTH = 6;

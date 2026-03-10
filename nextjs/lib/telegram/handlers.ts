@@ -10,8 +10,8 @@ import path from 'path';
 import https from 'https';
 import http from 'http';
 import TelegramBot from 'node-telegram-bot-api';
-import { prisma } from '@/lib/db';
-import { UPLOADS_DIR } from '@/lib/upload';
+import { prisma } from '../db';
+import { UPLOADS_DIR } from '../upload';
 import { validateAndConsumeLinkCode } from './codes';
 
 // Album buffering: bufferKey -> { messages, timer }
@@ -167,7 +167,7 @@ async function maybeRunOcr(billId: string, projectId: string): Promise<void> {
   if (!settings.ocrEnabled) return;
 
   try {
-    const { runOcrJob } = await import('@/lib/ocr');
+    const { runOcrJob } = await import('../ocr');
     runOcrJob(billId, projectId).catch((e: Error) =>
       console.error(`[OCR] Unhandled error for bill #${billId}:`, e.message)
     );

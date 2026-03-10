@@ -27,6 +27,9 @@ RUN npm run build
 # Compile seed script for production
 RUN npx tsc prisma/seed.ts --outDir dist --module commonjs --target es2020 --esModuleInterop --skipLibCheck
 
+# Compile custom server for production
+RUN npx tsc --project tsconfig.server.json
+
 # Stage 3 — runner: minimal production image
 FROM node:20-alpine AS runner
 WORKDIR /app
@@ -62,14 +65,9 @@ COPY --from=builder --chown=nextjs:nodejs /app/node_modules/fontkit ./node_modul
 # Copy node-telegram-bot-api (not traced by Next.js standalone output)
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/node-telegram-bot-api ./node_modules/node-telegram-bot-api
 
-# Copy tsx for running the custom server
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/tsx ./node_modules/tsx
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.bin/tsx ./node_modules/.bin/tsx
-
-# Copy custom server source and lib
-COPY --from=builder --chown=nextjs:nodejs /app/server.ts ./server.ts
-COPY --from=builder --chown=nextjs:nodejs /app/lib ./lib
-COPY --from=builder --chown=nextjs:nodejs /app/tsconfig.json ./tsconfig.json
+# Copy compiled server and lib (commonjs output from tsconfig.server.json)
+COPY --from=builder --chown=nextjs:nodejs /app/dist/server.js ./server.js
+COPY --from=builder --chown=nextjs:nodejs /app/dist/lib ./lib
 
 # Create uploads directory with correct ownership before dropping to non-root user
 RUN mkdir -p /app/data/uploads && chown nextjs:nodejs /app/data/uploads
@@ -86,4 +84,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
 ENV PORT=3001
 ENV HOSTNAME="0.0.0.0"
 
-CMD ["sh", "-c", "node node_modules/prisma/build/index.js migrate deploy && node prisma/seed.js && node_modules/.bin/tsx server.ts"]
+CMD ["sh", "-c", "node node_modules/prisma/build/index.js migrate deploy && node prisma/seed.js && node server.js"]

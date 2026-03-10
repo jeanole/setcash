@@ -5,7 +5,7 @@
 // ============================================================================
 
 import TelegramBot from 'node-telegram-bot-api';
-import { prisma } from '@/lib/db';
+import { prisma } from '../db';
 import { decrypt } from './encryption';
 import { handleMessage } from './handlers';
 
