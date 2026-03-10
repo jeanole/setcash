@@ -1,11 +1,11 @@
-# Stage 1 — deps: install production + dev dependencies
+# Stage 1 — deps: install all dependencies
 FROM node:20-alpine AS deps
 WORKDIR /app
 
 COPY package.json package-lock.json* ./
 RUN npm ci
 
-# Stage 2 — builder: copy source and build the Next.js app
+# Stage 2 — builder: build the Next.js app
 FROM deps AS builder
 WORKDIR /app
 
@@ -27,7 +27,7 @@ RUN npm run build
 # Compile seed script for production
 RUN npx tsc prisma/seed.ts --outDir dist --module commonjs --target es2020 --esModuleInterop --skipLibCheck
 
-# Compile custom server for production
+# Compile custom server and lib for production
 RUN npx tsc --project tsconfig.server.json
 
 # Stage 3 — runner: minimal production image
@@ -43,26 +43,35 @@ RUN apk add --no-cache openssl
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
 
-# Install production node_modules (includes node-telegram-bot-api + all transitive deps)
+# Install production node_modules (all deps including node-telegram-bot-api + transitive)
+# Run as root before switching user so node_modules is owned correctly
 COPY --from=builder /app/package.json /app/package-lock.json* ./
 RUN npm ci --omit=dev
 
-# Copy standalone output from builder (overwrites/extends node_modules with Next.js traced deps)
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+# Prisma CLI is a devDep so npm ci --omit=dev skips it — copy it manually from builder
+COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
+COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
+
+# Copy Next.js build artifacts from standalone (the .next dir, not its node_modules)
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone/.next ./.next
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 
-# Copy Prisma for migration and seed at startup
+# Copy Prisma schema and migrations for migrate deploy at startup
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
 # Copy compiled seed script
 COPY --from=builder --chown=nextjs:nodejs /app/dist/seed.js ./prisma/seed.js
 
-# Copy compiled server and lib (commonjs output from tsconfig.server.json)
+# Copy compiled server entry point and lib (commonjs from tsconfig.server.json)
 COPY --from=builder --chown=nextjs:nodejs /app/dist/server.js ./server.js
 COPY --from=builder --chown=nextjs:nodejs /app/dist/lib ./lib
 
-# Create uploads directory with correct ownership before dropping to non-root user
+# Fix ownership of node_modules
+RUN chown -R nextjs:nodejs /app/node_modules
+
+# Create uploads directory with correct ownership
 RUN mkdir -p /app/data/uploads && chown nextjs:nodejs /app/data/uploads
 
 ENV UPLOADS_DIR=/app/data/uploads
