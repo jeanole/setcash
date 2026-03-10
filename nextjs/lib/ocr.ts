@@ -8,8 +8,8 @@ import crypto from 'crypto';
 import path from 'path';
 import fs from 'fs';
 import { Prisma } from '@prisma/client';
-import { db as prisma } from '@/lib/db';
-import { UPLOADS_DIR, readFileForOCR } from '@/lib/upload';
+import { db as prisma } from './db';
+import { UPLOADS_DIR, readFileForOCR } from './upload';
 
 // ── Encryption helpers for API key at rest ──────────────────────────────────
 // Uses AES-256-GCM. Key is derived from SESSION_SECRET via SHA-256.

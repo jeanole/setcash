@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { validateEnv } from '@/lib/env';
+import { validateEnv } from './env';
 
 // Validate required environment variables before Prisma attempts to connect
 validateEnv();
