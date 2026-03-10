@@ -43,27 +43,20 @@ RUN apk add --no-cache openssl
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
 
-# Copy standalone output from builder
+# Install production node_modules (includes node-telegram-bot-api + all transitive deps)
+COPY --from=builder /app/package.json /app/package-lock.json* ./
+RUN npm ci --omit=dev
+
+# Copy standalone output from builder (overwrites/extends node_modules with Next.js traced deps)
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 
 # Copy Prisma for migration and seed at startup
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/prisma ./node_modules/prisma
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
-# Copy compiled seed script and its dependencies
+# Copy compiled seed script
 COPY --from=builder --chown=nextjs:nodejs /app/dist/seed.js ./prisma/seed.js
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/bcryptjs ./node_modules/bcryptjs
-
-# Copy pdfkit with its font data files (not traced by Next.js standalone output)
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/pdfkit ./node_modules/pdfkit
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/fontkit ./node_modules/fontkit
-
-# Copy node-telegram-bot-api (not traced by Next.js standalone output)
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/node-telegram-bot-api ./node_modules/node-telegram-bot-api
 
 # Copy compiled server and lib (commonjs output from tsconfig.server.json)
 COPY --from=builder --chown=nextjs:nodejs /app/dist/server.js ./server.js
