@@ -1,47 +1,95 @@
-# QA Test Plan — PROJ-7 Round 3
+# QA Test Plan — PROJ-14: Spending Overview
 
 ## Feature
-Bills Feature — `features/PROJ-7-bills-feature.md`
+PROJ-14: Spending Overview
+Spec: `features/PROJ-14-spending-overview.md`
 
 ## Context Summary
-- PROJ-7 is "Complete"; two prior QA rounds passed with production-ready verdict
-- Recent fixes in this session: BUG-31 (image thumbnails) and BUG-32 (bill view error)
-- BUG-31 fix: `BillImageUpload` now renders `existingImages` as thumbnails with remove buttons
-- BUG-32 fix: `useBill`/`useBills` hooks catch `getEditLogs()` errors gracefully (default to [])
-- Round 2 already verified: BUG-10 (isAdmin), BUG-11 (rate limiting) — do not re-test these
+- Feature status: "In Progress" per INDEX.md
+- Dependencies: PROJ-5 (auth), PROJ-6 (Prisma/PG), PROJ-7 (Bills), PROJ-9 (Categories/Motives)
+- Expected location: `nextjs/app/(protected)/spending/page.tsx`
+- Expected components: SpendingTable, SpendingProgress, SpendingTabs
+- Expected sidebar nav entry: "Spending" between existing items
 
-## Scope
-Focused re-test: verify BUG-31 and BUG-32 fixes via code review, then spot-check key ACs.
+## User Guidance
+- Code-only review — no running server
+- Test all acceptance criteria by verifying source files exist and are correct
+- Full security audit of data scoping and access control
 
-## BUG-31 Verification
-**File:** `nextjs/components/bills/BillImageUpload.tsx`
-- existingImages section renders a thumbnail grid (not plain text)
-- Each thumbnail shows img with src={image.file} and a filename overlay
-- Remove button is rendered when onRemoveExisting prop is provided
-- Remove button calls onRemoveExisting(index) on click
+## Acceptance Criteria to Test
 
-**File:** `nextjs/app/(protected)/bills/new/page.tsx`
-- BillImageUpload receives onRemoveExisting callback
-- Callback removes entry from pendingFiles at the given index
+### Page Structure
+- AC-1: Page route exists at `/app/(protected)/spending/page.tsx`
+- AC-2: Tab navigation with "By Motive" (default) and "By Category"
+- AC-3: Tab switching is client-side (no page reload)
 
-**File:** `nextjs/app/(protected)/bills/[id]/page.tsx`
-- Detail page no longer passes existingImages to BillImageUpload
-- Uses maxFiles={10 - (bill.images?.length || 0)} for slot calculation
+### By Motive Tab
+- AC-4: Table columns: Motive Name, Budget, Spent, Remaining, % Used
+- AC-5: Spending calculated via junction table (bill_motives) with percentage allocation
+- AC-6: Only confirmed bills included (status IS NULL OR status = 'confirmed')
+- AC-7: Unallocated bills row shown when bills exist without motive allocations
 
-## BUG-32 Verification
-**File:** `nextjs/lib/hooks/useBills.ts`
-- useBills.fetchBills() — getEditLogs() has .catch(() => [] as EditLog[])
-- useBill.fetchBill() — getEditLogs() has .catch(() => [] as EditLog[])
-- Promise.all still used but logs error won't cause the whole fetch to fail
+### By Category Tab
+- AC-8: Table columns: Category Name, Budget, Spent, Remaining, % Used
+- AC-9: Spending calculated via junction table (bill_categories) with percentage allocation
+- AC-10: Unallocated bills row shown when bills exist without category allocations
 
-## Spot-check ACs
-- AC-5: Bill detail page loads (key page after BUG-32 fix)
-- AC-9: Bill history log renders as timeline
-- AC-3: New bill image upload — thumbnails visible after selecting and uploading files
+### Color Coding
+- AC-11: Green < 80%, Orange 80-99.9%, Red >= 100%
+- AC-12: Color indicator as dot or pill next to percentage
 
-## TypeScript Check
-Run `npx tsc --noEmit` in `nextjs/` — zero errors expected
+### Grand Totals Row
+- AC-13: Fixed bottom row with "TOTAL" in bold
+- AC-14: Sum of all budgets, spent, remaining, % used
+- AC-15: Top border/divider and gray background
 
-## Outcome
-Append a QA Round 3 Results section to `features/PROJ-7-bills-feature.md`.
-Commit: `test(PROJ-7): QA Round 3 — verify BUG-31 and BUG-32 fixes`
+### Calculation Rules
+- AC-16: Uses netto_amount only
+- AC-17: Excludes draft bills
+- AC-18: Project-scoped via session currentProjectId
+
+### Data Display Format
+- AC-19: German locale currency (EUR X.XXX,XX)
+- AC-20: Percentage with 1 decimal place
+- AC-21: Negative numbers with minus sign
+
+### UI States
+- AC-22: Loading skeleton with 5 rows
+- AC-23: Empty state "No spending recorded yet"
+- AC-24: Empty state "No budget items configured" with Settings link
+- AC-25: Error state with retry button
+
+### Access Control
+- AC-26: Read-only for all users
+- AC-27: All authenticated project members can view
+- AC-28: Data scoped to current project
+
+### Navigation
+- AC-29: Sidebar includes "Spending" navigation entry
+
+## Edge Cases to Test
+- EC-1: No bills in project
+- EC-2: All bills are drafts
+- EC-3: Budget = 0 with spending > 0
+- EC-4: No motives/categories configured
+- EC-5: Very large numbers (> 6 digits)
+- EC-6: Deleted motive/category with historic bills
+- EC-7: Bills without any allocations
+- EC-8: Partial allocations (< 100%)
+- EC-9: Bill with netto_amount = NULL or 0
+- EC-10: Division by zero in % Used
+- EC-11: Negative remaining budget display
+- EC-12: Project switch while viewing
+
+## Security Audit Scope
+- SEC-1: Authentication required on spending page/API
+- SEC-2: Project isolation — data scoped to currentProjectId
+- SEC-3: No mutation endpoints exposed (read-only)
+- SEC-4: Input validation on any query params
+
+## Regression Test Scope
+- REG-1: Sidebar navigation still works for all other pages
+- REG-2: Budget matrix page not affected
+
+## Commit Message
+test(PROJ-14): QA Round 1 results
