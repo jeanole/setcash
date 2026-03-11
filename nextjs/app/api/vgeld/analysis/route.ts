@@ -40,20 +40,21 @@ export async function GET(req: NextRequest) {
       _sum: { amount: true },
     });
 
-    // Aggregate confirmed bill spending per user
-    const billGroups = await prisma.bill.groupBy({
-      by: ['submittedByEmail'],
+    // Aggregate confirmed bill spending per user (total brutto = brutto19 + brutto7 + brutto0)
+    const confirmedBills = await prisma.bill.findMany({
       where: { projectId, status: 'confirmed' },
-      _sum: { nettoAmount: true },
+      select: { submittedByEmail: true, brutto19: true, brutto7: true, brutto0: true },
     });
 
     // Build maps for quick lookup
     const receivedMap = new Map<string, number>(
       vgeldGroups.map((g) => [g.toUser, Number(g._sum.amount ?? 0)])
     );
-    const spentMap = new Map<string, number>(
-      billGroups.map((g) => [g.submittedByEmail, Number(g._sum.nettoAmount ?? 0)])
-    );
+    const spentMap = new Map<string, number>();
+    for (const bill of confirmedBills) {
+      const brutto = Number(bill.brutto19) + Number(bill.brutto7) + Number(bill.brutto0);
+      spentMap.set(bill.submittedByEmail, (spentMap.get(bill.submittedByEmail) ?? 0) + brutto);
+    }
 
     // Collect all users who appear in either set
     const allUsers = new Set<string>([

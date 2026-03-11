@@ -41,18 +41,21 @@ export async function GET(req: NextRequest) {
       _sum: { amount: true },
     });
 
-    // Sum all confirmed bill spending by current user in this project
-    const spentResult = await prisma.bill.aggregate({
+    // Sum all confirmed bill spending by current user (total brutto = brutto19 + brutto7 + brutto0)
+    const confirmedBills = await prisma.bill.findMany({
       where: {
         projectId,
         submittedByEmail: currentUser,
         status: 'confirmed',
       },
-      _sum: { nettoAmount: true },
+      select: { brutto19: true, brutto7: true, brutto0: true },
     });
 
     const received = Number(receivedResult._sum.amount ?? 0);
-    const spent = Number(spentResult._sum.nettoAmount ?? 0);
+    const spent = confirmedBills.reduce(
+      (sum, b) => sum + Number(b.brutto19) + Number(b.brutto7) + Number(b.brutto0),
+      0
+    );
     const balance = received - spent;
 
     return NextResponse.json({ balance });
