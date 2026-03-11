@@ -94,7 +94,7 @@ function buildSpendingItem(
  *   1. Sum of BudgetMatrix.amount for the motive (if any matrix entries exist)
  *   2. Motive.budget fallback
  *
- * Spending = SUM(bill.nettoAmount * billMotive.percentage / 100)
+ * Spending = SUM((bill.brutto19 + bill.brutto7 + bill.brutto0) * billMotive.percentage / 100)
  *   over confirmed bills only.
  *
  * An "(unallocated)" row is appended when bills exist with no motive
@@ -126,16 +126,17 @@ export async function getSpendingByMotive(projectId: string): Promise<SpendingIt
       motiveId: true,
       percentage: true,
       bill: {
-        select: { nettoAmount: true },
+        select: { brutto19: true, brutto7: true, brutto0: true },
       },
     },
   });
 
-  // 3. Aggregate spending per motiveId
+  // 3. Aggregate spending per motiveId (using total brutto = brutto19 + brutto7 + brutto0)
   const spendingByMotiveId = new Map<string, number>();
   for (const bm of billMotives) {
-    const allocated =
-      toNumber(bm.bill.nettoAmount) * toNumber(bm.percentage) / 100;
+    const totalBrutto =
+      toNumber(bm.bill.brutto19) + toNumber(bm.bill.brutto7) + toNumber(bm.bill.brutto0);
+    const allocated = totalBrutto * toNumber(bm.percentage) / 100;
     spendingByMotiveId.set(
       bm.motiveId,
       (spendingByMotiveId.get(bm.motiveId) ?? 0) + allocated
@@ -157,16 +158,19 @@ export async function getSpendingByMotive(projectId: string): Promise<SpendingIt
   });
 
   // 5. Unallocated row: bills with NO motive allocations at all
-  const unallocatedAgg = await prisma.bill.aggregate({
-    _sum: { nettoAmount: true },
+  const unallocatedBills = await prisma.bill.findMany({
     where: {
       projectId,
       ...CONFIRMED_BILL_FILTER,
       motives: { none: {} },
     },
+    select: { brutto19: true, brutto7: true, brutto0: true },
   });
 
-  const unallocatedSpent = toNumber(unallocatedAgg._sum.nettoAmount);
+  const unallocatedSpent = unallocatedBills.reduce(
+    (sum, b) => sum + toNumber(b.brutto19) + toNumber(b.brutto7) + toNumber(b.brutto0),
+    0
+  );
   if (unallocatedSpent > 0) {
     items.push({
       id: null,
@@ -193,7 +197,7 @@ export async function getSpendingByMotive(projectId: string): Promise<SpendingIt
  *   1. Sum of BudgetMatrix.amount for the category (if any matrix entries exist)
  *   2. Category.budget fallback
  *
- * Spending = SUM(bill.nettoAmount * billCategory.percentage / 100)
+ * Spending = SUM((bill.brutto19 + bill.brutto7 + bill.brutto0) * billCategory.percentage / 100)
  *   over confirmed bills only.
  *
  * An "(unallocated)" row is appended when bills exist with no category
@@ -224,16 +228,17 @@ export async function getSpendingByCategory(projectId: string): Promise<Spending
       categoryId: true,
       percentage: true,
       bill: {
-        select: { nettoAmount: true },
+        select: { brutto19: true, brutto7: true, brutto0: true },
       },
     },
   });
 
-  // 3. Aggregate spending per categoryId
+  // 3. Aggregate spending per categoryId (using total brutto = brutto19 + brutto7 + brutto0)
   const spendingByCategoryId = new Map<string, number>();
   for (const bc of billCategories) {
-    const allocated =
-      toNumber(bc.bill.nettoAmount) * toNumber(bc.percentage) / 100;
+    const totalBrutto =
+      toNumber(bc.bill.brutto19) + toNumber(bc.bill.brutto7) + toNumber(bc.bill.brutto0);
+    const allocated = totalBrutto * toNumber(bc.percentage) / 100;
     spendingByCategoryId.set(
       bc.categoryId,
       (spendingByCategoryId.get(bc.categoryId) ?? 0) + allocated
@@ -263,16 +268,19 @@ export async function getSpendingByCategory(projectId: string): Promise<Spending
   });
 
   // 5. Unallocated row: bills with NO category allocations at all
-  const unallocatedAgg = await prisma.bill.aggregate({
-    _sum: { nettoAmount: true },
+  const unallocatedBills = await prisma.bill.findMany({
     where: {
       projectId,
       ...CONFIRMED_BILL_FILTER,
       categories: { none: {} },
     },
+    select: { brutto19: true, brutto7: true, brutto0: true },
   });
 
-  const unallocatedSpent = toNumber(unallocatedAgg._sum.nettoAmount);
+  const unallocatedSpent = unallocatedBills.reduce(
+    (sum, b) => sum + toNumber(b.brutto19) + toNumber(b.brutto7) + toNumber(b.brutto0),
+    0
+  );
   if (unallocatedSpent > 0) {
     items.push({
       id: null,
