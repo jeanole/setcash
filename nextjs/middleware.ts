@@ -16,6 +16,7 @@ export default auth(function middleware(req) {
 
   // Allow public routes through without auth check
   const isPublicRoute =
+    nextUrl.pathname === '/' ||
     nextUrl.pathname === '/login' ||
     nextUrl.pathname === '/api/health' ||
     nextUrl.pathname.startsWith('/api/auth/') ||
@@ -26,9 +27,9 @@ export default auth(function middleware(req) {
     return NextResponse.next();
   }
 
-  // Redirect unauthenticated users to /login
+  // Redirect unauthenticated users to /
   if (!isAuthenticated) {
-    const loginUrl = new URL('/login', nextUrl.origin);
+    const loginUrl = new URL('/', nextUrl.origin);
     loginUrl.searchParams.set('callbackUrl', nextUrl.pathname);
     return NextResponse.redirect(loginUrl);
   }
