@@ -40,19 +40,17 @@ export interface SpendingTotals {
 /**
  * The confirmed-bill status filter used in all spending queries.
  * The Prisma BillStatus enum has no null value; the default is 'confirmed'.
- * We include confirmed, pending, approved, paid (all non-draft statuses)
- * per the spec: "status IS NULL OR status = 'confirmed'" — in the enum world
- * this means exclude only 'draft'.
+ * The spec says "status IS NULL OR status = 'confirmed'". Since the Bill.status
+ * field is non-nullable in the Prisma schema (BillStatus enum, default confirmed),
+ * "status IS NULL" can never occur. We therefore match the spec by including
+ * only bills with status = 'confirmed'.
  *
- * The spec says "confirmed bills only: status IS NULL OR status = 'confirmed'".
- * The Express app uses exactly that SQL. In the Prisma enum schema the only
- * excluded status is 'draft'. We match the spec literally by filtering
- * NOT IN ('draft').
+ * EC-6: Deleted motives/categories are not shown because Prisma CASCADE deletes
+ * remove allocation records from BillMotive/BillCategory when a motive/category
+ * is deleted. Soft-delete would be needed to support the "(deleted)" row variant.
  */
 const CONFIRMED_BILL_FILTER = {
-  status: {
-    not: BillStatus.draft,
-  },
+  status: BillStatus.confirmed,
 } as const;
 
 function toNumber(value: unknown): number {

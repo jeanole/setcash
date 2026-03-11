@@ -4,12 +4,15 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { auth } from '@/auth';
 import {
   getSpendingByMotive,
   getSpendingByCategory,
   getSpendingTotals,
 } from '@/lib/spending';
+
+const TabSchema = z.enum(['motive', 'category']).default('motive');
 
 export async function GET(req: NextRequest) {
   try {
@@ -23,7 +26,11 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'No project selected' }, { status: 400 });
     }
 
-    const tab = req.nextUrl.searchParams.get('tab') ?? 'motive';
+    const tabParsed = TabSchema.safeParse(req.nextUrl.searchParams.get('tab') ?? undefined);
+    if (!tabParsed.success) {
+      return NextResponse.json({ error: 'Invalid tab parameter' }, { status: 400 });
+    }
+    const tab = tabParsed.data;
 
     if (tab === 'category') {
       const items = await getSpendingByCategory(projectId);
