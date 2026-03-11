@@ -1,6 +1,6 @@
 # PROJ-5: NextAuth.js Authentication
 
-## Status: In Progress
+## Status: Change Requested
 **Created:** 2026-03-01
 **Last Updated:** 2026-03-02
 
@@ -700,4 +700,34 @@ export const config = {
 ```
 
 Or move rate limiting to a separate API route wrapper.
+
+---
+
+## Change Requests
+
+### CR-11: Merge Landing Page and Login Page into One
+**Requested:** 2026-03-11 | **Priority:** Medium | **Status:** Pending Review
+
+**Current Behavior:** There are two separate pages:
+- `app/page.tsx` — a minimal scaffold landing page (logo, migration notice, tech stack badges)
+- `app/(public)/login/page.tsx` — a centered dark login card with only the `LoginForm`
+
+Users who navigate to `/` see the scaffold page and must separately navigate to `/login`.
+
+**Desired Behavior:** A single full landing page at `/` (or `/login`) that combines product presentation with an embedded login form. The page should show meaningful product information (branding, key features, value proposition) alongside the login form — not two separate destinations.
+
+**Rationale:** Reduces friction for returning users who land at the root URL and have to find the login. Also removes the now-outdated scaffold/migration notice page entirely. Standard SaaS pattern: unauthenticated root = marketing/login hybrid.
+
+**Proposed Acceptance Criteria:**
+- [ ] `app/page.tsx` is replaced with a full landing+login page — the scaffold migration notice is removed entirely
+- [ ] The page uses a split layout (desktop: left=product hero/info, right=login form) or a single-column layout with branding above the form (mobile)
+- [ ] The login form (`LoginForm` component) is embedded directly in the page — no redirect to `/login`
+- [ ] `app/(public)/login/page.tsx` either redirects to `/` or is removed (unauthenticated users land at `/`)
+- [ ] The page includes: vBudget wordmark/logo, a short tagline or feature highlights (e.g. "Track expenses. Manage budgets. Simplify reimbursements."), and the login form
+- [ ] Middleware's public route list is updated if `/login` path changes
+- [ ] Authenticated users visiting `/` are redirected to `/dashboard` (same as current `/login` behavior)
+- [ ] Responsive: stacked single-column on mobile (≤768px), split two-column on desktop (≥1024px)
+- [ ] Dark cinematic background style from the existing login page is preserved or improved
+
+**Resolution:** Pending
 
