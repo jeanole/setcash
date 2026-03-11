@@ -1,6 +1,6 @@
 # vBudget — Project Index
 
-**Next Available IDs:** PROJ-20 · BUG-45 · CR-12
+**Next Available IDs:** PROJ-20 · BUG-45 · CR-13
 
 | ID | Type | Title | Status | Priority | Feature | Date |
 |----|------|-------|--------|----------|---------|------|
@@ -23,6 +23,7 @@
 | [PROJ-4](PROJ-4-nextjs-scaffold.md) | Feature | Next.js App Scaffold + PostgreSQL + Docker | Deployed | — | — | 2026-03-01 |
 | [PROJ-5](PROJ-5-nextauth-authentication.md) | Feature | NextAuth.js Authentication | Change Requested | — | PROJ-4 | 2026-03-03 |
 | CR-11 | CR | Merge Landing Page and Login Page into One | Pending Review | Medium | PROJ-5 | 2026-03-11 |
+| [CR-12](CR-12-forgot-password-reset.md) | CR | Add Forgot Password / Self-Service Password Reset | Pending Review | Medium | PROJ-5 | 2026-03-11 |
 | [PROJ-6](PROJ-6-sqlite-postgres-migration.md) | Feature | SQLite → PostgreSQL Data Migration Script | Complete | — | PROJ-4 | 2026-03-01 |
 | [PROJ-7](PROJ-7-bills-feature.md) | Feature | Bills Feature | In Progress | — | PROJ-5, PROJ-6 | 2026-03-01 |
 | [PROJ-8](PROJ-8-budget-matrix.md) | Feature | Budget Matrix | Complete | — | PROJ-5, PROJ-6 | 2026-03-01 |

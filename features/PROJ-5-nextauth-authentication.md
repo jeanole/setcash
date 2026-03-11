@@ -731,3 +731,18 @@ Users who navigate to `/` see the scaffold page and must separately navigate to 
 
 **Resolution:** Pending
 
+
+---
+
+### CR-12: Add Forgot Password / Self-Service Password Reset
+**Requested:** 2026-03-11 | **Priority:** Medium | **Status:** Pending Review
+
+See full spec: [CR-12-forgot-password-reset.md](CR-12-forgot-password-reset.md)
+
+**Current Behavior:** No self-service password reset — users must ask a super admin.
+
+**Desired Behavior:** "Forgot password?" link on login page triggers an email with a time-limited reset link. New `PasswordResetToken` table stores hashed tokens. Two new public pages: `/forgot-password` and `/reset-password`.
+
+**Requires:** Outbound email provider (Resend recommended — add `RESEND_API_KEY` to env).
+
+**Resolution:** Pending
