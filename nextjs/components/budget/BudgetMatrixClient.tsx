@@ -7,6 +7,8 @@ import type { BudgetMatrixResponse, BudgetCellUpdate } from '@/lib/types';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
+type AmountMode = 'brutto' | 'netto';
+
 interface BudgetMatrixClientProps extends BudgetMatrixResponse {
   isAdmin: boolean;
   projectId: string;
@@ -36,14 +38,25 @@ export default function BudgetMatrixClient({
   motiveSpending: initialMotiveSpending,
   categorySpending: initialCategorySpending,
   cellSpending: initialCellSpending,
+  motiveSpendingBrutto: initialMotiveSpendingBrutto,
+  categorySpendingBrutto: initialCategorySpendingBrutto,
+  cellSpendingBrutto: initialCellSpendingBrutto,
   isAdmin,
   projectId,
 }: BudgetMatrixClientProps) {
   const router = useRouter();
   const [matrix, setMatrix] = useState<Record<string, number>>(initialMatrix);
-  const [motiveSpending] = useState<Record<string, number>>(initialMotiveSpending);
-  const [categorySpending] = useState<Record<string, number>>(initialCategorySpending);
-  const [cellSpending] = useState<Record<string, number>>(initialCellSpending);
+  const [motiveSpendingNetto] = useState<Record<string, number>>(initialMotiveSpending);
+  const [categorySpendingNetto] = useState<Record<string, number>>(initialCategorySpending);
+  const [cellSpendingNetto] = useState<Record<string, number>>(initialCellSpending);
+  const [motiveSpendingBrutto] = useState<Record<string, number>>(initialMotiveSpendingBrutto);
+  const [categorySpendingBrutto] = useState<Record<string, number>>(initialCategorySpendingBrutto);
+  const [cellSpendingBrutto] = useState<Record<string, number>>(initialCellSpendingBrutto);
+  const [amountMode, setAmountMode] = useState<AmountMode>('brutto');
+
+  const motiveSpending = amountMode === 'brutto' ? motiveSpendingBrutto : motiveSpendingNetto;
+  const categorySpending = amountMode === 'brutto' ? categorySpendingBrutto : categorySpendingNetto;
+  const cellSpending = amountMode === 'brutto' ? cellSpendingBrutto : cellSpendingNetto;
   const [editingCell, setEditingCell] = useState<string | null>(null);
   const [modifiedCells, setModifiedCells] = useState<Set<string>>(new Set());
   const [isSaving, setIsSaving] = useState(false);
@@ -332,9 +345,39 @@ export default function BudgetMatrixClient({
 
   return (
     <div className="space-y-4">
-      {/* Header with save button */}
-      {isAdmin && (
-        <div className="flex justify-end">
+      {/* Header: Brutto/Netto toggle (always) + Save button (admin only) */}
+      <div className="flex items-center justify-between gap-4">
+        <div
+          className="flex items-center rounded-lg border border-zinc-200 overflow-hidden"
+          role="group"
+          aria-label="Amount display mode"
+        >
+          <button
+            type="button"
+            onClick={() => setAmountMode('brutto')}
+            className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+              amountMode === 'brutto'
+                ? 'bg-[#6366f1] text-white'
+                : 'bg-white text-zinc-500 hover:bg-zinc-50 hover:text-zinc-700'
+            }`}
+            aria-pressed={amountMode === 'brutto'}
+          >
+            Brutto
+          </button>
+          <button
+            type="button"
+            onClick={() => setAmountMode('netto')}
+            className={`px-3 py-1.5 text-xs font-medium border-l border-zinc-200 transition-colors ${
+              amountMode === 'netto'
+                ? 'bg-[#6366f1] text-white'
+                : 'bg-white text-zinc-500 hover:bg-zinc-50 hover:text-zinc-700'
+            }`}
+            aria-pressed={amountMode === 'netto'}
+          >
+            Netto
+          </button>
+        </div>
+        {isAdmin && (
           <button
             onClick={handleSave}
             disabled={!hasChanges || isSaving}
@@ -374,8 +417,8 @@ export default function BudgetMatrixClient({
               `Save Changes${hasChanges ? ` (${modifiedCells.size})` : ''}`
             )}
           </button>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Legend */}
       <div className="flex flex-wrap gap-4 text-sm">

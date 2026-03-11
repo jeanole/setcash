@@ -133,9 +133,18 @@ export interface BudgetMatrixResponse {
   categories: Category[];
   matrix: Record<string, number>;
   grandTotal: number;
+  /** Netto spending per motiveId */
   motiveSpending: Record<string, number>;
+  /** Netto spending per categoryId */
   categorySpending: Record<string, number>;
+  /** Netto spending per "{categoryId}_{motiveId}" cell */
   cellSpending: Record<string, number>;
+  /** Brutto spending per motiveId */
+  motiveSpendingBrutto: Record<string, number>;
+  /** Brutto spending per categoryId */
+  categorySpendingBrutto: Record<string, number>;
+  /** Brutto spending per "{categoryId}_{motiveId}" cell */
+  cellSpendingBrutto: Record<string, number>;
 }
 
 export interface BudgetCellUpdate {

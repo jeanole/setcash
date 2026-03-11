@@ -125,13 +125,26 @@ export function SpendingTableSkeleton() {
 // Main SpendingTable component
 // ============================================================================
 
+type AmountMode = 'brutto' | 'netto';
+
 interface SpendingTableProps {
   items: SpendingItem[];
   totals: SpendingTotals;
   label: string;
+  amountMode: AmountMode;
 }
 
-export default function SpendingTable({ items, totals, label }: SpendingTableProps) {
+export default function SpendingTable({ items, totals, label, amountMode }: SpendingTableProps) {
+  const getSpent = (item: SpendingItem) =>
+    amountMode === 'netto' ? item.nettoSpent : item.spent;
+  const getRemaining = (item: SpendingItem) => item.budget - getSpent(item);
+  const getPercentUsed = (item: SpendingItem): number | null => {
+    if (item.budget === 0) return null;
+    return (getSpent(item) / item.budget) * 100;
+  };
+  const activeTotalSpent = amountMode === 'netto' ? totals.nettoSpent : totals.spent;
+  const activeTotalRemaining = totals.budget - activeTotalSpent;
+  const activeTotalPercent = totals.budget === 0 ? null : (activeTotalSpent / totals.budget) * 100;
   if (items.length === 0) {
     return (
       <div className="bg-white rounded-xl border border-[var(--vb-card-border)] shadow-[var(--vb-shadow-sm)] p-12 text-center">
@@ -226,17 +239,17 @@ export default function SpendingTable({ items, totals, label }: SpendingTablePro
 
                   {/* Spent */}
                   <td className="px-4 py-3 text-right font-mono-numbers text-zinc-700">
-                    {formatCurrency(item.spent)}
+                    {formatCurrency(getSpent(item))}
                   </td>
 
                   {/* Remaining */}
                   <td
                     className={cn(
                       'px-4 py-3 text-right font-mono-numbers font-semibold',
-                      item.remaining < 0 ? 'text-rose-600' : 'text-zinc-700'
+                      getRemaining(item) < 0 ? 'text-rose-600' : 'text-zinc-700'
                     )}
                   >
-                    {formatCurrency(item.remaining)}
+                    {formatCurrency(getRemaining(item))}
                   </td>
 
                   {/* % Used */}
@@ -245,9 +258,9 @@ export default function SpendingTable({ items, totals, label }: SpendingTablePro
                       <span className="text-zinc-400 font-mono">—</span>
                     ) : (
                       <PercentIndicator
-                        percentUsed={item.percentUsed}
+                        percentUsed={getPercentUsed(item)}
                         budget={item.budget}
-                        spent={item.spent}
+                        spent={getSpent(item)}
                       />
                     )}
                   </td>
@@ -266,21 +279,21 @@ export default function SpendingTable({ items, totals, label }: SpendingTablePro
                 {formatCurrency(totals.budget)}
               </td>
               <td className="px-4 py-3 text-right font-mono-numbers font-bold text-zinc-800">
-                {formatCurrency(totals.spent)}
+                {formatCurrency(activeTotalSpent)}
               </td>
               <td
                 className={cn(
                   'px-4 py-3 text-right font-mono-numbers font-bold',
-                  totals.remaining < 0 ? 'text-rose-600' : 'text-zinc-800'
+                  activeTotalRemaining < 0 ? 'text-rose-600' : 'text-zinc-800'
                 )}
               >
-                {formatCurrency(totals.remaining)}
+                {formatCurrency(activeTotalRemaining)}
               </td>
               <td className="px-4 py-3 text-right">
                 <PercentIndicator
-                  percentUsed={totals.percentUsed}
+                  percentUsed={activeTotalPercent}
                   budget={totals.budget}
-                  spent={totals.spent}
+                  spent={activeTotalSpent}
                 />
               </td>
             </tr>

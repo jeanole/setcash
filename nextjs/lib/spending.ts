@@ -18,7 +18,10 @@ export interface SpendingItem {
   id: string | null;
   name: string;
   budget: number;
+  /** Total brutto (brutto19 + brutto7 + brutto0) allocated to this item */
   spent: number;
+  /** Netto amount allocated to this item */
+  nettoSpent: number;
   remaining: number;
   /** null when budget === 0 (avoid division by zero) */
   percentUsed: number | null;
@@ -28,6 +31,7 @@ export interface SpendingItem {
 export interface SpendingTotals {
   budget: number;
   spent: number;
+  nettoSpent: number;
   remaining: number;
   /** null when total budget === 0 */
   percentUsed: number | null;
@@ -69,6 +73,7 @@ function buildSpendingItem(
   name: string,
   budget: number,
   spent: number,
+  nettoSpent: number,
   itemStatus: 'normal' | 'deleted'
 ): SpendingItem {
   const remaining = budget - spent;
@@ -77,6 +82,7 @@ function buildSpendingItem(
     name,
     budget,
     spent,
+    nettoSpent,
     remaining,
     percentUsed: calcPercentUsed(spent, budget),
     status: itemStatus,
@@ -126,21 +132,20 @@ export async function getSpendingByMotive(projectId: string): Promise<SpendingIt
       motiveId: true,
       percentage: true,
       bill: {
-        select: { brutto19: true, brutto7: true, brutto0: true },
+        select: { brutto19: true, brutto7: true, brutto0: true, nettoAmount: true },
       },
     },
   });
 
-  // 3. Aggregate spending per motiveId (using total brutto = brutto19 + brutto7 + brutto0)
-  const spendingByMotiveId = new Map<string, number>();
+  // 3. Aggregate spending per motiveId (brutto and netto)
+  const bruttoByMotiveId = new Map<string, number>();
+  const nettoByMotiveId = new Map<string, number>();
   for (const bm of billMotives) {
+    const pct = toNumber(bm.percentage);
     const totalBrutto =
       toNumber(bm.bill.brutto19) + toNumber(bm.bill.brutto7) + toNumber(bm.bill.brutto0);
-    const allocated = totalBrutto * toNumber(bm.percentage) / 100;
-    spendingByMotiveId.set(
-      bm.motiveId,
-      (spendingByMotiveId.get(bm.motiveId) ?? 0) + allocated
-    );
+    bruttoByMotiveId.set(bm.motiveId, (bruttoByMotiveId.get(bm.motiveId) ?? 0) + totalBrutto * pct / 100);
+    nettoByMotiveId.set(bm.motiveId, (nettoByMotiveId.get(bm.motiveId) ?? 0) + toNumber(bm.bill.nettoAmount) * pct / 100);
   }
 
   // 4. Build result rows — one per motive
@@ -153,8 +158,9 @@ export async function getSpendingByMotive(projectId: string): Promise<SpendingIt
     const budget =
       motive.budgetMatrix.length > 0 ? matrixTotal : toNumber(motive.budget);
 
-    const spent = spendingByMotiveId.get(motive.id) ?? 0;
-    return buildSpendingItem(motive.id, motive.name, budget, spent, 'normal');
+    const spent = bruttoByMotiveId.get(motive.id) ?? 0;
+    const nettoSpent = nettoByMotiveId.get(motive.id) ?? 0;
+    return buildSpendingItem(motive.id, motive.name, budget, spent, nettoSpent, 'normal');
   });
 
   // 5. Unallocated row: bills with NO motive allocations at all
@@ -164,19 +170,22 @@ export async function getSpendingByMotive(projectId: string): Promise<SpendingIt
       ...CONFIRMED_BILL_FILTER,
       motives: { none: {} },
     },
-    select: { brutto19: true, brutto7: true, brutto0: true },
+    select: { brutto19: true, brutto7: true, brutto0: true, nettoAmount: true },
   });
 
   const unallocatedSpent = unallocatedBills.reduce(
-    (sum, b) => sum + toNumber(b.brutto19) + toNumber(b.brutto7) + toNumber(b.brutto0),
-    0
+    (sum, b) => sum + toNumber(b.brutto19) + toNumber(b.brutto7) + toNumber(b.brutto0), 0
   );
-  if (unallocatedSpent > 0) {
+  const unallocatedNettoSpent = unallocatedBills.reduce(
+    (sum, b) => sum + toNumber(b.nettoAmount), 0
+  );
+  if (unallocatedSpent > 0 || unallocatedNettoSpent > 0) {
     items.push({
       id: null,
       name: '(unallocated)',
       budget: 0,
       spent: unallocatedSpent,
+      nettoSpent: unallocatedNettoSpent,
       remaining: -unallocatedSpent,
       percentUsed: null,
       status: 'unallocated',
@@ -228,21 +237,20 @@ export async function getSpendingByCategory(projectId: string): Promise<Spending
       categoryId: true,
       percentage: true,
       bill: {
-        select: { brutto19: true, brutto7: true, brutto0: true },
+        select: { brutto19: true, brutto7: true, brutto0: true, nettoAmount: true },
       },
     },
   });
 
-  // 3. Aggregate spending per categoryId (using total brutto = brutto19 + brutto7 + brutto0)
-  const spendingByCategoryId = new Map<string, number>();
+  // 3. Aggregate spending per categoryId (brutto and netto)
+  const bruttoByCategoryId = new Map<string, number>();
+  const nettoByCategoryId = new Map<string, number>();
   for (const bc of billCategories) {
+    const pct = toNumber(bc.percentage);
     const totalBrutto =
       toNumber(bc.bill.brutto19) + toNumber(bc.bill.brutto7) + toNumber(bc.bill.brutto0);
-    const allocated = totalBrutto * toNumber(bc.percentage) / 100;
-    spendingByCategoryId.set(
-      bc.categoryId,
-      (spendingByCategoryId.get(bc.categoryId) ?? 0) + allocated
-    );
+    bruttoByCategoryId.set(bc.categoryId, (bruttoByCategoryId.get(bc.categoryId) ?? 0) + totalBrutto * pct / 100);
+    nettoByCategoryId.set(bc.categoryId, (nettoByCategoryId.get(bc.categoryId) ?? 0) + toNumber(bc.bill.nettoAmount) * pct / 100);
   }
 
   // 4. Build result rows — one per category
@@ -257,14 +265,9 @@ export async function getSpendingByCategory(projectId: string): Promise<Spending
         ? matrixTotal
         : toNumber(category.budget);
 
-    const spent = spendingByCategoryId.get(category.id) ?? 0;
-    return buildSpendingItem(
-      category.id,
-      category.name,
-      budget,
-      spent,
-      'normal'
-    );
+    const spent = bruttoByCategoryId.get(category.id) ?? 0;
+    const nettoSpent = nettoByCategoryId.get(category.id) ?? 0;
+    return buildSpendingItem(category.id, category.name, budget, spent, nettoSpent, 'normal');
   });
 
   // 5. Unallocated row: bills with NO category allocations at all
@@ -274,19 +277,22 @@ export async function getSpendingByCategory(projectId: string): Promise<Spending
       ...CONFIRMED_BILL_FILTER,
       categories: { none: {} },
     },
-    select: { brutto19: true, brutto7: true, brutto0: true },
+    select: { brutto19: true, brutto7: true, brutto0: true, nettoAmount: true },
   });
 
   const unallocatedSpent = unallocatedBills.reduce(
-    (sum, b) => sum + toNumber(b.brutto19) + toNumber(b.brutto7) + toNumber(b.brutto0),
-    0
+    (sum, b) => sum + toNumber(b.brutto19) + toNumber(b.brutto7) + toNumber(b.brutto0), 0
   );
-  if (unallocatedSpent > 0) {
+  const unallocatedNettoSpent = unallocatedBills.reduce(
+    (sum, b) => sum + toNumber(b.nettoAmount), 0
+  );
+  if (unallocatedSpent > 0 || unallocatedNettoSpent > 0) {
     items.push({
       id: null,
       name: '(unallocated)',
       budget: 0,
       spent: unallocatedSpent,
+      nettoSpent: unallocatedNettoSpent,
       remaining: -unallocatedSpent,
       percentUsed: null,
       status: 'unallocated',
@@ -307,10 +313,12 @@ export async function getSpendingByCategory(projectId: string): Promise<Spending
 export function getSpendingTotals(items: SpendingItem[]): SpendingTotals {
   let totalBudget = 0;
   let totalSpent = 0;
+  let totalNettoSpent = 0;
 
   for (const item of items) {
     totalBudget += item.budget;
     totalSpent += item.spent;
+    totalNettoSpent += item.nettoSpent;
   }
 
   const totalRemaining = totalBudget - totalSpent;
@@ -319,6 +327,7 @@ export function getSpendingTotals(items: SpendingItem[]): SpendingTotals {
   return {
     budget: totalBudget,
     spent: totalSpent,
+    nettoSpent: totalNettoSpent,
     remaining: totalRemaining,
     percentUsed,
   };

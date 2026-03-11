@@ -54,27 +54,48 @@ async function getBudgetMatrixData(projectId: string): Promise<BudgetMatrixRespo
 
   // Calculate spending using raw SQL queries
   // Note: PostgreSQL with Prisma uses camelCase column names
-  // Motive spending
+
+  // Netto spending per motive
   const motiveSpendingRaw = await prisma.$queryRaw<{ motiveId: string; spent: number }[]>`
     SELECT bm."motiveId", SUM(b."nettoAmount" * bm.percentage / 100) as spent
-    FROM "BillMotive" bm 
+    FROM "BillMotive" bm
     JOIN "Bill" b ON b.id = bm."billId"
     WHERE b."projectId" = ${projectId}
       AND b.status NOT IN ('draft'::"BillStatus", 'pending'::"BillStatus", 'rejected'::"BillStatus")
     GROUP BY bm."motiveId"
   `;
 
-  // Category spending
+  // Brutto spending per motive
+  const motiveSpendingBruttoRaw = await prisma.$queryRaw<{ motiveId: string; spent: number }[]>`
+    SELECT bm."motiveId", SUM((b."brutto19" + b."brutto7" + b."brutto0") * bm.percentage / 100) as spent
+    FROM "BillMotive" bm
+    JOIN "Bill" b ON b.id = bm."billId"
+    WHERE b."projectId" = ${projectId}
+      AND b.status NOT IN ('draft'::"BillStatus", 'pending'::"BillStatus", 'rejected'::"BillStatus")
+    GROUP BY bm."motiveId"
+  `;
+
+  // Netto spending per category
   const categorySpendingRaw = await prisma.$queryRaw<{ categoryId: string; spent: number }[]>`
     SELECT bc."categoryId", SUM(b."nettoAmount" * bc.percentage / 100) as spent
-    FROM "BillCategory" bc 
+    FROM "BillCategory" bc
     JOIN "Bill" b ON b.id = bc."billId"
     WHERE b."projectId" = ${projectId}
       AND b.status NOT IN ('draft'::"BillStatus", 'pending'::"BillStatus", 'rejected'::"BillStatus")
     GROUP BY bc."categoryId"
   `;
 
-  // Cell spending (motive + category intersection)
+  // Brutto spending per category
+  const categorySpendingBruttoRaw = await prisma.$queryRaw<{ categoryId: string; spent: number }[]>`
+    SELECT bc."categoryId", SUM((b."brutto19" + b."brutto7" + b."brutto0") * bc.percentage / 100) as spent
+    FROM "BillCategory" bc
+    JOIN "Bill" b ON b.id = bc."billId"
+    WHERE b."projectId" = ${projectId}
+      AND b.status NOT IN ('draft'::"BillStatus", 'pending'::"BillStatus", 'rejected'::"BillStatus")
+    GROUP BY bc."categoryId"
+  `;
+
+  // Netto cell spending (motive + category intersection)
   const cellSpendingRaw = await prisma.$queryRaw<{ motiveId: string; categoryId: string; spent: number }[]>`
     SELECT bm."motiveId", bc."categoryId",
       SUM(b."nettoAmount" * bm.percentage / 100 * bc.percentage / 100) as spent
@@ -86,7 +107,18 @@ async function getBudgetMatrixData(projectId: string): Promise<BudgetMatrixRespo
     GROUP BY bm."motiveId", bc."categoryId"
   `;
 
-  // Convert spending results to lookup maps with 2-decimal precision
+  // Brutto cell spending
+  const cellSpendingBruttoRaw = await prisma.$queryRaw<{ motiveId: string; categoryId: string; spent: number }[]>`
+    SELECT bm."motiveId", bc."categoryId",
+      SUM((b."brutto19" + b."brutto7" + b."brutto0") * bm.percentage / 100 * bc.percentage / 100) as spent
+    FROM "BillMotive" bm
+    JOIN "BillCategory" bc ON bc."billId" = bm."billId"
+    JOIN "Bill" b ON b.id = bm."billId"
+    WHERE b."projectId" = ${projectId}
+      AND b.status NOT IN ('draft'::"BillStatus", 'pending'::"BillStatus", 'rejected'::"BillStatus")
+    GROUP BY bm."motiveId", bc."categoryId"
+  `;
+
   const roundToTwo = (value: number): number => Math.round(value * 100) / 100;
 
   const motiveSpending: Record<string, number> = {};
@@ -94,15 +126,31 @@ async function getBudgetMatrixData(projectId: string): Promise<BudgetMatrixRespo
     motiveSpending[row.motiveId] = roundToTwo(Number(row.spent));
   }
 
+  const motiveSpendingBrutto: Record<string, number> = {};
+  for (const row of motiveSpendingBruttoRaw) {
+    motiveSpendingBrutto[row.motiveId] = roundToTwo(Number(row.spent));
+  }
+
   const categorySpending: Record<string, number> = {};
   for (const row of categorySpendingRaw) {
     categorySpending[row.categoryId] = roundToTwo(Number(row.spent));
+  }
+
+  const categorySpendingBrutto: Record<string, number> = {};
+  for (const row of categorySpendingBruttoRaw) {
+    categorySpendingBrutto[row.categoryId] = roundToTwo(Number(row.spent));
   }
 
   const cellSpending: Record<string, number> = {};
   for (const row of cellSpendingRaw) {
     const key = `${row.categoryId}_${row.motiveId}`;
     cellSpending[key] = roundToTwo(Number(row.spent));
+  }
+
+  const cellSpendingBrutto: Record<string, number> = {};
+  for (const row of cellSpendingBruttoRaw) {
+    const key = `${row.categoryId}_${row.motiveId}`;
+    cellSpendingBrutto[key] = roundToTwo(Number(row.spent));
   }
 
   return {
@@ -113,6 +161,9 @@ async function getBudgetMatrixData(projectId: string): Promise<BudgetMatrixRespo
     motiveSpending,
     categorySpending,
     cellSpending,
+    motiveSpendingBrutto,
+    categorySpendingBrutto,
+    cellSpendingBrutto,
   };
 }
 

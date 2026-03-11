@@ -11,6 +11,7 @@ import type { SpendingItem, SpendingTotals } from '@/lib/spending';
 // ============================================================================
 
 type Tab = 'motive' | 'category';
+type AmountMode = 'brutto' | 'netto';
 
 interface TabSpendingData {
   items: SpendingItem[];
@@ -131,6 +132,7 @@ export default function SpendingPageClient({
   const [categoryData, setCategoryData] = useState<TabSpendingData>(initialCategoryData);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [amountMode, setAmountMode] = useState<AmountMode>('brutto');
 
   const currentData = activeTab === 'motive' ? motiveData : categoryData;
 
@@ -188,11 +190,42 @@ export default function SpendingPageClient({
   return (
     <div className="space-y-6 animate-[vb-rise_0.4s_ease-out]">
       {/* Page header */}
-      <div>
-        <h1 className="text-[22px] font-semibold text-zinc-800">Spending Overview</h1>
-        <p className="text-sm text-zinc-500 mt-1">
-          Track budget utilization by motive and category
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-[22px] font-semibold text-zinc-800">Spending Overview</h1>
+          <p className="text-sm text-zinc-500 mt-1">
+            Track budget utilization by motive and category
+          </p>
+        </div>
+        {/* Brutto / Netto toggle */}
+        <div className="flex items-center rounded-lg border border-zinc-200 overflow-hidden shrink-0" role="group" aria-label="Amount display mode">
+          <button
+            type="button"
+            onClick={() => setAmountMode('brutto')}
+            className={cn(
+              'px-3 py-1.5 text-xs font-medium transition-colors',
+              amountMode === 'brutto'
+                ? 'bg-[var(--vb-accent)] text-white'
+                : 'bg-white text-zinc-500 hover:bg-zinc-50 hover:text-zinc-700'
+            )}
+            aria-pressed={amountMode === 'brutto'}
+          >
+            Brutto
+          </button>
+          <button
+            type="button"
+            onClick={() => setAmountMode('netto')}
+            className={cn(
+              'px-3 py-1.5 text-xs font-medium transition-colors border-l border-zinc-200',
+              amountMode === 'netto'
+                ? 'bg-[var(--vb-accent)] text-white'
+                : 'bg-white text-zinc-500 hover:bg-zinc-50 hover:text-zinc-700'
+            )}
+            aria-pressed={amountMode === 'netto'}
+          >
+            Netto
+          </button>
+        </div>
       </div>
 
       {/* Tab navigation */}
@@ -225,6 +258,7 @@ export default function SpendingPageClient({
             <SpendingTable
               items={currentData.items}
               totals={currentData.totals}
+              amountMode={amountMode}
               label={
                 activeTab === 'motive'
                   ? 'Spending by motive'
