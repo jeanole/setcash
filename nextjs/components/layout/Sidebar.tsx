@@ -36,6 +36,15 @@ function BudgetIcon({ className }: { className?: string }) {
   );
 }
 
+function SpendingIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+    </svg>
+  );
+}
+
 function ReportsIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -66,6 +75,7 @@ function SettingsIcon({ className }: { className?: string }) {
 
 const NAV_ITEMS: NavItem[] = [
   { label: 'Bills', href: '/bills', icon: BillsIcon },
+  { label: 'Spending', href: '/spending', icon: SpendingIcon },
   { label: 'Budget', href: '/budget', icon: BudgetIcon },
   { label: 'Reports', href: '/reports', icon: ReportsIcon },
   { label: 'V-Geld', href: '/vgeld', icon: VGeldIcon },
@@ -74,7 +84,6 @@ const NAV_ITEMS: NavItem[] = [
 
 // ============================================================================
 // V-Geld Balance Widget
-// Fetches the current user's balance from /api/vgeld/balance and displays it.
 // ============================================================================
 
 function VGeldBalance() {
@@ -109,20 +118,20 @@ function VGeldBalance() {
 
   return (
     <div
-      className="mx-3 mb-2 rounded-lg px-3 py-2 bg-white/5 border border-white/8"
+      className="mx-3 mb-2 rounded-lg px-3 py-2 bg-slate-50 border border-slate-200"
       aria-label="Your V-Geld balance"
     >
-      <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-[0.12em] mb-0.5">
+      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.12em] mb-0.5">
         V-Geld Balance
       </p>
       {isLoading ? (
-        <div className="h-4 w-20 bg-white/10 rounded animate-pulse" />
+        <div className="h-4 w-20 bg-slate-200 rounded animate-pulse" />
       ) : balance === null ? (
-        <p className="text-xs text-zinc-500">—</p>
+        <p className="text-xs text-slate-400">—</p>
       ) : (
         <p className={cn(
           'text-sm font-semibold font-mono',
-          balance < 0 ? 'text-rose-500' : 'text-zinc-100'
+          balance < 0 ? 'text-rose-500' : 'text-slate-700'
         )}>
           {formatCurrency(balance)}
         </p>
@@ -161,26 +170,26 @@ function NavLinks({
         className={cn(
           'flex items-center gap-3 py-2.5 rounded-lg text-[13.5px] font-medium transition-colors border-l-2 pl-[14px]',
           active
-            ? 'text-zinc-50 bg-white/10 border-[#7C6AF6]'
-            : 'text-zinc-400 hover:text-zinc-50 hover:bg-white/6 border-transparent'
+            ? 'text-indigo-700 bg-indigo-50 border-indigo-500'
+            : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100 border-transparent'
         )}
         aria-current={active ? 'page' : undefined}
       >
-        <item.icon className={cn('w-5 h-5 shrink-0', active ? 'opacity-100' : 'opacity-60')} />
+        <item.icon className={cn('w-5 h-5 shrink-0', active ? 'text-indigo-600' : 'opacity-60')} />
         {item.label}
       </a>
     );
   });
 
   const settingsSection = (
-    <div className="mt-6 pt-6 border-t border-white/8">
-      <p className="px-[14px] mb-2 text-[10px] font-semibold text-zinc-500 uppercase tracking-[0.12em]">
+    <div className="mt-6 pt-6 border-t border-slate-200">
+      <p className="px-[14px] mb-2 text-[10px] font-semibold text-slate-400 uppercase tracking-[0.12em]">
         Settings
       </p>
       {isSuperAdmin && (
         <button
           onClick={() => { onClose?.(); onOpenSuperAdmin(); }}
-          className="w-full flex items-center gap-3 py-2.5 rounded-lg text-[13.5px] font-medium transition-colors text-amber-400 hover:bg-white/6 hover:text-amber-300 border-l-2 border-transparent pl-[14px]"
+          className="w-full flex items-center gap-3 py-2.5 rounded-lg text-[13.5px] font-medium transition-colors text-amber-600 hover:bg-amber-50 hover:text-amber-700 border-l-2 border-transparent pl-[14px]"
           aria-label="Open Super Admin panel"
         >
           <svg
@@ -244,12 +253,12 @@ export default function Sidebar({ currentUser, isMobileOpen, onClose }: SidebarP
   return (
     <>
       <aside
-        className="hidden lg:flex w-64 flex-col bg-[var(--vb-sidebar-bg)] text-white shrink-0"
+        className="hidden lg:flex w-64 flex-col bg-white border-r border-slate-200 shrink-0"
         aria-label="Primary navigation"
       >
-        <div className="px-6 py-5 border-b border-white/8">
-          <span className="text-xl font-bold text-zinc-50 tracking-tight">vBudget</span>
-          <p className="text-xs text-zinc-500 mt-0.5">expense tracker</p>
+        <div className="px-6 py-5 border-b border-slate-200">
+          <span className="text-xl font-bold text-slate-800 tracking-tight">vBudget</span>
+          <p className="text-xs text-slate-400 mt-0.5">expense tracker</p>
         </div>
         <ProjectSwitcher />
         <nav className="flex-1 px-3 py-4 space-y-1" aria-label="Main menu">
@@ -260,8 +269,8 @@ export default function Sidebar({ currentUser, isMobileOpen, onClose }: SidebarP
             onOpenSuperAdmin={() => setIsSuperAdminModalOpen(true)}
           />
         </nav>
-        <div className="px-6 py-4 border-t border-white/8">
-          <p className="text-xs text-zinc-600">v2.0.0-next</p>
+        <div className="px-6 py-4 border-t border-slate-200">
+          <p className="text-xs text-slate-400">v2.0.0-next</p>
         </div>
       </aside>
 
@@ -269,21 +278,21 @@ export default function Sidebar({ currentUser, isMobileOpen, onClose }: SidebarP
         <div className="lg:hidden fixed inset-0 z-50" aria-hidden={!isMobileOpen}>
           <div className="absolute inset-0 bg-black/50 transition-opacity" onClick={onClose} aria-hidden="true" />
           <aside
-            className="absolute left-0 top-0 h-full w-72 bg-[var(--vb-sidebar-bg)] text-white flex flex-col shadow-xl transform transition-transform duration-300 ease-in-out translate-x-0"
+            className="absolute left-0 top-0 h-full w-72 bg-white border-r border-slate-200 flex flex-col shadow-xl transform transition-transform duration-300 ease-in-out translate-x-0"
             aria-label="Mobile navigation"
           >
-            <div className="flex items-center justify-between px-4 py-4 border-b border-white/8">
+            <div className="flex items-center justify-between px-4 py-4 border-b border-slate-200">
               <div>
-                <span className="text-xl font-bold text-zinc-50 tracking-tight">vBudget</span>
-                <p className="text-xs text-zinc-500 mt-0.5">expense tracker</p>
+                <span className="text-xl font-bold text-slate-800 tracking-tight">vBudget</span>
+                <p className="text-xs text-slate-400 mt-0.5">expense tracker</p>
               </div>
               <button
                 type="button"
                 onClick={onClose}
-                className="p-2 rounded-lg hover:bg-white/6 transition-colors"
+                className="p-2 rounded-lg hover:bg-slate-100 transition-colors"
                 aria-label="Close navigation menu"
               >
-                <X className="w-5 h-5 text-zinc-400" />
+                <X className="w-5 h-5 text-slate-400" />
               </button>
             </div>
             <ProjectSwitcher onClose={onClose} />
@@ -298,8 +307,8 @@ export default function Sidebar({ currentUser, isMobileOpen, onClose }: SidebarP
                 }}
               />
             </nav>
-            <div className="px-6 py-4 border-t border-white/8">
-              <p className="text-xs text-zinc-600">v2.0.0-next</p>
+            <div className="px-6 py-4 border-t border-slate-200">
+              <p className="text-xs text-slate-400">v2.0.0-next</p>
             </div>
           </aside>
         </div>
