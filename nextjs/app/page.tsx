@@ -2,42 +2,14 @@ import { Suspense } from 'react';
 import { auth } from '@/auth';
 import { redirect } from 'next/navigation';
 import LoginForm from '@/components/auth/LoginForm';
+import SparkleEffect from '@/components/auth/SparkleEffect';
 
 export const metadata = {
   title: 'vBudget — Your receipts deserve better than a shoebox',
 };
 
 // ---------------------------------------------------------------------------
-// Decorative receipt SVG — floats in the background
-// ---------------------------------------------------------------------------
-function ReceiptDoodle({ className, style }: { className?: string; style?: React.CSSProperties }) {
-  return (
-    <svg
-      className={className}
-      style={style}
-      width="120"
-      height="160"
-      viewBox="0 0 120 160"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-    >
-      <path
-        d="M10 0h100v148l-8 6-8-6-8 6-8-6-8 6-8-6-8 6-8-6-8 6-8-6-8 6-8-6V0z"
-        fill="currentColor"
-        opacity="0.06"
-      />
-      <line x1="28" y1="32" x2="92" y2="32" stroke="currentColor" opacity="0.1" strokeWidth="2" />
-      <line x1="28" y1="48" x2="80" y2="48" stroke="currentColor" opacity="0.08" strokeWidth="2" />
-      <line x1="28" y1="64" x2="88" y2="64" stroke="currentColor" opacity="0.1" strokeWidth="2" />
-      <line x1="28" y1="80" x2="72" y2="80" stroke="currentColor" opacity="0.08" strokeWidth="2" />
-      <line x1="28" y1="104" x2="92" y2="104" stroke="currentColor" opacity="0.12" strokeWidth="2.5" />
-    </svg>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Root page — combined landing + login
+// Root page — combined landing + login, dark neon chaos theme
 // ---------------------------------------------------------------------------
 export default async function HomePage() {
   const session = await auth();
@@ -45,42 +17,42 @@ export default async function HomePage() {
 
   return (
     <main className="landing-page">
-      {/* Background decorations */}
-      <div className="landing-bg" aria-hidden="true">
-        <ReceiptDoodle
-          style={{
-            position: 'absolute',
-            top: '8%',
-            left: '5%',
-            transform: 'rotate(-12deg)',
-            color: '#c1694f',
-            animation: 'landing-float 6s ease-in-out infinite',
-          }}
-        />
-        <ReceiptDoodle
-          style={{
-            position: 'absolute',
-            bottom: '12%',
-            right: '8%',
-            transform: 'rotate(8deg)',
-            color: '#c1694f',
-            animation: 'landing-float 7s ease-in-out infinite 1s',
-          }}
-        />
-        <ReceiptDoodle
-          style={{
-            position: 'absolute',
-            top: '45%',
-            right: '20%',
-            transform: 'rotate(-5deg) scale(0.7)',
-            color: '#c1694f',
-            animation: 'landing-float 8s ease-in-out infinite 2s',
-            opacity: 0.5,
-          }}
-        />
-        {/* Grain overlay */}
-        <div className="landing-grain" />
+      {/* ── Turbo blobs ── */}
+      <div aria-hidden="true">
+        <div className="landing-blob landing-blob-1" />
+        <div className="landing-blob landing-blob-2" />
+        <div className="landing-blob landing-blob-3" />
+        <div className="landing-blob landing-blob-4" />
+        <div className="landing-blob landing-blob-5" />
+        <div className="landing-blob landing-blob-6" />
+        <div className="landing-blob landing-blob-7" />
+        <div className="landing-blob landing-blob-8" />
       </div>
+
+      {/* ── Outer orbit ring (15s) ── */}
+      <div className="landing-orbit" aria-hidden="true">
+        <div className="landing-orbit-dot" />
+        <div className="landing-orbit-dot" />
+        <div className="landing-orbit-dot" />
+        <div className="landing-orbit-dot" />
+        <div className="landing-orbit-dot" />
+        <div className="landing-orbit-dot" />
+        <div className="landing-orbit-dot" />
+        <div className="landing-orbit-dot" />
+      </div>
+
+      {/* ── Inner orbit ring counter-rotating (8s) ── */}
+      <div className="landing-orbit-inner" aria-hidden="true">
+        <div className="landing-orbit-dot" />
+        <div className="landing-orbit-dot" />
+        <div className="landing-orbit-dot" />
+        <div className="landing-orbit-dot" />
+        <div className="landing-orbit-dot" />
+        <div className="landing-orbit-dot" />
+      </div>
+
+      {/* ── Sparkle particles (client-side) ── */}
+      <SparkleEffect />
 
       <div className="landing-container">
         {/* ---- LEFT: Hero content ---- */}
@@ -96,9 +68,9 @@ export default async function HomePage() {
             className="landing-headline"
             style={{ animation: 'landing-rise 600ms ease-out both', animationDelay: '100ms' }}
           >
-            Your receipts deserve
+            Track expenses. Manage budgets.
             <br />
-            better than a shoebox.
+            Simplify reimbursements.
           </h1>
 
           {/* Tagline */}
@@ -106,8 +78,8 @@ export default async function HomePage() {
             className="landing-tagline"
             style={{ animation: 'landing-rise 600ms ease-out both', animationDelay: '200ms' }}
           >
-            Track expenses, manage budgets, and stop pretending
-            that crumpled paper in your pocket counts as bookkeeping.
+            Stop pretending that crumpled paper in your pocket counts as bookkeeping.
+            Your receipts deserve better than a shoebox.
           </p>
 
           {/* Feature pills */}
@@ -149,7 +121,7 @@ export default async function HomePage() {
             </div>
           </div>
 
-          {/* Subtle footer */}
+          {/* Footer note */}
           <p
             className="landing-footer-note"
             style={{ animation: 'landing-rise 600ms ease-out both', animationDelay: '500ms' }}
@@ -163,15 +135,17 @@ export default async function HomePage() {
           className="landing-login-wrapper"
           style={{ animation: 'landing-rise 600ms ease-out both', animationDelay: '250ms' }}
         >
-          <div className="landing-login-card">
-            <Suspense>
-              <LoginForm allowSignup={process.env.EXTERNAL_REGISTRATION !== 'false'} />
-            </Suspense>
+          {/* Rainbow gradient animated border wrapper */}
+          <div className="landing-card-border">
+            <div className="landing-login-card">
+              <Suspense>
+                <LoginForm allowSignup={process.env.EXTERNAL_REGISTRATION !== 'false'} />
+              </Suspense>
+            </div>
           </div>
           <p className="landing-login-aside">
             &ldquo;I wish I&rsquo;d started tracking expenses sooner&rdquo;
-            <br />
-            <span>— Literally everyone, eventually</span>
+            &nbsp;&mdash; Literally everyone, eventually
           </p>
         </div>
       </div>

@@ -50,6 +50,23 @@ jobs:
           custom_instructions: |
             You are operating inside the vBudget repository via GitHub Actions.
 
+            ## CRITICAL: Project Structure
+            This project has been migrated from Express to Next.js. The production app
+            runs from the `nextjs/` directory. NEVER edit files in the old Express codebase
+            (server.js, routes/, public/, db.js, middleware.js, google.js).
+
+            All code changes MUST be made inside `nextjs/`:
+            - Pages: `nextjs/app/`
+            - Components: `nextjs/components/`
+            - API routes: `nextjs/app/api/`
+            - Styles: `nextjs/app/globals.css`
+            - Auth: `nextjs/auth.ts`, `nextjs/auth.config.ts`
+            - Database: `nextjs/prisma/schema.prisma`
+            - Libs: `nextjs/lib/`
+
+            The Docker image is built from `nextjs/Dockerfile`. Changes outside `nextjs/`
+            will NOT appear in production.
+
             Skills are defined in `.claude/skills/`. Read the relevant SKILL.md and follow it exactly.
             Key skills for this workflow:
               - report   → `.claude/skills/report/SKILL.md`
@@ -100,6 +117,13 @@ jobs:
 
             ### All other @claude comments
             Follow the comment instructions, guided by the project rules in `.claude/rules/`.
+
+            ## Pull Requests
+            After implementing changes (code fixes, new features, bug fixes), ALWAYS create
+            a pull request targeting the `main` branch using `gh pr create`.
+            - Use a clear, concise PR title (under 70 characters)
+            - Include a summary of changes and link to the issue (e.g. "Fixes #11")
+            - Post a comment on the issue with the PR link
 
             ## Always
             - Read `features/INDEX.md` before creating or updating any feature/bug/CR document.
