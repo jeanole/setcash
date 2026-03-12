@@ -2,203 +2,175 @@ import { auth } from '@/auth';
 import { redirect } from 'next/navigation';
 import LoginForm from '@/components/auth/LoginForm';
 
-// ---------------------------------------------------------------------------
-// Root page — combined landing + login entry point
-// Authenticated users are redirected to /dashboard immediately.
-// ---------------------------------------------------------------------------
-
 export const metadata = {
-  title: 'vBudget — Track expenses, manage budgets',
+  title: 'vBudget — Your receipts deserve better than a shoebox',
 };
 
+// ---------------------------------------------------------------------------
+// Decorative receipt SVG — floats in the background
+// ---------------------------------------------------------------------------
+function ReceiptDoodle({ className, style }: { className?: string; style?: React.CSSProperties }) {
+  return (
+    <svg
+      className={className}
+      style={style}
+      width="120"
+      height="160"
+      viewBox="0 0 120 160"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <path
+        d="M10 0h100v148l-8 6-8-6-8 6-8-6-8 6-8-6-8 6-8-6-8 6-8-6-8 6-8-6V0z"
+        fill="currentColor"
+        opacity="0.06"
+      />
+      <line x1="28" y1="32" x2="92" y2="32" stroke="currentColor" opacity="0.1" strokeWidth="2" />
+      <line x1="28" y1="48" x2="80" y2="48" stroke="currentColor" opacity="0.08" strokeWidth="2" />
+      <line x1="28" y1="64" x2="88" y2="64" stroke="currentColor" opacity="0.1" strokeWidth="2" />
+      <line x1="28" y1="80" x2="72" y2="80" stroke="currentColor" opacity="0.08" strokeWidth="2" />
+      <line x1="28" y1="104" x2="92" y2="104" stroke="currentColor" opacity="0.12" strokeWidth="2.5" />
+    </svg>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Root page — combined landing + login
+// ---------------------------------------------------------------------------
 export default async function HomePage() {
   const session = await auth();
   if (session?.user) redirect('/dashboard');
 
   return (
-    <main
-      className="min-h-screen flex items-center justify-center p-4 lg:p-8"
-      style={{
-        backgroundColor: '#020617', // slate-950
-        backgroundImage: [
-          'radial-gradient(900px 600px at 10% -10%, rgba(99, 102, 241, 0.18), transparent 60%)',
-          'radial-gradient(700px 500px at 110% 110%, rgba(16, 185, 129, 0.12), transparent 55%)',
-        ].join(', '),
-        backgroundAttachment: 'fixed',
-        animation: 'vb-rise 400ms ease-out both',
-      }}
-      aria-label="Welcome to vBudget"
-    >
-      <div className="w-full max-w-6xl mx-auto flex flex-col lg:flex-row lg:items-center lg:gap-16">
+    <main className="landing-page">
+      {/* Background decorations */}
+      <div className="landing-bg" aria-hidden="true">
+        <ReceiptDoodle
+          style={{
+            position: 'absolute',
+            top: '8%',
+            left: '5%',
+            transform: 'rotate(-12deg)',
+            color: '#c1694f',
+            animation: 'landing-float 6s ease-in-out infinite',
+          }}
+        />
+        <ReceiptDoodle
+          style={{
+            position: 'absolute',
+            bottom: '12%',
+            right: '8%',
+            transform: 'rotate(8deg)',
+            color: '#c1694f',
+            animation: 'landing-float 7s ease-in-out infinite 1s',
+          }}
+        />
+        <ReceiptDoodle
+          style={{
+            position: 'absolute',
+            top: '45%',
+            right: '20%',
+            transform: 'rotate(-5deg) scale(0.7)',
+            color: '#c1694f',
+            animation: 'landing-float 8s ease-in-out infinite 2s',
+            opacity: 0.5,
+          }}
+        />
+        {/* Grain overlay */}
+        <div className="landing-grain" />
+      </div>
 
-        {/* ----------------------------------------------------------------
-            LEFT COLUMN — branding + feature highlights
-            Visible at top on mobile, left panel on desktop
-        ---------------------------------------------------------------- */}
-        <div
-          className="flex-1 mb-8 lg:mb-0 flex flex-col items-center lg:items-start text-center lg:text-left"
-          style={{ animation: 'vb-rise 500ms ease-out both', animationDelay: '100ms' }}
-        >
+      <div className="landing-container">
+        {/* ---- LEFT: Hero content ---- */}
+        <div className="landing-hero">
           {/* Wordmark */}
-          <div className="mb-4 flex items-center gap-3">
-            <div
-              className="w-12 h-12 rounded-full flex items-center justify-center text-white text-lg font-bold flex-shrink-0"
-              style={{ backgroundColor: '#6366f1' }}
-              aria-hidden="true"
-            >
-              vB
-            </div>
-            <span
-              className="text-4xl font-bold tracking-tight"
-              style={{ color: '#ffffff' }}
-            >
-              vBudget
-            </span>
+          <div className="landing-wordmark" style={{ animation: 'landing-rise 600ms ease-out both' }}>
+            <div className="landing-logo-circle" aria-hidden="true">vB</div>
+            <span className="landing-logo-text">vBudget</span>
           </div>
+
+          {/* Headline */}
+          <h1
+            className="landing-headline"
+            style={{ animation: 'landing-rise 600ms ease-out both', animationDelay: '100ms' }}
+          >
+            Your receipts deserve
+            <br />
+            better than a shoebox.
+          </h1>
 
           {/* Tagline */}
           <p
-            className="text-lg mb-10 max-w-md"
-            style={{ color: '#cbd5e1' /* slate-300 */ }}
+            className="landing-tagline"
+            style={{ animation: 'landing-rise 600ms ease-out both', animationDelay: '200ms' }}
           >
-            Track expenses. Manage budgets. Simplify reimbursements.
+            Track expenses, manage budgets, and stop pretending
+            that crumpled paper in your pocket counts as bookkeeping.
           </p>
 
-          {/* Feature highlights */}
-          <ul className="space-y-5 w-full max-w-md" aria-label="Product features">
-
-            {/* Feature 1 — Receipt scanning */}
-            <li className="flex items-start gap-4">
-              <div
-                className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5"
-                style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}
-                aria-hidden="true"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.75"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="w-5 h-5"
-                  style={{ color: '#818cf8' /* indigo-400 */ }}
-                  aria-hidden="true"
-                >
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                  <polyline points="14 2 14 8 20 8" />
-                  <line x1="9" y1="13" x2="15" y2="13" />
-                  <line x1="9" y1="17" x2="12" y2="17" />
-                </svg>
-              </div>
-              <div>
-                <p className="font-semibold" style={{ color: '#ffffff' }}>
-                  Receipt scanning with AI analysis
-                </p>
-                <p className="text-sm mt-0.5" style={{ color: '#94a3b8' /* slate-400 */ }}>
-                  Upload photos of receipts and let AI extract the details automatically.
-                </p>
-              </div>
-            </li>
-
-            {/* Feature 2 — Budget tracking */}
-            <li className="flex items-start gap-4">
-              <div
-                className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5"
-                style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}
-                aria-hidden="true"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.75"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="w-5 h-5"
-                  style={{ color: '#818cf8' /* indigo-400 */ }}
-                  aria-hidden="true"
-                >
-                  <line x1="18" y1="20" x2="18" y2="10" />
-                  <line x1="12" y1="20" x2="12" y2="4" />
-                  <line x1="6" y1="20" x2="6" y2="14" />
-                </svg>
-              </div>
-              <div>
-                <p className="font-semibold" style={{ color: '#ffffff' }}>
-                  Multi-project budget tracking
-                </p>
-                <p className="text-sm mt-0.5" style={{ color: '#94a3b8' }}>
-                  Manage budgets across multiple projects with real-time category breakdowns.
-                </p>
-              </div>
-            </li>
-
-            {/* Feature 3 — Team management */}
-            <li className="flex items-start gap-4">
-              <div
-                className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5"
-                style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}
-                aria-hidden="true"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.75"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="w-5 h-5"
-                  style={{ color: '#818cf8' /* indigo-400 */ }}
-                  aria-hidden="true"
-                >
-                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                  <circle cx="9" cy="7" r="4" />
-                  <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                  <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                </svg>
-              </div>
-              <div>
-                <p className="font-semibold" style={{ color: '#ffffff' }}>
-                  Team expense management
-                </p>
-                <p className="text-sm mt-0.5" style={{ color: '#94a3b8' }}>
-                  Collaborate with your team — submit, review, and approve expenses together.
-                </p>
-              </div>
-            </li>
-          </ul>
-
-          {/* Footer version note */}
-          <p
-            className="mt-10 text-xs"
-            style={{ color: '#475569' /* slate-600 */ }}
-          >
-            v2.0 · Next.js
-          </p>
-        </div>
-
-        {/* ----------------------------------------------------------------
-            RIGHT COLUMN — login card
-            Centered on mobile, right panel on desktop
-        ---------------------------------------------------------------- */}
-        <div
-          className="w-full lg:w-auto lg:flex-shrink-0"
-          style={{ animation: 'vb-rise 500ms ease-out both', animationDelay: '200ms' }}
-        >
+          {/* Feature pills */}
           <div
-            className="bg-white/95 backdrop-blur-sm rounded-2xl p-8 w-full lg:w-96"
-            style={{
-              boxShadow: 'var(--vb-shadow-xl)',
-            }}
+            className="landing-features"
+            style={{ animation: 'landing-rise 600ms ease-out both', animationDelay: '350ms' }}
           >
-            <LoginForm />
+            <div className="landing-feature">
+              <span className="landing-feature-icon">&#128247;</span>
+              <div>
+                <p className="landing-feature-title">AI receipt scanning</p>
+                <p className="landing-feature-desc">
+                  Photograph it, forget it. Our AI reads receipts
+                  better than you ever did.
+                </p>
+              </div>
+            </div>
+
+            <div className="landing-feature">
+              <span className="landing-feature-icon">&#128200;</span>
+              <div>
+                <p className="landing-feature-title">Multi-project budgets</p>
+                <p className="landing-feature-desc">
+                  Because &ldquo;I&rsquo;ll track it in my head&rdquo;
+                  has never worked for anyone, ever.
+                </p>
+              </div>
+            </div>
+
+            <div className="landing-feature">
+              <span className="landing-feature-icon">&#129309;</span>
+              <div>
+                <p className="landing-feature-title">Team expenses</p>
+                <p className="landing-feature-desc">
+                  Submit, review, approve. No more chasing
+                  colleagues through hallways with forms.
+                </p>
+              </div>
+            </div>
           </div>
+
+          {/* Subtle footer */}
+          <p
+            className="landing-footer-note"
+            style={{ animation: 'landing-rise 600ms ease-out both', animationDelay: '500ms' }}
+          >
+            Free for small teams &middot; No credit card required &middot; Yes, it&rsquo;s really that easy
+          </p>
         </div>
 
+        {/* ---- RIGHT: Login card ---- */}
+        <div
+          className="landing-login-wrapper"
+          style={{ animation: 'landing-rise 600ms ease-out both', animationDelay: '250ms' }}
+        >
+          <div className="landing-login-card">
+            <LoginForm allowSignup={process.env.EXTERNAL_REGISTRATION !== 'false'} />
+          </div>
+          <p className="landing-login-aside">
+            &ldquo;I wish I&rsquo;d started tracking expenses sooner&rdquo;
+            <br />
+            <span>— Literally everyone, eventually</span>
+          </p>
+        </div>
       </div>
     </main>
   );

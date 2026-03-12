@@ -38,13 +38,14 @@ enum OcrStatus {
 // ---------------------------------------------------------------------------
 
 model User {
-  id            String   @id @default(uuid())
+  id            String    @id @default(uuid())
   legacyId      Int? @unique
-  email         String   @unique
+  email         String    @unique
   passwordHash  String
-  isSuperAdmin  Boolean  @default(false)
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
+  emailVerified DateTime?
+  isSuperAdmin  Boolean   @default(false)
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
 
   defaultProjectId String?
   defaultProject   Project? @relation("UserDefaultProject", fields: [defaultProjectId], references: [id])
@@ -75,6 +76,7 @@ model Project {
   notifications Notification[]
   telegramLinks TelegramLink[]
   telegramLinkCodes TelegramLinkCode[]
+  invitationTokens  InvitationToken[]
   defaultForUsers User[] @relation("UserDefaultProject")
 }
 
@@ -341,5 +343,43 @@ model TelegramLinkCode {
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([userEmail])
+  @@index([projectId])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  email     String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([email])
+}
+
+model EmailVerificationToken {
+  id        String   @id @default(uuid())
+  email     String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([email])
+}
+
+model InvitationToken {
+  id          String   @id @default(uuid())
+  email       String
+  tokenHash   String   @unique
+  projectId   String
+  role        ProjectRole @default(user)
+  message     String?
+  invitedBy   String
+  autoAdd     Boolean  @default(false)
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([email])
   @@index([projectId])
 }

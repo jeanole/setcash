@@ -291,9 +291,12 @@ export async function PUT(
       return NextResponse.json({ error: 'Bill not found' }, { status: 404 });
     }
 
-    // Check permissions - only owner or admin can update
+    // Check permissions - only submitter, project admin/owner, or superadmin can update
     const isOwner = bill.submittedByEmail.toLowerCase() === session.user.email.toLowerCase();
-    const isAdmin = session.user.role === 'admin' || session.user.role === 'superadmin';
+    const isAdmin =
+      session.user.role === 'admin' ||
+      session.user.role === 'owner' ||
+      session.user.role === 'superadmin';
     
     if (!isOwner && !isAdmin) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -469,8 +472,8 @@ export async function DELETE(
 
     // Check permissions - only owner or admin can delete
     const isOwner = bill.submittedByEmail.toLowerCase() === session.user.email.toLowerCase();
-    const isAdmin = session.user.role === 'admin' || session.user.role === 'superadmin';
-    
+    const isAdmin = session.user.role === 'admin' || session.user.role === 'owner' || session.user.role === 'superadmin';
+
     if (!isOwner && !isAdmin) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }

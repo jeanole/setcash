@@ -13,6 +13,8 @@ interface CropModalProps {
   onSkip: () => void;
   onCancel: () => void;
   counter?: string;
+  /** True while the parent is uploading the cropped blob to the server */
+  isSaving?: boolean;
 }
 
 export default function CropModal({
@@ -22,6 +24,7 @@ export default function CropModal({
   onSkip,
   onCancel,
   counter,
+  isSaving = false,
 }: CropModalProps) {
   const imageRef = useRef<HTMLImageElement>(null);
   const cropperRef = useRef<InstanceType<typeof import('cropperjs').default> | null>(null);
@@ -243,20 +246,20 @@ export default function CropModal({
 
             <button
               onClick={handleSave}
-              disabled={isLoading || !file || !file.type.startsWith('image/') || !cropperLoaded}
+              disabled={isLoading || isSaving || !file || !file.type.startsWith('image/') || !cropperLoaded}
               className={cn(
-                'px-4 py-2 bg-[#7C6AF6] text-white font-medium rounded-lg transition-colors',
-                'hover:bg-[#6C5CE7] disabled:opacity-50 disabled:cursor-not-allowed',
+                'px-4 py-2 bg-indigo-600 text-white font-medium rounded-lg transition-colors',
+                'hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed',
                 'flex items-center gap-2'
               )}
             >
-              {isLoading ? (
+              {isLoading || isSaving ? (
                 <>
                   <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
-                  Processing...
+                  {isSaving ? 'Saving…' : 'Processing…'}
                 </>
               ) : (
                 <>

@@ -56,3 +56,11 @@ if (!member || (member.role === 'user' && !isSuperAdmin)) {
 ## Files Affected
 
 - `nextjs/app/api/projects/[id]/members/route.ts` (GET handler)
+
+---
+
+## Resolution
+
+**Status:** Resolved
+**Resolved Date:** 2026-03-07
+**Fix Description:** Added role check after membership check in the GET handler: regular users (`role === 'user'`) without superadmin flag now receive HTTP 403 `"Forbidden: admin or owner role required"` instead of the full member list. Superadmins bypass the check and retain full access.

@@ -1,6 +1,6 @@
 # BUG-36: Crop Selection Area Is Too Small in Crop Modal
 
-**Status:** Open
+**Status:** Resolved
 **Reported:** 2026-03-08
 **Severity:** Medium
 **Skill Tag:** [Frontend]

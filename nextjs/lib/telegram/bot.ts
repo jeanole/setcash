@@ -67,12 +67,16 @@ export async function startProjectBot(projectId: string): Promise<void> {
   });
 
   bot.on('polling_error', (err) => {
-    // 409 Conflict: bot is running elsewhere
-    if (err.message && err.message.includes('409')) {
+    const msg = err.message ?? '';
+    if (msg.includes('409')) {
       console.error(`[TG ${projectId}] Bot already running elsewhere (409). Stopping.`);
       stopProjectBot(projectId);
+    } else if (msg.includes('401') || msg.includes('404')) {
+      // Invalid or deleted token — stop immediately to avoid spam
+      console.error(`[TG ${projectId}] Invalid bot token (${msg.includes('401') ? '401' : '404'}). Stopping.`);
+      stopProjectBot(projectId);
     } else {
-      console.error(`[TG ${projectId}] Polling error:`, err.message);
+      console.error(`[TG ${projectId}] Polling error:`, msg);
     }
   });
 

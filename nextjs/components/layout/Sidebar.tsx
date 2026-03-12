@@ -6,8 +6,9 @@ import { usePathname } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import dynamic from 'next/dynamic';
 import { cn, formatCurrency } from '@/lib/utils';
-import { X } from 'lucide-react';
+import { X, UserPlus } from 'lucide-react';
 import SuperAdminModal from '@/components/superadmin/SuperAdminModal';
+import InviteMemberModal from '@/components/settings/InviteMemberModal';
 import ProjectSwitcher from '@/components/layout/ProjectSwitcher';
 
 const FilmRollNav = dynamic(() => import('@/components/cinematic/FilmRollNav'), { ssr: false });
@@ -219,8 +220,11 @@ function NavLinks({
 export default function Sidebar({ currentUser, isMobileOpen, onClose }: SidebarProps): ReactNode {
   const pathname = usePathname();
   const [isSuperAdminModalOpen, setIsSuperAdminModalOpen] = useState(false);
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const { data: session } = useSession();
 
   const isSuperAdmin = currentUser?.role === 'superadmin';
+  const currentProjectId = session?.user?.currentProjectId;
 
   const isActive = (href: string) => {
     if (href === '/bills') {
@@ -269,8 +273,17 @@ export default function Sidebar({ currentUser, isMobileOpen, onClose }: SidebarP
             onOpenSuperAdmin={() => setIsSuperAdminModalOpen(true)}
           />
         </nav>
-        <div className="px-6 py-4 border-t border-slate-200">
-          <p className="text-xs text-slate-400">v2.0.0-next</p>
+        <div className="px-4 py-3 border-t border-slate-200">
+          {currentProjectId && (
+            <button
+              onClick={() => setIsInviteModalOpen(true)}
+              className="w-full flex items-center gap-2 px-3 py-2 mb-2 text-xs font-medium text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+              Invite to project
+            </button>
+          )}
+          <p className="text-xs text-slate-400 px-3">v2.0.0-next</p>
         </div>
       </aside>
 
@@ -307,8 +320,17 @@ export default function Sidebar({ currentUser, isMobileOpen, onClose }: SidebarP
                 }}
               />
             </nav>
-            <div className="px-6 py-4 border-t border-slate-200">
-              <p className="text-xs text-slate-400">v2.0.0-next</p>
+            <div className="px-4 py-3 border-t border-slate-200">
+              {currentProjectId && (
+                <button
+                  onClick={() => { setIsInviteModalOpen(true); onClose?.(); }}
+                  className="w-full flex items-center gap-2 px-3 py-2 mb-2 text-xs font-medium text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  Invite to project
+                </button>
+              )}
+              <p className="text-xs text-slate-400 px-3">v2.0.0-next</p>
             </div>
           </aside>
         </div>
@@ -319,6 +341,14 @@ export default function Sidebar({ currentUser, isMobileOpen, onClose }: SidebarP
         onClose={() => setIsSuperAdminModalOpen(false)}
         currentUserEmail={currentUser?.email || ''}
       />
+
+      {currentProjectId && (
+        <InviteMemberModal
+          isOpen={isInviteModalOpen}
+          projectId={currentProjectId}
+          onClose={() => setIsInviteModalOpen(false)}
+        />
+      )}
     </>
   );
 }

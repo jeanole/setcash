@@ -99,8 +99,8 @@ export default function OcrSettingsForm({ initialSettings }: OcrSettingsFormProp
             role="switch"
             aria-checked={ocrEnabled}
             onClick={() => setOcrEnabled((v: boolean) => !v)}
-            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#7C6AF6] focus:ring-offset-2 ${
-              ocrEnabled ? 'bg-[#7C6AF6]' : 'bg-slate-200'
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#6366f1] focus:ring-offset-2 ${
+              ocrEnabled ? 'bg-[#6366f1]' : 'bg-slate-200'
             }`}
           >
             <span
@@ -125,7 +125,7 @@ export default function OcrSettingsForm({ initialSettings }: OcrSettingsFormProp
             value={ocrProvider}
             onChange={(e) => setOcrProvider(e.target.value)}
             disabled={!ocrEnabled}
-            className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#7C6AF6] focus:border-[#7C6AF6] disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#6366f1] focus:border-[#6366f1] disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {PROVIDERS.map((p) => (
               <option key={p.value} value={p.value}>
@@ -151,7 +151,7 @@ export default function OcrSettingsForm({ initialSettings }: OcrSettingsFormProp
             disabled={!ocrEnabled}
             placeholder={maskedKeyHint ?? 'Enter API key'}
             autoComplete="new-password"
-            className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#7C6AF6] focus:border-[#7C6AF6] disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#6366f1] focus:border-[#6366f1] disabled:opacity-50 disabled:cursor-not-allowed"
           />
           <p className="mt-1 text-xs text-slate-500">
             {maskedKeyHint
@@ -176,7 +176,7 @@ export default function OcrSettingsForm({ initialSettings }: OcrSettingsFormProp
               onChange={(e) => setOcrBaseUrl(e.target.value)}
               disabled={!ocrEnabled}
               placeholder="https://..."
-              className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#7C6AF6] focus:border-[#7C6AF6] disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#6366f1] focus:border-[#6366f1] disabled:opacity-50 disabled:cursor-not-allowed"
             />
             <p className="mt-1 text-xs text-slate-500">
               Base URL for the OpenAI-compatible API endpoint.
@@ -194,7 +194,7 @@ export default function OcrSettingsForm({ initialSettings }: OcrSettingsFormProp
           <button
             type="submit"
             disabled={isLoading}
-            className="px-4 py-2 bg-[#7C6AF6] text-white rounded-md font-medium text-sm hover:bg-[#6C5CE7] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="px-4 py-2 bg-[#6366f1] text-white rounded-md font-medium text-sm hover:bg-[#4f46e5] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {isLoading ? 'Saving...' : 'Save Changes'}
           </button>

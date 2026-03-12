@@ -264,7 +264,7 @@ export default function ReportsPageClient({
                   id="user-select"
                   value={selectedUserEmail}
                   onChange={(e) => setSelectedUserEmail(e.target.value)}
-                  className="block w-full sm:w-auto min-w-[200px] px-3 py-2 text-sm border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-[#7C6AF6] focus:border-[#7C6AF6] text-slate-900 bg-white"
+                  className="block w-full sm:w-auto min-w-[200px] px-3 py-2 text-sm border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-[#6366f1] focus:border-[#6366f1] text-slate-900 bg-white"
                   aria-label="Select user for PDF report"
                 >
                   {users.map((u) => (
@@ -278,10 +278,10 @@ export default function ReportsPageClient({
                   onClick={handleDownloadUserPdf}
                   disabled={isDownloadingUserPdf || !selectedUserEmail}
                   className={cn(
-                    'inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-[#7C6AF6] focus:ring-offset-2',
+                    'inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-[#6366f1] focus:ring-offset-2',
                     isDownloadingUserPdf
-                      ? 'bg-[#7C6AF6] text-white cursor-not-allowed'
-                      : 'bg-[#7C6AF6] text-white hover:bg-[#6C5CE7]'
+                      ? 'bg-[#6366f1] text-white cursor-not-allowed'
+                      : 'bg-[#6366f1] text-white hover:bg-[#4f46e5]'
                   )}
                   aria-disabled={isDownloadingUserPdf}
                 >
@@ -305,10 +305,10 @@ export default function ReportsPageClient({
               onClick={handleDownloadBudgetPdf}
               disabled={isDownloadingBudgetPdf}
               className={cn(
-                'inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-[#7C6AF6] focus:ring-offset-2',
+                'inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-[#6366f1] focus:ring-offset-2',
                 isDownloadingBudgetPdf
-                  ? 'bg-[#7C6AF6] text-white cursor-not-allowed'
-                  : 'bg-[#7C6AF6] text-white hover:bg-[#6C5CE7]'
+                  ? 'bg-[#6366f1] text-white cursor-not-allowed'
+                  : 'bg-[#6366f1] text-white hover:bg-[#4f46e5]'
               )}
               aria-disabled={isDownloadingBudgetPdf}
             >
@@ -345,7 +345,7 @@ export default function ReportsPageClient({
                   onClick={handleDownloadExcel}
                   disabled={isDownloadingExcel}
                   className={cn(
-                    'inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border transition-colors focus:outline-none focus:ring-2 focus:ring-[#7C6AF6] focus:ring-offset-2',
+                    'inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border transition-colors focus:outline-none focus:ring-2 focus:ring-[#6366f1] focus:ring-offset-2',
                     isDownloadingExcel
                       ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
                       : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
@@ -362,7 +362,7 @@ export default function ReportsPageClient({
                   onClick={handleDownloadZip}
                   disabled={isDownloadingZip}
                   className={cn(
-                    'inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border transition-colors focus:outline-none focus:ring-2 focus:ring-[#7C6AF6] focus:ring-offset-2',
+                    'inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border transition-colors focus:outline-none focus:ring-2 focus:ring-[#6366f1] focus:ring-offset-2',
                     isDownloadingZip
                       ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
                       : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
@@ -379,7 +379,7 @@ export default function ReportsPageClient({
                   onClick={handlePushToSheets}
                   disabled={isPushingSheets}
                   className={cn(
-                    'inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border transition-colors focus:outline-none focus:ring-2 focus:ring-[#7C6AF6] focus:ring-offset-2',
+                    'inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border transition-colors focus:outline-none focus:ring-2 focus:ring-[#6366f1] focus:ring-offset-2',
                     isPushingSheets
                       ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
                       : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'

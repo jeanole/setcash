@@ -1,11 +1,14 @@
-import { auth } from './auth';
+import NextAuth from 'next-auth';
+import { authConfig } from './auth.config';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 // ---------------------------------------------------------------------------
 // NextAuth v5 Edge Middleware
-// Protects all routes under /(protected)/
+// Uses the edge-compatible config (no Prisma) — only verifies JWTs.
 // ---------------------------------------------------------------------------
+
+const { auth } = NextAuth(authConfig);
 
 export default auth(function middleware(req) {
   const { nextUrl, auth: session } = req as typeof req & {
@@ -18,6 +21,10 @@ export default auth(function middleware(req) {
   const isPublicRoute =
     nextUrl.pathname === '/' ||
     nextUrl.pathname === '/login' ||
+    nextUrl.pathname === '/forgot-password' ||
+    nextUrl.pathname === '/reset-password' ||
+    nextUrl.pathname === '/verify-email' ||
+    nextUrl.pathname === '/accept-invite' ||
     nextUrl.pathname === '/api/health' ||
     nextUrl.pathname.startsWith('/api/auth/') ||
     nextUrl.pathname.startsWith('/_next/') ||

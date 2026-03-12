@@ -1,7 +1,7 @@
 'use client';
 
 import { EditLog } from '@/lib/types';
-import { formatDate, cn } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 
 interface BillHistoryTimelineProps {
   logs: EditLog[];
@@ -9,139 +9,108 @@ interface BillHistoryTimelineProps {
 
 function formatChanges(changes: EditLog['changes']): string {
   if (!changes) return '';
-
-  // Special event types
-  if (changes._event === 'created') {
-    return 'Bill created';
-  }
-  if (changes._event === 'verified') {
-    return `Verified: ${changes.field}`;
-  }
-
-  // Regular field changes
+  if (changes._event === 'created') return 'Bill created';
+  if (changes._event === 'verified') return `Verified: ${changes.field}`;
   return Object.entries(changes)
     .filter(([key]) => key !== '_event')
     .map(([key, value]) => `${key}: ${value}`)
     .join(', ');
 }
 
-function getEventBadge(changes: EditLog['changes'], source: string) {
-  if (!changes) return null;
+type EventKind = 'created' | 'verified' | 'ai' | 'edit';
 
-  // Created event
-  if (changes._event === 'created') {
-    return (
-      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800">
-        Created
-      </span>
-    );
-  }
+function getEventKind(log: EditLog): EventKind {
+  if (log.changes?._event === 'created') return 'created';
+  if (log.changes?._event === 'verified') return 'verified';
+  if (log.source === 'ai') return 'ai';
+  return 'edit';
+}
 
-  // Verified event
-  if (changes._event === 'verified') {
-    return (
-      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">
-        ✓ Verified
-      </span>
-    );
-  }
+const EVENT_STYLES: Record<EventKind, { dot: string; label: string; labelClass: string }> = {
+  created:  { dot: 'bg-emerald-400 border-emerald-200', label: 'Created', labelClass: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  verified: { dot: 'bg-amber-400 border-amber-200',    label: '✓ Verified', labelClass: 'bg-amber-50 text-amber-700 border-amber-200' },
+  ai:       { dot: 'bg-indigo-400 border-indigo-200',  label: 'AI',         labelClass: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
+  edit:     { dot: 'bg-slate-300 border-slate-200',    label: 'Edited',     labelClass: 'bg-slate-100 text-slate-600 border-slate-200' },
+};
 
-  // AI source
-  if (source === 'ai') {
-    return (
-      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-violet-100 text-[#7C6AF6]">
-        AI
-      </span>
-    );
-  }
-
-  // Regular edit
-  return (
-    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700">
-      Edited
-    </span>
-  );
+function formatTimestamp(ts: string) {
+  const d = new Date(ts);
+  return {
+    date: d.toLocaleDateString('de-DE', { day: '2-digit', month: 'short', year: 'numeric' }),
+    time: d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }),
+  };
 }
 
 export default function BillHistoryTimeline({ logs }: BillHistoryTimelineProps) {
   if (!logs || logs.length === 0) {
     return (
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-        <h3 className="text-lg font-semibold text-slate-900 mb-4">History</h3>
-        <p className="text-slate-500 text-center py-4">No history yet</p>
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+        <h3 className="text-sm font-semibold text-slate-700 mb-3 uppercase tracking-wider">Audit Trail</h3>
+        <p className="text-sm text-slate-400 py-3 text-center">No history recorded yet</p>
       </div>
     );
   }
 
-  // Sort by timestamp descending (newest first)
-  const sortedLogs = [...logs].sort(
+  const sorted = [...logs].sort(
     (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
   );
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-      <h3 className="text-lg font-semibold text-slate-900 mb-4">History</h3>
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+      <h3 className="text-sm font-semibold text-slate-700 mb-4 uppercase tracking-wider">Audit Trail</h3>
 
-      <div className="space-y-0">
-        {sortedLogs.map((log, index) => {
-          const badge = getEventBadge(log.changes, log.source);
-          const isFirst = index === 0;
+      <ol className="relative" aria-label="Bill history">
+        {sorted.map((log, i) => {
+          const kind = getEventKind(log);
+          const style = EVENT_STYLES[kind];
+          const { date, time } = formatTimestamp(log.timestamp);
+          const isLast = i === sorted.length - 1;
 
           return (
-            <div
-              key={log.id}
-              className={cn(
-                'relative pl-6 pb-6',
-                !isFirst && 'border-l-2 border-slate-100 ml-2',
-                isFirst && 'ml-2'
+            <li key={log.id} className={cn('relative flex gap-3 pb-5', isLast && 'pb-0')}>
+              {/* Vertical line */}
+              {!isLast && (
+                <div className="absolute left-[5px] top-4 bottom-0 w-px bg-slate-100" aria-hidden="true" />
               )}
-            >
-              {/* Timeline dot */}
-              <div
-                className={cn(
-                  'absolute left-0 top-0 w-4 h-4 rounded-full border-2',
-                  log.source === 'ai'
-                    ? 'bg-violet-100 border-[#7C6AF6]'
-                    : log.changes?._event === 'created'
-                    ? 'bg-emerald-100 border-emerald-400'
-                    : log.changes?._event === 'verified'
-                    ? 'bg-amber-100 border-amber-400'
-                    : 'bg-slate-100 border-slate-300'
-                )}
-              />
+
+              {/* Dot */}
+              <div className={cn(
+                'relative z-10 mt-0.5 w-3 h-3 rounded-full border-2 shrink-0',
+                style.dot
+              )} />
 
               {/* Content */}
-              <div className="space-y-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  {badge}
-                  <span className="text-sm text-slate-500">
-                    {formatDate(log.timestamp)} at{' '}
-                    {new Date(log.timestamp).toLocaleTimeString('de-DE', {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
+              <div className="flex-1 min-w-0 -mt-0.5">
+                <div className="flex flex-wrap items-center gap-1.5 mb-0.5">
+                  <span className={cn(
+                    'inline-flex items-center px-1.5 py-px rounded text-[10px] font-semibold border',
+                    style.labelClass
+                  )}>
+                    {style.label}
                   </span>
+                  <time className="text-[11px] text-slate-400 font-mono">
+                    {date} {time}
+                  </time>
                 </div>
 
-                <p className="text-sm font-medium text-slate-900">{log.user}</p>
+                <p className="text-xs font-medium text-slate-700">{log.user}</p>
 
                 {log.changes && log.changes._event !== 'created' && log.changes._event !== 'verified' && (
-                  <div className="text-sm text-slate-600 bg-slate-50 rounded-lg p-2 mt-1">
-                    <span className="font-medium">Changes:</span>{' '}
+                  <p className="text-[11px] text-slate-500 mt-1 font-mono leading-relaxed">
                     {formatChanges(log.changes)}
-                  </div>
+                  </p>
                 )}
 
                 {log.changes?._event === 'verified' && (
-                  <p className="text-sm text-amber-700">
-                    Field &quot;{String(log.changes.field)}&quot; verified
+                  <p className="text-[11px] text-amber-600 mt-0.5">
+                    &ldquo;{String(log.changes.field)}&rdquo; marked as correct
                   </p>
                 )}
               </div>
-            </div>
+            </li>
           );
         })}
-      </div>
+      </ol>
     </div>
   );
 }

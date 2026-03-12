@@ -263,8 +263,8 @@ export default function MembersSubModal({ isOpen, project, onClose }: MembersSub
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
             <div className="flex items-center gap-3">
-              <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-violet-100">
-                <Users className="w-5 h-5 text-[#7C6AF6]" />
+              <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-indigo-100">
+                <Users className="w-5 h-5 text-[#6366f1]" />
               </div>
               <div>
                 <h3 className="text-lg font-semibold text-slate-800">Members: {project.name}</h3>
@@ -293,7 +293,7 @@ export default function MembersSubModal({ isOpen, project, onClose }: MembersSub
                   {!showAddForm && (
                     <button
                       onClick={() => setShowAddForm(true)}
-                      className="px-3 py-1.5 bg-[#7C6AF6] text-white text-sm font-medium rounded-lg hover:bg-[#6C5CE7] transition-colors flex items-center gap-1.5"
+                      className="px-3 py-1.5 bg-[#6366f1] text-white text-sm font-medium rounded-lg hover:bg-[#4f46e5] transition-colors flex items-center gap-1.5"
                     >
                       <Plus className="w-4 h-4" />
                       Add Member
@@ -332,7 +332,7 @@ export default function MembersSubModal({ isOpen, project, onClose }: MembersSub
                     value={newPositionName}
                     onChange={(e) => setNewPositionName(e.target.value)}
                     placeholder="New position name"
-                    className="flex-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#7C6AF6] focus:border-[#7C6AF6] text-sm"
+                    className="flex-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#6366f1] focus:border-[#6366f1] text-sm"
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         handleAddPosition();
@@ -342,7 +342,7 @@ export default function MembersSubModal({ isOpen, project, onClose }: MembersSub
                   <button
                     onClick={handleAddPosition}
                     disabled={!newPositionName.trim()}
-                    className="px-3 py-2 bg-[#7C6AF6] text-white rounded-lg hover:bg-[#6C5CE7] transition-colors disabled:opacity-50"
+                    className="px-3 py-2 bg-[#6366f1] text-white rounded-lg hover:bg-[#4f46e5] transition-colors disabled:opacity-50"
                     aria-label="Add position"
                   >
                     <Plus className="w-4 h-4" />

@@ -525,6 +525,10 @@ export async function runOcrJob(billId: string, projectId: string): Promise<void
             updates['date'] = d;
             writtenFields.push(field);
           }
+        } else if (field === 'amount') {
+          // 'amount' from OCR maps to grossAmount in Prisma (no VAT breakdown available)
+          updates['grossAmount'] = extracted.amount;
+          writtenFields.push(field);
         } else {
           updates[field] = extracted[field as keyof OcrResult];
           writtenFields.push(field);

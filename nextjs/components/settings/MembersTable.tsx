@@ -90,7 +90,7 @@ export default function MembersTable({
             value={row.role}
             onChange={(e) => handleRoleChange(row, e.target.value)}
             disabled={isOwnerChangeDisabled}
-            className="w-full px-2 py-1.5 text-sm border border-slate-300 rounded focus:outline-none focus:ring-2 focus:ring-[#7C6AF6] disabled:bg-slate-100 disabled:cursor-not-allowed"
+            className="w-full px-2 py-1.5 text-sm border border-slate-300 rounded focus:outline-none focus:ring-2 focus:ring-[#6366f1] disabled:bg-slate-100 disabled:cursor-not-allowed"
           >
             {ROLES.map((role) => (
               <option
@@ -113,7 +113,7 @@ export default function MembersTable({
         <select
           value={row.positionId || 'none'}
           onChange={(e) => handlePositionChange(row, e.target.value)}
-          className="w-full px-2 py-1.5 text-sm border border-slate-300 rounded focus:outline-none focus:ring-2 focus:ring-[#7C6AF6]"
+          className="w-full px-2 py-1.5 text-sm border border-slate-300 rounded focus:outline-none focus:ring-2 focus:ring-[#6366f1]"
         >
           <option value="none">—</option>
           {positions.map((pos) => (

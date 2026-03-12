@@ -161,13 +161,6 @@ export default function BillDetailPage({ params }: BillDetailPageProps) {
     }
   };
 
-  const handleMarkPaid = async () => {
-    const success = await updateStatus('paid');
-    if (success) {
-      setResult({ type: 'success', message: 'Bill marked as paid' });
-    }
-  };
-
   const handleDelete = async () => {
     if (!confirm('Are you sure you want to delete this bill? This cannot be undone.')) {
       return;
@@ -194,7 +187,8 @@ export default function BillDetailPage({ params }: BillDetailPageProps) {
   };
 
   const { data: session } = useSession();
-  const isAdmin = session?.user?.role === 'admin' || session?.user?.role === 'superadmin';
+  const isAdmin = session?.user?.role === 'admin' || session?.user?.role === 'owner' || session?.user?.role === 'superadmin';
+  const canDelete = isAdmin || session?.user?.email === bill?.email;
   const [hasOcrEnabled, setHasOcrEnabled] = useState(false);
 
   // Fetch OCR enabled flag from project settings (admins only)
@@ -237,7 +231,7 @@ export default function BillDetailPage({ params }: BillDetailPageProps) {
         <h2 className="text-lg font-medium text-slate-900 mb-2">
           {error || 'Bill not found'}
         </h2>
-        <button onClick={() => router.push('/bills')} className="text-[#7C6AF6] font-medium">
+        <button onClick={() => router.push('/bills')} className="text-[#6366f1] font-medium">
           Back to Bills
         </button>
       </div>
@@ -251,31 +245,49 @@ export default function BillDetailPage({ params }: BillDetailPageProps) {
     ? (formData.brutto19 || 0) + (formData.brutto7 || 0) + (formData.brutto0 || 0)
     : total;
 
+  // Shared field class helper
+  const fieldClass = (fieldName: string) => cn(
+    'w-full px-3 py-2 border rounded-lg text-sm bg-white transition-shadow',
+    'focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent',
+    ocrFieldSet.has(fieldName)
+      ? 'border-amber-300 ring-2 ring-amber-200 bg-amber-50/30'
+      : 'border-slate-200'
+  );
+
   return (
-    <div className="max-w-7xl mx-auto space-y-6 animate-[vb-rise_0.4s_ease-out]">
-      {/* Result message */}
+    <div className="max-w-7xl mx-auto space-y-5 animate-[vb-rise_0.4s_ease-out]">
+      {/* Toast notification */}
       {result && (
         <div
           className={cn(
-            'rounded-lg px-4 py-3 text-sm animate-[vb-rise_0.2s_ease-out]',
+            'rounded-lg px-4 py-2.5 text-sm font-medium flex items-center gap-2 animate-[vb-rise_0.2s_ease-out]',
             result.type === 'success'
               ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
               : 'bg-rose-50 text-rose-700 border border-rose-200'
           )}
         >
+          {result.type === 'success' ? (
+            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          ) : (
+            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          )}
           {result.message}
         </div>
       )}
 
-      {/* Header */}
+      {/* Document header */}
       <BillDetailHeader
         bill={bill}
         onApprove={handleApprove}
         onReject={handleReject}
-        onMarkPaid={handleMarkPaid}
         onDelete={handleDelete}
         onAnalyse={handleAnalyse}
         isAdmin={isAdmin}
+        canDelete={canDelete}
         hasOcrEnabled={hasOcrEnabled}
         isAnalysing={isAnalysing || bill.ocrStatus === 'pending'}
       />
@@ -298,253 +310,215 @@ export default function BillDetailPage({ params }: BillDetailPageProps) {
         onReject={handleVerifyField}
       />
 
-      {/* Two column layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left column - Images */}
-        <div className="space-y-6">
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-            <h2 className="text-lg font-semibold text-slate-900 mb-4">Images</h2>
-            <ImageGallery
-              images={bill.images || []}
-              onReorder={handleImageReorder}
-              onDelete={deleteImage}
-              onReplace={replaceImage}
-              onCropImage={cropImage}
-              billId={bill.id}
-              readOnly={false}
-            />
+      {/* Two-column grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+
+        {/* ── Left: Document images ── */}
+        <div className="space-y-5">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
+              <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                Receipt Images
+              </h2>
+              {bill.images && bill.images.length > 0 && (
+                <span className="text-xs text-slate-400">{bill.images.length} file{bill.images.length !== 1 ? 's' : ''}</span>
+              )}
+            </div>
+            <div className="p-5">
+              <ImageGallery
+                images={bill.images || []}
+                onReorder={handleImageReorder}
+                onDelete={deleteImage}
+                onReplace={replaceImage}
+                onCropImage={cropImage}
+                billId={bill.id}
+                readOnly={false}
+              />
+            </div>
           </div>
 
-          {/* Upload more images */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-            <h3 className="text-sm font-medium text-slate-700 mb-4">Add More Images</h3>
-            <BillImageUpload
-              selectedFiles={filesToUpload}
-              onSelectedFilesChange={setFilesToUpload}
-              maxFiles={10 - (bill.images?.length || 0)}
-            />
-            {filesToUpload.length > 0 && (
-              <button
-                onClick={async () => {
-                  setIsUploading(true);
-                  const ok = await uploadImages(filesToUpload);
-                  setIsUploading(false);
-                  if (ok) {
-                    setFilesToUpload([]);
-                    setResult({ type: 'success', message: `${filesToUpload.length} image${filesToUpload.length !== 1 ? 's' : ''} uploaded successfully` });
-                  } else {
-                    setResult({ type: 'error', message: 'Upload failed — please try again' });
-                  }
-                }}
-                disabled={isUploading}
-                className={cn(
-                  'mt-4 w-full py-2.5 bg-[#7C6AF6] text-white font-medium rounded-lg transition-colors',
-                  'hover:bg-[#6C5CE7] disabled:opacity-50 disabled:cursor-not-allowed',
-                  'flex items-center justify-center gap-2'
-                )}
-              >
-                {isUploading ? (
-                  <>
-                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                    </svg>
-                    Uploading...
-                  </>
-                ) : (
-                  `Upload ${filesToUpload.length} file${filesToUpload.length !== 1 ? 's' : ''}`
-                )}
-              </button>
-            )}
+          {/* Add more images */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-5 py-3 border-b border-slate-100">
+              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Add Images</h3>
+            </div>
+            <div className="p-5">
+              <BillImageUpload
+                selectedFiles={filesToUpload}
+                onSelectedFilesChange={setFilesToUpload}
+                maxFiles={10 - (bill.images?.length || 0)}
+              />
+              {filesToUpload.length > 0 && (
+                <button
+                  onClick={async () => {
+                    setIsUploading(true);
+                    const ok = await uploadImages(filesToUpload);
+                    setIsUploading(false);
+                    if (ok) {
+                      setFilesToUpload([]);
+                      setResult({ type: 'success', message: `${filesToUpload.length} image${filesToUpload.length !== 1 ? 's' : ''} uploaded` });
+                    } else {
+                      setResult({ type: 'error', message: 'Upload failed — please try again' });
+                    }
+                  }}
+                  disabled={isUploading}
+                  className={cn(
+                    'mt-4 w-full py-2.5 bg-indigo-600 text-white text-sm font-semibold rounded-lg transition-colors',
+                    'hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed',
+                    'flex items-center justify-center gap-2'
+                  )}
+                >
+                  {isUploading ? (
+                    <>
+                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      Uploading…
+                    </>
+                  ) : (
+                    `Upload ${filesToUpload.length} file${filesToUpload.length !== 1 ? 's' : ''}`
+                  )}
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Right column - Editable fields */}
-        <div className="space-y-6">
+        {/* ── Right: Ledger form ── */}
+        <div className="space-y-5">
+
           {/* Details */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-            <h2 className="text-lg font-semibold text-slate-900 mb-4">Details</h2>
-            {formData ? (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-500 mb-1">Date</label>
-                    <input
-                      type="date"
-                      value={formData.date}
-                      onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                      className={cn(
-                        'w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7C6AF6] focus:border-transparent',
-                        ocrFieldSet.has('date') ? 'ring-2 ring-amber-300 border-amber-300' : 'border-slate-200'
-                      )}
-                    />
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-5 py-3 border-b border-slate-100">
+              <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Details</h2>
+            </div>
+            <div className="p-5">
+              {formData ? (
+                <div className="space-y-3.5">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-500 mb-1">Date</label>
+                      <input type="date" value={formData.date}
+                        onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                        className={fieldClass('date')} />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-500 mb-1">Type</label>
+                      <select value={formData.type}
+                        onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                        className={fieldClass('type')}>
+                        <option value="Kauf">Kauf</option>
+                        <option value="Reise">Reise</option>
+                        <option value="Bewirtung">Bewirtung</option>
+                        <option value="Sonstiges">Sonstiges</option>
+                      </select>
+                    </div>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-slate-500 mb-1">Type</label>
-                    <select
-                      value={formData.type}
-                      onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                      className={cn(
-                        'w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7C6AF6] focus:border-transparent',
-                        ocrFieldSet.has('type') ? 'ring-2 ring-amber-300 border-amber-300' : 'border-slate-200'
-                      )}
-                    >
-                      <option value="Kauf">Kauf</option>
-                      <option value="Reise">Reise</option>
-                      <option value="Bewirtung">Bewirtung</option>
-                      <option value="Sonstiges">Sonstiges</option>
-                    </select>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Vendor</label>
+                    <input type="text" value={formData.vendor}
+                      onChange={(e) => setFormData({ ...formData, vendor: e.target.value })}
+                      placeholder="Vendor name"
+                      className={fieldClass('vendor')} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Item</label>
+                    <input type="text" value={formData.item}
+                      onChange={(e) => setFormData({ ...formData, item: e.target.value })}
+                      placeholder="Item description"
+                      className={fieldClass('item')} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Comment</label>
+                    <textarea value={formData.comment}
+                      onChange={(e) => setFormData({ ...formData, comment: e.target.value })}
+                      placeholder="Optional comment" rows={2}
+                      className={cn(fieldClass('comment'), 'resize-none')} />
                   </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Vendor</label>
-                  <input
-                    type="text"
-                    value={formData.vendor}
-                    onChange={(e) => setFormData({ ...formData, vendor: e.target.value })}
-                    placeholder="Vendor name"
-                    className={cn(
-                      'w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7C6AF6] focus:border-transparent',
-                      ocrFieldSet.has('vendor') ? 'ring-2 ring-amber-300 border-amber-300' : 'border-slate-200'
-                    )}
-                  />
+              ) : (
+                <div className="animate-pulse space-y-3">
+                  <div className="h-9 bg-slate-100 rounded-lg" />
+                  <div className="h-9 bg-slate-100 rounded-lg" />
+                  <div className="h-9 bg-slate-100 rounded-lg" />
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Item</label>
-                  <input
-                    type="text"
-                    value={formData.item}
-                    onChange={(e) => setFormData({ ...formData, item: e.target.value })}
-                    placeholder="Item description"
-                    className={cn(
-                      'w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7C6AF6] focus:border-transparent',
-                      ocrFieldSet.has('item') ? 'ring-2 ring-amber-300 border-amber-300' : 'border-slate-200'
-                    )}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Comment</label>
-                  <textarea
-                    value={formData.comment}
-                    onChange={(e) => setFormData({ ...formData, comment: e.target.value })}
-                    placeholder="Optional comment"
-                    rows={2}
-                    className={cn(
-                      'w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7C6AF6] focus:border-transparent resize-none',
-                      ocrFieldSet.has('comment') ? 'ring-2 ring-amber-300 border-amber-300' : 'border-slate-200'
-                    )}
-                  />
-                </div>
-              </div>
-            ) : (
-              <div className="animate-pulse space-y-3">
-                <div className="h-9 bg-slate-100 rounded-lg" />
-                <div className="h-9 bg-slate-100 rounded-lg" />
-              </div>
-            )}
+              )}
+            </div>
           </div>
 
-          {/* Amounts */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-            <h2 className="text-lg font-semibold text-slate-900 mb-4">Amounts</h2>
-            {formData ? (
-              <div className="space-y-3">
-                {(['brutto19', 'brutto7', 'brutto0'] as const).map((field) => {
-                  const labels = {
-                    brutto19: '19% VAT (Brutto)',
-                    brutto7: '7% VAT (Brutto)',
-                    brutto0: '0% VAT (Brutto)',
-                  };
-                  return (
-                    <div key={field} className="flex items-center gap-3">
-                      <label className="text-sm text-slate-600 w-36 shrink-0">{labels[field]}</label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={formData[field] || ''}
-                        onChange={(e) =>
-                          setFormData({ ...formData, [field]: parseFloat(e.target.value) || 0 })
-                        }
-                        className={cn(
-                          'flex-1 px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7C6AF6] focus:border-transparent',
-                          ocrFieldSet.has(field) ? 'ring-2 ring-amber-300 border-amber-300' : 'border-slate-200'
-                        )}
-                        placeholder="0.00"
-                      />
-                    </div>
-                  );
-                })}
-                <div className="flex justify-between items-center pt-3 border-t border-slate-100">
-                  <span className="font-medium text-slate-700">Total</span>
-                  <span className="text-xl font-bold text-slate-900">{formatCurrency(formTotal)}</span>
+          {/* Amounts — financial table */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-5 py-3 border-b border-slate-100">
+              <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Amounts</h2>
+            </div>
+            <div className="p-5">
+              {formData ? (
+                <div className="space-y-2">
+                  {(['brutto19', 'brutto7', 'brutto0'] as const).map((field) => {
+                    const labels = { brutto19: '19% MwSt.', brutto7: '7% MwSt.', brutto0: '0% MwSt.' };
+                    return (
+                      <div key={field} className="flex items-center gap-3">
+                        <label className="text-xs font-medium text-slate-500 w-24 shrink-0">{labels[field]}</label>
+                        <input
+                          type="number" min="0" step="0.01"
+                          value={formData[field] || ''}
+                          onChange={(e) => setFormData({ ...formData, [field]: parseFloat(e.target.value) || 0 })}
+                          placeholder="0,00"
+                          className={cn(fieldClass(field), 'text-right font-mono-numbers')}
+                        />
+                      </div>
+                    );
+                  })}
+                  <div className="flex items-baseline justify-between pt-3 mt-1 border-t border-slate-100">
+                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Brutto</span>
+                    <span className="text-2xl font-bold text-slate-900 font-mono-numbers">{formatCurrency(formTotal)}</span>
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <div className="animate-pulse space-y-3">
-                <div className="h-9 bg-slate-100 rounded-lg" />
-                <div className="h-9 bg-slate-100 rounded-lg" />
-              </div>
-            )}
+              ) : (
+                <div className="animate-pulse space-y-3">
+                  <div className="h-9 bg-slate-100 rounded-lg" />
+                  <div className="h-9 bg-slate-100 rounded-lg" />
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Allocations */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-            <h2 className="text-lg font-semibold text-slate-900 mb-4">Allocations</h2>
-            <div className="space-y-6">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-5 py-3 border-b border-slate-100">
+              <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Allocations</h2>
+            </div>
+            <div className="p-5 space-y-5">
               <div>
-                <h3 className="text-sm font-medium text-slate-700 mb-2">Motives</h3>
+                <p className="text-xs font-medium text-slate-500 mb-2">Motives</p>
                 <AllocationWidget
-                  type="motive"
-                  options={motives}
-                  value={
-                    formData
-                      ? formData.motiveAllocations
-                      : (bill.motiveAllocations || []).map((a) => ({
-                          id: a.motiveId,
-                          name: a.name,
-                          percentage: a.percentage,
-                        }))
-                  }
-                  onChange={(allocs) =>
-                    formData && setFormData({ ...formData, motiveAllocations: allocs })
-                  }
-                  totalAmount={formTotal}
-                  readOnly={!formData}
+                  type="motive" options={motives}
+                  value={formData ? formData.motiveAllocations : (bill.motiveAllocations || []).map((a) => ({ id: a.motiveId, name: a.name, percentage: a.percentage }))}
+                  onChange={(allocs) => formData && setFormData({ ...formData, motiveAllocations: allocs })}
+                  totalAmount={formTotal} readOnly={!formData}
                 />
               </div>
               <div className="pt-4 border-t border-slate-100">
-                <h3 className="text-sm font-medium text-slate-700 mb-2">Categories</h3>
+                <p className="text-xs font-medium text-slate-500 mb-2">Categories</p>
                 <AllocationWidget
-                  type="category"
-                  options={categories}
-                  value={
-                    formData
-                      ? formData.categoryAllocations
-                      : (bill.categoryAllocations || []).map((a) => ({
-                          id: a.categoryId,
-                          name: a.name,
-                          percentage: a.percentage,
-                        }))
-                  }
-                  onChange={(allocs) =>
-                    formData && setFormData({ ...formData, categoryAllocations: allocs })
-                  }
-                  totalAmount={formTotal}
-                  readOnly={!formData}
+                  type="category" options={categories}
+                  value={formData ? formData.categoryAllocations : (bill.categoryAllocations || []).map((a) => ({ id: a.categoryId, name: a.name, percentage: a.percentage }))}
+                  onChange={(allocs) => formData && setFormData({ ...formData, categoryAllocations: allocs })}
+                  totalAmount={formTotal} readOnly={!formData}
                 />
               </div>
             </div>
           </div>
 
-          {/* Save button */}
+          {/* Save */}
           <button
             onClick={handleSave}
             disabled={isSaving || !formData}
             className={cn(
-              'w-full py-2.5 bg-[#7C6AF6] text-white font-medium rounded-lg transition-colors',
-              'hover:bg-[#6C5CE7] disabled:opacity-50 disabled:cursor-not-allowed',
-              'flex items-center justify-center gap-2'
+              'w-full py-3 bg-indigo-600 text-white text-sm font-semibold rounded-xl transition-colors',
+              'hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed',
+              'flex items-center justify-center gap-2 shadow-sm'
             )}
           >
             {isSaving ? (
@@ -553,14 +527,14 @@ export default function BillDetailPage({ params }: BillDetailPageProps) {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
-                Saving...
+                Saving…
               </>
             ) : (
               'Save Changes'
             )}
           </button>
 
-          {/* History */}
+          {/* Audit trail */}
           <BillHistoryTimeline logs={logs} />
         </div>
       </div>

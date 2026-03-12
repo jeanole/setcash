@@ -15,7 +15,7 @@ declare module 'next-auth' {
       id: string;
       email: string;
       name?: string | null;
-      role: 'user' | 'admin' | 'superadmin';
+      role: 'user' | 'admin' | 'owner' | 'superadmin';
       currentProjectId: string | null;
       currentProjectRole: 'user' | 'admin' | 'owner' | null;
       currentProjectName: string | null;
@@ -112,6 +112,10 @@ class AccountDisabledError extends CredentialsSignin {
   code = 'AccountDisabled' as const;
 }
 
+class EmailNotVerifiedError extends CredentialsSignin {
+  code = 'EmailNotVerified' as const;
+}
+
 // ---------------------------------------------------------------------------
 // Prisma singleton (avoid multiple instances during hot-reload in dev)
 // ---------------------------------------------------------------------------
@@ -167,6 +171,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         const passwordMatch = await bcrypt.compare(password, user.passwordHash);
         if (!passwordMatch) return null;
+
+        if (!user.emailVerified) throw new EmailNotVerifiedError();
 
         return {
           id: user.id,
@@ -333,7 +339,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (session.user) {
         session.user.id = token.id as string;
         session.user.email = token.email as string;
-        session.user.role = token.role as 'user' | 'admin' | 'superadmin';
+        session.user.role = token.role as 'user' | 'admin' | 'owner' | 'superadmin';
         session.user.currentProjectId = token.currentProjectId as string | null;
         session.user.currentProjectRole = token.currentProjectRole as 'user' | 'admin' | 'owner' | null;
         session.user.currentProjectName = token.currentProjectName as string | null;
@@ -356,12 +362,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (existing && !existing.isActive) return false;
 
         if (!existing) {
-          // Auto-create user on first Google sign-in (passwordHash is empty)
+          // Auto-create user on first Google sign-in (passwordHash is empty, auto-verified)
           await prisma.user.create({
             data: {
               email: user.email,
               passwordHash: '',
+              emailVerified: new Date(),
             },
+          });
+        } else if (!existing.emailVerified) {
+          // Existing user signing in via Google — mark as verified
+          await prisma.user.update({
+            where: { email: user.email },
+            data: { emailVerified: new Date() },
           });
         }
 

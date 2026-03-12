@@ -89,7 +89,7 @@ export async function GET(
     return new NextResponse(fileBuffer, {
       headers: {
         'Content-Type': contentType,
-        'Cache-Control': 'public, max-age=86400',
+        'Cache-Control': 'no-cache, must-revalidate',
       },
     });
   } catch (error) {

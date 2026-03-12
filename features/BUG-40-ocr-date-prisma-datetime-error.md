@@ -1,11 +1,11 @@
 # BUG-40: OCR Job Crashes with Prisma DateTime Error When Date Extracted
 
-**Status:** Open
+**Status:** Resolved
 **Severity:** High
 **Feature:** PROJ-19 (OCR / AI Bill Analysis — Next.js)
 **Skill:** [Backend]
 **Date:** 2026-03-09
-**Fixed In:** —
+**Fixed In:** f149d8c
 
 ---
 

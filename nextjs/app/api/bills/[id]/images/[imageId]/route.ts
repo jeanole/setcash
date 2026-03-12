@@ -84,12 +84,14 @@ export async function PUT(
     // Overwrite the existing file on disk
     const imgPath = path.join(UPLOADS_DIR, image.filePath);
     const dir = path.dirname(imgPath);
-    
+
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
 
-    fs.renameSync(uploadedFile.filepath, imgPath);
+    // Use copy+delete instead of rename to handle cross-device moves (EXDEV)
+    fs.copyFileSync(uploadedFile.filepath, imgPath);
+    try { fs.unlinkSync(uploadedFile.filepath); } catch { /* temp cleanup, non-fatal */ }
 
     // Log the crop
     await prisma.editLog.create({

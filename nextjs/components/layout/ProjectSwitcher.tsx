@@ -66,20 +66,19 @@ export default function ProjectSwitcher({ onClose }: ProjectSwitcherProps) {
     closeDropdown();
     onClose?.();
     await switchProject(projectId);
-    // switchProject already calls window.location.href = '/dashboard'
     setIsSwitching(null);
   };
 
   if (isLoading) {
     return (
-      <div className="px-6 py-3 border-b border-white/8">
-        <p className="text-sm text-zinc-500">Loading...</p>
+      <div className="px-6 py-3 border-b border-slate-200">
+        <p className="text-sm text-slate-400">Loading...</p>
       </div>
     );
   }
 
   return (
-    <div ref={containerRef} className="relative px-6 py-3 border-b border-white/8">
+    <div ref={containerRef} className="relative px-6 py-3 border-b border-slate-200">
       <button
         type="button"
         onClick={handleToggle}
@@ -93,11 +92,11 @@ export default function ProjectSwitcher({ onClose }: ProjectSwitcherProps) {
         aria-label={hasMultipleProjects ? 'Switch project' : undefined}
       >
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-zinc-50 truncate">
+          <p className="text-sm font-semibold text-slate-800 truncate">
             {currentProjectName ?? 'No project'}
           </p>
           {currentProjectRole && (
-            <p className="text-[10px] uppercase tracking-wider text-zinc-500 mt-0.5">
+            <p className="text-[10px] uppercase tracking-wider text-slate-400 mt-0.5">
               {currentProjectRole}
             </p>
           )}
@@ -105,7 +104,7 @@ export default function ProjectSwitcher({ onClose }: ProjectSwitcherProps) {
         {hasMultipleProjects && (
           <ChevronDown
             className={cn(
-              'w-4 h-4 text-zinc-500 shrink-0 transition-transform duration-150',
+              'w-4 h-4 text-slate-400 shrink-0 transition-transform duration-150',
               isOpen && 'rotate-180'
             )}
           />
@@ -116,7 +115,7 @@ export default function ProjectSwitcher({ onClose }: ProjectSwitcherProps) {
         <div
           role="listbox"
           aria-label="Projects"
-          className="absolute left-3 right-3 mt-1 bg-zinc-800 rounded-lg border border-white/10 shadow-xl z-50 overflow-hidden transition-opacity duration-150"
+          className="absolute left-3 right-3 mt-1 bg-white rounded-lg border border-slate-200 shadow-lg z-50 overflow-hidden"
         >
           {projects.map((project) => {
             const isActive = project.isCurrent;
@@ -139,16 +138,16 @@ export default function ProjectSwitcher({ onClose }: ProjectSwitcherProps) {
                 className={cn(
                   'w-full flex items-center justify-between gap-2 px-3 py-2.5 text-sm transition-colors',
                   isActive
-                    ? 'text-zinc-50'
-                    : 'text-zinc-300 hover:bg-white/6 cursor-pointer'
+                    ? 'text-indigo-700 bg-indigo-50 font-medium'
+                    : 'text-slate-600 hover:bg-slate-50 cursor-pointer'
                 )}
               >
                 <span className="truncate">{project.name}</span>
                 {isActive && (
-                  <Check className="w-4 h-4 shrink-0" style={{ color: '#7C6AF6' }} />
+                  <Check className="w-4 h-4 shrink-0 text-indigo-500" />
                 )}
                 {isBusy && !isActive && (
-                  <span className="text-xs text-zinc-500 shrink-0">Switching...</span>
+                  <span className="text-xs text-slate-400 shrink-0">Switching...</span>
                 )}
               </button>
             );

@@ -27,7 +27,7 @@ async function SpendingContent() {
     // No project selected — show empty state via client
     const emptyData = {
       items: [],
-      totals: { budget: 0, spent: 0, remaining: 0, percentUsed: null },
+      totals: { budget: 0, spent: 0, nettoSpent: 0, remaining: 0, percentUsed: null },
     };
     return (
       <SpendingPageClient

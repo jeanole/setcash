@@ -119,7 +119,7 @@ export default function BudgetMatrixTable({
         ) : (
           <a
             href="/settings/motives"
-            className="text-[#7C6AF6] hover:text-[#6C5CE7] text-sm font-medium"
+            className="text-[#6366f1] hover:text-[#4f46e5] text-sm font-medium"
           >
             Go to Settings to add motives →
           </a>
@@ -137,7 +137,7 @@ export default function BudgetMatrixTable({
         ) : (
           <a
             href="/settings/categories"
-            className="text-[#7C6AF6] hover:text-[#6C5CE7] text-sm font-medium"
+            className="text-[#6366f1] hover:text-[#4f46e5] text-sm font-medium"
           >
             Go to Settings to add categories →
           </a>
@@ -177,7 +177,7 @@ export default function BudgetMatrixTable({
                         }
                       }}
                       onBlur={() => setRenamingMotive(null)}
-                      className="w-full px-2 py-1 text-sm border border-[#7C6AF6] rounded focus:outline-none bg-violet-50"
+                      className="w-full px-2 py-1 text-sm border border-[#6366f1] rounded focus:outline-none bg-indigo-50"
                     />
                   </div>
                 ) : (
@@ -237,13 +237,13 @@ export default function BudgetMatrixTable({
                       }
                     }}
                     onBlur={() => { setAddMotiveValue(''); setIsAddingMotive(false); }}
-                    className="w-full px-2 py-1 text-xs border border-[#7C6AF6] rounded focus:outline-none bg-violet-50"
+                    className="w-full px-2 py-1 text-xs border border-[#6366f1] rounded focus:outline-none bg-indigo-50"
                   />
                 ) : (
                   <button
                     type="button"
                     onClick={() => setIsAddingMotive(true)}
-                    className="flex items-center gap-1 text-xs text-zinc-400 hover:text-[#7C6AF6] transition-colors"
+                    className="flex items-center gap-1 text-xs text-zinc-400 hover:text-[#6366f1] transition-colors"
                     title="Add motive"
                   >
                     <Plus className="w-3.5 h-3.5" />
@@ -267,7 +267,7 @@ export default function BudgetMatrixTable({
             const categoryPct = categoryTotal > 0 ? Math.round((categorySpent / categoryTotal) * 100) : 0;
 
             return (
-              <tr key={category.id} className="hover:bg-violet-50/40">
+              <tr key={category.id} className="hover:bg-indigo-50/40">
                 {/* Category name - sticky first column */}
                 <td className="group sticky left-0 z-10 bg-white p-3 border-b border-r border-[var(--vb-card-border)] min-w-[160px]">
                   {renamingCategory?.id === category.id ? (
@@ -285,7 +285,7 @@ export default function BudgetMatrixTable({
                         }
                       }}
                       onBlur={() => setRenamingCategory(null)}
-                      className="w-full px-2 py-1 text-sm border border-[#7C6AF6] rounded focus:outline-none bg-violet-50"
+                      className="w-full px-2 py-1 text-sm border border-[#6366f1] rounded focus:outline-none bg-indigo-50"
                     />
                   ) : (
                     <>
@@ -381,13 +381,13 @@ export default function BudgetMatrixTable({
                       }
                     }}
                     onBlur={() => { setAddCategoryValue(''); setIsAddingCategory(false); }}
-                    className="w-full px-2 py-1 text-xs border border-[#7C6AF6] rounded focus:outline-none bg-violet-50"
+                    className="w-full px-2 py-1 text-xs border border-[#6366f1] rounded focus:outline-none bg-indigo-50"
                   />
                 ) : (
                   <button
                     type="button"
                     onClick={() => setIsAddingCategory(true)}
-                    className="flex items-center gap-1 text-xs text-zinc-400 hover:text-[#7C6AF6]"
+                    className="flex items-center gap-1 text-xs text-zinc-400 hover:text-[#6366f1]"
                     title="Add category"
                   >
                     <Plus className="w-3.5 h-3.5" />

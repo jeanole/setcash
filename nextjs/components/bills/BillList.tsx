@@ -10,10 +10,11 @@ interface BillListProps {
   bills: Bill[];
   onDelete: (id: string) => void;
   isAdmin: boolean;
+  currentUserEmail?: string;
   isLoading?: boolean;
 }
 
-export default function BillList({ bills, onDelete, isAdmin, isLoading = false }: BillListProps) {
+export default function BillList({ bills, onDelete, isAdmin, currentUserEmail, isLoading = false }: BillListProps) {
   const router = useRouter();
   const [sort, setSort] = useState<SortState>({ column: null, dir: 'asc' });
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -83,7 +84,7 @@ export default function BillList({ bills, onDelete, isAdmin, isLoading = false }
     if (sort.column !== column) {
       return <span className="ml-1 text-zinc-300 opacity-0 group-hover:opacity-100">↕</span>;
     }
-    return <span className="ml-1 text-[#7C6AF6]">{sort.dir === 'asc' ? '↑' : '↓'}</span>;
+    return <span className="ml-1 text-[#6366f1]">{sort.dir === 'asc' ? '↑' : '↓'}</span>;
   };
 
   if (isLoading) {
@@ -142,7 +143,7 @@ export default function BillList({ bills, onDelete, isAdmin, isLoading = false }
                         if (el) el.indeterminate = selectedIds.length > 0 && selectedIds.length < sortedBills.length;
                       }}
                       onChange={toggleSelectAll}
-                      className="rounded border-zinc-300 text-[#7C6AF6] focus:ring-[#7C6AF6]"
+                      className="rounded border-zinc-300 text-[#6366f1] focus:ring-[#6366f1]"
                     />
                   </th>
                 )}
@@ -170,12 +171,13 @@ export default function BillList({ bills, onDelete, isAdmin, isLoading = false }
                 const total = calculateTotal(bill);
                 const isSelected = selectedIds.includes(bill.id);
                 const isDraft = bill.status === 'draft' || !bill.vendor || total === 0;
+                const canDeleteRow = isAdmin || bill.email === currentUserEmail;
                 return (
                   <tr
                     key={bill.id}
                     className={cn(
-                      'transition-colors hover:bg-violet-50/40',
-                      isSelected && 'bg-violet-50/40',
+                      'transition-colors hover:bg-indigo-50/40',
+                      isSelected && 'bg-indigo-50/40',
                       isDraft && 'bg-rose-50/40'
                     )}
                   >
@@ -185,7 +187,7 @@ export default function BillList({ bills, onDelete, isAdmin, isLoading = false }
                           type="checkbox"
                           checked={isSelected}
                           onChange={() => toggleSelect(bill.id)}
-                          className="rounded border-zinc-300 text-[#7C6AF6] focus:ring-[#7C6AF6]"
+                          className="rounded border-zinc-300 text-[#6366f1] focus:ring-[#6366f1]"
                         />
                       </td>
                     )}
@@ -206,14 +208,30 @@ export default function BillList({ bills, onDelete, isAdmin, isLoading = false }
                         <div className="text-zinc-400 mt-0.5">{formatAllocations(bill.categoryAllocations)}</div>
                       )}
                     </td>
-                    <td className="px-3 py-3"><BillStatusBadge status={bill.status} size="sm" /></td>
+                    <td className="px-3 py-3">{bill.status !== 'draft' && <BillStatusBadge status={bill.status} size="sm" />}</td>
                     <td className="px-3 py-3">
-                      <button
-                        onClick={() => router.push(`/bills/${bill.id}`)}
-                        className="text-sm px-3 py-1.5 bg-violet-50/40 text-[#7C6AF6] rounded-lg hover:bg-violet-50 transition-colors"
-                      >
-                        View
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => router.push(`/bills/${bill.id}`)}
+                          className="text-sm px-3 py-1.5 bg-indigo-50/40 text-[#6366f1] rounded-lg hover:bg-indigo-50 transition-colors"
+                        >
+                          View
+                        </button>
+                        {canDeleteRow && (
+                          <button
+                            onClick={() => {
+                              if (confirm('Delete this bill?')) onDelete(bill.id);
+                            }}
+                            className="p-1.5 text-zinc-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                            aria-label="Delete bill"
+                            title="Delete"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -229,12 +247,13 @@ export default function BillList({ bills, onDelete, isAdmin, isLoading = false }
           const total = calculateTotal(bill);
           const isSelected = selectedIds.includes(bill.id);
           const isDraft = bill.status === 'draft' || !bill.vendor || total === 0;
+          const canDeleteRow = isAdmin || bill.email === currentUserEmail;
           return (
             <div
               key={bill.id}
               className={cn(
                 'bg-white rounded-xl border border-[var(--vb-card-border)] shadow-[var(--vb-shadow-sm)] p-4 transition-colors',
-                isSelected && 'ring-2 ring-[#7C6AF6]',
+                isSelected && 'ring-2 ring-[#6366f1]',
                 isDraft && 'border-rose-200'
               )}
             >
@@ -245,7 +264,7 @@ export default function BillList({ bills, onDelete, isAdmin, isLoading = false }
                       type="checkbox"
                       checked={isSelected}
                       onChange={() => toggleSelect(bill.id)}
-                      className="rounded border-zinc-300 text-[#7C6AF6] focus:ring-[#7C6AF6]"
+                      className="rounded border-zinc-300 text-[#6366f1] focus:ring-[#6366f1]"
                     />
                   )}
                   <div>
@@ -256,7 +275,7 @@ export default function BillList({ bills, onDelete, isAdmin, isLoading = false }
                     <p className="text-xs text-zinc-500 font-mono-numbers">{formatDate(bill.date)}</p>
                   </div>
                 </div>
-                <BillStatusBadge status={bill.status} size="sm" />
+                {bill.status !== 'draft' && <BillStatusBadge status={bill.status} size="sm" />}
               </div>
               <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
                 <div><span className="text-zinc-500">Person:</span><span className="ml-1 text-zinc-900">{bill.email}</span></div>
@@ -272,13 +291,27 @@ export default function BillList({ bills, onDelete, isAdmin, isLoading = false }
                   )}
                 </div>
               )}
-              <div className="mt-3">
+              <div className="mt-3 flex gap-2">
                 <button
                   onClick={() => router.push(`/bills/${bill.id}`)}
-                  className="w-full text-sm px-3 py-2 bg-violet-50/40 text-[#7C6AF6] rounded-lg hover:bg-violet-50 transition-colors"
+                  className="flex-1 text-sm px-3 py-2 bg-indigo-50/40 text-[#6366f1] rounded-lg hover:bg-indigo-50 transition-colors"
                 >
                   View Details
                 </button>
+                {canDeleteRow && (
+                  <button
+                    onClick={() => {
+                      if (confirm('Delete this bill?')) onDelete(bill.id);
+                    }}
+                    className="p-2 text-zinc-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                    aria-label="Delete bill"
+                    title="Delete"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                )}
               </div>
             </div>
           );
@@ -287,8 +320,8 @@ export default function BillList({ bills, onDelete, isAdmin, isLoading = false }
 
       {/* Bulk actions */}
       {isAdmin && selectedIds.length > 0 && (
-        <div className="flex items-center justify-between bg-violet-50/40 border border-[var(--vb-card-border)] rounded-lg p-4 animate-[vb-rise_0.2s_ease-out]">
-          <span className="text-sm text-[#7C6AF6]">{selectedIds.length} bill(s) selected</span>
+        <div className="flex items-center justify-between bg-indigo-50/40 border border-[var(--vb-card-border)] rounded-lg p-4 animate-[vb-rise_0.2s_ease-out]">
+          <span className="text-sm text-[#6366f1]">{selectedIds.length} bill(s) selected</span>
           <button
             onClick={() => {
               if (confirm(`Delete ${selectedIds.length} selected bill(s)?`)) {

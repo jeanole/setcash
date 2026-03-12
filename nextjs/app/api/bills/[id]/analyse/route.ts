@@ -32,7 +32,7 @@ export async function POST(
     }
 
     // Check admin permission
-    if (session.user.role !== 'admin' && session.user.role !== 'superadmin') {
+    if (session.user.role !== 'admin' && session.user.role !== 'owner' && session.user.role !== 'superadmin') {
       return NextResponse.json({ error: 'Forbidden - admin only' }, { status: 403 });
     }
 

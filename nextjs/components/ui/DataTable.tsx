@@ -58,7 +58,7 @@ export default function DataTable<T>({
       return <span className="ml-1 text-zinc-300 opacity-0 group-hover:opacity-100">↕</span>;
     }
     return (
-      <span className="ml-1 text-[#7C6AF6]">
+      <span className="ml-1 text-[#6366f1]">
         {sortDir === 'asc' ? '↑' : '↓'}
       </span>
     );
@@ -100,7 +100,7 @@ export default function DataTable<T>({
                 <th className="px-3 py-3 w-10">
                   <input
                     type="checkbox"
-                    className="rounded border-zinc-300 text-[#7C6AF6] focus:ring-[#7C6AF6]"
+                    className="rounded border-zinc-300 text-[#6366f1] focus:ring-[#6366f1]"
                     checked={allSelected}
                     ref={(input) => {
                       if (input) input.indeterminate = someSelected;
@@ -137,8 +137,8 @@ export default function DataTable<T>({
                   key={rowId}
                   className={cn(
                     'transition-colors',
-                    isSelected && 'bg-violet-50/40',
-                    onRowClick && 'cursor-pointer hover:bg-violet-50/40'
+                    isSelected && 'bg-indigo-50/40',
+                    onRowClick && 'cursor-pointer hover:bg-indigo-50/40'
                   )}
                   onClick={() => onRowClick?.(row)}
                 >
@@ -146,7 +146,7 @@ export default function DataTable<T>({
                     <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
-                        className="rounded border-zinc-300 text-[#7C6AF6] focus:ring-[#7C6AF6]"
+                        className="rounded border-zinc-300 text-[#6366f1] focus:ring-[#6366f1]"
                         checked={isSelected}
                         onChange={(e) => onSelect?.(rowId, e.target.checked)}
                         aria-label={`Select row ${rowId}`}

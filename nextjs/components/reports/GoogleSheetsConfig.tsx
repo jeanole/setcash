@@ -212,7 +212,7 @@ export default function GoogleSheetsConfig({ projectId }: GoogleSheetsConfigProp
               value={sheetIdInput}
               onChange={(e) => setSheetIdInput(e.target.value)}
               placeholder="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms"
-              className="flex-1 min-w-0 block px-3 py-2 text-sm border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-[#7C6AF6] focus:border-[#7C6AF6] text-slate-900 placeholder-slate-400"
+              className="flex-1 min-w-0 block px-3 py-2 text-sm border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-[#6366f1] focus:border-[#6366f1] text-slate-900 placeholder-slate-400"
               aria-label="Google Sheet ID"
             />
           </div>
@@ -270,10 +270,10 @@ export default function GoogleSheetsConfig({ projectId }: GoogleSheetsConfigProp
             onClick={handleSave}
             disabled={isSaving || isTesting}
             className={cn(
-              'inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-[#7C6AF6] focus:ring-offset-2',
+              'inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-[#6366f1] focus:ring-offset-2',
               isSaving || isTesting
-                ? 'bg-[#7C6AF6] text-white cursor-not-allowed'
-                : 'bg-[#7C6AF6] text-white hover:bg-[#6C5CE7]'
+                ? 'bg-[#6366f1] text-white cursor-not-allowed'
+                : 'bg-[#6366f1] text-white hover:bg-[#4f46e5]'
             )}
             aria-disabled={isSaving || isTesting}
           >
@@ -295,7 +295,7 @@ export default function GoogleSheetsConfig({ projectId }: GoogleSheetsConfigProp
             onClick={handleTestConnection}
             disabled={isSaving || isTesting}
             className={cn(
-              'inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border transition-colors focus:outline-none focus:ring-2 focus:ring-[#7C6AF6] focus:ring-offset-2',
+              'inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border transition-colors focus:outline-none focus:ring-2 focus:ring-[#6366f1] focus:ring-offset-2',
               isSaving || isTesting
                 ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
                 : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'

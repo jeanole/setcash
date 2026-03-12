@@ -1,107 +1,123 @@
-# Frontend Implementation Plan
+# Frontend Implementation Plan — CR-11 (Merge Landing + Login Page)
 
 ## Feature
-BUG-14: Mobile Navigation Menu Not Working
+CR-11: Merge Landing Page and Login Page into One
+Feature: PROJ-5 (NextAuth.js Authentication)
+Spec: `features/PROJ-5-nextauth-authentication.md` → Change Requests → CR-11
 
 ## Context Summary
-The mobile navigation is completely inaccessible. The Sidebar component uses `hidden lg:flex` making it invisible on mobile, and there's no hamburger menu button to toggle it. This is a critical bug affecting all mobile users.
+- Current `app/page.tsx` is a scaffold/migration-notice placeholder — not useful
+- Current `app/(public)/login/page.tsx` is a standalone dark login page with `LoginForm`
+- `LoginForm` component at `components/auth/LoginForm.tsx` is self-contained with logo, form, Google button
+- Middleware at `middleware.ts` has `/login` in the public route list
+- Design tokens in `globals.css`: indigo accent `#6366f1`, slate-50 content bg, Inter font
+- Login page uses dark cinematic bg: `slate-950` with indigo/emerald radial gradients
 
 ## User Decisions
-- **Design:** Follow existing vBudget design system (slate/indigo colors)
-- **Mobile breakpoint:** lg (1024px) — matches current Tailwind classes
-- **Drawer behavior:** Slide from left with backdrop overlay
-- **Icons:** Use lucide-react (Menu, X icons)
+- **Layout:** Full landing page with product info + embedded login form (option B)
+- **Responsive:** Split two-column on desktop (≥1024px), stacked single-column on mobile (≤768px)
+- **Priority:** Medium
+- **Style:** Keep the dark cinematic background from the existing login page
 
 ## Open Bug Reports to Address
-- BUG-14: Mobile Navigation Menu Not Working (this fix)
+None
 
 ## Existing Components to Reuse
-- `AppShell.tsx` — Layout wrapper (needs state management added)
-- `Sidebar.tsx` — Navigation content (needs mobile drawer behavior)
-- `Header.tsx` — Top bar (needs hamburger button)
-- `lucide-react` — Icon library already in use
+- `LoginForm` (`components/auth/LoginForm.tsx`) — reuse as-is, embedded in the new page
+- Design tokens from `globals.css`
 
-## New Components to Build
-None — modifying existing components only.
+## Implementation Plan
 
-## Components to Modify
+### Step 1: Rewrite `app/page.tsx`
+Replace the scaffold page with a combined landing+login page:
 
-### 1. Header.tsx
-**Changes:**
-- Add optional `onMenuToggle` prop
-- Add hamburger button (visible only on mobile: `lg:hidden`)
-- Use `Menu` icon from lucide-react
+**Desktop layout (lg+):**
+```
+┌──────────────────────────────────────────────┐
+│  LEFT (60%)              │  RIGHT (40%)       │
+│                          │                    │
+│  vBudget logo (large)    │  ┌──────────────┐  │
+│  Tagline                 │  │  LoginForm    │  │
+│  3 feature highlights    │  │  (frosted     │  │
+│  (icons + text)          │  │   glass card) │  │
+│                          │  └──────────────┘  │
+│  "v2.0" footer           │                    │
+└──────────────────────────────────────────────┘
+```
 
-**Props:**
-```typescript
-interface HeaderProps {
-  title?: string;
-  onMenuToggle?: () => void;
+**Mobile layout (<lg):**
+```
+┌─────────────────────┐
+│  vBudget logo       │
+│  Tagline            │
+│  ┌───────────────┐  │
+│  │  LoginForm    │  │
+│  │  (card)       │  │
+│  └───────────────┘  │
+│  Feature highlights │
+│  (compact)          │
+└─────────────────────┘
+```
+
+**Background:** Dark cinematic (`slate-950` with radial gradients from existing login page)
+
+**Left column content:**
+- Large "vBudget" wordmark (text-4xl+ bold, white)
+- Tagline: "Track expenses. Manage budgets. Simplify reimbursements."
+- 3 feature cards/highlights:
+  - Receipt scanning with AI analysis
+  - Multi-project budget tracking
+  - Team expense management
+- Each with a simple icon and 1-line description
+- All text white/slate-300 against dark bg
+
+**Right column:**
+- Frosted glass card (`bg-white/95 backdrop-blur-sm rounded-2xl`)
+- Contains `<LoginForm />` directly (no changes to LoginForm needed)
+
+**Auth redirect:** Add server-side auth check — if user is already authenticated, redirect to `/dashboard`
+
+### Step 2: Update `app/(public)/login/page.tsx`
+Redirect to `/` since the root page now handles login.
+
+```tsx
+import { redirect } from 'next/navigation';
+export default function LoginPage() {
+  redirect('/');
 }
 ```
 
-### 2. Sidebar.tsx
-**Changes:**
-- Add `isMobileOpen` prop to control mobile visibility
-- Add mobile drawer overlay (`fixed inset-0 z-50 lg:static lg:z-auto`)
-- Add close button in mobile header (X icon)
-- Clicking a link should close mobile menu
-- Clicking backdrop should close mobile menu
-
-**Props:**
-```typescript
-interface SidebarProps {
-  currentUser?: {
-    email: string;
-    role: 'user' | 'admin' | 'superadmin';
-  } | null;
-  isMobileOpen?: boolean;
-  onClose?: () => void;
-}
+### Step 3: Update middleware
+Add `/` to the public route list in `middleware.ts`:
+```ts
+const isPublicRoute =
+  nextUrl.pathname === '/' ||
+  nextUrl.pathname === '/login' ||
+  ...
 ```
 
-### 3. AppShell.tsx
-**Changes:**
-- Convert to client component (`'use client'`)
-- Add `isMobileMenuOpen` state
-- Pass toggle handler to Header
-- Pass open state and close handler to Sidebar
-- Add effect to close menu on route change (optional UX improvement)
+### Step 4: Update auth redirect
+In `middleware.ts`, the redirect for unauthenticated users currently goes to `/login`. Change to `/`:
+```ts
+const loginUrl = new URL('/', nextUrl.origin);
+```
 
 ## Design Specifications
-
-### Mobile Drawer
-- Width: 280px (w-72)
-- Backdrop: bg-black/50 with fade animation
-- Position: fixed, left-0, top-0, full height
-- Z-index: 50 (above all content)
-- Animation: translate-x transition
-
-### Hamburger Button
-- Visible: only on mobile (`lg:hidden`)
-- Style: ghost button (hover:bg-slate-100)
-- Icon: Menu from lucide-react
-- Position: left side of header
-
-### Mobile Sidebar Header
-- Logo + close button row
-- Close button: X icon, right-aligned
-- Border bottom to match desktop sidebar
-
-## Accessibility
-- Hamburger button has `aria-label="Open navigation menu"`
-- Close button has `aria-label="Close navigation menu"`
-- Backdrop has `aria-hidden="true"` when closed
-- Focus trap within mobile drawer when open
-- ESC key closes mobile menu
+- **Background:** `#020617` (slate-950) with radial gradients: indigo at top-left, emerald at bottom-right
+- **Left text:** White (`text-white`) for headings, `text-slate-300` for body, `text-slate-500` for footer
+- **Feature icons:** `text-indigo-400` with `bg-white/10` icon containers
+- **Right card:** `bg-white/95 backdrop-blur-sm rounded-2xl` with `--vb-shadow-xl`
+- **Responsive breakpoint:** `lg:` (1024px) for split → stacked transition
+- **Font:** Inter (already loaded)
 
 ## Checklist
-- [ ] Header shows hamburger button on mobile
-- [ ] Clicking hamburger opens mobile drawer
-- [ ] Sidebar renders correctly in mobile drawer
-- [ ] Backdrop click closes drawer
-- [ ] Clicking nav link closes drawer
-- [ ] Close button works
-- [ ] ESC key closes drawer
-- [ ] Desktop layout unchanged (lg breakpoint)
-- [ ] No visual regressions on desktop
+- [ ] `app/page.tsx` rewritten as combined landing+login
+- [ ] Left column: branding, tagline, feature highlights
+- [ ] Right column: LoginForm embedded in frosted card
+- [ ] Responsive: stacked on mobile, split on desktop
+- [ ] `app/(public)/login/page.tsx` redirects to `/`
+- [ ] Middleware updated: `/` added to public routes
+- [ ] Middleware updated: unauthenticated redirect goes to `/` instead of `/login`
+- [ ] Authenticated users visiting `/` redirected to `/dashboard`
+- [ ] Dark cinematic background preserved
+- [ ] No changes to LoginForm component itself

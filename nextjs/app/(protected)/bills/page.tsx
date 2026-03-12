@@ -70,10 +70,10 @@ export default function BillsPage() {
   );
 
   const { data: session } = useSession();
-  const isAdmin = session?.user?.role === 'admin' || session?.user?.role === 'superadmin';
+  const isAdmin = session?.user?.role === 'admin' || session?.user?.role === 'owner' || session?.user?.role === 'superadmin';
+  const currentUserEmail = session?.user?.email ?? undefined;
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this bill?')) return;
     const success = await deleteBill(id);
     if (success) {
       setResultMessage({ type: 'success', text: 'Bill deleted successfully' });
@@ -165,7 +165,7 @@ export default function BillsPage() {
       </div>
 
       {/* Bill list */}
-      <BillList bills={filteredBills} onDelete={handleDelete} isAdmin={isAdmin} isLoading={isLoading} />
+      <BillList bills={filteredBills} onDelete={handleDelete} isAdmin={isAdmin} currentUserEmail={currentUserEmail} isLoading={isLoading} />
 
       {/* Pagination */}
       <Pagination

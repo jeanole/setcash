@@ -17,7 +17,7 @@ interface Particle {
   size: number;
 }
 
-const PARTICLE_COLORS = ['#7C6AF6', '#F59E0B', '#F43F5E', '#10B981'];
+const PARTICLE_COLORS = ['#6366f1', '#F59E0B', '#F43F5E', '#10B981'];
 
 export default function CinematicButton({
   children,

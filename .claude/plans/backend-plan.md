@@ -1,154 +1,127 @@
-# Backend Implementation Plan — PROJ-12 (Telegram Integration)
+# Backend Implementation Plan — CR-12 (Forgot Password / Password Reset)
 
 ## Feature
-PROJ-12: Integrations (Google Sheets + Telegram)
-Spec: `features/PROJ-12-integrations.md`
-Scope: **Telegram only** (Google Sheets routes already exist)
+CR-12: Add Forgot Password / Self-Service Password Reset
+Spec: `features/CR-12-forgot-password-reset.md`
+Parent: PROJ-5 (NextAuth.js Authentication)
 
 ## Context Summary
-- Prisma models `TelegramLink` and `TelegramLinkCode` already exist in schema
-- No Telegram API routes or lib files exist yet in Next.js
-- Express `routes/telegram.js` has full working implementation to port
-- `lib/upload.ts` has UPLOADS_DIR and file utilities
-- Auth pattern: `auth()` → `session.user.currentProjectId`, `session.user.currentProjectRole`
-- Admin check: `role === 'superadmin' || currentProjectRole in ['admin', 'owner']`
-- Rate limiting via `@upstash/ratelimit` with mock fallback
+- **Auth:** NextAuth v5 with JWT sessions, bcryptjs for password hashing (`auth.ts`)
+- **DB:** PostgreSQL via Prisma ORM (`prisma/schema.prisma`)
+- **Rate limiting:** Upstash Redis with MockRatelimit fallback (`lib/ratelimit.ts`)
+- **Middleware:** Edge middleware protects all non-public routes (`middleware.ts`)
+- **Public routes:** `/`, `/login`, `/api/health`, `/api/auth/*`, `/_next/*`, `/favicon.ico`
+- **Env example:** `.env.test.example` exists (no `.env.local.example`)
+- **Login page:** Root `/` is combined landing+login page; `/login` redirects to `/`
 
 ## User Decisions
-- **Scope:** Telegram only — skip Google Sheets test/status endpoints
-- **Code generation:** Use `crypto.randomBytes` for secure 6-char codes
-- **Token storage:** AES-256 encryption for bot tokens in ProjectSettings
-- **Dependencies:** Install `node-telegram-bot-api` + `@types/node-telegram-bot-api`
+- Email provider: **Resend** via `resend` npm package + API key
+- Token hash: SHA-256 (simpler than bcrypt for random tokens, equally secure)
+- Token expiry: 1 hour
+- Rate limit: 1 request per email per 5 minutes
+- No user enumeration: always show generic success message
 
 ## Open Bug Reports to Address
 None
 
+## Database — New Prisma Model
+
+### `PasswordResetToken`
+| Column | Type | Notes |
+|--------|------|-------|
+| id | String @id @default(uuid()) | Primary key |
+| email | String | User email |
+| tokenHash | String @unique | SHA-256 hash of raw token |
+| expiresAt | DateTime | Token expiry (now + 1 hour) |
+| createdAt | DateTime @default(now()) | Creation timestamp |
+
+**Indexes:** `@@index([email])`
+**Note:** `tokenHash` has `@unique` which also creates an index.
+
+## API Endpoints
+
+### 1. `POST /api/auth/forgot-password`
+- **Auth:** Public (no session required)
+- **Input (Zod):** `{ email: z.string().email() }`
+- **Logic:**
+  1. Rate limit by email (1 per 5 min) — add `forgotPassword` config to `lib/ratelimit.ts`
+  2. Look up user by email
+  3. If user exists AND has a passwordHash (not empty = not Google-only):
+     - Delete any existing tokens for this email
+     - Generate 32-byte random token via `crypto.randomBytes(32)`
+     - SHA-256 hash it, store in `PasswordResetToken` with 1-hour expiry
+     - Send email via Nodemailer with reset link: `${APP_URL}/reset-password?token=${rawToken}`
+  4. Always return 200 `{ message: "If an account exists with that email, a reset link has been sent." }`
+- **Error cases:** Rate limited → 429, Invalid email → 400
+
+### 2. `POST /api/auth/reset-password`
+- **Auth:** Public (no session required)
+- **Input (Zod):** `{ token: z.string().min(1), password: z.string().min(8) }`
+- **Logic:**
+  1. SHA-256 hash the incoming raw token
+  2. Look up `PasswordResetToken` by `tokenHash` where `expiresAt > now()`
+  3. If not found → 400 "Invalid or expired reset link"
+  4. Look up user by email from the token record
+  5. Hash new password with bcrypt (12 rounds, matching `auth.ts`)
+  6. Update `User.passwordHash`
+  7. Delete ALL tokens for this email (single-use + invalidate siblings)
+  8. Return 200 `{ message: "Password has been reset successfully." }`
+- **Error cases:** Invalid/expired token → 400, Password too short → 400
+
+## New Files to Create
+
+### 1. `lib/email.ts` — Resend client + send helper
+```typescript
+import { Resend } from 'resend';
+
+// Instantiate Resend with RESEND_API_KEY env var
+// Graceful fallback: if RESEND_API_KEY not configured, log warning + skip send
+
+export async function sendPasswordResetEmail(email: string, resetUrl: string): Promise<void>
+// HTML template with reset link and 1-hour expiry notice
+// from: 'onboarding@resend.dev' (sandbox) or custom verified domain
+```
+
+### 2. `app/api/auth/forgot-password/route.ts`
+### 3. `app/api/auth/reset-password/route.ts`
+### 4. `app/(public)/forgot-password/page.tsx` — Email input form (client component)
+### 5. `app/(public)/reset-password/page.tsx` — New password form (client component)
+### 6. `prisma/migrations/[timestamp]_add_password_reset_token/migration.sql`
+
+## Files to Modify
+
+### 1. `prisma/schema.prisma` — Add PasswordResetToken model
+### 2. `lib/ratelimit.ts` — Add forgotPassword limiter config + export
+### 3. `middleware.ts` — Add `/forgot-password` and `/reset-password` to public routes
+### 4. `.env.test.example` — Add SMTP env vars + NEXT_PUBLIC_APP_URL
+### 5. `app/page.tsx` — Add "Forgot password?" link below sign-in button
+
 ## Dependencies to Install
 ```bash
-cd nextjs && npm install node-telegram-bot-api && npm install -D @types/node-telegram-bot-api
+npm install resend
 ```
 
-## Files to Create
-
-### 1. `lib/telegram/encryption.ts` — Token encryption/decryption
-- AES-256-GCM encryption using `TELEGRAM_ENCRYPTION_KEY` env var
-- `encrypt(plaintext: string): string` → returns `iv:authTag:ciphertext` (hex)
-- `decrypt(encrypted: string): string` → reverses
-- Fail gracefully if env var not set (warn + store plaintext for dev)
-
-### 2. `lib/telegram/codes.ts` — Link code generation/validation
-- `generateLinkCode(userEmail: string, projectId: string): Promise<{ code: string; expires: Date }>`
-  - Delete existing codes for user+project first
-  - Generate 6-char alphanumeric code using `crypto.randomBytes`
-  - Insert into `TelegramLinkCode` with 10-min TTL
-- `validateLinkCode(code: string, projectId: string): Promise<{ userEmail: string } | null>`
-  - Check code exists, matches project, not expired
-  - Delete code on success (single-use)
-
-### 3. `lib/telegram/handlers.ts` — Bot message handlers
-Port from Express `routes/telegram.js`:
-- `handleStartCommand(bot, msg)` — Welcome message (German)
-- `handleLinkCommand(bot, msg, projectId)` — Validate code, create TelegramLink (upsert)
-- `handlePhoto(bot, msg, projectId)` — Check linked, download photo, create draft bill
-- `handleMediaGroup(bot, msg, projectId)` — Buffer album photos (1.5s), create one bill
-- `downloadTelegramFile(bot, fileId)` — Download to UPLOADS_DIR with `tg_` prefix
-- `createDraftBill(projectId, userEmail, photos, caption)` — Prisma version of Express createDraftBill
-  - Create bill with status `draft`, billNumber `TG-${timestamp}`
-  - Auto-assign Default motive + Uncategorized category (100% each)
-  - Attach images via BillImage records
-  - Fire-and-forget OCR if `ocrEnabled` setting is true
-
-### 4. `lib/telegram/bot.ts` — Bot instance management
-Port from Express, adapted for Next.js:
-- `activeBots: Map<string, TelegramBot>` — global singleton (use `globalThis` for dev HMR)
-- `startProjectBot(projectId: string): Promise<void>` — Decrypt token, create bot, register handlers, start polling
-- `stopProjectBot(projectId: string): void` — Stop polling, remove from map
-- `initAllBots(): Promise<void>` — Query all projects, start enabled bots
-- `isBotRunning(projectId: string): boolean`
-- Polling error handling: 409 → stop, others → log
-
-### 5. `nextjs/server.ts` — Custom Next.js server for bot lifecycle
-```typescript
-import { createServer } from 'http';
-import next from 'next';
-import { initAllBots } from './lib/telegram/bot';
-
-const dev = process.env.NODE_ENV !== 'production';
-const app = next({ dev });
-app.prepare().then(() => {
-  initAllBots();
-  createServer(app.getRequestHandler()).listen(3000);
-});
+## Environment Variables (add to `.env.test.example`)
 ```
-- Update `package.json` scripts: `"start": "node server.js"` (compiled), `"dev": "tsx server.ts"` or `npx ts-node server.ts`
-- Update `Dockerfile` to use custom server
-
-### 6. API Routes
-
-#### `app/api/telegram/link-code/route.ts` — GET
-- Auth: any authenticated user
-- Requires: currentProjectId, telegram enabled for project
-- Calls `generateLinkCode()`
-- Returns `{ code, expires }`
-- Rate limit: 5/min (reuse mock pattern from ratelimit.ts)
-
-#### `app/api/telegram/status/route.ts` — GET
-- Auth: any authenticated user
-- Returns `{ enabled, linked, linkedAt }` for current user+project
-
-#### `app/api/telegram/links/me/route.ts` — DELETE
-- Auth: any authenticated user
-- Deletes TelegramLink for current user+project
-- Returns `{ ok: true }`
-
-#### `app/api/admin/telegram/links/route.ts` — GET
-- Auth: admin/owner/superadmin
-- Returns all TelegramLink records for project (with user email, telegram ID, date)
-
-#### `app/api/admin/telegram/links/[id]/route.ts` — DELETE
-- Auth: admin/owner/superadmin
-- Deletes specific TelegramLink by ID
-- Returns `{ ok: true }`
-
-#### `app/api/admin/telegram/bot-status/route.ts` — GET
-- Auth: admin/owner/superadmin
-- Returns `{ running: boolean }` from activeBots map
-
-#### `app/api/admin/telegram/restart/route.ts` — POST
-- Auth: admin/owner/superadmin
-- Calls `startProjectBot(projectId)`
-- Returns `{ running: boolean }`
-
-## Auth Pattern (copy from existing routes)
-```typescript
-const session = await auth();
-if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-const projectId = session.user.currentProjectId;
-if (!projectId) return NextResponse.json({ error: 'No project selected' }, { status: 400 });
-
-// For admin routes:
-const isAdmin = session.user.role === 'superadmin'
-  || session.user.currentProjectRole === 'admin'
-  || session.user.currentProjectRole === 'owner';
-if (!isAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+RESEND_API_KEY=re_xxxxxxxxx
+NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
-
-## Environment Variables
-```
-TELEGRAM_ENCRYPTION_KEY=  # 32-byte hex key for AES-256-GCM (generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
-```
-Add to `.env.example` and document.
 
 ## Checklist
-- [ ] Install `node-telegram-bot-api` + types
-- [ ] Create `lib/telegram/encryption.ts`
-- [ ] Create `lib/telegram/codes.ts`
-- [ ] Create `lib/telegram/handlers.ts`
-- [ ] Create `lib/telegram/bot.ts`
-- [ ] Create `server.ts` custom server
-- [ ] Update `package.json` start scripts
-- [ ] Update `Dockerfile` for custom server
-- [ ] Create all 7 API routes
-- [ ] Add `TELEGRAM_ENCRYPTION_KEY` to `.env.example`
+- [ ] Install `resend` package
+- [ ] Add `PasswordResetToken` model to Prisma schema
+- [ ] Create + apply Prisma migration
+- [ ] Create `lib/email.ts` with Resend SDK
+- [ ] Create `POST /api/auth/forgot-password` with rate limiting
+- [ ] Create `POST /api/auth/reset-password` with token validation
+- [ ] Create `/forgot-password` page with email form
+- [ ] Create `/reset-password` page with password + confirm form
+- [ ] Add "Forgot password?" link on login/landing page
+- [ ] Update middleware for public routes
+- [ ] Add `RESEND_API_KEY` + `NEXT_PUBLIC_APP_URL` to `.env.test.example`
+- [ ] No user enumeration (generic success on forgot-password)
+- [ ] Token stored as SHA-256 hash (raw token never persisted)
+- [ ] Token is single-use (deleted on use)
+- [ ] Token expires after 1 hour
+- [ ] Graceful fallback if SMTP not configured (log warning, don't crash)
 - [ ] Validate with `npx tsc --noEmit`
-- [ ] Commit: `feat(PROJ-12): Implement Telegram integration backend`

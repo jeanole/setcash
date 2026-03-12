@@ -52,7 +52,27 @@
       "Bash(docker ps --format \"table {{.Names}}\\\\t{{.Status}}\\\\t{{.Ports}}\")",
       "Bash(ls /c/Users/jensmoeller/code/vbudget/nextjs/app/\\\\\\(protected\\\\\\)/dashboard/)",
       "Bash(ls /c/Users/jensmoeller/code/vbudget/nextjs/app/\\\\\\(public\\\\\\)/)",
-      "Bash(wc -l /c/Users/jensmoeller/code/vbudget/routes/*.js)"
+      "Bash(wc -l /c/Users/jensmoeller/code/vbudget/routes/*.js)",
+      "Bash(npx tsc --noEmit)",
+      "Bash(ls /mnt/c/Users/jensmoeller/code/vbudget/nextjs/app/\\\\\\(public\\\\\\)/ 2>/dev/null && ls /mnt/c/Users/jensmoeller/code/vbudget/nextjs/.env.test.example 2>/dev/null && cat /mnt/c/Users/jensmoeller/code/vbudget/nextjs/.env.test.example)",
+      "Bash(ls /mnt/c/Users/jensmoeller/code/vbudget/nextjs/app/\\\\\\(public\\\\\\)/)",
+      "Bash(mkdir -p /mnt/c/Users/jensmoeller/code/vbudget/nextjs/app/api/auth/forgot-password && mkdir -p /mnt/c/Users/jensmoeller/code/vbudget/nextjs/app/api/auth/reset-password && mkdir -p \"/mnt/c/Users/jensmoeller/code/vbudget/nextjs/app/\\(public\\)/forgot-password\" && mkdir -p \"/mnt/c/Users/jensmoeller/code/vbudget/nextjs/app/\\(public\\)/reset-password\")",
+      "Bash(ls -la /mnt/c/Users/jensmoeller/code/vbudget/nextjs/.env* 2>/dev/null)",
+      "Bash(ls -la /mnt/c/Users/jensmoeller/code/vbudget/.env* 2>/dev/null)",
+      "Bash(git remote:*)",
+      "Bash(find /mnt/c/Users/jensmoeller/code/vbudget/nextjs -name \"forgot-password*\" -o -name \"reset-password*\" 2>/dev/null | head -20)",
+      "Bash(cd /mnt/c/Users/jensmoeller/code/vbudget/nextjs && npx prisma generate 2>&1 | tail -5)",
+      "Bash(cd /mnt/c/Users/jensmoeller/code/vbudget/nextjs && npx tsc --noEmit --pretty 2>&1 | head -40)",
+      "Bash(ls -la /mnt/c/Users/jensmoeller/code/vbudget/nextjs/.env* 2>&1 | head -20)",
+      "Bash(cd /mnt/c/Users/jensmoeller/code/vbudget/nextjs && npm list bcryptjs 2>&1 | head -10)",
+      "Bash(cd /mnt/c/Users/jensmoeller/code/vbudget/nextjs && npx tsc --noEmit --pretty 2>&1 | head -60)",
+      "Bash(npx prisma:*)",
+      "Bash(npx tsc:*)",
+      "Bash(cd /mnt/c/Users/jensmoeller/code/vbudget/nextjs && npx next build 2>&1 | tail -30)",
+      "Bash(npx next:*)"
     ]
+  },
+  "remote": {
+    "defaultEnvironmentId": "env_01Ho8pb2C4W9Q3Vp7UmgC5e4"
   }
 }

@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from 'react';
 import { signIn } from 'next-auth/react';
+import Link from 'next/link';
 
 // ---------------------------------------------------------------------------
 // Error message mapping — NextAuth error codes → user-friendly strings
@@ -19,6 +20,8 @@ function mapError(code: string | undefined): string {
       return 'This account uses Google Sign-In. Please use the button below.';
     case 'AccountDisabled':
       return 'Your account is not active. Please contact your administrator.';
+    case 'EmailNotVerified':
+      return 'Please verify your email before signing in. Check your inbox for a verification link.';
     default:
       return 'An error occurred. Please try again.';
   }
@@ -90,12 +93,21 @@ function Spinner() {
 // LoginForm — main export
 // ---------------------------------------------------------------------------
 
-export default function LoginForm() {
+interface LoginFormProps {
+  allowSignup?: boolean;
+}
+
+export default function LoginForm({ allowSignup = true }: LoginFormProps) {
+  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [showResend, setShowResend] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
 
   // Animation base style helper
   function rise(durationMs: number, delayMs: number): React.CSSProperties {
@@ -105,6 +117,30 @@ export default function LoginForm() {
     };
   }
 
+  async function handleResendVerification() {
+    if (!email.trim()) return;
+    setResendLoading(true);
+    try {
+      const res = await fetch('/api/auth/resend-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || 'Failed to resend.');
+      } else {
+        setError(null);
+        setSuccessMessage('Verification email sent! Check your inbox.');
+        setShowResend(false);
+      }
+    } catch {
+      setError('Failed to resend verification email.');
+    } finally {
+      setResendLoading(false);
+    }
+  }
+
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!email.trim() || !password) {
@@ -112,8 +148,43 @@ export default function LoginForm() {
       return;
     }
     setError(null);
+    setSuccessMessage(null);
+    setShowResend(false);
     setLoading(true);
 
+    if (mode === 'signup') {
+      // Sign-up flow
+      if (password !== confirmPassword) {
+        setError('Passwords do not match.');
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/auth/signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          setError(data.error || 'Sign-up failed.');
+        } else {
+          setSuccessMessage('Account created! Check your email for a verification link.');
+          setPassword('');
+          setConfirmPassword('');
+        }
+      } catch {
+        setError('An unexpected error occurred. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    // Sign-in flow
     try {
       const result = await signIn('credentials', {
         email,
@@ -122,7 +193,11 @@ export default function LoginForm() {
       });
 
       if (result?.error) {
-        setError(mapError(result.error));
+        const msg = mapError(result.error);
+        setError(msg);
+        if (result.error === 'EmailNotVerified') {
+          setShowResend(true);
+        }
       } else if (result?.ok) {
         // Session verified — navigate to dashboard
         window.location.href = '/dashboard';
@@ -152,7 +227,7 @@ export default function LoginForm() {
       <div className="flex flex-col items-center mb-6">
         {/* Monogram */}
         <div
-          className="w-12 h-12 rounded-full bg-[#7C6AF6] flex items-center justify-center text-white text-lg font-bold mb-3"
+          className="w-12 h-12 rounded-full bg-indigo-500 flex items-center justify-center text-white text-lg font-bold mb-3"
           style={rise(300, 300)}
           aria-hidden="true"
         >
@@ -177,7 +252,7 @@ export default function LoginForm() {
       </div>
 
       {/* Credentials form */}
-      <form onSubmit={handleSubmit} noValidate aria-label="Sign in form">
+      <form onSubmit={handleSubmit} noValidate aria-label={mode === 'signin' ? 'Sign in form' : 'Sign up form'}>
         {/* Email field */}
         <div className="mb-4" style={rise(300, 700)}>
           <label
@@ -216,7 +291,7 @@ export default function LoginForm() {
           <input
             id="password"
             type="password"
-            autoComplete="current-password"
+            autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -232,6 +307,48 @@ export default function LoginForm() {
           />
         </div>
 
+        {/* Confirm password field (sign-up only) */}
+        {mode === 'signup' && (
+          <div className="mb-4" style={rise(300, 830)}>
+            <label
+              htmlFor="confirm-password"
+              className="block text-sm font-medium text-slate-700 mb-1"
+            >
+              Confirm Password
+            </label>
+            <input
+              id="confirm-password"
+              type="password"
+              autoComplete="new-password"
+              required
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              disabled={isDisabled}
+              className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 focus:bg-white disabled:opacity-60 disabled:cursor-not-allowed"
+              style={{ boxShadow: 'none' }}
+              onFocus={(e) =>
+                (e.currentTarget.style.boxShadow = 'var(--vb-ring)')
+              }
+              onBlur={(e) => (e.currentTarget.style.boxShadow = 'none')}
+              placeholder="Repeat your password"
+            />
+          </div>
+        )}
+
+        {/* Success message */}
+        {successMessage && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 mt-2 mb-3"
+            style={{
+              animation: 'vb-rise 200ms ease-out both',
+            }}
+          >
+            {successMessage}
+          </div>
+        )}
+
         {/* Inline error message */}
         {error && (
           <div
@@ -243,7 +360,29 @@ export default function LoginForm() {
             }}
           >
             {error}
+            {showResend && (
+              <button
+                type="button"
+                onClick={handleResendVerification}
+                disabled={resendLoading}
+                className="mt-1 text-xs text-indigo-600 hover:text-indigo-700 font-medium underline disabled:opacity-60"
+              >
+                {resendLoading ? 'Sending...' : 'Resend verification email'}
+              </button>
+            )}
           </div>
+        )}
+
+        {/* Forgot password link (sign-in only) */}
+        {mode === 'signin' && (
+        <div className="text-right mb-4" style={rise(300, 830)}>
+          <Link
+            href="/forgot-password"
+            className="text-xs text-indigo-500 hover:text-indigo-600 font-medium"
+          >
+            Forgot password?
+          </Link>
+        </div>
         )}
 
         {/* Submit button */}
@@ -251,16 +390,16 @@ export default function LoginForm() {
           <button
             type="submit"
             disabled={isDisabled}
-            className="w-full bg-[#7C6AF6] hover:bg-[#6C5CE7] text-white rounded-lg py-2.5 text-sm font-semibold transition-colors flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+            className="w-full bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg py-2.5 text-sm font-semibold transition-colors flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
             aria-busy={loading}
           >
             {loading ? (
               <>
                 <Spinner />
-                Signing in…
+                {mode === 'signin' ? 'Signing in…' : 'Creating account…'}
               </>
             ) : (
-              'Sign in'
+              mode === 'signin' ? 'Sign in' : 'Create account'
             )}
           </button>
         </div>
@@ -317,6 +456,47 @@ export default function LoginForm() {
           )}
         </button>
       </div>
+
+      {/* Mode toggle */}
+      {allowSignup && (
+      <div className="text-center mt-4" style={rise(300, 1000)}>
+        {mode === 'signin' ? (
+          <p className="text-sm text-slate-500">
+            Don&apos;t have an account?{' '}
+            <button
+              type="button"
+              onClick={() => {
+                setMode('signup');
+                setError(null);
+                setSuccessMessage(null);
+                setShowResend(false);
+                setConfirmPassword('');
+              }}
+              className="text-indigo-500 hover:text-indigo-600 font-medium"
+            >
+              Sign up
+            </button>
+          </p>
+        ) : (
+          <p className="text-sm text-slate-500">
+            Already have an account?{' '}
+            <button
+              type="button"
+              onClick={() => {
+                setMode('signin');
+                setError(null);
+                setSuccessMessage(null);
+                setShowResend(false);
+                setConfirmPassword('');
+              }}
+              className="text-indigo-500 hover:text-indigo-600 font-medium"
+            >
+              Sign in
+            </button>
+          </p>
+        )}
+      </div>
+      )}
     </>
   );
 }

@@ -75,7 +75,7 @@ export default function NewProjectModal({ isOpen, onClose, onCreate }: NewProjec
               onChange={(e) => setName(e.target.value)}
               placeholder="My Awesome Project"
               maxLength={100}
-              className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#7C6AF6] focus:border-[#7C6AF6]"
+              className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#6366f1] focus:border-[#6366f1]"
             />
           </div>
 
@@ -90,7 +90,7 @@ export default function NewProjectModal({ isOpen, onClose, onCreate }: NewProjec
               onChange={(e) => setSubtitle(e.target.value)}
               placeholder="A brief description (optional)"
               maxLength={200}
-              className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#7C6AF6] focus:border-[#7C6AF6]"
+              className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#6366f1] focus:border-[#6366f1]"
             />
           </div>
 
@@ -105,7 +105,7 @@ export default function NewProjectModal({ isOpen, onClose, onCreate }: NewProjec
             <button
               type="submit"
               disabled={isLoading || !name.trim()}
-              className="flex items-center gap-2 px-4 py-2 bg-[#7C6AF6] text-white rounded-md font-medium hover:bg-[#6C5CE7] disabled:opacity-50 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-[#6366f1] text-white rounded-md font-medium hover:bg-[#4f46e5] disabled:opacity-50 transition-colors"
             >
               <Plus className="w-4 h-4" />
               {isLoading ? 'Creating...' : 'Create Project'}

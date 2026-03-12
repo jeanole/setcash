@@ -47,7 +47,7 @@ export default function Header({ title, user, onMenuToggle }: HeaderProps) {
               {user.email}
             </span>
             <div
-              className="w-8 h-8 rounded-full bg-[#7C6AF6] flex items-center justify-center text-white text-sm font-semibold shrink-0"
+              className="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center text-white text-sm font-semibold shrink-0"
               aria-label={`Signed in as ${user.email}`}
               role="img"
             >

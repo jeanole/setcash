@@ -1,6 +1,6 @@
 # CR-8: Add Create User Button to Super Admin Users Tab
 
-**Requested:** 2026-03-04 | **Priority:** Medium | **Status:** Pending Review
+**Requested:** 2026-03-04 | **Priority:** Medium | **Status:** Deployed
 
 **Feature:** [PROJ-17: Super-Admin](PROJ-17-super-admin.md)
 
@@ -38,4 +38,4 @@ Super admins need the ability to provision accounts for team members without req
 - [ ] If auto-generated password: display once with copy button (like password reset flow)
 - [ ] Error handling: show inline errors (duplicate email, weak password, etc.)
 
-**Resolution:** Pending
+**Resolution:** Deployed — Create User button and modal fully implemented in `UsersTab.tsx` + `CreateUserModal.tsx`, wired via `SuperAdminModal.tsx`. All acceptance criteria met: email/password/isSuperAdmin form, auto-generated 16-char password with copy-to-clipboard, inline error handling, user list refresh on success.

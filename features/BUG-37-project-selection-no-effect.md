@@ -1,6 +1,6 @@
 # BUG-37: Project Selection Has No Effect
 
-**Status:** Open
+**Status:** Resolved
 **Reported:** 2026-03-08
 **Severity:** Critical
 **Skill Tag:** Not sure

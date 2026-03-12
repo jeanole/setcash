@@ -17,6 +17,25 @@ export const rateLimits = {
     limiter: Ratelimit.slidingWindow(5, '1 m'),
     name: 'bill_analyse',
   },
+  // Forgot password: 1 request per email per 5 minutes
+  forgotPassword: {
+    limiter: Ratelimit.slidingWindow(1, '5 m'),
+    name: 'forgot_password',
+  },
+  // Sign up: 3 requests per IP per 10 minutes
+  signUp: {
+    limiter: Ratelimit.slidingWindow(3, '10 m'),
+    name: 'sign_up',
+  },
+  // Resend verification: 1 request per email per 2 minutes
+  resendVerification: {
+    limiter: Ratelimit.slidingWindow(1, '2 m'),
+    name: 'resend_verification',
+  },
+  bugReport: {
+    limiter: Ratelimit.slidingWindow(3, '10 m'),
+    name: 'bug_report',
+  },
 } as const;
 
 // Mock rate limiter for local development when Redis is not configured
@@ -56,3 +75,7 @@ function createRateLimiter(config: { limiter: ReturnType<typeof Ratelimit.slidin
 // Export rate limiter instances
 export const billCreateLimiter = createRateLimiter(rateLimits.billCreate);
 export const billAnalyseLimiter = createRateLimiter(rateLimits.billAnalyse);
+export const forgotPasswordLimiter = createRateLimiter(rateLimits.forgotPassword);
+export const signUpLimiter = createRateLimiter(rateLimits.signUp);
+export const resendVerificationLimiter = createRateLimiter(rateLimits.resendVerification);
+export const bugReportLimiter = createRateLimiter(rateLimits.bugReport);

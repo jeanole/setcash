@@ -95,3 +95,11 @@ simply had full access to everything without special routing.
 - `nextjs/auth.ts` (lines 230–234, 275)
 - `nextjs/app/(protected)/settings/members/page.tsx` (SSR guard logic)
 - `nextjs/app/(protected)/settings/positions/page.tsx` (SSR guard logic)
+
+---
+
+## Resolution
+
+**Status:** Resolved
+**Resolved Date:** 2026-03-07
+**Fix Description:** Implemented Option A. Removed the forced `null` reset for superadmins on sign-in so they can hold a `currentProjectId` in the JWT. Fixed two secondary issues in `auth.ts`: (1) `trigger === 'update'` path now uses `session` data directly (validated by the switch API) rather than re-fetching from DB with the wrong ID; (2) `else if` re-fetch path changed from `token.id` to `userEmail` so Google OAuth users are looked up correctly. Superadmins can now switch projects via the ProjectSwitcher and access project-scoped settings pages.

@@ -7,7 +7,7 @@ import { auth } from '../../auth';
 export type SessionUser = {
   id: string;
   email: string;
-  role: 'user' | 'admin' | 'superadmin';
+  role: 'user' | 'admin' | 'owner' | 'superadmin';
   currentProjectId: string | null;
 };
 

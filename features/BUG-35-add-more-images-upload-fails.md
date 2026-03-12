@@ -1,6 +1,6 @@
 # BUG-35: Add More Images Upload Fails on Bill Detail Page
 
-**Status:** Open
+**Status:** Resolved
 **Reported:** 2026-03-08
 **Severity:** Critical
 **Skill Tag:** [Frontend]

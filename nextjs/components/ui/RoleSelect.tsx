@@ -79,7 +79,7 @@ export default function RoleSelect({
                   isDisabled
                     ? 'opacity-40 cursor-not-allowed'
                     : 'hover:bg-slate-50 cursor-pointer',
-                  value === option.value && 'bg-violet-50'
+                  value === option.value && 'bg-indigo-50'
                 )}
               >
                 <RoleBadge role={option.value} size="sm" />

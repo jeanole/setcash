@@ -17,6 +17,7 @@ const TABS: Tab[] = [
   { id: 'motives', label: 'Motives', href: '/settings/motives', roles: ['admin', 'owner', 'superadmin'] },
   { id: 'categories', label: 'Categories', href: '/settings/categories', roles: ['admin', 'owner', 'superadmin'] },
   { id: 'ai-analysis', label: 'AI Analysis', href: '/settings/ai-analysis', roles: ['admin', 'owner', 'superadmin'] },
+  { id: 'telegram', label: 'Telegram', href: '/settings/telegram', roles: ['user', 'admin', 'owner', 'superadmin'] },
   { id: 'projects', label: 'Projects', href: '/settings/projects', roles: ['user', 'admin', 'owner', 'superadmin'] },
 ];
 
@@ -46,7 +47,7 @@ export default function SettingsTabs({ userRole }: SettingsTabsProps) {
             className={cn(
               'px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap',
               isActive(tab)
-                ? 'border-[#7C6AF6] text-[#7C6AF6]'
+                ? 'border-[#6366f1] text-[#6366f1]'
                 : 'border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300'
             )}
           >

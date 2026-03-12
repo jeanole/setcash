@@ -163,8 +163,8 @@ export default function CreateUserModal({ isOpen, onClose, onUserCreated }: Crea
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
           <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-violet-100">
-              <UserPlus className="w-4 h-4 text-[#7C6AF6]" />
+            <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-indigo-100">
+              <UserPlus className="w-4 h-4 text-[#6366f1]" />
             </div>
             <h3 className="text-lg font-semibold text-slate-800">
               {step === 'form' ? 'Create User' : 'User Created'}
@@ -197,7 +197,7 @@ export default function CreateUserModal({ isOpen, onClose, onUserCreated }: Crea
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-[#7C6AF6]/30 focus:border-[#7C6AF6] transition-colors"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-[#6366f1]/30 focus:border-[#6366f1] transition-colors"
                     placeholder="user@example.com"
                     autoComplete="email"
                     autoFocus
@@ -217,7 +217,7 @@ export default function CreateUserModal({ isOpen, onClose, onUserCreated }: Crea
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-[#7C6AF6]/30 focus:border-[#7C6AF6] transition-colors"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-[#6366f1]/30 focus:border-[#6366f1] transition-colors"
                     placeholder="Leave empty to auto-generate"
                     autoComplete="new-password"
                   />
@@ -233,7 +233,7 @@ export default function CreateUserModal({ isOpen, onClose, onUserCreated }: Crea
                     type="checkbox"
                     checked={isSuperAdmin}
                     onChange={(e) => setIsSuperAdmin(e.target.checked)}
-                    className="w-4 h-4 rounded border-slate-300 text-[#7C6AF6] focus:ring-[#7C6AF6]/30 cursor-pointer"
+                    className="w-4 h-4 rounded border-slate-300 text-[#6366f1] focus:ring-[#6366f1]/30 cursor-pointer"
                   />
                   <label
                     htmlFor="create-user-superadmin"
@@ -278,7 +278,7 @@ export default function CreateUserModal({ isOpen, onClose, onUserCreated }: Crea
                       'px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2',
                       copied
                         ? 'bg-emerald-100 text-emerald-700'
-                        : 'bg-[#7C6AF6] text-white hover:bg-[#6C5CE7]'
+                        : 'bg-[#6366f1] text-white hover:bg-[#4f46e5]'
                     )}
                     aria-label="Copy password to clipboard"
                   >
@@ -316,7 +316,7 @@ export default function CreateUserModal({ isOpen, onClose, onUserCreated }: Crea
                 type="submit"
                 form="create-user-form"
                 disabled={isLoading}
-                className="px-4 py-2 bg-[#7C6AF6] text-white font-medium rounded-lg transition-colors hover:bg-[#6C5CE7] disabled:opacity-50 flex items-center gap-2"
+                className="px-4 py-2 bg-[#6366f1] text-white font-medium rounded-lg transition-colors hover:bg-[#4f46e5] disabled:opacity-50 flex items-center gap-2"
               >
                 {isLoading ? (
                   <>
@@ -345,7 +345,7 @@ export default function CreateUserModal({ isOpen, onClose, onUserCreated }: Crea
           ) : (
             <button
               onClick={handleCloseDisplay}
-              className="px-4 py-2 bg-[#7C6AF6] text-white font-medium rounded-lg transition-colors hover:bg-[#6C5CE7]"
+              className="px-4 py-2 bg-[#6366f1] text-white font-medium rounded-lg transition-colors hover:bg-[#4f46e5]"
             >
               Done
             </button>

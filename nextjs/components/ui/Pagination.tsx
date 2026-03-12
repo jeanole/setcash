@@ -25,7 +25,7 @@ export default function Pagination({
   const pgBase =
     'px-2.5 py-1 text-sm rounded-md min-w-[34px] text-center border transition-colors';
   const pgNormal = `${pgBase} bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300`;
-  const pgActive = `${pgBase} bg-[#7C6AF6] text-white border-[#7C6AF6]`;
+  const pgActive = `${pgBase} bg-[#6366f1] text-white border-[#6366f1]`;
   const pgDisabled = `${pgBase} bg-slate-50 text-slate-300 border-slate-200 cursor-default`;
 
   // Calculate visible page range
