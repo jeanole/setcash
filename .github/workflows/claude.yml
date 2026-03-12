@@ -19,16 +19,24 @@ jobs:
       (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
     runs-on: ubuntu-latest
     permissions:
-      contents: read
-      pull-requests: read
-      issues: read
+      contents: write      # required: commit features/INDEX.md, bug/CR docs, QA results
+      pull-requests: write # required: post comments with results
+      issues: write        # required: post comments with results
       id-token: write
-      actions: read # Required for Claude to read CI results on PRs
+      actions: read        # required: read CI results on PRs
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0   # full history — needed by pipeline skill for git log / tagging
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
 
       - name: Run Claude Code
         id: claude
@@ -36,15 +44,65 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
-          # This is an optional setting that allows Claude to read CI results on PRs
           additional_permissions: |
             actions: read
 
-          # Optional: Give a custom prompt to Claude. If this is not specified, Claude will perform the instructions specified in the comment that tagged it.
-          # prompt: 'Update the pull request description to include a summary of changes.'
+          custom_instructions: |
+            You are operating inside the vBudget repository via GitHub Actions.
 
-          # Optional: Add claude_args to customize behavior and configuration
-          # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
-          # or https://code.claude.com/docs/en/cli-reference for available options
-          # claude_args: '--allowed-tools Bash(gh pr:*)'
+            Skills are defined in `.claude/skills/`. Read the relevant SKILL.md and follow it exactly.
+            Key skills for this workflow:
+              - report   → `.claude/skills/report/SKILL.md`
+              - pipeline → `.claude/skills/pipeline/SKILL.md`
 
+            ## Routing by trigger
+
+            ### New issue opened (GitHub issue body/title contains @claude)
+            Treat the issue title + body as the user's report description.
+            Execute the `report` skill (read its SKILL.md and follow every phase).
+            Skip asking for details already present in the issue body.
+            After committing, post a comment on the issue summarising what was created
+            (e.g. "BUG-9 created at features/BUG-9-*.md. INDEX.md updated.").
+
+            ### Comment: @claude /report [description]
+            Execute the `report` skill using [description] as the input.
+            Commit the created files, then post a comment with the outcome.
+
+            ## Auto-pipeline for minor issues
+            After the report skill finishes (whether triggered by a new issue or by
+            `@claude /report`), check whether the pipeline should auto-run:
+
+            **Conditions — ALL must be true:**
+            1. The report created a BUG-N or CR-N (NOT a new PROJ-X feature spec —
+               those need architecture first).
+            2. The item is linked to a specific PROJ-N (not "Cross-feature" or "Unknown").
+            3. You judge it as minor enough to auto-fix (e.g. typo, missing CSS class,
+               small validation bug, copy change). Use severity, scope, and complexity
+               to decide.
+
+            **If all conditions met:**
+            - Post a comment: "This looks minor — auto-running `/pipeline PROJ-N` in yolo mode."
+            - Execute the pipeline skill for the parent PROJ-N with `--yolo`
+              (skips Gate 1 auto-fix approval, still requires Gate 2 deploy approval).
+
+            **If NOT minor or no PROJ-N linked:**
+            - Keep the standard handoff message (e.g. "Next step: Run `/pipeline PROJ-N`
+              to fix and deploy."). Do not auto-run the pipeline.
+
+            ### Comment: @claude /pipeline PROJ-N
+            Execute the `pipeline` skill for PROJ-N (read its SKILL.md and follow every step).
+            CI-specific constraint: you cannot call AskUserQuestion interactively.
+            - Gate 1 (auto-fix bugs?): post a comment listing the bugs and ask for a reply
+              "@claude yes" to proceed, or proceed automatically if the comment that triggered
+              you already contains "--yolo".
+            - Gate 2 (deploy to production?): ALWAYS post a comment asking for explicit human
+              approval before pushing to the production branch. Never skip this gate.
+
+            ### All other @claude comments
+            Follow the comment instructions, guided by the project rules in `.claude/rules/`.
+
+            ## Always
+            - Read `features/INDEX.md` before creating or updating any feature/bug/CR document.
+            - Use commit format: `type(ID): description` (e.g. `bug(BUG-9): ...`).
+            - Never commit secrets or credentials.
+            - Follow all rules in `.claude/rules/` (general, backend, frontend, security).

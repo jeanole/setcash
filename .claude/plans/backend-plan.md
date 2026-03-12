@@ -1,97 +1,127 @@
-# Backend Implementation Plan — CR-1: Admin OCR/AI Logging Panel
+# Backend Implementation Plan — CR-12 (Forgot Password / Password Reset)
 
 ## Feature
-CR-1 in `features/PROJ-1-ocr-bill-analysis.md` — Admin OCR/AI Logging Panel in Settings
+CR-12: Add Forgot Password / Self-Service Password Reset
+Spec: `features/CR-12-forgot-password-reset.md`
+Parent: PROJ-5 (NextAuth.js Authentication)
 
 ## Context Summary
-- Project uses Node.js + Express + SQLite (better-sqlite3)
-- DB migrations use try/catch pattern: `SELECT col FROM table LIMIT 1` → if error → `ALTER TABLE`
-- `routes/ocr.js` contains `runOcrJob()` — the function we need to extend with logging
-- `routes/settings.js` contains admin settings endpoints — we add the log query endpoint here
-- `public/js/admin.js` handles admin settings UI — frontend work deferred to `/frontend`
-- `public/index.html` — frontend work deferred to `/frontend`
+- **Auth:** NextAuth v5 with JWT sessions, bcryptjs for password hashing (`auth.ts`)
+- **DB:** PostgreSQL via Prisma ORM (`prisma/schema.prisma`)
+- **Rate limiting:** Upstash Redis with MockRatelimit fallback (`lib/ratelimit.ts`)
+- **Middleware:** Edge middleware protects all non-public routes (`middleware.ts`)
+- **Public routes:** `/`, `/login`, `/api/health`, `/api/auth/*`, `/_next/*`, `/favicon.ico`
+- **Env example:** `.env.test.example` exists (no `.env.local.example`)
+- **Login page:** Root `/` is combined landing+login page; `/login` redirects to `/`
 
 ## User Decisions
-All decisions made by architect in CR-1 Tech Design — no open questions.
+- Email provider: **Resend** via `resend` npm package + API key
+- Token hash: SHA-256 (simpler than bcrypt for random tokens, equally secure)
+- Token expiry: 1 hour
+- Rate limit: 1 request per email per 5 minutes
+- No user enumeration: always show generic success message
 
 ## Open Bug Reports to Address
-- BUG-1 (OCR Analysis Runs Indefinitely) — already fixed in previous session; will update INDEX.md status
+None
 
-## Tables to Create
+## Database — New Prisma Model
 
-### `ocr_log`
+### `PasswordResetToken`
 | Column | Type | Notes |
 |--------|------|-------|
-| `id` | INTEGER PRIMARY KEY AUTOINCREMENT | |
-| `project_id` | INTEGER | FK → projects(id) ON DELETE SET NULL |
-| `bill_id` | INTEGER | FK → bills(id) ON DELETE SET NULL |
-| `timestamp` | TEXT | ISO datetime, DEFAULT datetime('now') |
-| `provider` | TEXT | e.g. "openai", "gemini", "claude", "custom" |
-| `status` | TEXT | "done" / "failed" / "skipped" |
-| `fields_written` | TEXT | JSON array or null |
-| `ai_response` | TEXT | Truncated to 2000 chars, null for config/input failures |
-| `error_detail` | TEXT | null on success |
+| id | String @id @default(uuid()) | Primary key |
+| email | String | User email |
+| tokenHash | String @unique | SHA-256 hash of raw token |
+| expiresAt | DateTime | Token expiry (now + 1 hour) |
+| createdAt | DateTime @default(now()) | Creation timestamp |
 
-Migration: CREATE TABLE IF NOT EXISTS in `db.js` (append to the main schema block is not possible since it uses IF NOT EXISTS — add as separate CREATE TABLE IF NOT EXISTS statement after the main block, before the existing ALTER migrations).
+**Indexes:** `@@index([email])`
+**Note:** `tokenHash` has `@unique` which also creates an index.
 
-### Index
-- `CREATE INDEX IF NOT EXISTS idx_ocr_log_project ON ocr_log(project_id, timestamp)`
+## API Endpoints
 
-## API Endpoints to Implement
+### 1. `POST /api/auth/forgot-password`
+- **Auth:** Public (no session required)
+- **Input (Zod):** `{ email: z.string().email() }`
+- **Logic:**
+  1. Rate limit by email (1 per 5 min) — add `forgotPassword` config to `lib/ratelimit.ts`
+  2. Look up user by email
+  3. If user exists AND has a passwordHash (not empty = not Google-only):
+     - Delete any existing tokens for this email
+     - Generate 32-byte random token via `crypto.randomBytes(32)`
+     - SHA-256 hash it, store in `PasswordResetToken` with 1-hour expiry
+     - Send email via Nodemailer with reset link: `${APP_URL}/reset-password?token=${rawToken}`
+  4. Always return 200 `{ message: "If an account exists with that email, a reset link has been sent." }`
+- **Error cases:** Rate limited → 429, Invalid email → 400
 
-### `GET /api/admin/ocr-log`
-- **File:** `routes/settings.js`
-- **Auth:** `ensureProjectAdmin`
-- **Query:** Last 50 rows from `ocr_log` for `project_id`, joined with `bills.bill_number`, ordered by `timestamp DESC`
-- **Response:** Array of objects:
-  ```json
-  {
-    "id": 1,
-    "billId": 42,
-    "billNumber": "R-2026-042",
-    "timestamp": "2026-02-26T14:30:00",
-    "provider": "openai",
-    "status": "done",
-    "fieldsWritten": ["vendor", "date", "amount"],
-    "aiResponsePreview": "first 200 chars...",
-    "errorDetail": null
-  }
-  ```
-- **Error cases:** 403 if not project admin (middleware handles)
+### 2. `POST /api/auth/reset-password`
+- **Auth:** Public (no session required)
+- **Input (Zod):** `{ token: z.string().min(1), password: z.string().min(8) }`
+- **Logic:**
+  1. SHA-256 hash the incoming raw token
+  2. Look up `PasswordResetToken` by `tokenHash` where `expiresAt > now()`
+  3. If not found → 400 "Invalid or expired reset link"
+  4. Look up user by email from the token record
+  5. Hash new password with bcrypt (12 rounds, matching `auth.ts`)
+  6. Update `User.passwordHash`
+  7. Delete ALL tokens for this email (single-use + invalidate siblings)
+  8. Return 200 `{ message: "Password has been reset successfully." }`
+- **Error cases:** Invalid/expired token → 400, Password too short → 400
 
-## Backend Modifications
+## New Files to Create
 
-### `routes/ocr.js` — `runOcrJob()`
-Extend to write one `ocr_log` row at every exit:
+### 1. `lib/email.ts` — Resend client + send helper
+```typescript
+import { Resend } from 'resend';
 
-1. **Capture raw AI response text** — store the raw text from `analyseImage()` before it goes through `parseOcrResponse()`. This means `analyseImage()` needs to return both the parsed result AND the raw text. OR we capture the raw text separately. Simplest: modify `analyseImage` to return `{ parsed, rawText }` instead of just parsed result.
+// Instantiate Resend with RESEND_API_KEY env var
+// Graceful fallback: if RESEND_API_KEY not configured, log warning + skip send
 
-2. **At the `fail()` helper** — insert log row with status='failed', error_detail=reason, ai_response=null (since we haven't called the AI yet at most fail points), provider from settings (if available).
+export async function sendPasswordResetEmail(email: string, resetUrl: string): Promise<void>
+// HTML template with reset link and 1-hour expiry notice
+// from: 'onboarding@resend.dev' (sandbox) or custom verified domain
+```
 
-3. **At success path** — insert log row with status='done', fields_written=JSON array, ai_response=rawText (truncated to 2000 chars), error_detail=null.
+### 2. `app/api/auth/forgot-password/route.ts`
+### 3. `app/api/auth/reset-password/route.ts`
+### 4. `app/(public)/forgot-password/page.tsx` — Email input form (client component)
+### 5. `app/(public)/reset-password/page.tsx` — New password form (client component)
+### 6. `prisma/migrations/[timestamp]_add_password_reset_token/migration.sql`
 
-4. **For config/input failures** (OCR not enabled, no API key, no image) — status='skipped' or 'failed', ai_response=null.
+## Files to Modify
 
-### `db.js`
-- Add `CREATE TABLE IF NOT EXISTS ocr_log (...)` after existing schema block
+### 1. `prisma/schema.prisma` — Add PasswordResetToken model
+### 2. `lib/ratelimit.ts` — Add forgotPassword limiter config + export
+### 3. `middleware.ts` — Add `/forgot-password` and `/reset-password` to public routes
+### 4. `.env.test.example` — Add SMTP env vars + NEXT_PUBLIC_APP_URL
+### 5. `app/page.tsx` — Add "Forgot password?" link below sign-in button
 
-## Implementation Steps (ordered)
+## Dependencies to Install
+```bash
+npm install resend
+```
 
-1. **`db.js`** — Add `ocr_log` table creation + index
-2. **`routes/ocr.js`** — Modify `analyseImage()` to return `{ parsed, rawText }`; update call sites. Modify `runOcrJob()` to capture raw response and insert `ocr_log` rows at every exit point.
-3. **`routes/settings.js`** — Add `GET /api/admin/ocr-log` endpoint
-4. **Verify** — No new npm packages needed
+## Environment Variables (add to `.env.test.example`)
+```
+RESEND_API_KEY=re_xxxxxxxxx
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+```
 
 ## Checklist
-- [ ] `ocr_log` table created in db.js
-- [ ] Index on (project_id, timestamp)
-- [ ] `analyseImage()` returns raw text alongside parsed result
-- [ ] `runOcrJob()` writes log row on success
-- [ ] `runOcrJob()` writes log row on failure (all fail paths)
-- [ ] `runOcrJob()` writes log row on skip (config/input errors)
-- [ ] Raw AI response truncated to 2000 chars before storage
-- [ ] API key NEVER stored in log
-- [ ] `GET /api/admin/ocr-log` endpoint returns last 50 entries
-- [ ] Endpoint joins bills.bill_number for display
-- [ ] Endpoint scoped to current project
-- [ ] Endpoint protected by ensureProjectAdmin
+- [ ] Install `resend` package
+- [ ] Add `PasswordResetToken` model to Prisma schema
+- [ ] Create + apply Prisma migration
+- [ ] Create `lib/email.ts` with Resend SDK
+- [ ] Create `POST /api/auth/forgot-password` with rate limiting
+- [ ] Create `POST /api/auth/reset-password` with token validation
+- [ ] Create `/forgot-password` page with email form
+- [ ] Create `/reset-password` page with password + confirm form
+- [ ] Add "Forgot password?" link on login/landing page
+- [ ] Update middleware for public routes
+- [ ] Add `RESEND_API_KEY` + `NEXT_PUBLIC_APP_URL` to `.env.test.example`
+- [ ] No user enumeration (generic success on forgot-password)
+- [ ] Token stored as SHA-256 hash (raw token never persisted)
+- [ ] Token is single-use (deleted on use)
+- [ ] Token expires after 1 hour
+- [ ] Graceful fallback if SMTP not configured (log warning, don't crash)
+- [ ] Validate with `npx tsc --noEmit`

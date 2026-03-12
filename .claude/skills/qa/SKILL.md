@@ -27,13 +27,22 @@ Announce: "Starting QA for [feature name]. Reading project context..."
 Announce: "Context loaded. Found [N] acceptance criteria and [M] edge cases."
 
 ### 2. Ask Scoping Questions
-Use `AskUserQuestion` to clarify:
+
+Detect yolo mode: run `echo $CLAUDE_CODE_DANGEROUSLY_SKIP_PERMISSIONS`. Yolo mode is active if the output is `true` OR if the arguments contain `--yolo`.
+
+**If yolo mode is active** — skip questions and use these defaults:
+- Specific worries: none
+- Known issues: none
+- Scope: full — test all acceptance criteria, edge cases, security, and regression
+- Credentials: http://localhost:3000 · default admin account
+
+**If yolo mode is NOT active** — use `AskUserQuestion` to clarify:
 - Are there specific areas you're worried about?
 - Any known issues to watch for?
 - Should I focus on a specific subset of acceptance criteria, or test everything?
 - Any test accounts / credentials I need?
 
-**Do NOT proceed until questions are answered.**
+**Do NOT proceed until questions are answered (or yolo defaults are applied).**
 
 ### 3. Write Test Plan
 Create the file `.claude/plans/qa-plan.md` with this structure:
@@ -87,9 +96,9 @@ Display a summary:
 - Security audit scope
 - Regression scope
 
-Ask: "Does this test plan cover everything? Any areas to add or skip?"
+**If yolo mode is active** — announce "Yolo mode: skipping plan approval, launching Phase 2 now." and proceed immediately to Phase 2.
 
-**Wait for user approval before proceeding to Phase 2.**
+**If yolo mode is NOT active** — ask: "Does this test plan cover everything? Any areas to add or skip?" and wait for user approval before proceeding to Phase 2.
 
 ## Phase 2 — Execute (subagent)
 

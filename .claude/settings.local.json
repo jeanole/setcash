@@ -32,8 +32,7 @@
       "Bash(export PATH=\"$PATH:/c/Users/jensmoeller/AppData/Local/Programs/GitHub CLI:/c/Program Files/GitHub CLI\")",
       "WebFetch(domain:api.github.com)",
       "Bash(powershell -Command:*)",
-      "Skill(deploy)",
-      "Skill(deploy:*)"
+      "Bash(git pull:*)"
     ]
   }
 }

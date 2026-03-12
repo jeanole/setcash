@@ -1,18 +1,34 @@
 services:
-  vbudget-test:
-    build: .
-    image: vbudget:test
-    container_name: vbudget-test
-    restart: unless-stopped
+  vbudget-next:
+    build:
+      context: ./nextjs
+      dockerfile: Dockerfile
     ports:
-      - "5001:3000"
+      - "3001:3001"
+    env_file: .env.test
     volumes:
-      - ./data-test:/app/data
-    environment:
-      - NODE_ENV=production
-    networks:
-      - vbudget-test-net
+      - vbudget-uploads-test:/app/data/uploads
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+    restart: unless-stopped
 
-networks:
-  vbudget-test-net:
-    driver: bridge
+  postgres-test:
+    image: postgres:15-alpine
+    ports:
+      - "5433:5432"
+    volumes:
+      - vbudget-pg-test-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: vbudget
+      POSTGRES_PASSWORD: vbudget_test
+      POSTGRES_DB: vbudget
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vbudget"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  vbudget-pg-test-data:
+  vbudget-uploads-test:  # non-persistent: cleared when `docker-compose down -v`

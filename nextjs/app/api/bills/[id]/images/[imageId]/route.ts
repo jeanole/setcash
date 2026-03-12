@@ -1,0 +1,194 @@
+// ============================================================================
+// Bill Image API - PUT / DELETE
+// ============================================================================
+
+import { NextRequest, NextResponse } from 'next/server';
+import { auth } from '@/auth';
+import { db as prisma } from '@/lib/db';
+import path from 'path';
+import fs from 'fs';
+import {
+  parseForm,
+  getUploadedFile,
+  UPLOADS_DIR,
+} from '@/lib/upload';
+
+// Sync legacy bills.filename with first image
+async function syncLegacyImageColumns(billId: string) {
+  const firstImage = await prisma.billImage.findFirst({
+    where: { billId },
+    orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+  });
+
+  if (firstImage) {
+    await prisma.bill.update({
+      where: { id: billId },
+      data: {
+        filename: firstImage.filename,
+      },
+    });
+  } else {
+    await prisma.bill.update({
+      where: { id: billId },
+      data: { filename: '' },
+    });
+  }
+}
+
+// PUT /api/bills/[id]/images/[imageId] - Replace/crop image
+export async function PUT(
+  req: NextRequest,
+  { params }: { params: { id: string; imageId: string } }
+) {
+  try {
+    const session = await auth();
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const projectId = session.user.currentProjectId;
+    if (!projectId) {
+      return NextResponse.json({ error: 'No project selected' }, { status: 400 });
+    }
+
+    const { id, imageId } = params;
+
+    // Get bill
+    const bill = await prisma.bill.findFirst({
+      where: { id, projectId },
+    });
+
+    if (!bill) {
+      return NextResponse.json({ error: 'Bill not found' }, { status: 404 });
+    }
+
+    // Get image
+    const image = await prisma.billImage.findFirst({
+      where: { id: imageId, billId: id },
+    });
+
+    if (!image) {
+      return NextResponse.json({ error: 'Image not found' }, { status: 404 });
+    }
+
+    // Parse multipart form
+    const { files } = await parseForm(req);
+
+    // Get uploaded file
+    const uploadedFile = getUploadedFile(files, 'photo');
+
+    if (!uploadedFile) {
+      return NextResponse.json({ error: 'No file' }, { status: 400 });
+    }
+
+    // Overwrite the existing file on disk
+    const imgPath = path.join(UPLOADS_DIR, image.filePath);
+    const dir = path.dirname(imgPath);
+
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+
+    // Use copy+delete instead of rename to handle cross-device moves (EXDEV)
+    fs.copyFileSync(uploadedFile.filepath, imgPath);
+    try { fs.unlinkSync(uploadedFile.filepath); } catch { /* temp cleanup, non-fatal */ }
+
+    // Log the crop
+    await prisma.editLog.create({
+      data: {
+        projectId,
+        timestamp: new Date(),
+        user: session.user.email,
+        billId: id,
+        changes: { image: 'cropped' },
+        source: 'user',
+      },
+    });
+
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    console.error('Error replacing image:', error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+// DELETE /api/bills/[id]/images/[imageId] - Delete single image
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: { id: string; imageId: string } }
+) {
+  try {
+    const session = await auth();
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const projectId = session.user.currentProjectId;
+    if (!projectId) {
+      return NextResponse.json({ error: 'No project selected' }, { status: 400 });
+    }
+
+    const { id, imageId } = params;
+
+    // Get bill
+    const bill = await prisma.bill.findFirst({
+      where: { id, projectId },
+    });
+
+    if (!bill) {
+      return NextResponse.json({ error: 'Bill not found' }, { status: 404 });
+    }
+
+    // Get image
+    const image = await prisma.billImage.findFirst({
+      where: { id: imageId, billId: id },
+    });
+
+    if (!image) {
+      return NextResponse.json({ error: 'Image not found' }, { status: 404 });
+    }
+
+    // Delete file from disk
+    if (image.filePath) {
+      const imgPath = path.join(UPLOADS_DIR, image.filePath);
+      if (fs.existsSync(imgPath)) {
+        try {
+          fs.unlinkSync(imgPath);
+        } catch (e) {
+          console.error('Failed to delete image file:', e);
+        }
+      }
+    }
+
+    // Delete image record
+    await prisma.billImage.delete({
+      where: { id: imageId },
+    });
+
+    // Update legacy columns
+    await syncLegacyImageColumns(id);
+
+    // Log the deletion
+    await prisma.editLog.create({
+      data: {
+        projectId,
+        timestamp: new Date(),
+        user: session.user.email,
+        billId: id,
+        changes: { image: 'deleted' },
+        source: 'user',
+      },
+    });
+
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    console.error('Error deleting image:', error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}

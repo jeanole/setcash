@@ -1,173 +1,123 @@
-# Frontend Implementation Plan — PROJ-1 CR-4 + CR-5
+# Frontend Implementation Plan — CR-11 (Merge Landing + Login Page)
 
 ## Feature
-PROJ-1: OCR / AI Bill Analysis — pending CRs
-- CR-4: Analyse Button + Field Verification in Upload Modal
-- CR-5: Re-Analyse Button for Already-Analysed Bills
-Spec: `features/PROJ-1-ocr-bill-analysis.md`
+CR-11: Merge Landing Page and Login Page into One
+Feature: PROJ-5 (NextAuth.js Authentication)
+Spec: `features/PROJ-5-nextauth-authentication.md` → Change Requests → CR-11
 
 ## Context Summary
-- PROJ-1 core + CR-1/CR-2/CR-3 all deployed; CR-4 and CR-5 are Pending Review
-- The app is vanilla HTML/JS with Tailwind CSS classes
-- Upload form: `public/index.html` lines 290-464 (tab-upload pane), submit handler in `public/js/core.js` lines 380-477
-- Upload form fields: photos, type, brutto19/7/0, vendor, item, comment, motive/category allocations. **No date field in upload form** (date is auto-set to `new Date().toISOString()` on the server)
-- Bill detail modal: `public/js/bills.js` has `triggerBillAnalysis()` (line 922), `showAnalyseButton()` (line 910), `applyOcrFieldHighlights()` (line 735), `verifyOcrField()` (line 814)
-- OCR analyse endpoint: `POST /api/bills/:id/analyse` — requires a saved bill ID, fires `runOcrJob` in background, returns 202
-- OCR polling: `startOcrPolling(billId)` polls `GET /api/bills/:id` until `ocrStatus` changes from "pending"
+- Current `app/page.tsx` is a scaffold/migration-notice placeholder — not useful
+- Current `app/(public)/login/page.tsx` is a standalone dark login page with `LoginForm`
+- `LoginForm` component at `components/auth/LoginForm.tsx` is self-contained with logo, form, Google button
+- Middleware at `middleware.ts` has `/login` in the public route list
+- Design tokens in `globals.css`: indigo accent `#6366f1`, slate-50 content bg, Inter font
+- Login page uses dark cinematic bg: `slate-950` with indigo/emerald radial gradients
+
+## User Decisions
+- **Layout:** Full landing page with product info + embedded login form (option B)
+- **Responsive:** Split two-column on desktop (≥1024px), stacked single-column on mobile (≤768px)
+- **Priority:** Medium
+- **Style:** Keep the dark cinematic background from the existing login page
 
 ## Open Bug Reports to Address
-None — all PROJ-1 bugs resolved.
+None
 
-## Key Architecture Decision: CR-4
+## Existing Components to Reuse
+- `LoginForm` (`components/auth/LoginForm.tsx`) — reuse as-is, embedded in the new page
+- Design tokens from `globals.css`
 
-**Problem:** The current analyse endpoint requires a saved bill (`POST /api/bills/:id/analyse`). CR-4 wants analysis _during upload, before saving_.
+## Implementation Plan
 
-**Chosen approach: Two-step save-then-analyse**
-1. When user clicks "Analyse" in the upload form, first save the bill immediately via `POST /upload` (existing endpoint) — this creates the bill with images
-2. Then immediately trigger `POST /api/bills/:id/analyse` on the newly created bill
-3. Poll for results via `startOcrPolling(billId)`
-4. When OCR completes, pre-fill the form as an "edit view" — switch the upload form into an edit mode showing the OCR results with verification badges
-5. User reviews/verifies fields and clicks "Save Changes" which calls `PUT /api/bills/:id`
+### Step 1: Rewrite `app/page.tsx`
+Replace the scaffold page with a combined landing+login page:
 
-**Why this approach:**
-- No new backend endpoints needed — reuses existing `/upload`, `/api/bills/:id/analyse`, and `PUT /api/bills/:id`
-- The bill is saved as a draft (status="draft" when vendor is empty and amounts are 0), so it's safe to save before OCR fills in values
-- This matches the existing backend flow exactly
+**Desktop layout (lg+):**
+```
+┌──────────────────────────────────────────────┐
+│  LEFT (60%)              │  RIGHT (40%)       │
+│                          │                    │
+│  vBudget logo (large)    │  ┌──────────────┐  │
+│  Tagline                 │  │  LoginForm    │  │
+│  3 feature highlights    │  │  (frosted     │  │
+│  (icons + text)          │  │   glass card) │  │
+│                          │  └──────────────┘  │
+│  "v2.0" footer           │                    │
+└──────────────────────────────────────────────┘
+```
 
-**UX flow:**
-1. User attaches photo(s) → "Analyse" button appears
-2. User clicks "Analyse" → button shows "Saving & Analysing..." spinner
-3. Behind the scenes: POST /upload saves draft bill → POST /api/bills/:id/analyse triggers OCR → poll for results
-4. When done: form switches to edit mode with OCR results pre-filled + amber verification badges
-5. User reviews, verifies fields, clicks "Save Changes" (PUT /api/bills/:id)
-6. On success: form resets, user sees success message
+**Mobile layout (<lg):**
+```
+┌─────────────────────┐
+│  vBudget logo       │
+│  Tagline            │
+│  ┌───────────────┐  │
+│  │  LoginForm    │  │
+│  │  (card)       │  │
+│  └───────────────┘  │
+│  Feature highlights │
+│  (compact)          │
+└─────────────────────┘
+```
 
-## Changes
+**Background:** Dark cinematic (`slate-950` with radial gradients from existing login page)
 
-### CR-5: Re-Analyse Button (simpler, do first)
+**Left column content:**
+- Large "vBudget" wordmark (text-4xl+ bold, white)
+- Tagline: "Track expenses. Manage budgets. Simplify reimbursements."
+- 3 feature cards/highlights:
+  - Receipt scanning with AI analysis
+  - Multi-project budget tracking
+  - Team expense management
+- Each with a simple icon and 1-line description
+- All text white/slate-300 against dark bg
 
-**File: `public/js/bills.js`**
+**Right column:**
+- Frosted glass card (`bg-white/95 backdrop-blur-sm rounded-2xl`)
+- Contains `<LoginForm />` directly (no changes to LoginForm needed)
 
-1. **Modify `showAnalyseButton(bill)` (line 910):**
-   - If `bill.ocrStatus === "done"` or (`bill.ocrFields && bill.ocrFields.length > 0`): label = "Re-analyse"
-   - Otherwise: label = "Analyse"
-   - Store the label state on the button
+**Auth redirect:** Add server-side auth check — if user is already authenticated, redirect to `/dashboard`
 
-2. **Modify `triggerBillAnalysis()` (line 922):**
-   - Before triggering: check if bill has existing OCR results
-   - If yes: show `confirm("This will re-analyse the bill and overwrite all AI-filled fields. Continue?")`
-   - If user cancels: return early, do nothing
-   - If user confirms or no prior analysis: proceed as before
+### Step 2: Update `app/(public)/login/page.tsx`
+Redirect to `/` since the root page now handles login.
 
-3. **Modify `triggerBillAnalysisFromList(billId)` (line 957):**
-   - Same confirm logic for list-level "Analyse" button
-   - Update the button text in `renderFilteredBills()` to show "Re-analyse" when appropriate (line 301 template)
+```tsx
+import { redirect } from 'next/navigation';
+export default function LoginPage() {
+  redirect('/');
+}
+```
 
-### CR-4: Analyse Button in Upload Modal
+### Step 3: Update middleware
+Add `/` to the public route list in `middleware.ts`:
+```ts
+const isPublicRoute =
+  nextUrl.pathname === '/' ||
+  nextUrl.pathname === '/login' ||
+  ...
+```
 
-**File: `public/index.html`**
+### Step 4: Update auth redirect
+In `middleware.ts`, the redirect for unauthenticated users currently goes to `/login`. Change to `/`:
+```ts
+const loginUrl = new URL('/', nextUrl.origin);
+```
 
-1. **Add "Analyse" button to upload form** — between the photo area and the Type field:
-   ```html
-   <div id="uploadAnalyseSection" style="display: none">
-       <button type="button" id="uploadAnalyseBtn"
-           onclick="triggerUploadAnalysis()"
-           class="text-sm px-4 py-2 bg-amber-50 text-amber-700 rounded-lg hover:bg-amber-100 transition-colors border border-amber-200 cursor-pointer flex items-center gap-2">
-           <svg ...> <!-- small scan/sparkle icon -->
-           Analyse
-       </button>
-       <div id="uploadAnalyseStatus" class="hidden text-sm mt-2"></div>
-   </div>
-   ```
-
-**File: `public/js/bills.js`** (or a new section in `core.js`)
-
-2. **Show/hide Analyse button based on photo state:**
-   - In the existing `renderUploadThumbnails()` or photo change handlers:
-     if `pendingFiles.length > 0 && projectOcrEnabled` → show `#uploadAnalyseSection`
-     else → hide it
-
-3. **New function `triggerUploadAnalysis()`:**
-   ```
-   async function triggerUploadAnalysis() {
-     // 1. Disable button, show "Saving & Analysing..."
-     // 2. Build FormData from current upload form fields + pendingFiles
-     // 3. POST /upload → get { ok: true, billId: N }
-     // 4. POST /api/bills/:billId/analyse → get { ok: true }
-     // 5. Poll via startOcrPolling(billId) with a callback
-     // 6. When OCR completes:
-     //    a. Fetch GET /api/bills/:billId for full bill data
-     //    b. Switch upload form into "edit mode":
-     //       - Store billId in a variable (uploadEditBillId)
-     //       - Pre-fill all form fields with OCR-extracted values
-     //       - Apply OCR field highlights (amber badges + verify buttons)
-     //       - Change submit button text to "Save Changes"
-     //       - Change form submit handler to PUT /api/bills/:billId
-     //    c. Show success message
-     // 7. On error: show inline error, re-enable button
-   }
-   ```
-
-4. **Modify upload form submit handler** (in `core.js` line 382):
-   - Check if `uploadEditBillId` is set
-   - If yes: submit as PUT /api/bills/:id instead of POST /upload
-   - Include `ocrFields` tracking (which fields are still unverified)
-   - On success: reset form + clear uploadEditBillId
-
-5. **OCR field highlighting in upload form:**
-   - Need a fieldMap for upload form IDs (different from detail form IDs):
-     ```
-     uploadFieldMap = {
-       date: null,  // no date field in upload form
-       vendor: uploadForm.vendor,
-       item: uploadForm.item,
-       type: uploadForm.type,
-       brutto19: uploadForm.brutto19,
-       brutto7: uploadForm.brutto7,
-       brutto0: uploadForm.brutto0,
-       comment: uploadForm.comment
-     }
-     ```
-   - Apply same amber highlight + verify button pattern
-   - Track verified fields client-side in a Set
-
-6. **Reset function** — when switching away from upload tab or after successful save:
-   - Clear `uploadEditBillId`
-   - Clear all OCR highlights from upload form
-   - Reset button text back to "Upload"
-
-## Files to Modify
-
-| File | Changes |
-|------|---------|
-| `public/js/bills.js` | CR-5: modify `showAnalyseButton()`, `triggerBillAnalysis()`, `triggerBillAnalysisFromList()`, bill list template; CR-4: add `triggerUploadAnalysis()`, `applyUploadOcrHighlights()`, upload field verification tracking |
-| `public/js/core.js` | CR-4: modify upload form submit handler to support edit mode, show/hide analyse button on photo changes |
-| `public/index.html` | CR-4: add analyse button + status area in upload form |
-
-No new npm packages. No backend changes needed.
+## Design Specifications
+- **Background:** `#020617` (slate-950) with radial gradients: indigo at top-left, emerald at bottom-right
+- **Left text:** White (`text-white`) for headings, `text-slate-300` for body, `text-slate-500` for footer
+- **Feature icons:** `text-indigo-400` with `bg-white/10` icon containers
+- **Right card:** `bg-white/95 backdrop-blur-sm rounded-2xl` with `--vb-shadow-xl`
+- **Responsive breakpoint:** `lg:` (1024px) for split → stacked transition
+- **Font:** Inter (already loaded)
 
 ## Checklist
-
-### CR-5
-- [ ] Analyse button shows "Re-analyse" when bill has existing OCR results
-- [ ] Clicking "Re-analyse" shows confirmation dialog
-- [ ] Cancelling confirmation does nothing
-- [ ] Confirming triggers re-analysis normally
-- [ ] List-level button also shows "Re-analyse" and has confirmation
-- [ ] First-time "Analyse" has no confirmation (works as before)
-
-### CR-4
-- [ ] "Analyse" button appears in upload form when photos attached + OCR enabled
-- [ ] Button hidden when no photos
-- [ ] Clicking "Analyse" saves draft bill and triggers OCR
-- [ ] Loading spinner shown during save + analysis
-- [ ] On OCR success: form fields pre-filled with extracted values
-- [ ] OCR-filled fields show amber highlight + "AI - please verify" + verify button
-- [ ] Verify button clears highlight client-side
-- [ ] Submit button changes to "Save Changes" after analysis
-- [ ] Submitting after analysis calls PUT (not POST /upload)
-- [ ] Unverified fields tracked in ocr_fields on save
-- [ ] OCR failure shows inline error in upload form
-- [ ] Normal upload (without analyse) works unchanged
-- [ ] Form resets cleanly after successful save
-- [ ] All dynamic content uses escapeHtml() for XSS safety
+- [ ] `app/page.tsx` rewritten as combined landing+login
+- [ ] Left column: branding, tagline, feature highlights
+- [ ] Right column: LoginForm embedded in frosted card
+- [ ] Responsive: stacked on mobile, split on desktop
+- [ ] `app/(public)/login/page.tsx` redirects to `/`
+- [ ] Middleware updated: `/` added to public routes
+- [ ] Middleware updated: unauthenticated redirect goes to `/` instead of `/login`
+- [ ] Authenticated users visiting `/` redirected to `/dashboard`
+- [ ] Dark cinematic background preserved
+- [ ] No changes to LoginForm component itself

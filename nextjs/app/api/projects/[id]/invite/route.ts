@@ -1,0 +1,128 @@
+import { NextResponse } from 'next/server';
+import { PrismaClient } from '@prisma/client';
+import { z } from 'zod';
+import crypto from 'crypto';
+import { auth } from '@/auth';
+import { sendInvitationEmail } from '@/lib/email';
+
+const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
+const prisma = globalForPrisma.prisma ?? new PrismaClient();
+if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+
+const schema = z.object({
+  email: z.string().email(),
+  message: z.string().max(500).optional(),
+});
+
+export async function POST(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await auth();
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const { id: projectId } = await params;
+
+  // Verify the inviter is a member of this project (or superadmin)
+  const isSuperAdmin = session.user.role === 'superadmin';
+  let inviterRole: string | null = null;
+
+  if (isSuperAdmin) {
+    inviterRole = 'superadmin';
+  } else {
+    const membership = await prisma.projectMember.findUnique({
+      where: {
+        projectId_userEmail: {
+          projectId,
+          userEmail: session.user.email,
+        },
+      },
+    });
+
+    if (!membership) {
+      return NextResponse.json({ error: 'Not a member of this project' }, { status: 403 });
+    }
+    inviterRole = membership.role;
+  }
+
+  // Only admins, owners, and superadmins can auto-add members to the project
+  const canAutoAdd = inviterRole === 'admin' || inviterRole === 'owner' || inviterRole === 'superadmin';
+
+  const body = await req.json().catch(() => null);
+  const parsed = schema.safeParse(body);
+
+  if (!parsed.success) {
+    const firstError = parsed.error.issues[0]?.message || 'Invalid input.';
+    return NextResponse.json({ error: firstError }, { status: 400 });
+  }
+
+  const { email, message } = parsed.data;
+
+  // Don't allow self-invite
+  if (email.toLowerCase() === session.user.email.toLowerCase()) {
+    return NextResponse.json({ error: 'You cannot invite yourself.' }, { status: 400 });
+  }
+
+  // Check if already a member
+  const existingMember = await prisma.projectMember.findUnique({
+    where: {
+      projectId_userEmail: {
+        projectId,
+        userEmail: email,
+      },
+    },
+  });
+
+  if (existingMember) {
+    return NextResponse.json({ error: 'This user is already a member of the project.' }, { status: 400 });
+  }
+
+  // Get project name for the email
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { name: true },
+  });
+
+  if (!project) {
+    return NextResponse.json({ error: 'Project not found.' }, { status: 404 });
+  }
+
+  // Delete any existing invitation tokens for this email + project
+  await prisma.invitationToken.deleteMany({
+    where: { email, projectId },
+  });
+
+  // Generate token
+  const rawToken = crypto.randomBytes(32).toString('hex');
+  const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+
+  // Store with 7-day expiry
+  await prisma.invitationToken.create({
+    data: {
+      email,
+      tokenHash,
+      projectId,
+      role: 'user',
+      message: message || null,
+      invitedBy: session.user.email,
+      autoAdd: canAutoAdd,
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    },
+  });
+
+  // Build invite URL
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const inviteUrl = `${appUrl}/accept-invite?token=${rawToken}`;
+
+  // Send email
+  try {
+    await sendInvitationEmail(email, inviteUrl, session.user.email, project.name, message);
+  } catch (err) {
+    console.error('[Invite] Failed to send invitation email:', err);
+    // Token is created — the invite still works if user has the link
+  }
+
+  return NextResponse.json({ message: `Invitation sent to ${email}.` });
+}

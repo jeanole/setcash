@@ -1,0 +1,26 @@
+import { PrismaClient } from '@prisma/client';
+import { validateEnv } from './env';
+
+// Validate required environment variables before Prisma attempts to connect
+validateEnv();
+
+// Prevent multiple instances of Prisma Client in development (hot-reload safe)
+const globalForPrisma = globalThis as unknown as {
+  prisma: PrismaClient | undefined;
+};
+
+export const db =
+  globalForPrisma.prisma ??
+  new PrismaClient({
+    log:
+      process.env.NODE_ENV === 'development'
+        ? ['query', 'error', 'warn']
+        : ['error'],
+  });
+
+// Export prisma as alias for db (for compatibility with existing code)
+export const prisma = db;
+
+if (process.env.NODE_ENV !== 'production') {
+  globalForPrisma.prisma = db;
+}
