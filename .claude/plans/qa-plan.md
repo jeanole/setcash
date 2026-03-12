@@ -1,59 +1,95 @@
-# QA Test Plan -- PROJ-1: OCR / AI Bill Analysis (Round 7)
+# QA Test Plan — PROJ-14: Spending Overview
 
 ## Feature
-PROJ-1 -- `features/PROJ-1-ocr-bill-analysis.md`
+PROJ-14: Spending Overview
+Spec: `features/PROJ-14-spending-overview.md`
 
 ## Context Summary
-- Feature deployed as v1.9.0-PROJ-1 after 6 prior QA rounds
-- Rounds 1-5 found and fixed many bugs. Round 6 found 2 new bugs.
-- Round 7 is a focused fix-verification round for 2 bugs from Round 6:
-  - NEW-BUG-R6-1 (Medium): netto_amount not recalculated during re-analysis
-  - NEW-BUG-R6-2 (Low): session cookie missing secure flag and sameSite
-- All other items passed in Round 6
+- Feature status: "In Progress" per INDEX.md
+- Dependencies: PROJ-5 (auth), PROJ-6 (Prisma/PG), PROJ-7 (Bills), PROJ-9 (Categories/Motives)
+- Expected location: `nextjs/app/(protected)/spending/page.tsx`
+- Expected components: SpendingTable, SpendingProgress, SpendingTabs
+- Expected sidebar nav entry: "Spending" between existing items
 
-## Focus Areas
-1. Verify NEW-BUG-R6-1 fix: netto_amount recalculation guard now includes `isReanalysis`
-2. Verify NEW-BUG-R6-2 fix: session cookie has `secure` and `sameSite` attributes
-3. Regression spot-check: first-time analysis still preserves user-entered amounts
-4. Check for any new issues introduced by the fixes
+## User Guidance
+- Code-only review — no running server
+- Test all acceptance criteria by verifying source files exist and are correct
+- Full security audit of data scoping and access control
 
----
+## Acceptance Criteria to Test
 
-## Test Matrix
+### Page Structure
+- AC-1: Page route exists at `/app/(protected)/spending/page.tsx`
+- AC-2: Tab navigation with "By Motive" (default) and "By Category"
+- AC-3: Tab switching is client-side (no page reload)
 
-### Phase 1: NEW-BUG-R6-1 Fix Verification (netto_amount recalculation)
+### By Motive Tab
+- AC-4: Table columns: Motive Name, Budget, Spent, Remaining, % Used
+- AC-5: Spending calculated via junction table (bill_motives) with percentage allocation
+- AC-6: Only confirmed bills included (status IS NULL OR status = 'confirmed')
+- AC-7: Unallocated bills row shown when bills exist without motive allocations
 
-| Test | Description | Files |
-|------|-------------|-------|
-| R6-1-FIX-1 | Guard condition now includes `isReanalysis` | `routes/ocr.js` line 450 |
-| R6-1-FIX-2 | Re-analysis scenario: brutto fields + netto recalculated | `routes/ocr.js` lines 450-460 |
-| R6-1-FIX-3 | Regression: first-time analysis with zero amount still recalculates | `routes/ocr.js` lines 450-460 |
-| R6-1-FIX-4 | Regression: first-time analysis with user-entered amount preserves it | `routes/ocr.js` lines 424, 450 |
-| R6-1-FIX-5 | Check for double-push of "amount" to writtenFields | `routes/ocr.js` lines 424, 459 |
+### By Category Tab
+- AC-8: Table columns: Category Name, Budget, Spent, Remaining, % Used
+- AC-9: Spending calculated via junction table (bill_categories) with percentage allocation
+- AC-10: Unallocated bills row shown when bills exist without category allocations
 
-### Phase 2: NEW-BUG-R6-2 Fix Verification (session cookie)
+### Color Coding
+- AC-11: Green < 80%, Orange 80-99.9%, Red >= 100%
+- AC-12: Color indicator as dot or pill next to percentage
 
-| Test | Description | Files |
-|------|-------------|-------|
-| R6-2-FIX-1 | `secure` set to `process.env.NODE_ENV === "production"` | `server.js` line 109 |
-| R6-2-FIX-2 | `sameSite` set to `"lax"` | `server.js` line 110 |
-| R6-2-FIX-3 | Regression: httpOnly still true | `server.js` line 107 |
-| R6-2-FIX-4 | Regression: maxAge still set | `server.js` line 108 |
+### Grand Totals Row
+- AC-13: Fixed bottom row with "TOTAL" in bold
+- AC-14: Sum of all budgets, spent, remaining, % used
+- AC-15: Top border/divider and gray background
 
-### Phase 3: Broader Regression Spot-Check
+### Calculation Rules
+- AC-16: Uses netto_amount only
+- AC-17: Excludes draft bills
+- AC-18: Project-scoped via session currentProjectId
 
-| Test | Description | Files |
-|------|-------------|-------|
-| REG-1 | fieldChecks still guards first-time writes properly | `routes/ocr.js` lines 416-425 |
-| REG-2 | isReanalysis detection unchanged | `routes/ocr.js` line 323 |
-| REG-3 | SESSION_SECRET enforcement unchanged | `server.js` lines 42-53 |
-| REG-4 | Security headers unchanged | `server.js` lines 81-88 |
+### Data Display Format
+- AC-19: German locale currency (EUR X.XXX,XX)
+- AC-20: Percentage with 1 decimal place
+- AC-21: Negative numbers with minus sign
 
----
+### UI States
+- AC-22: Loading skeleton with 5 rows
+- AC-23: Empty state "No spending recorded yet"
+- AC-24: Empty state "No budget items configured" with Settings link
+- AC-25: Error state with retry button
 
-## Bug Report Instructions
-- APPEND results as "## QA Test Results (Round 7)" to `features/PROJ-1-ocr-bill-analysis.md`
-- Use template from `.claude/skills/qa/test-template.md`
-- Tag every bug with [Frontend] or [Backend]
-- NEVER fix bugs -- only find, document, and prioritize
-- Commit with: `test(PROJ-1): QA Round 7 -- R6 bug fix verification`
+### Access Control
+- AC-26: Read-only for all users
+- AC-27: All authenticated project members can view
+- AC-28: Data scoped to current project
+
+### Navigation
+- AC-29: Sidebar includes "Spending" navigation entry
+
+## Edge Cases to Test
+- EC-1: No bills in project
+- EC-2: All bills are drafts
+- EC-3: Budget = 0 with spending > 0
+- EC-4: No motives/categories configured
+- EC-5: Very large numbers (> 6 digits)
+- EC-6: Deleted motive/category with historic bills
+- EC-7: Bills without any allocations
+- EC-8: Partial allocations (< 100%)
+- EC-9: Bill with netto_amount = NULL or 0
+- EC-10: Division by zero in % Used
+- EC-11: Negative remaining budget display
+- EC-12: Project switch while viewing
+
+## Security Audit Scope
+- SEC-1: Authentication required on spending page/API
+- SEC-2: Project isolation — data scoped to currentProjectId
+- SEC-3: No mutation endpoints exposed (read-only)
+- SEC-4: Input validation on any query params
+
+## Regression Test Scope
+- REG-1: Sidebar navigation still works for all other pages
+- REG-2: Budget matrix page not affected
+
+## Commit Message
+test(PROJ-14): QA Round 1 results
