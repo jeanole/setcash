@@ -101,6 +101,13 @@ jobs:
             ### All other @claude comments
             Follow the comment instructions, guided by the project rules in `.claude/rules/`.
 
+            ## Pull Requests
+            After implementing changes (code fixes, new features, bug fixes), ALWAYS create
+            a pull request targeting the `main` branch using `gh pr create`.
+            - Use a clear, concise PR title (under 70 characters)
+            - Include a summary of changes and link to the issue (e.g. "Fixes #11")
+            - Post a comment on the issue with the PR link
+
             ## Always
             - Read `features/INDEX.md` before creating or updating any feature/bug/CR document.
             - Use commit format: `type(ID): description` (e.g. `bug(BUG-9): ...`).
