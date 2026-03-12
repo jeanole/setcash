@@ -99,7 +99,10 @@ interface LoginFormProps {
 }
 
 export default function LoginForm({ allowSignup = true }: LoginFormProps) {
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+  const searchParams = useSearchParams();
+  const [mode, setMode] = useState<'signin' | 'signup'>(
+    allowSignup && searchParams.get('tab') === 'signup' ? 'signup' : 'signin'
+  );
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');

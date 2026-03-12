@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { auth } from '@/auth';
 import { redirect } from 'next/navigation';
 import LoginForm from '@/components/auth/LoginForm';
@@ -163,7 +164,9 @@ export default async function HomePage() {
           style={{ animation: 'landing-rise 600ms ease-out both', animationDelay: '250ms' }}
         >
           <div className="landing-login-card">
-            <LoginForm allowSignup={process.env.EXTERNAL_REGISTRATION !== 'false'} />
+            <Suspense>
+              <LoginForm allowSignup={process.env.EXTERNAL_REGISTRATION !== 'false'} />
+            </Suspense>
           </div>
           <p className="landing-login-aside">
             &ldquo;I wish I&rsquo;d started tracking expenses sooner&rdquo;

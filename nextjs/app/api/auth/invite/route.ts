@@ -29,7 +29,7 @@ export async function POST(req: Request) {
   }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-  const signupUrl = appUrl;
+  const signupUrl = `${appUrl}/?tab=signup`;
 
   try {
     await sendPlatformInviteEmail(email, signupUrl, session.user.email, message);
