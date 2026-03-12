@@ -225,6 +225,9 @@ export default function Sidebar({ currentUser, isMobileOpen, onClose }: SidebarP
 
   const isSuperAdmin = currentUser?.role === 'superadmin';
   const currentProjectId = session?.user?.currentProjectId;
+  const currentProjectRole = session?.user?.currentProjectRole;
+  const canInviteToProject = currentProjectRole === 'admin' || currentProjectRole === 'owner' || isSuperAdmin;
+  const inviteMode = canInviteToProject ? 'project' as const : 'platform' as const;
 
   const isActive = (href: string) => {
     if (href === '/bills') {
@@ -274,15 +277,13 @@ export default function Sidebar({ currentUser, isMobileOpen, onClose }: SidebarP
           />
         </nav>
         <div className="px-4 py-3 border-t border-slate-200">
-          {currentProjectId && (
-            <button
-              onClick={() => setIsInviteModalOpen(true)}
-              className="w-full flex items-center gap-2 px-3 py-2 mb-2 text-xs font-medium text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-            >
-              <UserPlus className="w-3.5 h-3.5" />
-              Invite to project
-            </button>
-          )}
+          <button
+            onClick={() => setIsInviteModalOpen(true)}
+            className="w-full flex items-center gap-2 px-3 py-2 mb-2 text-xs font-medium text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+          >
+            <UserPlus className="w-3.5 h-3.5" />
+            {canInviteToProject ? 'Invite to project' : 'Invite to vBudget'}
+          </button>
           <p className="text-xs text-slate-400 px-3">v2.0.0-next</p>
         </div>
       </aside>
@@ -321,15 +322,13 @@ export default function Sidebar({ currentUser, isMobileOpen, onClose }: SidebarP
               />
             </nav>
             <div className="px-4 py-3 border-t border-slate-200">
-              {currentProjectId && (
-                <button
-                  onClick={() => { setIsInviteModalOpen(true); onClose?.(); }}
-                  className="w-full flex items-center gap-2 px-3 py-2 mb-2 text-xs font-medium text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                >
-                  <UserPlus className="w-3.5 h-3.5" />
-                  Invite to project
-                </button>
-              )}
+              <button
+                onClick={() => { setIsInviteModalOpen(true); onClose?.(); }}
+                className="w-full flex items-center gap-2 px-3 py-2 mb-2 text-xs font-medium text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+                {canInviteToProject ? 'Invite to project' : 'Invite to vBudget'}
+              </button>
               <p className="text-xs text-slate-400 px-3">v2.0.0-next</p>
             </div>
           </aside>
@@ -342,13 +341,12 @@ export default function Sidebar({ currentUser, isMobileOpen, onClose }: SidebarP
         currentUserEmail={currentUser?.email || ''}
       />
 
-      {currentProjectId && (
-        <InviteMemberModal
-          isOpen={isInviteModalOpen}
-          projectId={currentProjectId}
-          onClose={() => setIsInviteModalOpen(false)}
-        />
-      )}
+      <InviteMemberModal
+        isOpen={isInviteModalOpen}
+        projectId={currentProjectId || undefined}
+        mode={inviteMode}
+        onClose={() => setIsInviteModalOpen(false)}
+      />
     </>
   );
 }

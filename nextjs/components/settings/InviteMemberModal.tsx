@@ -6,7 +6,8 @@ import { toast } from 'sonner';
 
 interface InviteMemberModalProps {
   isOpen: boolean;
-  projectId: string;
+  projectId?: string;
+  mode?: 'project' | 'platform';
   onClose: () => void;
   onInvited?: () => void;
 }
@@ -14,15 +15,20 @@ interface InviteMemberModalProps {
 export default function InviteMemberModal({
   isOpen,
   projectId,
+  mode = 'project',
   onClose,
   onInvited,
 }: InviteMemberModalProps) {
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState(
-    'Hey, join my project so we can ease the bureaucracy!'
+    mode === 'project'
+      ? 'Hey, join my project so we can ease the bureaucracy!'
+      : 'Hey, check out vBudget for tracking expenses!'
   );
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const isPlatform = mode === 'platform';
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -43,7 +49,11 @@ export default function InviteMemberModal({
       setIsLoading(true);
 
       try {
-        const res = await fetch(`/api/projects/${projectId}/invite`, {
+        const url = isPlatform
+          ? '/api/auth/invite'
+          : `/api/projects/${projectId}/invite`;
+
+        const res = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -61,7 +71,11 @@ export default function InviteMemberModal({
 
         toast.success(`Invitation sent to ${email.trim()}`);
         setEmail('');
-        setMessage('Hey, join my project so we can ease the bureaucracy!');
+        setMessage(
+          isPlatform
+            ? 'Hey, check out vBudget for tracking expenses!'
+            : 'Hey, join my project so we can ease the bureaucracy!'
+        );
         onInvited?.();
         onClose();
       } catch {
@@ -70,15 +84,19 @@ export default function InviteMemberModal({
         setIsLoading(false);
       }
     },
-    [email, message, projectId, onClose, onInvited]
+    [email, message, projectId, isPlatform, onClose, onInvited]
   );
 
   const handleClose = useCallback(() => {
     setEmail('');
-    setMessage('Hey, join my project so we can ease the bureaucracy!');
+    setMessage(
+      isPlatform
+        ? 'Hey, check out vBudget for tracking expenses!'
+        : 'Hey, join my project so we can ease the bureaucracy!'
+    );
     setError(null);
     onClose();
-  }, [onClose]);
+  }, [isPlatform, onClose]);
 
   if (!isOpen) return null;
 
@@ -86,7 +104,9 @@ export default function InviteMemberModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
       <div className="w-full max-w-md bg-white rounded-lg shadow-xl">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
-          <h2 className="text-lg font-semibold text-slate-900">Invite to Project</h2>
+          <h2 className="text-lg font-semibold text-slate-900">
+            {isPlatform ? 'Invite to vBudget' : 'Invite to Project'}
+          </h2>
           <button
             onClick={handleClose}
             className="p-2 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100"
@@ -118,7 +138,9 @@ export default function InviteMemberModal({
               className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#6366f1] focus:border-[#6366f1]"
             />
             <p className="mt-1 text-xs text-slate-500">
-              They&apos;ll receive an email invitation to join the project
+              {isPlatform
+                ? "They\u2019ll receive an email invitation to create a vBudget account"
+                : "They\u2019ll receive an email invitation to join the project"}
             </p>
           </div>
 
