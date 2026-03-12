@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from 'react';
 import { signIn } from 'next-auth/react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
 // ---------------------------------------------------------------------------

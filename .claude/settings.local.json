@@ -69,7 +69,8 @@
       "Bash(npx prisma:*)",
       "Bash(npx tsc:*)",
       "Bash(cd /mnt/c/Users/jensmoeller/code/vbudget/nextjs && npx next build 2>&1 | tail -30)",
-      "Bash(npx next:*)"
+      "Bash(npx next:*)",
+      "Bash(wc -l /mnt/c/Users/jensmoeller/code/vbudget/public/*.html /mnt/c/Users/jensmoeller/code/vbudget/public/style.css 2>/dev/null)"
     ]
   },
   "remote": {

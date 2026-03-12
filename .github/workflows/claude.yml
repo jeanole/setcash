@@ -68,6 +68,27 @@ jobs:
             Execute the `report` skill using [description] as the input.
             Commit the created files, then post a comment with the outcome.
 
+            ## Auto-pipeline for minor issues
+            After the report skill finishes (whether triggered by a new issue or by
+            `@claude /report`), check whether the pipeline should auto-run:
+
+            **Conditions — ALL must be true:**
+            1. The report created a BUG-N or CR-N (NOT a new PROJ-X feature spec —
+               those need architecture first).
+            2. The item is linked to a specific PROJ-N (not "Cross-feature" or "Unknown").
+            3. You judge it as minor enough to auto-fix (e.g. typo, missing CSS class,
+               small validation bug, copy change). Use severity, scope, and complexity
+               to decide.
+
+            **If all conditions met:**
+            - Post a comment: "This looks minor — auto-running `/pipeline PROJ-N` in yolo mode."
+            - Execute the pipeline skill for the parent PROJ-N with `--yolo`
+              (skips Gate 1 auto-fix approval, still requires Gate 2 deploy approval).
+
+            **If NOT minor or no PROJ-N linked:**
+            - Keep the standard handoff message (e.g. "Next step: Run `/pipeline PROJ-N`
+              to fix and deploy."). Do not auto-run the pipeline.
+
             ### Comment: @claude /pipeline PROJ-N
             Execute the `pipeline` skill for PROJ-N (read its SKILL.md and follow every step).
             CI-specific constraint: you cannot call AskUserQuestion interactively.
