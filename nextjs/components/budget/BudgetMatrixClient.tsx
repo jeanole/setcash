@@ -345,38 +345,8 @@ export default function BudgetMatrixClient({
 
   return (
     <div className="space-y-4">
-      {/* Header: Brutto/Netto toggle (always) + Save button (admin only) */}
-      <div className="flex items-center justify-between gap-4">
-        <div
-          className="flex items-center rounded-lg border border-zinc-200 overflow-hidden"
-          role="group"
-          aria-label="Amount display mode"
-        >
-          <button
-            type="button"
-            onClick={() => setAmountMode('brutto')}
-            className={`px-3 py-1.5 text-xs font-medium transition-colors ${
-              amountMode === 'brutto'
-                ? 'bg-[#6366f1] text-white'
-                : 'bg-white text-zinc-500 hover:bg-zinc-50 hover:text-zinc-700'
-            }`}
-            aria-pressed={amountMode === 'brutto'}
-          >
-            Brutto
-          </button>
-          <button
-            type="button"
-            onClick={() => setAmountMode('netto')}
-            className={`px-3 py-1.5 text-xs font-medium border-l border-zinc-200 transition-colors ${
-              amountMode === 'netto'
-                ? 'bg-[#6366f1] text-white'
-                : 'bg-white text-zinc-500 hover:bg-zinc-50 hover:text-zinc-700'
-            }`}
-            aria-pressed={amountMode === 'netto'}
-          >
-            Netto
-          </button>
-        </div>
+      {/* Header: Save button (admin only) + Brutto/Netto toggle (always, right-aligned) */}
+      <div className="flex items-center gap-4">
         {isAdmin && (
           <button
             onClick={handleSave}
@@ -418,7 +388,61 @@ export default function BudgetMatrixClient({
             )}
           </button>
         )}
+        <div
+          className="ml-auto flex items-center rounded-lg border border-zinc-200 overflow-hidden"
+          role="group"
+          aria-label="Amount display mode"
+        >
+          <button
+            type="button"
+            onClick={() => setAmountMode('brutto')}
+            className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+              amountMode === 'brutto'
+                ? 'bg-[#6366f1] text-white'
+                : 'bg-white text-zinc-500 hover:bg-zinc-50 hover:text-zinc-700'
+            }`}
+            aria-pressed={amountMode === 'brutto'}
+          >
+            Brutto
+          </button>
+          <button
+            type="button"
+            onClick={() => setAmountMode('netto')}
+            className={`px-3 py-1.5 text-xs font-medium border-l border-zinc-200 transition-colors ${
+              amountMode === 'netto'
+                ? 'bg-[#6366f1] text-white'
+                : 'bg-white text-zinc-500 hover:bg-zinc-50 hover:text-zinc-700'
+            }`}
+            aria-pressed={amountMode === 'netto'}
+          >
+            Netto
+          </button>
+        </div>
       </div>
+
+      {/* Matrix table */}
+      <BudgetMatrixTable
+        motives={motives}
+        categories={categories}
+        matrix={matrix}
+        motiveSpending={motiveSpending}
+        categorySpending={categorySpending}
+        cellSpending={cellSpending}
+        isAdmin={isAdmin}
+        editingCell={editingCell}
+        modifiedCells={modifiedCells}
+        onEditStart={handleEditStart}
+        onEditSave={handleEditSave}
+        onEditCancel={handleEditCancel}
+        projectId={projectId}
+        isMutating={isMutating}
+        onAddMotive={handleAddMotive}
+        onRenameMotive={handleRenameMotive}
+        onDeleteMotive={handleDeleteMotive}
+        onAddCategory={handleAddCategory}
+        onRenameCategory={handleRenameCategory}
+        onDeleteCategory={handleDeleteCategory}
+      />
 
       {/* Legend */}
       <div className="flex flex-wrap gap-4 text-sm">
@@ -445,30 +469,6 @@ export default function BudgetMatrixClient({
           </div>
         )}
       </div>
-
-      {/* Matrix table */}
-      <BudgetMatrixTable
-        motives={motives}
-        categories={categories}
-        matrix={matrix}
-        motiveSpending={motiveSpending}
-        categorySpending={categorySpending}
-        cellSpending={cellSpending}
-        isAdmin={isAdmin}
-        editingCell={editingCell}
-        modifiedCells={modifiedCells}
-        onEditStart={handleEditStart}
-        onEditSave={handleEditSave}
-        onEditCancel={handleEditCancel}
-        projectId={projectId}
-        isMutating={isMutating}
-        onAddMotive={handleAddMotive}
-        onRenameMotive={handleRenameMotive}
-        onDeleteMotive={handleDeleteMotive}
-        onAddCategory={handleAddCategory}
-        onRenameCategory={handleRenameCategory}
-        onDeleteCategory={handleDeleteCategory}
-      />
 
       {/* Delete confirmation dialog */}
       <ConfirmationDialog
