@@ -39,6 +39,57 @@ Users can click their avatar/logo next to the Sign Out button in the header to o
 
 ---
 
+## Tech Design (Solution Architect)
+
+### Component Structure
+
+```
+Header.tsx (modified)
+└── Avatar Button (clickable — opens ProfilePanel)
+
+ProfilePanel (new modal component)
+├── Profile Form
+│   ├── Username field
+│   ├── First Name field
+│   ├── Last Name field
+│   └── Mobile field (optional)
+├── Save Button → PATCH /api/users/me
+├── Feedback Banner (success / error)
+└── Reset Password Button → POST /api/auth/forgot-password
+```
+
+### Data Model Changes
+
+New nullable columns added to the `User` table via Prisma migration:
+
+| Field | Type | Rules |
+|---|---|---|
+| `username` | String? | Unique across all users (case-insensitive) |
+| `firstName` | String? | Optional |
+| `lastName` | String? | Optional |
+| `mobile` | String? | Optional, no uniqueness constraint |
+
+### API Surface
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/api/users/me` | GET | Returns logged-in user's profile fields |
+| `/api/users/me` | PATCH | Updates username, firstName, lastName, mobile |
+| `/api/auth/forgot-password` | POST | Sends password reset email (reuse existing flow) |
+
+### Tech Decisions
+
+- **Modal pattern** — consistent with BugReportModal and other modals in the app
+- **New `/api/users/me` route** — keeps self-service separate from superadmin user management routes
+- **Additive Prisma migration** — all new columns are nullable, zero risk to existing data
+- **Password reset reuses existing token flow** — no duplicate logic
+
+### Dependencies
+
+No new packages required.
+
+---
+
 ## Change Requests
 
 ### CR-14: Add User Profile Edit Panel
