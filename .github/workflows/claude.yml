@@ -36,6 +36,7 @@ jobs:
           node-version: '20'
 
       - name: Install dependencies
+        working-directory: nextjs
         run: npm install
 
       - name: Run Claude Code
