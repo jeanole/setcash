@@ -5,6 +5,10 @@ on:
     branches:
       - test_production
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
