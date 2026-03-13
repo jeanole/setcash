@@ -1,6 +1,6 @@
 # PROJ-10: Members, Projects & Settings
 
-## Status: Complete
+## Status: Change Requested
 **Created:** 2026-03-01
 **Last Updated:** 2026-03-04
 
@@ -862,6 +862,86 @@ The spec already uses URL-based tabs (`/settings`, `/settings/members`, etc.) wh
 | ID | Severity | Title | Status |
 |----|----------|-------|--------|
 | [BUG-13](BUG-13-project-switching-not-updating-session.md) | Critical | Project Switching Does Not Update Session | Resolved |
+
+## Change Requests
+
+### CR-13: Require Invite Token for All Signups (No Open Registration)
+**Requested:** 2026-03-13 | **Priority:** Medium | **Status:** Pending Review
+
+**Current Behavior:** When a user is invited, they receive an email with a signup link. However, the signup route is accessible without an invite token, meaning external users could potentially register without being invited. Additionally, invites that are not tied to a specific project do not generate an invite token.
+
+**Desired Behavior:** All signup links must always carry an invite token — whether the invite is for a specific project or a standalone system invite. The `/signup` route should reject any request that does not include a valid invite token. There should be no open registration for external people; every new account must originate from an invite.
+
+**Rationale:** Signup does not exist as a self-service feature for external users. The system is invite-only. Without enforcing invite tokens on all signup paths, unauthorized users could create accounts by navigating directly to the signup URL.
+
+**Proposed Acceptance Criteria:**
+- [ ] Every invite (project-scoped or not) generates a unique, time-limited invite token
+- [ ] The signup link in invite emails always includes the invite token as a query parameter
+- [ ] The `/signup` route validates the invite token before rendering the registration form
+- [ ] Accessing `/signup` without a valid token shows an error or redirects to login
+- [ ] Expired or already-used tokens are rejected with a clear message
+- [ ] Admin/superadmin "create user" flow is unaffected (direct account creation bypasses invite tokens)
+
+**Resolution:** Pending
+
+---
+
+### Design Revision (CR-13): Invite-Token-Gated Signup
+
+**Architect Review:** 2026-03-13
+
+#### What Changes
+
+```
+Current:
+  Platform Invite → email → /?tab=signup (open, no token)
+  POST /api/auth/signup ← anyone can call (env-var gated only)
+
+After CR-13:
+  Platform Invite → generates token → email → /accept-invite?token=...
+  POST /api/auth/signup ← blocked for all external users
+  POST /api/auth/accept-invite ← single entry point for ALL new accounts
+```
+
+```
+Auth Flows (After)
+├── Existing user → /login (credentials or Google)
+├── New user (project invite) → /accept-invite?token=...  [unchanged]
+├── New user (platform invite) → /accept-invite?token=... [new — same flow]
+└── Open signup (/?tab=signup) → hidden/blocked
+```
+
+```
+Accept Invite Page (/accept-invite?token=...)
+├── Token has projectId → create account + add to project (unchanged)
+└── Token has no projectId → create account only (new case)
+    └── Shows: "Account created! Ask an admin to add you to a project."
+```
+
+#### Data Model Change
+
+`InvitationToken.projectId` — **Required → Optional (nullable)**
+
+- `projectId = null`: platform invite (account creation only, no project membership)
+- `projectId = set`: project invite (account creation + membership, unchanged)
+
+No new tables. One nullable column change + migration.
+
+#### Components to Build / Modify
+
+| Component | Change | Skill |
+|-----------|--------|-------|
+| `InvitationToken` Prisma schema | Make `projectId` nullable | Backend |
+| DB migration | Alter column to allow null | Backend |
+| `POST /api/auth/invite` | Generate token, send `/accept-invite?token=...` link | Backend |
+| `POST /api/auth/accept-invite` | Handle `projectId: null` (platform invite path) | Backend |
+| `POST /api/auth/signup` | Block all requests (no open registration) | Backend |
+| NextAuth Google OAuth callback | Block new Google accounts without invite token | Backend |
+| `LoginForm` / landing page | Hide signup tab; remove `/?tab=signup` UI | Frontend |
+| Accept-invite page | Handle platform-only invite (no project context) | Frontend |
+
+#### Dependencies
+No new packages. All infrastructure already exists (token model, email sending, accept-invite flow).
 
 ## Deployment
 _To be added by /deploy_

@@ -2,120 +2,104 @@
 
 ## Project Overview
 
-**vBudget** is a multi-tenant expense tracking and budget management web application. It uses a Node.js + Express backend with vanilla HTML/CSS/JS frontend and a SQLite database.
+**vBudget** is a multi-tenant expense tracking and budget management web application built with Next.js, PostgreSQL, and Prisma.
+
+> **All application code lives in the `nextjs/` subdirectory.** Do not look for or modify code at the repo root — the Express/vanilla JS legacy app has been removed.
 
 ## Tech Stack
 
 - **Runtime:** Node.js (20+ recommended)
-- **Framework:** Express.js
-- **Database:** SQLite via `better-sqlite3`
-- **Frontend:** Vanilla HTML5 / CSS / JavaScript (no framework)
-- **Auth:** Local email/password (bcryptjs) + Google OAuth 2.0 (passport-google-oauth20)
+- **Framework:** Next.js 14 (App Router)
+- **Database:** PostgreSQL via Prisma ORM
+- **Frontend:** React + Tailwind CSS
+- **Auth:** NextAuth.js (email/password + Google OAuth 2.0)
 - **Integrations:** Google Sheets API, Google Drive API, Telegram Bot API
 - **File generation:** PDFKit (PDF), ExcelJS (Excel)
-- **Sessions:** express-session + session-file-store
 
 ## Project Structure
 
 ```
 vbudget/
-├── server.js          # Express bootstrap (~115 lines)
-├── db.js              # SQLite schema, migrations, initUsers()
-├── middleware.js      # Auth/session middleware (ensureAuth, ensureAdmin, etc.)
-├── google.js          # Google Sheets/Drive init
-├── routes/            # Express route modules (one file per domain)
-│   ├── auth.js        # Login, logout, Google OAuth
-│   ├── bills.js       # Bill CRUD + images
-│   ├── budget.js      # Budget matrix
-│   ├── categories.js
-│   ├── exports.js     # PDF, Excel, ZIP, Google Sheets
-│   ├── helpers.js     # Shared utilities (saveAllocations, getSettings)
-│   ├── members.js
-│   ├── motives.js
-│   ├── notifications.js
-│   ├── positions.js
-│   ├── projects.js
-│   ├── reporting.js
-│   ├── settings.js
-│   ├── superadmin.js
-│   ├── telegram.js
-│   └── vgeld.js
-├── public/            # Static frontend files
-│   ├── index.html     # Main user SPA (markup only, ~2150 lines)
-│   ├── style.css      # Shared styles
-│   └── js/            # Frontend JS modules
-│       ├── state.js          # Global state variables
-│       ├── utils.js          # escapeHtml, formatCurrency, etc.
-│       ├── allocation-widget.js
-│       ├── core.js           # init(), switchPane(), loadProjectData()
-│       ├── bills.js
-│       ├── budget.js
-│       ├── sidebar.js
-│       ├── notifications.js
-│       ├── admin.js
-│       ├── superadmin.js
-│       ├── gallery.js
-│       ├── spending.js
-│       ├── vgeld.js
-│       ├── reports.js
-│       └── telegram.js
-├── data/              # Runtime data (gitignored)
-│   ├── vbudget.db     # SQLite database
-│   ├── uploads/       # Uploaded bill images
-│   └── sessions/      # Session files
-├── package.json
-├── Dockerfile
-├── docker-compose.yml
-├── .env.example       # Environment variable template
-└── specification.md   # Living architecture/API documentation
+├── nextjs/                    # ← ALL application code is here
+│   ├── app/                   # Next.js App Router pages and API routes
+│   │   ├── (protected)/       # Authenticated pages (budget, bills, etc.)
+│   │   ├── api/               # API route handlers
+│   │   └── ...
+│   ├── components/            # React components
+│   │   ├── budget/            # Budget matrix components
+│   │   ├── bills/             # Bills components
+│   │   ├── layout/            # AppShell, Header, Sidebar
+│   │   └── ...
+│   ├── lib/                   # Shared utilities and DB client
+│   ├── prisma/                # Prisma schema and migrations
+│   ├── scripts/               # Migration and seed scripts
+│   ├── auth.ts                # NextAuth config
+│   ├── middleware.ts           # Next.js middleware (auth guards)
+│   ├── server.ts              # Custom Express-like server wrapper
+│   ├── Dockerfile
+│   └── package.json
+├── features/                  # Feature specs and bug reports
+├── specification.md           # Living architecture/API documentation
+└── CLAUDE.md                  # This file
 ```
 
 ## Running the Application
 
 ```bash
+cd nextjs
 npm install
-npm start              # Starts server on port 3000
+npm run dev        # Dev server on port 3000
+npm run build && npm start   # Production
 ```
 
 **With Docker:**
 ```bash
-docker-compose up      # Exposed on port 5000 → internal 3000
+cd nextjs
+docker build -t vbudget .
+docker run -p 3000:3000 vbudget
 ```
 
 ## Environment Variables
 
-Copy `.env.example` to `.env` and fill in:
+All env vars go in `nextjs/.env.local`:
 
 | Variable | Description |
 |---|---|
+| `DATABASE_URL` | PostgreSQL connection string |
+| `NEXTAUTH_SECRET` | Secret for NextAuth session signing |
+| `NEXTAUTH_URL` | Full URL of the app (e.g. `http://localhost:3000`) |
 | `GOOGLE_CLIENT_ID` | Google OAuth 2.0 client ID |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth 2.0 client secret |
-| `GOOGLE_CALLBACK_URL` | OAuth callback URL |
 | `TARGET_SHEET_ID` | Google Sheets spreadsheet ID |
 | `GOOGLE_DRIVE_FOLDER_ID` | Google Drive folder ID for uploads |
-| `ADMIN_EMAIL` | Email address of the initial admin user (created on first run) |
-| `ADMIN_PASSWORD` | Password for the initial admin user (created on first run) |
-| `SESSION_SECRET` | Secret key for session signing |
 | `TELEGRAM_BOT_TOKEN` | Telegram bot token (optional) |
+| `OCR_ENCRYPTION_SECRET` | Secret for encrypting OCR API keys |
 
-A `google-credentials.json` service account file is also required in `data/`.
+A `nextjs/data/google-credentials.json` service account file is required for Google integrations.
 
 ## Key Architecture Notes
 
-- **Modular backend:** `server.js` is a thin bootstrap; routes in `routes/`; DB schema/migrations in `db.js`; auth middleware in `middleware.js`
+- **App Router:** Pages in `nextjs/app/(protected)/`; API routes in `nextjs/app/api/`
+- **Auth:** NextAuth.js in `nextjs/auth.ts`; session guards in `nextjs/middleware.ts`
+- **Database:** Prisma client in `nextjs/lib/db.ts`; schema in `nextjs/prisma/schema.prisma`
 - **Multi-tenant:** Projects are isolated; users belong to projects with roles (`user`, `admin`)
 - **Super-admin:** A global super-admin role exists above project admins
 - **Bill tracking:** Users submit expense bills with images; admins approve/process them
 - **Google Sheets sync:** Bills can be exported/synced to Google Sheets
 - **Roles:** `user` → submit bills; `admin` → manage project bills; `superadmin` → manage all projects and users
 
-## Linting & Testing
-
-No linter or test framework is currently configured in this project. Functionality is validated manually via the web UI.
-
 ## Common Development Tasks
 
-- **Add an API route:** Add your Express route to the appropriate file in `routes/` (e.g. `routes/bills.js` for bill-related endpoints)
-- **Modify the database schema:** Edit `db.js` — schema creation and all migrations are at the top of the file
-- **Update the frontend:** Edit `public/index.html` for markup; JS logic lives in `public/js/` modules (e.g. `bills.js`, `budget.js`, `core.js`)
+- **Add an API route:** Create a file under `nextjs/app/api/your-route/route.ts`
+- **Add a page:** Create a folder under `nextjs/app/(protected)/your-page/page.tsx`
+- **Modify the database schema:** Edit `nextjs/prisma/schema.prisma`, then run `npx prisma migrate dev`
+- **Add a component:** Create under `nextjs/components/` in the appropriate subdomain folder
 - **Refer to API docs:** See `specification.md` for the full list of API endpoints and data models
+
+## Linting & Testing
+
+```bash
+cd nextjs
+npm run lint       # ESLint
+npm run test       # Jest (integration tests with real DB)
+```
