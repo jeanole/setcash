@@ -884,5 +884,64 @@ The spec already uses URL-based tabs (`/settings`, `/settings/members`, etc.) wh
 
 **Resolution:** Pending
 
+---
+
+### Design Revision (CR-13): Invite-Token-Gated Signup
+
+**Architect Review:** 2026-03-13
+
+#### What Changes
+
+```
+Current:
+  Platform Invite → email → /?tab=signup (open, no token)
+  POST /api/auth/signup ← anyone can call (env-var gated only)
+
+After CR-13:
+  Platform Invite → generates token → email → /accept-invite?token=...
+  POST /api/auth/signup ← blocked for all external users
+  POST /api/auth/accept-invite ← single entry point for ALL new accounts
+```
+
+```
+Auth Flows (After)
+├── Existing user → /login (credentials or Google)
+├── New user (project invite) → /accept-invite?token=...  [unchanged]
+├── New user (platform invite) → /accept-invite?token=... [new — same flow]
+└── Open signup (/?tab=signup) → hidden/blocked
+```
+
+```
+Accept Invite Page (/accept-invite?token=...)
+├── Token has projectId → create account + add to project (unchanged)
+└── Token has no projectId → create account only (new case)
+    └── Shows: "Account created! Ask an admin to add you to a project."
+```
+
+#### Data Model Change
+
+`InvitationToken.projectId` — **Required → Optional (nullable)**
+
+- `projectId = null`: platform invite (account creation only, no project membership)
+- `projectId = set`: project invite (account creation + membership, unchanged)
+
+No new tables. One nullable column change + migration.
+
+#### Components to Build / Modify
+
+| Component | Change | Skill |
+|-----------|--------|-------|
+| `InvitationToken` Prisma schema | Make `projectId` nullable | Backend |
+| DB migration | Alter column to allow null | Backend |
+| `POST /api/auth/invite` | Generate token, send `/accept-invite?token=...` link | Backend |
+| `POST /api/auth/accept-invite` | Handle `projectId: null` (platform invite path) | Backend |
+| `POST /api/auth/signup` | Block all requests (no open registration) | Backend |
+| NextAuth Google OAuth callback | Block new Google accounts without invite token | Backend |
+| `LoginForm` / landing page | Hide signup tab; remove `/?tab=signup` UI | Frontend |
+| Accept-invite page | Handle platform-only invite (no project context) | Frontend |
+
+#### Dependencies
+No new packages. All infrastructure already exists (token model, email sending, accept-invite flow).
+
 ## Deployment
 _To be added by /deploy_
