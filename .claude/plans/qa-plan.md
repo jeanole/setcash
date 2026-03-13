@@ -1,95 +1,80 @@
-# QA Test Plan — PROJ-14: Spending Overview
+# QA Test Plan — PROJ-20 User Profile Edit Panel
 
 ## Feature
-PROJ-14: Spending Overview
-Spec: `features/PROJ-14-spending-overview.md`
+PROJ-20: User Profile Edit Panel — `features/PROJ-20-user-profile-edit.md`
 
 ## Context Summary
-- Feature status: "In Progress" per INDEX.md
-- Dependencies: PROJ-5 (auth), PROJ-6 (Prisma/PG), PROJ-7 (Bills), PROJ-9 (Categories/Motives)
-- Expected location: `nextjs/app/(protected)/spending/page.tsx`
-- Expected components: SpendingTable, SpendingProgress, SpendingTabs
-- Expected sidebar nav entry: "Spending" between existing items
+- Frontend: ProfileModal.tsx (new), Header.tsx (modified), AppShell.tsx (modified), layout.tsx (modified)
+- Backend: GET/PATCH /api/users/me, PATCH /api/users/me/password, Prisma migration (4 new User columns)
+- No running server — QA is code-level static analysis of all changed files
+- Password change is inline (current + new), not email-based
 
 ## User Guidance
-- Code-only review — no running server
-- Test all acceptance criteria by verifying source files exist and are correct
-- Full security audit of data scoping and access control
+- Full scope: all 7 acceptance criteria, 3 edge cases, full security audit, regression spot-check
+- Code-level review (no live server)
 
 ## Acceptance Criteria to Test
 
-### Page Structure
-- AC-1: Page route exists at `/app/(protected)/spending/page.tsx`
-- AC-2: Tab navigation with "By Motive" (default) and "By Category"
-- AC-3: Tab switching is client-side (no page reload)
+### AC-1: Avatar opens profile panel
+- Expected: clicking avatar button in Header opens ProfileModal
+- How: verify Header renders a `<button>` with onClick, AppShell wires `isProfileOpen` state, ProfileModal receives `isOpen` prop
 
-### By Motive Tab
-- AC-4: Table columns: Motive Name, Budget, Spent, Remaining, % Used
-- AC-5: Spending calculated via junction table (bill_motives) with percentage allocation
-- AC-6: Only confirmed bills included (status IS NULL OR status = 'confirmed')
-- AC-7: Unallocated bills row shown when bills exist without motive allocations
+### AC-2: Panel displays and allows editing all 4 fields
+- Expected: username, firstName, lastName, mobile all present as editable inputs
+- How: read ProfileModal.tsx, verify all 4 fields rendered with correct input types
 
-### By Category Tab
-- AC-8: Table columns: Category Name, Budget, Spent, Remaining, % Used
-- AC-9: Spending calculated via junction table (bill_categories) with percentage allocation
-- AC-10: Unallocated bills row shown when bills exist without category allocations
+### AC-3: Save persists to database
+- Expected: PATCH /api/users/me saves to DB via Prisma update
+- How: read api/users/me/route.ts, verify prisma.user.update is called with validated data
 
-### Color Coding
-- AC-11: Green < 80%, Orange 80-99.9%, Red >= 100%
-- AC-12: Color indicator as dot or pill next to percentage
+### AC-4: Password change available
+- Expected: separate password section with current + new + confirm fields
+- How: verify ProfileModal has password section, PATCH /api/users/me/password exists and verifies current password
 
-### Grand Totals Row
-- AC-13: Fixed bottom row with "TOTAL" in bold
-- AC-14: Sum of all budgets, spent, remaining, % used
-- AC-15: Top border/divider and gray background
+### AC-5: Success/error feedback shown
+- Expected: green success banner and rose error banner per section, success auto-dismisses
+- How: verify ProfileModal state management for error and success, check auto-dismiss timer
 
-### Calculation Rules
-- AC-16: Uses netto_amount only
-- AC-17: Excludes draft bills
-- AC-18: Project-scoped via session currentProjectId
+### AC-6: Panel is responsive
+- Expected: bottom-sheet on mobile, centered modal on sm+
+- How: verify `items-end sm:items-center` classes on modal overlay
 
-### Data Display Format
-- AC-19: German locale currency (EUR X.XXX,XX)
-- AC-20: Percentage with 1 decimal place
-- AC-21: Negative numbers with minus sign
-
-### UI States
-- AC-22: Loading skeleton with 5 rows
-- AC-23: Empty state "No spending recorded yet"
-- AC-24: Empty state "No budget items configured" with Settings link
-- AC-25: Error state with retry button
-
-### Access Control
-- AC-26: Read-only for all users
-- AC-27: All authenticated project members can view
-- AC-28: Data scoped to current project
-
-### Navigation
-- AC-29: Sidebar includes "Spending" navigation entry
+### AC-7: Username reflected in header immediately after save
+- Expected: onProfileUpdated callback updates AppShell state, Header re-renders with new initial
+- How: verify AppShell has onProfileUpdated handler updating local state, Header uses firstName for initials
 
 ## Edge Cases to Test
-- EC-1: No bills in project
-- EC-2: All bills are drafts
-- EC-3: Budget = 0 with spending > 0
-- EC-4: No motives/categories configured
-- EC-5: Very large numbers (> 6 digits)
-- EC-6: Deleted motive/category with historic bills
-- EC-7: Bills without any allocations
-- EC-8: Partial allocations (< 100%)
-- EC-9: Bill with netto_amount = NULL or 0
-- EC-10: Division by zero in % Used
-- EC-11: Negative remaining budget display
-- EC-12: Project switch while viewing
+
+### EC-1: Username uniqueness
+- Expected: PATCH returns 409 when username taken, ProfileModal shows inline error
+- How: verify case-insensitive uniqueness check in API, 409 handling in modal
+
+### EC-2: Mobile field optional
+- Expected: mobile can be null/empty with no validation error
+- How: verify Zod schema uses .nullable().optional() for mobile
+
+### EC-3: Confirm password match
+- Expected: client-side check newPassword === confirmPassword before API call
+- How: verify ProfileModal validates match client-side
 
 ## Security Audit Scope
-- SEC-1: Authentication required on spending page/API
-- SEC-2: Project isolation — data scoped to currentProjectId
-- SEC-3: No mutation endpoints exposed (read-only)
-- SEC-4: Input validation on any query params
 
-## Regression Test Scope
-- REG-1: Sidebar navigation still works for all other pages
-- REG-2: Budget matrix page not affected
+1. Auth bypass — GET and PATCH /api/users/me must 401 without session
+2. User isolation — PATCH must only update session user, no userId in body
+3. Password verification — PATCH /api/users/me/password must verify currentPassword
+4. Input injection — Zod schemas with max lengths on all string inputs
+5. Username self-conflict — uniqueness query must exclude current user (no false 409)
+6. Password strength — min 8 + uppercase + lowercase + digit enforced
+7. Sensitive data — GET /api/users/me must NOT return passwordHash
+8. Email immutability — PATCH must not accept email changes
+
+## Regression Scope
+- Header still renders with null profile fields (fallback to email initial)
+- AppShell BugReportModal unaffected
+- Protected layout still passes email and role to AppShell
+
+## Bug Report Template
+See `.claude/skills/qa/test-template.md`
 
 ## Commit Message
-test(PROJ-14): QA Round 1 results
+test(PROJ-20): Add QA test results for User Profile Edit Panel

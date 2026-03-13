@@ -1,127 +1,114 @@
-# Backend Implementation Plan — CR-12 (Forgot Password / Password Reset)
+# Backend Implementation Plan — PROJ-20 User Profile Edit Panel
 
 ## Feature
-CR-12: Add Forgot Password / Self-Service Password Reset
-Spec: `features/CR-12-forgot-password-reset.md`
-Parent: PROJ-5 (NextAuth.js Authentication)
+PROJ-20: User Profile Edit Panel — `features/PROJ-20-user-profile-edit.md`
 
 ## Context Summary
-- **Auth:** NextAuth v5 with JWT sessions, bcryptjs for password hashing (`auth.ts`)
-- **DB:** PostgreSQL via Prisma ORM (`prisma/schema.prisma`)
-- **Rate limiting:** Upstash Redis with MockRatelimit fallback (`lib/ratelimit.ts`)
-- **Middleware:** Edge middleware protects all non-public routes (`middleware.ts`)
-- **Public routes:** `/`, `/login`, `/api/health`, `/api/auth/*`, `/_next/*`, `/favicon.ico`
-- **Env example:** `.env.test.example` exists (no `.env.local.example`)
-- **Login page:** Root `/` is combined landing+login page; `/login` redirects to `/`
+- All app code in `nextjs/`
+- Auth: NextAuth v5 with JWT sessions, bcryptjs for password hashing
+- DB: PostgreSQL via Prisma ORM; client at `lib/db.ts`
+- Session helper: `lib/auth/session.ts` — `getCurrentUser()` returns `{ id, email, role, currentProjectId }`
+- Admin user routes exist at `app/api/admin/users/` — our new routes are separate self-service routes
+- Password validation pattern: min 8 chars, regex `^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)` (from admin users route)
+- Zod validation pattern used across all API routes
+- User model fields: id, email, passwordHash, emailVerified, isSuperAdmin, isActive, createdAt, defaultProjectId, legacyId
+- No `username`, `firstName`, `lastName`, `mobile` columns exist yet
 
 ## User Decisions
-- Email provider: **Resend** via `resend` npm package + API key
-- Token hash: SHA-256 (simpler than bcrypt for random tokens, equally secure)
-- Token expiry: 1 hour
-- Rate limit: 1 request per email per 5 minutes
-- No user enumeration: always show generic success message
+- Password change is inline (current password + new password), not email-based reset
+- Username must be unique case-insensitively
+- All new fields are optional/nullable
+- No rate limiting needed for profile updates (already behind auth)
 
 ## Open Bug Reports to Address
 None
 
-## Database — New Prisma Model
+## Database — Prisma Schema Change
 
-### `PasswordResetToken`
-| Column | Type | Notes |
-|--------|------|-------|
-| id | String @id @default(uuid()) | Primary key |
-| email | String | User email |
-| tokenHash | String @unique | SHA-256 hash of raw token |
-| expiresAt | DateTime | Token expiry (now + 1 hour) |
-| createdAt | DateTime @default(now()) | Creation timestamp |
+Add 4 nullable columns to the `User` model:
 
-**Indexes:** `@@index([email])`
-**Note:** `tokenHash` has `@unique` which also creates an index.
+| Field | Type | Constraint |
+|-------|------|-----------|
+| `username` | String? | `@unique` (case-insensitive enforced in code) |
+| `firstName` | String? | None |
+| `lastName` | String? | None |
+| `mobile` | String? | None |
+
+Migration: `npx prisma migrate dev --name add_user_profile_fields`
 
 ## API Endpoints
 
-### 1. `POST /api/auth/forgot-password`
-- **Auth:** Public (no session required)
-- **Input (Zod):** `{ email: z.string().email() }`
+### 1. `GET /api/users/me`
+- **Auth:** Authenticated user (use `getCurrentUser()`)
 - **Logic:**
-  1. Rate limit by email (1 per 5 min) — add `forgotPassword` config to `lib/ratelimit.ts`
-  2. Look up user by email
-  3. If user exists AND has a passwordHash (not empty = not Google-only):
-     - Delete any existing tokens for this email
-     - Generate 32-byte random token via `crypto.randomBytes(32)`
-     - SHA-256 hash it, store in `PasswordResetToken` with 1-hour expiry
-     - Send email via Nodemailer with reset link: `${APP_URL}/reset-password?token=${rawToken}`
-  4. Always return 200 `{ message: "If an account exists with that email, a reset link has been sent." }`
-- **Error cases:** Rate limited → 429, Invalid email → 400
+  1. Get session user via `getCurrentUser()`
+  2. If no session → 401
+  3. Fetch user from DB by `session.id`, select: `email, username, firstName, lastName, mobile`
+  4. Return user fields
+- **Response:** `{ email, username, firstName, lastName, mobile }`
+- **Errors:** 401 unauthenticated, 500 internal
 
-### 2. `POST /api/auth/reset-password`
-- **Auth:** Public (no session required)
-- **Input (Zod):** `{ token: z.string().min(1), password: z.string().min(8) }`
+### 2. `PATCH /api/users/me`
+- **Auth:** Authenticated user
+- **Input (Zod):**
+  ```
+  {
+    username: z.string().max(50).nullable().optional(),
+    firstName: z.string().max(100).nullable().optional(),
+    lastName: z.string().max(100).nullable().optional(),
+    mobile: z.string().max(30).nullable().optional()
+  }
+  ```
 - **Logic:**
-  1. SHA-256 hash the incoming raw token
-  2. Look up `PasswordResetToken` by `tokenHash` where `expiresAt > now()`
-  3. If not found → 400 "Invalid or expired reset link"
-  4. Look up user by email from the token record
-  5. Hash new password with bcrypt (12 rounds, matching `auth.ts`)
+  1. Get session user → 401 if missing
+  2. Validate body with Zod → 400 if invalid
+  3. If username provided and non-null: check uniqueness case-insensitively (exclude current user) → 409 if taken
+  4. Update user record with provided fields
+  5. Return updated fields
+- **Response:** `{ email, username, firstName, lastName, mobile }`
+- **Errors:** 401, 400, 409 (username taken), 500
+
+### 3. `PATCH /api/users/me/password`
+- **Auth:** Authenticated user
+- **Input (Zod):**
+  ```
+  {
+    currentPassword: z.string().min(1),
+    newPassword: z.string().min(8).regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
+  }
+  ```
+- **Logic:**
+  1. Get session user → 401 if missing
+  2. Validate body → 400 if invalid
+  3. Fetch user by ID, get `passwordHash`
+  4. Compare `currentPassword` with `passwordHash` via `bcrypt.compare` → 401 if wrong
+  5. Hash `newPassword` with bcrypt (12 rounds)
   6. Update `User.passwordHash`
-  7. Delete ALL tokens for this email (single-use + invalidate siblings)
-  8. Return 200 `{ message: "Password has been reset successfully." }`
-- **Error cases:** Invalid/expired token → 400, Password too short → 400
+  7. Return 200 `{ message: "Password updated successfully" }`
+- **Errors:** 401 (unauthenticated or wrong password), 400 (validation), 500
 
 ## New Files to Create
 
-### 1. `lib/email.ts` — Resend client + send helper
-```typescript
-import { Resend } from 'resend';
-
-// Instantiate Resend with RESEND_API_KEY env var
-// Graceful fallback: if RESEND_API_KEY not configured, log warning + skip send
-
-export async function sendPasswordResetEmail(email: string, resetUrl: string): Promise<void>
-// HTML template with reset link and 1-hour expiry notice
-// from: 'onboarding@resend.dev' (sandbox) or custom verified domain
-```
-
-### 2. `app/api/auth/forgot-password/route.ts`
-### 3. `app/api/auth/reset-password/route.ts`
-### 4. `app/(public)/forgot-password/page.tsx` — Email input form (client component)
-### 5. `app/(public)/reset-password/page.tsx` — New password form (client component)
-### 6. `prisma/migrations/[timestamp]_add_password_reset_token/migration.sql`
+1. `app/api/users/me/route.ts` — GET + PATCH handlers
+2. `app/api/users/me/password/route.ts` — PATCH handler
+3. Prisma migration (auto-generated)
 
 ## Files to Modify
 
-### 1. `prisma/schema.prisma` — Add PasswordResetToken model
-### 2. `lib/ratelimit.ts` — Add forgotPassword limiter config + export
-### 3. `middleware.ts` — Add `/forgot-password` and `/reset-password` to public routes
-### 4. `.env.test.example` — Add SMTP env vars + NEXT_PUBLIC_APP_URL
-### 5. `app/page.tsx` — Add "Forgot password?" link below sign-in button
-
-## Dependencies to Install
-```bash
-npm install resend
-```
-
-## Environment Variables (add to `.env.test.example`)
-```
-RESEND_API_KEY=re_xxxxxxxxx
-NEXT_PUBLIC_APP_URL=http://localhost:3000
-```
+1. `prisma/schema.prisma` — Add 4 fields to User model
+2. `app/(protected)/layout.tsx` — Fetch profile fields from DB and pass to AppShell (the frontend plan already modified this but may need adjusting to actually query DB)
 
 ## Checklist
-- [ ] Install `resend` package
-- [ ] Add `PasswordResetToken` model to Prisma schema
+- [ ] Add `username`, `firstName`, `lastName`, `mobile` to Prisma User model
 - [ ] Create + apply Prisma migration
-- [ ] Create `lib/email.ts` with Resend SDK
-- [ ] Create `POST /api/auth/forgot-password` with rate limiting
-- [ ] Create `POST /api/auth/reset-password` with token validation
-- [ ] Create `/forgot-password` page with email form
-- [ ] Create `/reset-password` page with password + confirm form
-- [ ] Add "Forgot password?" link on login/landing page
-- [ ] Update middleware for public routes
-- [ ] Add `RESEND_API_KEY` + `NEXT_PUBLIC_APP_URL` to `.env.test.example`
-- [ ] No user enumeration (generic success on forgot-password)
-- [ ] Token stored as SHA-256 hash (raw token never persisted)
-- [ ] Token is single-use (deleted on use)
-- [ ] Token expires after 1 hour
-- [ ] Graceful fallback if SMTP not configured (log warning, don't crash)
+- [ ] Create `GET /api/users/me` — returns profile fields for authenticated user
+- [ ] Create `PATCH /api/users/me` — updates profile fields with Zod validation
+- [ ] Username uniqueness check (case-insensitive, exclude self) → 409
+- [ ] Create `PATCH /api/users/me/password` — validates current password, hashes + saves new
+- [ ] All endpoints check auth via `getCurrentUser()`
+- [ ] Max length validation on all string fields
+- [ ] bcrypt compare for current password verification
+- [ ] bcrypt hash (12 rounds) for new password
+- [ ] Password regex matches signup pattern
+- [ ] Ensure `app/(protected)/layout.tsx` fetches the new fields from DB
 - [ ] Validate with `npx tsc --noEmit`
