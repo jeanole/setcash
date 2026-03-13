@@ -47,6 +47,11 @@ model User {
   isActive      Boolean   @default(true)
   createdAt     DateTime  @default(now())
 
+  username      String?   @unique
+  firstName     String?
+  lastName      String?
+  mobile        String?
+
   defaultProjectId String?
   defaultProject   Project? @relation("UserDefaultProject", fields: [defaultProjectId], references: [id])
 
