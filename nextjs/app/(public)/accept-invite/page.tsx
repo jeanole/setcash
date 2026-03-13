@@ -206,7 +206,7 @@ function AcceptInviteForm() {
 
         {invitation.userExists && (
           <p className="text-sm text-slate-500 mb-4">
-            You already have a vBudget account. Click below to join the project.
+            You already have a SetCash account. Click below to join the project.
           </p>
         )}
 

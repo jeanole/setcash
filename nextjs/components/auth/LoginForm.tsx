@@ -235,7 +235,7 @@ export default function LoginForm({ allowSignup = true }: LoginFormProps) {
           style={rise(300, 300)}
           aria-hidden="true"
         >
-          vB
+          SC
         </div>
 
         {/* Product name */}
@@ -243,7 +243,7 @@ export default function LoginForm({ allowSignup = true }: LoginFormProps) {
           className="text-2xl font-bold text-slate-800"
           style={rise(300, 450)}
         >
-          vBudget
+          SetCash
         </h1>
 
         {/* Subtitle */}

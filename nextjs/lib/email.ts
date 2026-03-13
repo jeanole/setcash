@@ -33,7 +33,7 @@ export async function sendPasswordResetEmail(email: string, resetUrl: string): P
   const { error } = await client.emails.send({
     from: process.env.EMAIL_FROM || 'onboarding@resend.dev',
     to: email,
-    subject: 'Reset your vBudget password',
+    subject: 'Reset your SetCash password',
     html: `
       <!DOCTYPE html>
       <html lang="en">
@@ -51,9 +51,9 @@ export async function sendPasswordResetEmail(email: string, resetUrl: string): P
                 <tr>
                   <td style="background-color:#020617;padding:32px 40px;text-align:center;">
                     <div style="width:48px;height:48px;border-radius:50%;background-color:#6366f1;display:inline-flex;align-items:center;justify-content:center;margin-bottom:12px;">
-                      <span style="color:#ffffff;font-size:18px;font-weight:bold;line-height:48px;display:block;">vB</span>
+                      <span style="color:#ffffff;font-size:18px;font-weight:bold;line-height:48px;display:block;">SC</span>
                     </div>
-                    <h1 style="color:#ffffff;font-size:24px;font-weight:700;margin:0;">vBudget</h1>
+                    <h1 style="color:#ffffff;font-size:24px;font-weight:700;margin:0;">SetCash</h1>
                   </td>
                 </tr>
                 <!-- Body -->
@@ -61,7 +61,7 @@ export async function sendPasswordResetEmail(email: string, resetUrl: string): P
                   <td style="padding:40px;">
                     <h2 style="color:#0f172a;font-size:20px;font-weight:600;margin:0 0 12px 0;">Reset your password</h2>
                     <p style="color:#475569;font-size:15px;line-height:1.6;margin:0 0 24px 0;">
-                      We received a request to reset the password for your vBudget account. Click the button below to choose a new password.
+                      We received a request to reset the password for your SetCash account. Click the button below to choose a new password.
                     </p>
                     <div style="text-align:center;margin:32px 0;">
                       <a
@@ -83,7 +83,7 @@ export async function sendPasswordResetEmail(email: string, resetUrl: string): P
                 <!-- Footer -->
                 <tr>
                   <td style="border-top:1px solid #e2e8f0;padding:20px 40px;text-align:center;">
-                    <p style="color:#94a3b8;font-size:12px;margin:0;">vBudget · Expense Tracker</p>
+                    <p style="color:#94a3b8;font-size:12px;margin:0;">SetCash · Expense Tracker</p>
                   </td>
                 </tr>
               </table>
@@ -116,7 +116,7 @@ export async function sendVerificationEmail(email: string, verifyUrl: string): P
   const { error } = await client.emails.send({
     from: process.env.EMAIL_FROM || 'onboarding@resend.dev',
     to: email,
-    subject: 'Verify your vBudget email',
+    subject: 'Verify your SetCash email',
     html: `
       <!DOCTYPE html>
       <html lang="en">
@@ -134,9 +134,9 @@ export async function sendVerificationEmail(email: string, verifyUrl: string): P
                 <tr>
                   <td style="background-color:#020617;padding:32px 40px;text-align:center;">
                     <div style="width:48px;height:48px;border-radius:50%;background-color:#6366f1;display:inline-flex;align-items:center;justify-content:center;margin-bottom:12px;">
-                      <span style="color:#ffffff;font-size:18px;font-weight:bold;line-height:48px;display:block;">vB</span>
+                      <span style="color:#ffffff;font-size:18px;font-weight:bold;line-height:48px;display:block;">SC</span>
                     </div>
-                    <h1 style="color:#ffffff;font-size:24px;font-weight:700;margin:0;">vBudget</h1>
+                    <h1 style="color:#ffffff;font-size:24px;font-weight:700;margin:0;">SetCash</h1>
                   </td>
                 </tr>
                 <!-- Body -->
@@ -144,7 +144,7 @@ export async function sendVerificationEmail(email: string, verifyUrl: string): P
                   <td style="padding:40px;">
                     <h2 style="color:#0f172a;font-size:20px;font-weight:600;margin:0 0 12px 0;">Verify your email</h2>
                     <p style="color:#475569;font-size:15px;line-height:1.6;margin:0 0 24px 0;">
-                      Thanks for signing up for vBudget! Please verify your email address by clicking the button below.
+                      Thanks for signing up for SetCash! Please verify your email address by clicking the button below.
                     </p>
                     <div style="text-align:center;margin:32px 0;">
                       <a
@@ -166,7 +166,7 @@ export async function sendVerificationEmail(email: string, verifyUrl: string): P
                 <!-- Footer -->
                 <tr>
                   <td style="border-top:1px solid #e2e8f0;padding:20px 40px;text-align:center;">
-                    <p style="color:#94a3b8;font-size:12px;margin:0;">vBudget · Expense Tracker</p>
+                    <p style="color:#94a3b8;font-size:12px;margin:0;">SetCash · Expense Tracker</p>
                   </td>
                 </tr>
               </table>
@@ -212,7 +212,7 @@ export async function sendInvitationEmail(
   const { error } = await client.emails.send({
     from: process.env.EMAIL_FROM || 'onboarding@resend.dev',
     to: email,
-    subject: `You're invited to join "${projectName}" on vBudget`,
+    subject: `You're invited to join "${projectName}" on SetCash`,
     html: `
       <!DOCTYPE html>
       <html lang="en">
@@ -230,9 +230,9 @@ export async function sendInvitationEmail(
                 <tr>
                   <td style="background-color:#020617;padding:32px 40px;text-align:center;">
                     <div style="width:48px;height:48px;border-radius:50%;background-color:#6366f1;display:inline-flex;align-items:center;justify-content:center;margin-bottom:12px;">
-                      <span style="color:#ffffff;font-size:18px;font-weight:bold;line-height:48px;display:block;">vB</span>
+                      <span style="color:#ffffff;font-size:18px;font-weight:bold;line-height:48px;display:block;">SC</span>
                     </div>
-                    <h1 style="color:#ffffff;font-size:24px;font-weight:700;margin:0;">vBudget</h1>
+                    <h1 style="color:#ffffff;font-size:24px;font-weight:700;margin:0;">SetCash</h1>
                   </td>
                 </tr>
                 <!-- Body -->
@@ -240,7 +240,7 @@ export async function sendInvitationEmail(
                   <td style="padding:40px;">
                     <h2 style="color:#0f172a;font-size:20px;font-weight:600;margin:0 0 12px 0;">You&rsquo;re invited!</h2>
                     <p style="color:#475569;font-size:15px;line-height:1.6;margin:0 0 24px 0;">
-                      <strong>${inviterEmail}</strong> has invited you to join the project <strong>&ldquo;${projectName}&rdquo;</strong> on vBudget.
+                      <strong>${inviterEmail}</strong> has invited you to join the project <strong>&ldquo;${projectName}&rdquo;</strong> on SetCash.
                     </p>
                     ${messageBlock}
                     <div style="text-align:center;margin:32px 0;">
@@ -263,7 +263,7 @@ export async function sendInvitationEmail(
                 <!-- Footer -->
                 <tr>
                   <td style="border-top:1px solid #e2e8f0;padding:20px 40px;text-align:center;">
-                    <p style="color:#94a3b8;font-size:12px;margin:0;">vBudget &middot; Expense Tracker</p>
+                    <p style="color:#94a3b8;font-size:12px;margin:0;">SetCash &middot; Expense Tracker</p>
                   </td>
                 </tr>
               </table>
@@ -308,7 +308,7 @@ export async function sendPlatformInviteEmail(
   const { error } = await client.emails.send({
     from: process.env.EMAIL_FROM || 'onboarding@resend.dev',
     to: email,
-    subject: `You're invited to join vBudget`,
+    subject: `You're invited to join SetCash`,
     html: `
       <!DOCTYPE html>
       <html lang="en">
@@ -326,9 +326,9 @@ export async function sendPlatformInviteEmail(
                 <tr>
                   <td style="background-color:#020617;padding:32px 40px;text-align:center;">
                     <div style="width:48px;height:48px;border-radius:50%;background-color:#6366f1;display:inline-flex;align-items:center;justify-content:center;margin-bottom:12px;">
-                      <span style="color:#ffffff;font-size:18px;font-weight:bold;line-height:48px;display:block;">vB</span>
+                      <span style="color:#ffffff;font-size:18px;font-weight:bold;line-height:48px;display:block;">SC</span>
                     </div>
-                    <h1 style="color:#ffffff;font-size:24px;font-weight:700;margin:0;">vBudget</h1>
+                    <h1 style="color:#ffffff;font-size:24px;font-weight:700;margin:0;">SetCash</h1>
                   </td>
                 </tr>
                 <!-- Body -->
@@ -336,7 +336,7 @@ export async function sendPlatformInviteEmail(
                   <td style="padding:40px;">
                     <h2 style="color:#0f172a;font-size:20px;font-weight:600;margin:0 0 12px 0;">You&rsquo;re invited!</h2>
                     <p style="color:#475569;font-size:15px;line-height:1.6;margin:0 0 24px 0;">
-                      <strong>${inviterEmail}</strong> has invited you to join <strong>vBudget</strong> &mdash; a simple tool for tracking expenses and managing budgets.
+                      <strong>${inviterEmail}</strong> has invited you to join <strong>SetCash</strong> &mdash; a simple tool for tracking expenses and managing budgets.
                     </p>
                     ${messageBlock}
                     <div style="text-align:center;margin:32px 0;">
@@ -359,7 +359,7 @@ export async function sendPlatformInviteEmail(
                 <!-- Footer -->
                 <tr>
                   <td style="border-top:1px solid #e2e8f0;padding:20px 40px;text-align:center;">
-                    <p style="color:#94a3b8;font-size:12px;margin:0;">vBudget &middot; Expense Tracker</p>
+                    <p style="color:#94a3b8;font-size:12px;margin:0;">SetCash &middot; Expense Tracker</p>
                   </td>
                 </tr>
               </table>

@@ -16,7 +16,7 @@ import { v4 as uuid } from 'uuid';
 // Configuration
 // ============================================================================
 
-const SQLITE_PATH = process.env.SQLITE_PATH || '../../data/vbudget.db';
+const SQLITE_PATH = process.env.SQLITE_PATH || '../../data/setcash.db';
 const DATABASE_URL = process.env.DATABASE_URL;
 
 if (!DATABASE_URL) {

@@ -22,7 +22,7 @@ const bricolage = Bricolage_Grotesque({
 });
 
 export const metadata: Metadata = {
-  title: 'vBudget',
+  title: 'SetCash',
   description: 'Multi-tenant expense tracking and budget management',
 };
 

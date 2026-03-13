@@ -1,8 +1,8 @@
-# vBudget — Claude Code Guide
+# SetCash — Claude Code Guide
 
 ## Project Overview
 
-**vBudget** is a multi-tenant expense tracking and budget management web application built with Next.js, PostgreSQL, and Prisma.
+**SetCash** is a multi-tenant expense tracking and budget management web application built with Next.js, PostgreSQL, and Prisma.
 
 > **All application code lives in the `nextjs/` subdirectory.** Do not look for or modify code at the repo root — the Express/vanilla JS legacy app has been removed.
 
@@ -19,7 +19,7 @@
 ## Project Structure
 
 ```
-vbudget/
+setcash/
 ├── nextjs/                    # ← ALL application code is here
 │   ├── app/                   # Next.js App Router pages and API routes
 │   │   ├── (protected)/       # Authenticated pages (budget, bills, etc.)
@@ -55,8 +55,8 @@ npm run build && npm start   # Production
 **With Docker:**
 ```bash
 cd nextjs
-docker build -t vbudget .
-docker run -p 3000:3000 vbudget
+docker build -t setcash .
+docker run -p 3000:3000 setcash
 ```
 
 ## Environment Variables

@@ -1,4 +1,4 @@
-# vBudget — Project Index
+# SetCash — Project Index
 
 **Next Available IDs:** PROJ-20 · BUG-45 · CR-14
 

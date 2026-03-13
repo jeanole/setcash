@@ -9,7 +9,7 @@
 - PROJ-7 (Bills Feature) — CinematicButton applied to bill submit; ClapperboardToast hooks into bill success flow
 
 ## Overview
-Two-part visual redesign of the vBudget Next.js frontend targeting a creative audience:
+Two-part visual redesign of the SetCash Next.js frontend targeting a creative audience:
 
 **Part 1 — Atelier Design System:** Replace the generic Tailwind/indigo aesthetic with a warm, editorial "Atelier" design language. Distinctive typography, warmer palette, precise financial data presentation.
 

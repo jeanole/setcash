@@ -278,7 +278,7 @@ Bot receives photo
   → runOcrJob(billId, projectId)  ← no await, runs in background
   → bot sends: "✓ Foto empfangen. OCR analysis started."
 
-User opens vBudget
+User opens SetCash
   → draft bill shows "Analysing…" or "AI ✓ check" depending on timing
 ```
 
@@ -288,7 +288,7 @@ User opens vBudget
 
 A persistent job queue (Bull, BeeQueue) would improve resilience but requires Redis or a separate worker process. For v1, fire-and-forget inside Node is sufficient:
 
-- vBudget is a single-process server; no cross-process coordination needed
+- SetCash is a single-process server; no cross-process coordination needed
 - Jobs complete in 2–15s; no retry logic needed (failure → notification → user re-triggers)
 - If server restarts mid-job, bill stays at `'pending'`; user can click "Analyse" again
 - `runOcrJob` function signature stays the same if a queue is added later
@@ -450,8 +450,8 @@ The following bugs from Round 1 have been **FIXED** in the current codebase:
 **Priority:** P1
 **Tag:** **[Frontend]**
 
-**File:** `C:\Users\jensmoeller\code\vbudget\public\js\bills.js`, lines 686-801
-**Also:** `C:\Users\jensmoeller\code\vbudget\routes\bills.js`, lines 150-151
+**File:** `C:\Users\jensmoeller\code\setcash\public\js\bills.js`, lines 686-801
+**Also:** `C:\Users\jensmoeller\code\setcash\routes\bills.js`, lines 150-151
 
 **Description:**
 The backend API (`GET /api/bills`) returns bill objects with **camelCase** property names:
@@ -489,7 +489,7 @@ Additionally, `ocrFields` is already parsed as a JavaScript array by the API (li
 **Priority:** P1
 **Tag:** **[Frontend][Backend]**
 
-**File:** `C:\Users\jensmoeller\code\vbudget\public\js\core.js`, lines 158, 170-172
+**File:** `C:\Users\jensmoeller\code\setcash\public\js\core.js`, lines 158, 170-172
 
 **Description:**
 The `projectOcrEnabled` variable is loaded from `GET /api/admin/settings` on line 158 of `core.js`:
@@ -521,7 +521,7 @@ The spec says "As a **user**, I want to click 'Analyse Bill' on a saved bill" --
 **Priority:** P2
 **Tag:** **[Backend]**
 
-**File:** `C:\Users\jensmoeller\code\vbudget\routes\bills.js`, lines 277-348
+**File:** `C:\Users\jensmoeller\code\setcash\routes\bills.js`, lines 277-348
 
 **Description:**
 The `date` field is destructured from `req.body` on line 298 but is never added to the `changes` object or the `updates` array. There is no code block like:
@@ -553,7 +553,7 @@ This means:
 **Priority:** P3
 **Tag:** **[Frontend]**
 
-**File:** `C:\Users\jensmoeller\code\vbudget\public\js\bills.js`, line 314
+**File:** `C:\Users\jensmoeller\code\setcash\public\js\bills.js`, line 314
 
 **Description:**
 Due to NEW-BUG-1 (property name mismatch), the condition `!bill.ocr_status` is always truthy (since `bill.ocr_status` is `undefined`). This means the "Analyse" button in the bills list row appears for ALL bills with images -- including bills that have already been analysed (`ocrStatus = "done"`) or that failed (`ocrStatus = "failed"`). The button should only show when `ocrStatus` is `null` (not yet analysed) or `"failed"` (retry).
@@ -574,7 +574,7 @@ Due to NEW-BUG-1 (property name mismatch), the condition `!bill.ocr_status` is a
 **Priority:** P2
 **Tag:** **[Frontend]**
 
-**File:** `C:\Users\jensmoeller\code\vbudget\public\js\bills.js`, lines 892-903
+**File:** `C:\Users\jensmoeller\code\setcash\public\js\bills.js`, lines 892-903
 
 **Description:**
 The bill detail form submit handler constructs the `data` object (lines 892-903) but maps fields using `form.vendor.value`, `form.description.value`, `form.brutto19.value`, etc. However:
@@ -593,7 +593,7 @@ Let me verify by re-checking the form markup.
 **Priority:** P3
 **Tag:** **[Backend]**
 
-**File:** `C:\Users\jensmoeller\code\vbudget\routes\ocr.js`, lines 15-21 and `server.js` line 75
+**File:** `C:\Users\jensmoeller\code\setcash\routes\ocr.js`, lines 15-21 and `server.js` line 75
 
 **Description:**
 The SESSION_SECRET warning (BUG-4 fix from Round 1) is only emitted in `routes/ocr.js` at module load time. This means the warning only appears when the OCR module is loaded, and only as a `console.warn` which is easy to miss in production logs. The application does not refuse to start or emit a more prominent alert. Additionally, `server.js` line 75 uses the same weak fallback `"change-this-in-production"` for session signing without any warning.
@@ -1215,7 +1215,7 @@ public/style.css
 **Priority:** P2
 **Tag:** [Frontend]
 
-**File:** `C:/Users/jensmoeller/code/vbudget/public/index.html` (upload form), `C:/Users/jensmoeller/code/vbudget/public/js/bills.js` lines 1056-1101 (`applyUploadOcrHighlights`), lines 1184-1235 (`pollUploadOcr`)
+**File:** `C:/Users/jensmoeller/code/setcash/public/index.html` (upload form), `C:/Users/jensmoeller/code/setcash/public/js/bills.js` lines 1056-1101 (`applyUploadOcrHighlights`), lines 1184-1235 (`pollUploadOcr`)
 
 **Description:**
 The upload form (`#uploadForm`) has no `name="date"` input field. When `runOcrJob` extracts a date, it writes it to the DB and includes `"date"` in `ocr_fields`. However, `applyUploadOcrHighlights()` explicitly skips `date` (and `amount`) in its fieldMap. The `pollUploadOcr()` success path does not pre-fill a date field. Result: (1) the date is silently written to the bill without user review, (2) the user cannot verify or correct the date during the upload flow, (3) `"date"` remains in `ocr_fields` after save, causing an unexpected amber highlight when the bill detail is opened later.
@@ -1230,7 +1230,7 @@ The upload form (`#uploadForm`) has no `name="date"` input field. When `runOcrJo
 **Priority:** P3
 **Tag:** [Frontend]
 
-**File:** `C:/Users/jensmoeller/code/vbudget/public/js/bills.js` line 301 and lines 966-975
+**File:** `C:/Users/jensmoeller/code/setcash/public/js/bills.js` line 301 and lines 966-975
 
 **Description:**
 The list-level button label uses `bill.ocrStatus === "done" ? "Re-analyse" : "Analyse"` (checks only `ocrStatus`). `triggerBillAnalysisFromList()` uses `hasPriorResults = bill.ocrStatus === "done" || (bill.ocrFields && bill.ocrFields.length > 0)` for the confirm dialog — a slightly broader condition. In an abnormal state (e.g. `ocrStatus = null`, `ocrFields` non-empty), the button label would show "Analyse" but the confirmation dialog would still appear, creating confusing UX. Only affects abnormal data states; no impact in normal operation.
@@ -1243,7 +1243,7 @@ The list-level button label uses `bill.ocrStatus === "done" ? "Re-analyse" : "An
 **Priority:** P2
 **Tag:** [Backend]
 
-**File:** `C:/Users/jensmoeller/code/vbudget/routes/ocr.js` lines 322-323
+**File:** `C:/Users/jensmoeller/code/setcash/routes/ocr.js` lines 322-323
 
 **Description:**
 `isReanalysis` is `true` when `priorBill.ocr_status !== null`. This includes `ocr_status = "failed"`. When a bill previously failed analysis, any subsequent analysis attempt runs with `isReanalysis = true`, causing all `fieldChecks` to bypass the zero/empty guard — potentially overwriting user-entered data with AI-extracted values. No confirmation dialog is shown for `"failed"` bills since `hasPriorResults` in the frontend only checks `ocrStatus === "done" || ocrFields.length > 0`, and failed bills typically have `ocrFields = null`.
@@ -1258,7 +1258,7 @@ The list-level button label uses `bill.ocrStatus === "done" ? "Re-analyse" : "An
 **Priority:** P2
 **Tag:** [Backend]
 
-**File:** `C:/Users/jensmoeller/code/vbudget/routes/ocr.js` line 88
+**File:** `C:/Users/jensmoeller/code/setcash/routes/ocr.js` line 88
 
 **Description:**
 `isPrivateUrl()` blocks `hostname === "127.0.0.1"` as a string equality check. The full `127.0.0.0/8` subnet (RFC 1122 §3.2.1.3) routes to localhost on most OS. Addresses like `127.0.0.2` through `127.255.255.255` pass the SSRF guard. An attacker who can supply a custom base URL could use `https://127.0.0.2/...` to reach localhost services on the application host.
@@ -1820,7 +1820,7 @@ None. All 3 edits in the R4-1 fix are correct and complete.
 - **Severity:** Medium
 - **Priority:** P2
 - **Tag:** **[Backend]**
-- **File:** `C:/Users/jensmoeller/code/vbudget/routes/ocr.js` lines 442-462
+- **File:** `C:/Users/jensmoeller/code/setcash/routes/ocr.js` lines 442-462
 
 **Description:**
 
@@ -1849,7 +1849,7 @@ The bill ends up with inconsistent brutto/netto values. The net amount displayed
 - **Severity:** Low
 - **Priority:** P3
 - **Tag:** **[Backend]**
-- **File:** `C:/Users/jensmoeller/code/vbudget/server.js` line 106
+- **File:** `C:/Users/jensmoeller/code/setcash/server.js` line 106
 
 **Description:**
 
@@ -1986,7 +1986,7 @@ if (anyAmountWritten && (isReanalysis || (bill.amount || 0) === 0)) {
 - **Severity:** Low
 - **Priority:** P4
 - **Tag:** **[Backend]**
-- **File:** `C:/Users/jensmoeller/code/vbudget/routes/ocr.js` lines 424, 432-436, 455-459
+- **File:** `C:/Users/jensmoeller/code/setcash/routes/ocr.js` lines 424, 432-436, 455-459
 - **Pre-existing:** Yes -- this issue existed before the R6-1 fix and was not introduced by it.
 
 **Description:**

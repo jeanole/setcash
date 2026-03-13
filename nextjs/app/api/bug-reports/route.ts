@@ -94,7 +94,7 @@ export async function POST(req: Request) {
     const body = bodyParts.join('\n\n');
 
     // Create GitHub issue
-    const ghRepo = process.env.GITHUB_REPO || 'jeanole/vbudget';
+    const ghRepo = process.env.GITHUB_REPO || 'jeanole/setcash';
     const ghRes = await fetch(`https://api.github.com/repos/${ghRepo}/issues`, {
       method: 'POST',
       headers: {

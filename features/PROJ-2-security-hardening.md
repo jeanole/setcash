@@ -4,7 +4,7 @@
 **Deployed:** 2026-02-27
 
 ### Summary
-Strengthen vBudget’s security and tenant isolation so that each project’s data and uploads are fully isolated, sensitive operations are protected against CSRF, and secrets/crypto use safe defaults suitable for both self-hosted and multi-tenant deployments.
+Strengthen SetCash’s security and tenant isolation so that each project’s data and uploads are fully isolated, sensitive operations are protected against CSRF, and secrets/crypto use safe defaults suitable for both self-hosted and multi-tenant deployments.
 
 ### Context & Motivation
 - Recent code review identified several high-impact issues:
@@ -54,7 +54,7 @@ Primary environments:
 - As an **authenticated user or admin**, I want my actions (uploads, vgeld changes, settings changes, approvals, etc.) to be protected against CSRF, so that visiting another website cannot silently perform state-changing actions on my behalf.
 
 #### US-4: Safe secrets in production
-- As an **operator of vBudget**, I want the app to **refuse to start in production** when session/encryption secrets are missing or obviously weak, so that we don’t accidentally deploy with insecure defaults.
+- As an **operator of SetCash**, I want the app to **refuse to start in production** when session/encryption secrets are missing or obviously weak, so that we don’t accidentally deploy with insecure defaults.
 
 #### US-5: Backwards-compatible for legitimate flows
 - As a **self-hosted admin**, I want existing legitimate workflows (e.g. opening exports from the UI, viewing images linked from bills) to keep working with minimal changes, while insecure direct URL patterns may be tightened or removed.

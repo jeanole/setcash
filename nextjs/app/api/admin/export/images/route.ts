@@ -65,7 +65,7 @@ export async function GET() {
     const settingsRaw = await prisma.projectSettings.findMany({ where: { projectId } });
     const settings: Record<string, string> = {};
     settingsRaw.forEach((s) => { if (s.value) settings[s.key] = s.value; });
-    const projectName = settings['projectTitle'] ?? 'vBudget';
+    const projectName = settings['projectTitle'] ?? 'SetCash';
 
     const dateStr = new Date().toISOString().split('T')[0];
     const zipName = `${projectName.replace(/[^a-zA-Z0-9_-]/g, '_')}_images_${dateStr}.zip`;

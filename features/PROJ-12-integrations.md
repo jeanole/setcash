@@ -19,7 +19,7 @@ This feature migrates the existing Express-based integrations (Telegram Bot and 
 ### Telegram Integration
 - As a project admin, I want to configure a Telegram bot for my project so that team members can submit bills via photos.
 - As a user, I want to link my Telegram account to the project bot so I can submit bills from my phone.
-- As a user, I want to send photos to the Telegram bot and have them automatically create draft bills in vBudget.
+- As a user, I want to send photos to the Telegram bot and have them automatically create draft bills in SetCash.
 - As a project admin, I want to see which team members have linked their Telegram accounts and be able to unlink them if needed.
 - As a user, I want to receive confirmation when my Telegram-submitted bill is successfully created as a draft.
 
@@ -97,7 +97,7 @@ This feature migrates the existing Express-based integrations (Telegram Bot and 
 
 #### A2.2 Bot Commands
 - [ ] **`/start` command:**
-  - Response (German): "Willkommen bei vBudget!\nSende /link <Code> um deinen Account zu verknüpfen.\nDen Code findest du in vBudget unter 'Telegram verknüpfen'."
+  - Response (German): "Willkommen bei SetCash!\nSende /link <Code> um deinen Account zu verknüpfen.\nDen Code findest du in SetCash unter 'Telegram verknüpfen'."
 
 - [ ] **`/link <code>` command:**
   - Validates 6-character code against `TelegramLinkCode` table
@@ -112,7 +112,7 @@ This feature migrates the existing Express-based integrations (Telegram Bot and 
 #### A2.3 Photo/Message Handling
 - [ ] **Pre-requisite check:**
   - User must be linked (exist in `TelegramLink` table)
-  - If not linked: Reply "Dein Telegram-Account ist noch nicht verknüpft.\nSende /link <Code> – den Code findest du in vBudget."
+  - If not linked: Reply "Dein Telegram-Account ist noch nicht verknüpft.\nSende /link <Code> – den Code findest du in SetCash."
 
 - [ ] **Single Photo Processing:**
   - Download the largest available photo size from Telegram servers
@@ -126,7 +126,7 @@ This feature migrates the existing Express-based integrations (Telegram Bot and 
     - Auto-assign "Default" motive and "Uncategorized" category (100% each)
   - Attach image to bill via `BillImage` record
   - Trigger OCR analysis if `ocrEnabled` setting is true (fire-and-forget)
-  - Response: "✓ Foto empfangen – Beleg als Entwurf gespeichert.\nBitte in vBudget vervollständigen."
+  - Response: "✓ Foto empfangen – Beleg als Entwurf gespeichert.\nBitte in SetCash vervollständigen."
   - If OCR enabled, append: "\nBeleganalyse läuft im Hintergrund."
 
 - [ ] **Photo Album Processing:**
@@ -135,7 +135,7 @@ This feature migrates the existing Express-based integrations (Telegram Bot and 
   - Download all photos, save to uploads directory
   - Create ONE draft bill with ALL images attached
   - Use caption from first message only
-  - Response: "✓ {N} Foto(s) empfangen – Beleg als Entwurf gespeichert.\nBitte in vBudget vervollständigen."
+  - Response: "✓ {N} Foto(s) empfangen – Beleg als Entwurf gespeichert.\nBitte in SetCash vervollständigen."
 
 - [ ] **Error Handling:**
   - Photo download failure: Reply "Fehler beim Speichern des Fotos. Bitte erneut versuchen."
@@ -520,7 +520,7 @@ Settings Layout
   - Deleted after use or expiration
 
 - **Active Links** (`TelegramLink` table):
-  - Maps Telegram User ID → vBudget User Email
+  - Maps Telegram User ID → SetCash User Email
   - Per-project scope (user can link different Telegram accounts to different projects)
   - Timestamp when linked
   - Cascade delete when user or project is removed

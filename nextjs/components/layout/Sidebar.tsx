@@ -264,7 +264,7 @@ export default function Sidebar({ currentUser, isMobileOpen, onClose }: SidebarP
         aria-label="Primary navigation"
       >
         <div className="px-6 py-5 border-b border-slate-200">
-          <span className="text-xl font-bold text-slate-800 tracking-tight">vBudget</span>
+          <span className="text-xl font-bold text-slate-800 tracking-tight">SetCash</span>
           <p className="text-xs text-slate-400 mt-0.5">expense tracker</p>
         </div>
         <ProjectSwitcher />
@@ -282,7 +282,7 @@ export default function Sidebar({ currentUser, isMobileOpen, onClose }: SidebarP
             className="w-full flex items-center gap-2 px-3 py-2 mb-2 text-xs font-medium text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
           >
             <UserPlus className="w-3.5 h-3.5" />
-            {canInviteToProject ? 'Invite to project' : 'Invite to vBudget'}
+            {canInviteToProject ? 'Invite to project' : 'Invite to SetCash'}
           </button>
           <p className="text-xs text-slate-400 px-3">v2.0.0-next</p>
         </div>
@@ -297,7 +297,7 @@ export default function Sidebar({ currentUser, isMobileOpen, onClose }: SidebarP
           >
             <div className="flex items-center justify-between px-4 py-4 border-b border-slate-200">
               <div>
-                <span className="text-xl font-bold text-slate-800 tracking-tight">vBudget</span>
+                <span className="text-xl font-bold text-slate-800 tracking-tight">SetCash</span>
                 <p className="text-xs text-slate-400 mt-0.5">expense tracker</p>
               </div>
               <button
@@ -327,7 +327,7 @@ export default function Sidebar({ currentUser, isMobileOpen, onClose }: SidebarP
                 className="w-full flex items-center gap-2 px-3 py-2 mb-2 text-xs font-medium text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
               >
                 <UserPlus className="w-3.5 h-3.5" />
-                {canInviteToProject ? 'Invite to project' : 'Invite to vBudget'}
+                {canInviteToProject ? 'Invite to project' : 'Invite to SetCash'}
               </button>
               <p className="text-xs text-slate-400 px-3">v2.0.0-next</p>
             </div>
