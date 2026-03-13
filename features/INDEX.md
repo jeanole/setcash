@@ -1,6 +1,6 @@
 # SetCash — Project Index
 
-**Next Available IDs:** PROJ-20 · BUG-45 · CR-14
+**Next Available IDs:** PROJ-21 · BUG-45 · CR-15
 
 | ID | Type | Title | Status | Priority | Feature | Date |
 |----|------|-------|--------|----------|---------|------|
@@ -80,3 +80,5 @@
 | [BUG-43](BUG-43-system-nav-visible-all-users-blank-error.md) | Bug | System Nav Item Visible to All Users and Produces Blank Error | Resolved | Critical | PROJ-17 | 2026-03-09 |
 | [BUG-44](BUG-44-header-overlaps-modals-z-index.md) | Bug | Header Renders on Top of Modals Due to z-index | Resolved | High | PROJ-18 | 2026-03-09 |
 | CR-13 | CR | Require Invite Token for All Signups (No Open Registration) | Pending Review | Medium | PROJ-10 | 2026-03-13 |
+| [PROJ-20](PROJ-20-user-profile-edit.md) | Feature | User Profile Edit Panel | Planned | Medium | PROJ-5 | 2026-03-13 |
+| CR-14 | CR | Add User Profile Edit Panel | Pending Review | Medium | PROJ-20 | 2026-03-13 |
