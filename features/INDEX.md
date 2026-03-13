@@ -1,6 +1,6 @@
 # vBudget — Project Index
 
-**Next Available IDs:** PROJ-20 · BUG-45 · CR-13
+**Next Available IDs:** PROJ-20 · BUG-45 · CR-14
 
 | ID | Type | Title | Status | Priority | Feature | Date |
 |----|------|-------|--------|----------|---------|------|
@@ -28,7 +28,7 @@
 | [PROJ-7](PROJ-7-bills-feature.md) | Feature | Bills Feature | In Progress | — | PROJ-5, PROJ-6 | 2026-03-01 |
 | [PROJ-8](PROJ-8-budget-matrix.md) | Feature | Budget Matrix | Complete | — | PROJ-5, PROJ-6 | 2026-03-01 |
 | [PROJ-9](PROJ-9-categories-motives.md) | Feature | Categories & Motives Admin Pages | Complete | — | PROJ-5, PROJ-6 | 2026-03-01 |
-| [PROJ-10](PROJ-10-members-projects-settings.md) | Feature | Members, Projects & Settings | Complete | — | PROJ-5, PROJ-6 | 2026-03-01 |
+| [PROJ-10](PROJ-10-members-projects-settings.md) | Feature | Members, Projects & Settings | Change Requested | — | PROJ-5, PROJ-6 | 2026-03-01 |
 | [PROJ-11](PROJ-11-reports-exports.md) | Feature | Reports & Exports | Complete | — | PROJ-5, PROJ-6, PROJ-9 | 2026-03-01 |
 | [PROJ-12](PROJ-12-integrations.md) | Feature | Integrations (Google Sheets + Telegram) | In Progress | — | PROJ-5, PROJ-10 | 2026-03-04 |
 | [PROJ-13](PROJ-13-production-cutover.md) | Feature | Production Cutover | Planned | — | PROJ-4–12 | 2026-03-01 |
@@ -79,3 +79,4 @@
 | [BUG-42](BUG-42-pdf-export-helvetica-afm-regression.md) | Bug | PDF Export Fails — Helvetica.afm ENOENT Regression | Resolved | High | PROJ-11 | 2026-03-09 |
 | [BUG-43](BUG-43-system-nav-visible-all-users-blank-error.md) | Bug | System Nav Item Visible to All Users and Produces Blank Error | Resolved | Critical | PROJ-17 | 2026-03-09 |
 | [BUG-44](BUG-44-header-overlaps-modals-z-index.md) | Bug | Header Renders on Top of Modals Due to z-index | Resolved | High | PROJ-18 | 2026-03-09 |
+| CR-13 | CR | Require Invite Token for All Signups (No Open Registration) | Pending Review | Medium | PROJ-10 | 2026-03-13 |

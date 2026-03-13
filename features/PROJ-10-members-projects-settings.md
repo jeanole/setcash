@@ -1,6 +1,6 @@
 # PROJ-10: Members, Projects & Settings
 
-## Status: Complete
+## Status: Change Requested
 **Created:** 2026-03-01
 **Last Updated:** 2026-03-04
 
@@ -862,6 +862,27 @@ The spec already uses URL-based tabs (`/settings`, `/settings/members`, etc.) wh
 | ID | Severity | Title | Status |
 |----|----------|-------|--------|
 | [BUG-13](BUG-13-project-switching-not-updating-session.md) | Critical | Project Switching Does Not Update Session | Resolved |
+
+## Change Requests
+
+### CR-13: Require Invite Token for All Signups (No Open Registration)
+**Requested:** 2026-03-13 | **Priority:** Medium | **Status:** Pending Review
+
+**Current Behavior:** When a user is invited, they receive an email with a signup link. However, the signup route is accessible without an invite token, meaning external users could potentially register without being invited. Additionally, invites that are not tied to a specific project do not generate an invite token.
+
+**Desired Behavior:** All signup links must always carry an invite token — whether the invite is for a specific project or a standalone system invite. The `/signup` route should reject any request that does not include a valid invite token. There should be no open registration for external people; every new account must originate from an invite.
+
+**Rationale:** Signup does not exist as a self-service feature for external users. The system is invite-only. Without enforcing invite tokens on all signup paths, unauthorized users could create accounts by navigating directly to the signup URL.
+
+**Proposed Acceptance Criteria:**
+- [ ] Every invite (project-scoped or not) generates a unique, time-limited invite token
+- [ ] The signup link in invite emails always includes the invite token as a query parameter
+- [ ] The `/signup` route validates the invite token before rendering the registration form
+- [ ] Accessing `/signup` without a valid token shows an error or redirects to login
+- [ ] Expired or already-used tokens are rejected with a clear message
+- [ ] Admin/superadmin "create user" flow is unaffected (direct account creation bypasses invite tokens)
+
+**Resolution:** Pending
 
 ## Deployment
 _To be added by /deploy_
