@@ -5,6 +5,7 @@ import { useState } from 'react';
 import Header from './Header';
 import Sidebar from './Sidebar';
 import BugReportModal from './BugReportModal';
+import ProfileModal from './ProfileModal';
 
 interface AppShellProps {
   children: ReactNode;
@@ -12,12 +13,28 @@ interface AppShellProps {
   currentUser: {
     email: string;
     role: 'user' | 'admin' | 'superadmin';
+    username?: string | null;
+    firstName?: string | null;
+    lastName?: string | null;
+    mobile?: string | null;
   } | null;
 }
 
 export default function AppShell({ children, title, currentUser }: AppShellProps): ReactNode {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isBugReportOpen, setIsBugReportOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+
+  // Local copy of profile fields so header re-renders immediately after save
+  const [profileFields, setProfileFields] = useState<{
+    username: string | null;
+    firstName: string | null;
+    lastName: string | null;
+  }>({
+    username: currentUser?.username ?? null,
+    firstName: currentUser?.firstName ?? null,
+    lastName: currentUser?.lastName ?? null,
+  });
 
   const handleMenuToggle = () => {
     setIsMobileMenuOpen((prev) => !prev);
@@ -26,6 +43,34 @@ export default function AppShell({ children, title, currentUser }: AppShellProps
   const handleMenuClose = () => {
     setIsMobileMenuOpen(false);
   };
+
+  const handleProfileUpdated = (updated: {
+    username: string | null;
+    firstName: string | null;
+    lastName: string | null;
+  }) => {
+    setProfileFields(updated);
+  };
+
+  // Merged user object passed to Header so the avatar initials update instantly
+  const headerUser = currentUser
+    ? {
+        email: currentUser.email,
+        username: profileFields.username,
+        firstName: profileFields.firstName,
+      }
+    : null;
+
+  // Full user object passed to ProfileModal
+  const profileUser = currentUser
+    ? {
+        email: currentUser.email,
+        username: profileFields.username,
+        firstName: profileFields.firstName,
+        lastName: profileFields.lastName,
+        mobile: currentUser.mobile ?? null,
+      }
+    : null;
 
   return (
     <div className="flex h-screen overflow-hidden bg-[var(--vb-content-bg)]">
@@ -37,8 +82,9 @@ export default function AppShell({ children, title, currentUser }: AppShellProps
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         <Header
           title={title}
-          user={currentUser}
+          user={headerUser}
           onMenuToggle={handleMenuToggle}
+          onProfileOpen={() => setIsProfileOpen(true)}
         />
         <main
           className="flex-1 overflow-y-auto"
@@ -63,6 +109,14 @@ export default function AppShell({ children, title, currentUser }: AppShellProps
           </footer>
         </main>
         <BugReportModal isOpen={isBugReportOpen} onClose={() => setIsBugReportOpen(false)} />
+        {profileUser && (
+          <ProfileModal
+            isOpen={isProfileOpen}
+            onClose={() => setIsProfileOpen(false)}
+            user={profileUser}
+            onProfileUpdated={handleProfileUpdated}
+          />
+        )}
       </div>
     </div>
   );

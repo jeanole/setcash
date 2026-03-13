@@ -25,6 +25,10 @@ export default async function ProtectedLayout({
     ? {
         email: session.user.email || '',
         role: (session.user.role as 'user' | 'admin' | 'superadmin') || 'user',
+        username: (session.user as { username?: string | null }).username ?? null,
+        firstName: (session.user as { firstName?: string | null }).firstName ?? null,
+        lastName: (session.user as { lastName?: string | null }).lastName ?? null,
+        mobile: (session.user as { mobile?: string | null }).mobile ?? null,
       }
     : null;
 
