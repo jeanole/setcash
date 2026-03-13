@@ -10,10 +10,11 @@ import { z } from 'zod';
 
 // Validation schema for password change
 const ChangePasswordSchema = z.object({
-  currentPassword: z.string().min(1),
+  currentPassword: z.string().min(1).max(128),
   newPassword: z
     .string()
     .min(8)
+    .max(128)
     .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, {
       message:
         'Password must contain at least one uppercase letter, one lowercase letter, and one digit',
