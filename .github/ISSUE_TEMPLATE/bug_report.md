@@ -1,6 +1,6 @@
 ---
 name: Bug Report
-about: Report a bug found while using vBudget
+about: Report a bug found while using SetCash
 title: "[BUG] "
 labels: bug
 assignees: ''

@@ -88,7 +88,7 @@ export async function GET() {
     settingsRaw.forEach((s) => { if (s.value) settings[s.key] = s.value; });
     const bmTitle = settings['projectTitle'] ?? '';
     const bmSubtitle = settings['projectSubtitle'] ?? '';
-    const bmPrefix = bmTitle ? bmTitle + ' - ' : 'vBudget - ';
+    const bmPrefix = bmTitle ? bmTitle + ' - ' : 'SetCash - ';
 
     const eur = (v: number) => (v || 0).toFixed(2).replace('.', ',') + ' €';
 

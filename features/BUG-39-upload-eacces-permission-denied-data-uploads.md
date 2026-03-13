@@ -37,7 +37,7 @@ The server attempts to create the directory `/data/uploads` (filesystem root) in
 export const UPLOADS_DIR = path.join(process.cwd(), '..', 'data', 'uploads');
 ```
 
-In **development** (`cwd = .../vbudget/nextjs`): resolves correctly to `.../vbudget/data/uploads`.
+In **development** (`cwd = .../setcash/nextjs`): resolves correctly to `.../setcash/data/uploads`.
 
 In **Docker** (`WORKDIR /app`, standalone server runs as `node server.js` from `/app`): `cwd = /app`, so `path.join('/app', '..', 'data', 'uploads')` = `/data/uploads` — the filesystem root, inaccessible to the non-root `nextjs` user.
 

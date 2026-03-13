@@ -9,7 +9,7 @@
 ## Description
 
 ### Expected Behavior
-The `/bills/new` page should have only ONE image upload section, positioned at the **top** of the form (as per original vBudget design where photos are captured first).
+The `/bills/new` page should have only ONE image upload section, positioned at the **top** of the form (as per original SetCash design where photos are captured first).
 
 ### Actual Behavior
 The `/bills/new` page currently displays **two** image upload sections when creating a new bill:
@@ -37,10 +37,10 @@ The issue stems from having `BillImageUpload` in two places:
 ## Proposed Fix
 1. Remove the image upload section from `BillForm.tsx` (lines 320-331)
 2. Keep only the image upload in `page.tsx`
-3. Move the image upload section to the **TOP** of the form (above Basic Information), matching the original vBudget layout
+3. Move the image upload section to the **TOP** of the form (above Basic Information), matching the original SetCash layout
 
 ## Additional Context
-The original vBudget app positioned the photo upload at the top of the upload form, as users typically want to capture the receipt image first before entering details.
+The original SetCash app positioned the photo upload at the top of the upload form, as users typically want to capture the receipt image first before entering details.
 
 ---
 

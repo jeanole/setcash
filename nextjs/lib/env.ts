@@ -18,7 +18,7 @@ function assertEnv(key: RequiredEnvVar): string {
   const value = process.env[key];
   if (!value) {
     throw new Error(
-      `[vBudget] Missing required environment variable: ${key}\n` +
+      `[SetCash] Missing required environment variable: ${key}\n` +
         `Copy .env.test.example to .env.test (or .env.local) and fill in the value.`
     );
   }
@@ -40,7 +40,7 @@ export function validateEnv(): void {
 
   if (missing.length > 0) {
     throw new Error(
-      `[vBudget] Missing required environment variables:\n` +
+      `[SetCash] Missing required environment variables:\n` +
         missing.map((k) => `  - ${k}`).join('\n') +
         `\n\nCopy nextjs/.env.test.example to nextjs/.env.test and fill in the values.`
     );

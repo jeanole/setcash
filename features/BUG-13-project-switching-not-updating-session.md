@@ -50,7 +50,7 @@ When the user switches projects, the database is updated but the JWT token still
 
 ## Environment
 
-- **App:** vBudget Next.js migration
+- **App:** SetCash Next.js migration
 - **Branch:** to_nextjs
 - **Auth:** NextAuth.js v5 with JWT strategy
 - **Database:** PostgreSQL with Prisma

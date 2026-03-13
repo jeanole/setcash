@@ -34,7 +34,7 @@ export default function Header({ title, user, onMenuToggle }: HeaderProps) {
       </button>
 
       <h1 className="text-base font-semibold text-zinc-800">
-        {title ?? 'vBudget'}
+        {title ?? 'SetCash'}
       </h1>
 
       <div className="ml-auto flex items-center gap-3">

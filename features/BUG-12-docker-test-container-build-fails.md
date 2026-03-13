@@ -34,7 +34,7 @@ The Docker build fails with TypeScript compilation errors:
 ## Environment
 
 - **Docker:** Docker Compose test configuration
-- **Service:** vbudget-next (Next.js app)
+- **Service:** setcash-next (Next.js app)
 - **Base Image:** node:20-alpine
 - **Date/Time:** 2026-03-05
 

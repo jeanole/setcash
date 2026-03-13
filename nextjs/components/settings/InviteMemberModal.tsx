@@ -23,7 +23,7 @@ export default function InviteMemberModal({
   const [message, setMessage] = useState(
     mode === 'project'
       ? 'Hey, join my project so we can ease the bureaucracy!'
-      : 'Hey, check out vBudget for tracking expenses!'
+      : 'Hey, check out SetCash for tracking expenses!'
   );
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -73,7 +73,7 @@ export default function InviteMemberModal({
         setEmail('');
         setMessage(
           isPlatform
-            ? 'Hey, check out vBudget for tracking expenses!'
+            ? 'Hey, check out SetCash for tracking expenses!'
             : 'Hey, join my project so we can ease the bureaucracy!'
         );
         onInvited?.();
@@ -91,7 +91,7 @@ export default function InviteMemberModal({
     setEmail('');
     setMessage(
       isPlatform
-        ? 'Hey, check out vBudget for tracking expenses!'
+        ? 'Hey, check out SetCash for tracking expenses!'
         : 'Hey, join my project so we can ease the bureaucracy!'
     );
     setError(null);
@@ -105,7 +105,7 @@ export default function InviteMemberModal({
       <div className="w-full max-w-md bg-white rounded-lg shadow-xl">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
           <h2 className="text-lg font-semibold text-slate-900">
-            {isPlatform ? 'Invite to vBudget' : 'Invite to Project'}
+            {isPlatform ? 'Invite to SetCash' : 'Invite to Project'}
           </h2>
           <button
             onClick={handleClose}
@@ -139,7 +139,7 @@ export default function InviteMemberModal({
             />
             <p className="mt-1 text-xs text-slate-500">
               {isPlatform
-                ? "They\u2019ll receive an email invitation to create a vBudget account"
+                ? "They\u2019ll receive an email invitation to create a SetCash account"
                 : "They\u2019ll receive an email invitation to join the project"}
             </p>
           </div>

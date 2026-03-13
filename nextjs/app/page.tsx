@@ -5,7 +5,7 @@ import LoginForm from '@/components/auth/LoginForm';
 import SparkleEffect from '@/components/auth/SparkleEffect';
 
 export const metadata = {
-  title: 'vBudget — Your receipts deserve better than a shoebox',
+  title: 'SetCash — Your receipts deserve better than a shoebox',
 };
 
 // ---------------------------------------------------------------------------
@@ -59,8 +59,8 @@ export default async function HomePage() {
         <div className="landing-hero">
           {/* Wordmark */}
           <div className="landing-wordmark" style={{ animation: 'landing-rise 600ms ease-out both' }}>
-            <div className="landing-logo-circle" aria-hidden="true">vB</div>
-            <span className="landing-logo-text">vBudget</span>
+            <div className="landing-logo-circle" aria-hidden="true">SC</div>
+            <span className="landing-logo-text">SetCash</span>
           </div>
 
           {/* Headline */}

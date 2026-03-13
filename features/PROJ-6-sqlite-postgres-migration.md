@@ -20,7 +20,7 @@
 ## Acceptance Criteria
 - [ ] Script located at `/nextjs/scripts/migrate-sqlite-to-pg.ts` (runnable via `ts-node` or
       `npx tsx`)
-- [ ] Reads from `DATA_DIR/vbudget.db` (path configurable via env var `SQLITE_PATH`)
+- [ ] Reads from `DATA_DIR/setcash.db` (path configurable via env var `SQLITE_PATH`)
 - [ ] Writes to PostgreSQL via Prisma using `DATABASE_URL`
 - [ ] Migrates all tables in dependency order:
       1. `users`
@@ -62,7 +62,7 @@
 ## Tech Design (Solution Architect)
 
 ### Overview
-PROJ-6 is a **one-time data migration tool** that bridges the legacy Express/SQLite app and the new Next.js/PostgreSQL app. It reads from the existing `vbudget.db` file and writes to PostgreSQL via Prisma, transforming integer IDs to UUIDs while preserving all relationships.
+PROJ-6 is a **one-time data migration tool** that bridges the legacy Express/SQLite app and the new Next.js/PostgreSQL app. It reads from the existing `setcash.db` file and writes to PostgreSQL via Prisma, transforming integer IDs to UUIDs while preserving all relationships.
 
 ### Architecture Diagram
 
@@ -79,7 +79,7 @@ PROJ-6 is a **one-time data migration tool** that bridges the legacy Express/SQL
 │   SQLite     │    │  ID Mapping    │    │   PostgreSQL     │
 │  (Source)    │───▶│    Engine      │───▶│   (Target)       │
 │              │    │                │    │                  │
-│ • vbudget.db │    │ In-memory maps │    │ • Prisma Client  │
+│ • setcash.db │    │ In-memory maps │    │ • Prisma Client  │
 │ • Integer PKs│    │ legacyId → UUID│    │ • UUID PKs       │
 │ • TEXT dates │    │                │    │ • DateTime       │
 │ • 0/1 bools  │    │ Preserves FKs  │    │ • Boolean        │
@@ -178,7 +178,7 @@ Exit code: 1 (errors occurred)
 
 | Variable | Purpose | Default |
 |----------|---------|---------|
-| `SQLITE_PATH` | Path to SQLite file | `../../data/vbudget.db` |
+| `SQLITE_PATH` | Path to SQLite file | `../../data/setcash.db` |
 | `DATABASE_URL` | PostgreSQL connection | (required) |
 
 ### Dependencies
@@ -318,7 +318,7 @@ The script outputs row counts that should be verified:
 - [x] Runnable via `npx tsx` (verified: `npm run migrate:sqlite` works)
 
 #### AC-2: SQLite Path Configuration
-- [x] Default path `../../data/vbudget.db` works
+- [x] Default path `../../data/setcash.db` works
 - [x] Custom path via `SQLITE_PATH` env var works
 
 #### AC-3: PostgreSQL Connection
@@ -409,7 +409,7 @@ The script outputs row counts that should be verified:
 #### Prerequisites Check
 - [x] docker-compose.test.yml exists
 - [x] PostgreSQL running on port 5433
-- [x] data/vbudget.db exists (73728 bytes)
+- [x] data/setcash.db exists (73728 bytes)
 - [x] DATABASE_URL configured
 
 #### Pre-Migration State

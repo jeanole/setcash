@@ -1,4 +1,4 @@
-# vBudget Specification
+# SetCash Specification
 
 > Living document. Update this file whenever features are added, changed, or planned.
 
@@ -11,7 +11,7 @@
 
 ## 1. System Overview
 
-vBudget is a multi-tenant, web-based expense tracking and budget management system designed for film productions and media projects. The goal is an easy-to-use interface for handling expenses, budgeting, and advance payment (V-Geld) tracking. Transparency and overview are paramount — during running projects, time is tight and keeping an overview is crucial.
+SetCash is a multi-tenant, web-based expense tracking and budget management system designed for film productions and media projects. The goal is an easy-to-use interface for handling expenses, budgeting, and advance payment (V-Geld) tracking. Transparency and overview are paramount — during running projects, time is tight and keeping an overview is crucial.
 
 **Core Principles:**
 

@@ -347,7 +347,7 @@ Spending is calculated from **confirmed bills only** (draft bills are excluded):
 |----------|--------|-----------|
 | **Tab Implementation** | URL query param (`?tab=motive` or `?tab=category`) | Allows direct linking to specific view; syncs with browser history; easy to implement with `useSearchParams` |
 | **Data Fetching** | Server Component + async data fetch | Spending calculations are compute-intensive; server-side keeps bundle small; leverages existing Prisma patterns |
-| **Color Thresholds** | Tailwind classes: `emerald-500` (green), `amber-500` (orange), `rose-500` (red) | Consistent with vBudget design system; accessible color contrast |
+| **Color Thresholds** | Tailwind classes: `emerald-500` (green), `amber-500` (orange), `rose-500` (red) | Consistent with SetCash design system; accessible color contrast |
 | **Color Indicator Style** | Small circular dot (8px) next to percentage | Compact, scannable, universally understood pattern |
 | **Currency Formatting** | German locale: `€1.234,56` | Matches existing Express app behavior; user expectation for German market |
 | **Loading State** | Skeleton rows (pulsing gray bars) | Consistent with PROJ-7 bills table; perceived performance boost |

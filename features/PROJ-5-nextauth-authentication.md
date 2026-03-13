@@ -197,7 +197,7 @@ All auth env vars are already documented in `.env.test.example` at the repo root
 **App URL:** http://localhost:3001
 **Tester:** QA Engineer (AI)
 **Method:** Static code review + live Docker testing (curl)
-**Docker:** vbudget-vbudget-next-1 (Next.js on :3001), vbudget-postgres-test-1 (PostgreSQL on :5433)
+**Docker:** setcash-setcash-next-1 (Next.js on :3001), setcash-postgres-test-1 (PostgreSQL on :5433)
 
 > **CRITICAL BLOCKER:** The Docker image running in the test stack was built from PROJ-4
 > code. The PROJ-5 commits (`3cca599` feat, `5965c22` fix) exist in git but the Docker
@@ -251,9 +251,9 @@ All auth env vars are already documented in `.env.test.example` at the repo root
 #### AC-7: /login page renders correctly
 - [x] (Static) `LoginForm` component has email field, password field, error display, submit button
 - [x] (Static) "Sign in with Google" button with Google SVG logo is present
-- [x] (Static) vBudget monogram ("vB" in indigo circle) and product name are rendered
+- [x] (Static) SetCash monogram ("SC" in indigo circle) and product name are rendered
 - [x] (Static) `vb-rise` animation defined in `globals.css` with staggered delays in LoginForm
-- [x] (Static) Page metadata sets `title: 'Sign in -- vBudget'`
+- [x] (Static) Page metadata sets `title: 'Sign in -- SetCash'`
 - [ ] BUG-1: Live -- Login page shows PROJ-4 placeholder "Login page -- coming in PROJ-5" (stale image)
 
 #### AC-8: /logout clears session and redirects to /login
@@ -289,7 +289,7 @@ All auth env vars are already documented in `.env.test.example` at the repo root
 
 #### AC-13: NEXTAUTH_SECRET missing causes clear error
 - [x] (Static) `lib/env.ts` includes `NEXTAUTH_SECRET` in `REQUIRED_ENV_VARS` array (line 8)
-- [x] (Static) `assertEnv()` throws descriptive error: "[vBudget] Missing required environment variable: NEXTAUTH_SECRET"
+- [x] (Static) `assertEnv()` throws descriptive error: "[SetCash] Missing required environment variable: NEXTAUTH_SECRET"
 - [x] (Static) `validateEnv()` collects all missing vars and throws a combined error message
 
 ---
@@ -429,7 +429,7 @@ Login page CSS analysis (source code -- cannot live-test due to stale Docker ima
 #### BUG-4: Database missing `isActive` column -- migration not applied [Backend]
 - **Severity:** Critical
 - **Steps to Reproduce:**
-  1. `docker exec postgres-test psql -U vbudget -d vbudget -c "SELECT column_name FROM information_schema.columns WHERE table_name='User';"`
+  1. `docker exec postgres-test psql -U setcash -d setcash -c "SELECT column_name FROM information_schema.columns WHERE table_name='User';"`
   2. Result shows 7 columns -- `isActive` is NOT present
   3. Only `20260301195848_init` migration applied; `20260303115657_add_user_isactive` is pending
 - **Expected:** `isActive` column exists with `BOOLEAN NOT NULL DEFAULT true`
@@ -541,7 +541,7 @@ _To be added by /deploy_
 **App URL:** http://localhost:3001
 **Tester:** QA Engineer (AI)
 **Method:** Live Docker testing with Node.js test scripts
-**Docker:** vbudget-vbudget-next-1 (built 2026-03-04 12:30 UTC), vbudget-postgres-test-1
+**Docker:** setcash-setcash-next-1 (built 2026-03-04 12:30 UTC), setcash-postgres-test-1
 
 > **Note:** Docker image was rebuilt with `--no-cache` to ensure PROJ-5 code was included. Previous QA was blocked by stale PROJ-4 image.
 
@@ -723,7 +723,7 @@ Users who navigate to `/` see the scaffold page and must separately navigate to 
 - [ ] The page uses a split layout (desktop: left=product hero/info, right=login form) or a single-column layout with branding above the form (mobile)
 - [ ] The login form (`LoginForm` component) is embedded directly in the page — no redirect to `/login`
 - [ ] `app/(public)/login/page.tsx` either redirects to `/` or is removed (unauthenticated users land at `/`)
-- [ ] The page includes: vBudget wordmark/logo, a short tagline or feature highlights (e.g. "Track expenses. Manage budgets. Simplify reimbursements."), and the login form
+- [ ] The page includes: SetCash wordmark/logo, a short tagline or feature highlights (e.g. "Track expenses. Manage budgets. Simplify reimbursements."), and the login form
 - [ ] Middleware's public route list is updated if `/login` path changes
 - [ ] Authenticated users visiting `/` are redirected to `/dashboard` (same as current `/login` behavior)
 - [ ] Responsive: stacked single-column on mobile (≤768px), split two-column on desktop (≥1024px)

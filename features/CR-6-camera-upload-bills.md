@@ -5,7 +5,7 @@
 **Feature:** PROJ-7: Bills Feature
 
 ## Current Behavior
-The new Next.js bill upload form (`/bills/new`) only has a "Choose Files" button for selecting images from the device gallery. It lacks the camera capture functionality that was present in the original vBudget app.
+The new Next.js bill upload form (`/bills/new`) only has a "Choose Files" button for selecting images from the device gallery. It lacks the camera capture functionality that was present in the original SetCash app.
 
 ## Desired Behavior
 Add a "Take Photo" button that allows users to capture images directly using the device's camera (back camera / environment facing). This should:
@@ -18,7 +18,7 @@ Add a "Take Photo" button that allows users to capture images directly using the
    - Captured photo goes through the same crop/validation flow
 
 ## Rationale
-The original vBudget app supported camera capture which is essential for mobile workflows. Users expect to snap photos of receipts immediately rather than saving them to gallery first. This is a regression from the original functionality.
+The original SetCash app supported camera capture which is essential for mobile workflows. Users expect to snap photos of receipts immediately rather than saving them to gallery first. This is a regression from the original functionality.
 
 ## Original Implementation Reference
 From `public/index.html` lines 324-335:

@@ -1,4 +1,4 @@
-# vBudget - Bills manager (minimal scaffold)
+# SetCash - Bills manager (minimal scaffold)
 
 This project is a small app to manage bills. Users sign in with Google (when invited by an admin), upload a photo of a bill, and store bill metadata in a Google Sheet. Images are uploaded to Google Drive and the link is stored in the sheet.
 

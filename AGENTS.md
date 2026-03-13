@@ -1,10 +1,10 @@
-# vBudget — AI Agent Guide
+# SetCash — AI Agent Guide
 
 > This document is intended for AI coding agents. It provides the essential context needed to understand, navigate, and modify the codebase effectively.
 
 ## Project Overview
 
-**vBudget** is a multi-tenant expense tracking and budget management system designed for film productions and media projects. It enables teams to track expenses, manage budgets across multiple dimensions (motives and categories), handle advance payments (V-Geld), and export data for accounting.
+**SetCash** is a multi-tenant expense tracking and budget management system designed for film productions and media projects. It enables teams to track expenses, manage budgets across multiple dimensions (motives and categories), handle advance payments (V-Geld), and export data for accounting.
 
 **Core Principles:**
 - Strict project isolation (multi-tenant)
@@ -36,7 +36,7 @@
 ## Project Structure
 
 ```
-vbudget/
+setcash/
 ├── server.js              # Express bootstrap, middleware setup, route mounting
 ├── db.js                  # SQLite schema, migrations, initialization (~800 lines)
 ├── middleware.js          # Auth middleware, CSRF protection, role guards
@@ -90,7 +90,7 @@ vbudget/
 │       └── telegram.js    # Telegram linking UI
 │
 ├── data/                  # Runtime data (gitignored)
-│   ├── vbudget.db         # SQLite database
+│   ├── setcash.db         # SQLite database
 │   ├── uploads/           # Uploaded bill images
 │   ├── sessions/          # File-based session storage
 │   └── google-credentials.json  # Service account key
@@ -292,7 +292,7 @@ No automated test suite is currently configured. Testing is manual via the web U
 
 For database testing, you can use the SQLite CLI:
 ```bash
-sqlite3 data/vbudget.db
+sqlite3 data/setcash.db
 ```
 
 ## Deployment Process
@@ -300,7 +300,7 @@ sqlite3 data/vbudget.db
 **CI/CD Pipeline (GitHub Actions):**
 
 1. Push to `production` branch triggers `docker-publish.yml`
-2. Docker image built and pushed to Docker Hub (`jeanlosch/vbudget`)
+2. Docker image built and pushed to GitHub Container Registry (`ghcr.io/jeanole/setcash`)
 3. Image tagged with `:latest` and commit SHA
 4. Watchtower on production server auto-pulls new image
 

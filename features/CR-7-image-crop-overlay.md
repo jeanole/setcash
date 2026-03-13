@@ -5,7 +5,7 @@
 **Feature:** PROJ-7: Bills Feature
 
 ## Current Behavior
-The new Next.js `ImageGallery` and `BillImageUpload` components are missing the image cropping functionality that existed in the original vBudget app. Users cannot crop images after upload or during the upload process.
+The new Next.js `ImageGallery` and `BillImageUpload` components are missing the image cropping functionality that existed in the original SetCash app. Users cannot crop images after upload or during the upload process.
 
 ## Desired Behavior
 Port the complete cropping feature from the original app:

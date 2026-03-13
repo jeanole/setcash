@@ -80,7 +80,7 @@ export async function GET(
     settingsRaw.forEach((s) => { if (s.value) settings[s.key] = s.value; });
     const pTitle = settings['projectTitle'] ?? '';
     const pSubtitle = settings['projectSubtitle'] ?? '';
-    const pdfPrefix = pTitle ? pTitle + ' - ' : 'vBudget - ';
+    const pdfPrefix = pTitle ? pTitle + ' - ' : 'SetCash - ';
 
     // Bulk-fetch allocations for all user bills
     const billIds = userBills.map((b) => b.id);

@@ -216,7 +216,7 @@ async function processMediaGroup(
   bot
     .sendMessage(
       chatId,
-      `✓ ${photos.length} Foto(s) empfangen – Beleg als Entwurf gespeichert.\nBitte in vBudget vervollständigen.${ocrNote}`
+      `✓ ${photos.length} Foto(s) empfangen – Beleg als Entwurf gespeichert.\nBitte in SetCash vervollständigen.${ocrNote}`
     )
     .catch(() => {});
 }
@@ -254,7 +254,7 @@ async function processSinglePhoto(
   bot
     .sendMessage(
       msg.chat.id,
-      `✓ Foto empfangen – Beleg als Entwurf gespeichert.\nBitte in vBudget vervollständigen.${ocrNote}`
+      `✓ Foto empfangen – Beleg als Entwurf gespeichert.\nBitte in SetCash vervollständigen.${ocrNote}`
     )
     .catch(() => {});
 }
@@ -272,7 +272,7 @@ export async function handleMessage(
     bot
       .sendMessage(
         msg.chat.id,
-        'Willkommen bei vBudget!\nSende /link <Code> um deinen Account zu verknüpfen.\nDen Code findest du in vBudget unter "Telegram verknüpfen".'
+        'Willkommen bei SetCash!\nSende /link <Code> um deinen Account zu verknüpfen.\nDen Code findest du in SetCash unter "Telegram verknüpfen".'
       )
       .catch(() => {});
     return;
@@ -328,7 +328,7 @@ export async function handleMessage(
       bot
         .sendMessage(
           msg.chat.id,
-          'Dein Telegram-Account ist noch nicht verknüpft.\nSende /link <Code> – den Code findest du in vBudget.'
+          'Dein Telegram-Account ist noch nicht verknüpft.\nSende /link <Code> – den Code findest du in SetCash.'
         )
         .catch(() => {});
       return;

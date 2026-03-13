@@ -5,7 +5,7 @@
 **Last Updated:** 2026-03-01
 
 ## Context
-Parallel rewrite of vBudget using Next.js 14 (App Router), Prisma ORM, and PostgreSQL.
+Parallel rewrite of SetCash using Next.js 14 (App Router), Prisma ORM, and PostgreSQL.
 The new app lives in `/nextjs/` inside the existing repo. The existing Express app remains
 untouched during the migration. All migration work happens on branch `to_nextjs`.
 
@@ -26,7 +26,7 @@ untouched during the migration. All migration work happens on branch `to_nextjs`
 - [ ] `/nextjs/` directory contains a Next.js 14+ project initialised with App Router (`app/` dir)
 - [ ] TypeScript is configured (`tsconfig.json` present, strict mode on)
 - [ ] Prisma is installed and configured to connect to PostgreSQL via `DATABASE_URL` env var
-- [ ] Prisma schema (`schema.prisma`) defines all models matching the current vBudget tables:
+- [ ] Prisma schema (`schema.prisma`) defines all models matching the current SetCash tables:
       `User`, `Project`, `ProjectMember`, `Bill`, `BillImage`, `BillMotive`, `BillCategory`,
       `Category`, `Motive`, `Vgeld`, `EditLog`, `Settings`
 - [ ] `prisma migrate dev` runs successfully against a fresh PostgreSQL instance
@@ -35,7 +35,7 @@ untouched during the migration. All migration work happens on branch `to_nextjs`
       `.env.test.example` is committed with the same keys and dummy values
 - [ ] `npm run dev` inside `/nextjs/` starts without errors on port 3001
 - [ ] Root layout (`app/layout.tsx`) renders a sidebar shell and main content slot
-- [ ] A placeholder home page (`app/page.tsx`) renders "vBudget — Next.js migration in progress"
+- [ ] A placeholder home page (`app/page.tsx`) renders "SetCash — Next.js migration in progress"
 - [ ] Branch `to_nextjs` is the only branch where `/nextjs/` changes are committed
 
 ## Edge Cases
@@ -301,7 +301,7 @@ TelegramLinkCode
 Two services, completely isolated from the production compose:
 
 ```
-vbudget-next   — Next.js app
+setcash-next   — Next.js app
   build:  ./nextjs/Dockerfile
   port:   3001 (host) → 3001 (container)
   env:    DATABASE_URL, NEXTAUTH_SECRET, NEXTAUTH_URL, GOOGLE_* etc.
@@ -310,11 +310,11 @@ vbudget-next   — Next.js app
 postgres-test  — PostgreSQL 15
   image:  postgres:15-alpine
   port:   5433 (host) → 5432 (container)   ← different host port from any local PG
-  volume: vbudget-pg-test-data (named volume)
+  volume: setcash-pg-test-data (named volume)
   env:    POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB
 ```
 
-Service names (`vbudget-next`, `postgres-test`) and host port (3001, 5433) are
+Service names (`setcash-next`, `postgres-test`) and host port (3001, 5433) are
 deliberately different from any production values to prevent accidents.
 
 ---
@@ -345,7 +345,7 @@ pages will load fast with no client-side fetch waterfalls.
 **Prisma over raw SQL or Drizzle**
 Prisma auto-generates TypeScript types from the schema, so every query is type-safe.
 It also handles complex migration management (`migrate dev`, `migrate deploy`) cleanly.
-The trade-off is slightly slower query speed vs. raw SQL, which is acceptable at vBudget's
+The trade-off is slightly slower query speed vs. raw SQL, which is acceptable at SetCash's
 scale.
 
 **PostgreSQL over keeping SQLite**
@@ -393,7 +393,7 @@ first real pages are built.
 **App URL:** http://localhost:3001
 **Tester:** QA Engineer (AI)
 **Branch:** to_nextjs
-**Docker stack:** docker-compose.test.yml (vbudget-next + postgres-test)
+**Docker stack:** docker-compose.test.yml (setcash-next + postgres-test)
 **Fix commit verified:** `1374850 fix(PROJ-4): Fix QA bugs`
 
 ### Fix Verification

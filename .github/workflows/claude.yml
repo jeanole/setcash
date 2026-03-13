@@ -49,7 +49,7 @@ jobs:
             actions: read
 
           custom_instructions: |
-            You are operating inside the vBudget repository via GitHub Actions.
+            You are operating inside the SetCash repository via GitHub Actions.
 
             ## CRITICAL: Project Structure
             This project has been migrated from Express to Next.js. The production app

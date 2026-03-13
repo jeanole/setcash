@@ -496,8 +496,8 @@ All endpoints require `session.user.role === 'superadmin'`.
 ### Container Startup
 | Check | Status | Details |
 |-------|--------|---------|
-| App container | ✅ Running | vbudget-vbudget-next-1 (healthy) |
-| Database container | ✅ Running | vbudget-postgres-test-1 (healthy) |
+| App container | ✅ Running | setcash-setcash-next-1 (healthy) |
+| Database container | ✅ Running | setcash-postgres-test-1 (healthy) |
 | Port mapping | ✅ OK | 0.0.0.0:3001->3001/tcp |
 | Health endpoint | ✅ Responding | 200 OK |
 | Login page | ✅ Responding | 200 OK |
