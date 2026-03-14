@@ -16,7 +16,7 @@ import { encryptApiKey, maskApiKey } from '@/lib/ocr';
 
 const updateSettingsSchema = z.object({
   ocrEnabled: z.boolean().optional(),
-  ocrProvider: z.enum(['openai', 'gemini', 'claude', 'custom']).optional(),
+  ocrProvider: z.enum(['openai', 'gemini', 'claude', 'custom', 'qwen25vl', 'qwen3vl', 'deepseek']).optional(),
   ocrApiKey: z.string().optional(),
   ocrBaseUrl: z.string().url().nullable().optional(),
 });

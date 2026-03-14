@@ -168,7 +168,7 @@ export interface ProjectOcrSettings {
 
 export interface UpdateProjectOcrSettingsData {
   ocrEnabled?: boolean;
-  ocrProvider?: 'openai' | 'gemini' | 'claude' | 'custom';
+  ocrProvider?: 'openai' | 'gemini' | 'claude' | 'custom' | 'qwen25vl' | 'qwen3vl' | 'deepseek';
   /** Provide plaintext key to update; empty string to clear; omit to leave unchanged */
   ocrApiKey?: string;
   ocrBaseUrl?: string | null;
