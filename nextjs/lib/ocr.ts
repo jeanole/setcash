@@ -75,7 +75,17 @@ export function maskApiKey(stored: string): string | null {
 }
 
 // ── SSRF protection ──────────────────────────────────────────────────────────
-function isPrivateUrl(urlString: string): boolean {
+function isPrivateIp(ip: string): boolean {
+  if (ip === 'localhost' || ip === '::1' || ip === '0.0.0.0' || ip === '[::]') return true;
+  if (/^127\./.test(ip)) return true;
+  if (/^169\.254\./.test(ip)) return true;
+  if (/^10\./.test(ip)) return true;
+  if (/^192\.168\./.test(ip)) return true;
+  if (/^172\.(1[6-9]|2\d|3[01])\./.test(ip)) return true;
+  return false;
+}
+
+async function isPrivateUrl(urlString: string): Promise<boolean> {
   let parsed: URL;
   try {
     parsed = new URL(urlString);
@@ -83,13 +93,17 @@ function isPrivateUrl(urlString: string): boolean {
     return true;
   }
   const hostname = parsed.hostname.toLowerCase();
-  if (hostname === 'localhost' || /^127\./.test(hostname) || hostname === '::1') return true;
   if (hostname.endsWith('.local')) return true;
-  if (/^169\.254\./.test(hostname)) return true;
-  if (/^10\./.test(hostname)) return true;
-  if (/^192\.168\./.test(hostname)) return true;
-  if (/^172\.(1[6-9]|2\d|3[01])\./.test(hostname)) return true;
-  if (hostname === '0.0.0.0' || hostname === '[::]') return true;
+  if (isPrivateIp(hostname)) return true;
+  // Resolve DNS to catch rebinding attacks (e.g. evil.example.com → 169.254.169.254)
+  try {
+    const dns = await import('dns/promises');
+    const { address } = await dns.lookup(hostname);
+    if (isPrivateIp(address)) return true;
+  } catch {
+    // DNS resolution failed — block the request
+    return true;
+  }
   return false;
 }
 
@@ -293,16 +307,32 @@ async function analyseImage(
   throw new Error(`Unknown provider: ${provider}`);
 }
 
+function sanitizeOcrString(val: unknown, maxLen = 255): string | null {
+  if (val == null) return null;
+  return String(val).replace(/[\x00-\x1F\x7F]/g, '').slice(0, maxLen) || null;
+}
+
+const VALID_OCR_TYPES = ['Kassenbon', 'Rechnung', 'Quittung'] as const;
+
 function parseOcrResponse(text: string): OcrResult {
   const cleaned = text.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
   const match = cleaned.match(/\{[\s\S]*\}/);
   if (!match) throw new Error('No JSON found in provider response');
   const obj = JSON.parse(match[0]);
+
+  const rawType = sanitizeOcrString(obj.type);
+  const validatedType =
+    rawType != null && (VALID_OCR_TYPES as readonly string[]).includes(rawType) ? rawType : null;
+
+  const rawDate = sanitizeOcrString(obj.date);
+  const validatedDate =
+    rawDate != null && !isNaN(new Date(rawDate).getTime()) ? rawDate : null;
+
   return {
-    date: obj.date || null,
-    vendor: obj.vendor || null,
-    item: obj.item || null,
-    type: obj.type || null,
+    date: validatedDate,
+    vendor: sanitizeOcrString(obj.vendor),
+    item: sanitizeOcrString(obj.item),
+    type: validatedType,
     brutto19: obj.brutto19 != null ? parseFloat(obj.brutto19) : null,
     brutto7: obj.brutto7 != null ? parseFloat(obj.brutto7) : null,
     brutto0: obj.brutto0 != null ? parseFloat(obj.brutto0) : null,
@@ -436,7 +466,7 @@ export async function runOcrJob(billId: string, projectId: string): Promise<void
       if (!baseUrl || !baseUrl.startsWith('https://')) {
         return fail('Custom provider base URL must start with https://', 'ConfigError');
       }
-      if (isPrivateUrl(baseUrl)) {
+      if (await isPrivateUrl(baseUrl)) {
         return fail(
           'Custom provider base URL must not point to a private or reserved address',
           'SSRFError'

@@ -36,6 +36,26 @@ export const rateLimits = {
     limiter: Ratelimit.slidingWindow(3, '10 m'),
     name: 'bug_report',
   },
+  // Telegram link code generation: 5 requests per 10 minutes per user
+  telegramLinkCode: {
+    limiter: Ratelimit.slidingWindow(5, '10 m'),
+    name: 'telegram_link_code',
+  },
+  // Password change: 5 attempts per 15 minutes per user
+  passwordChange: {
+    limiter: Ratelimit.slidingWindow(5, '15 m'),
+    name: 'password_change',
+  },
+  // Export reports: 10 requests per minute per user
+  exportReport: {
+    limiter: Ratelimit.slidingWindow(10, '1 m'),
+    name: 'export_report',
+  },
+  // Project invite: 20 requests per hour per project
+  inviteEmail: {
+    limiter: Ratelimit.slidingWindow(20, '1 h'),
+    name: 'invite_email',
+  },
 } as const;
 
 // Mock rate limiter for local development when Redis is not configured
@@ -79,3 +99,7 @@ export const forgotPasswordLimiter = createRateLimiter(rateLimits.forgotPassword
 export const signUpLimiter = createRateLimiter(rateLimits.signUp);
 export const resendVerificationLimiter = createRateLimiter(rateLimits.resendVerification);
 export const bugReportLimiter = createRateLimiter(rateLimits.bugReport);
+export const telegramLinkCodeLimiter = createRateLimiter(rateLimits.telegramLinkCode);
+export const passwordChangeLimiter = createRateLimiter(rateLimits.passwordChange);
+export const exportLimiter = createRateLimiter(rateLimits.exportReport);
+export const inviteLimiter = createRateLimiter(rateLimits.inviteEmail);

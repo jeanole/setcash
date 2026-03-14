@@ -23,17 +23,12 @@ function getKey(): Buffer | null {
 /**
  * Encrypt a plaintext string using AES-256-GCM.
  * Returns `iv:authTag:ciphertext` (all hex).
- * Falls back to returning plaintext if TELEGRAM_ENCRYPTION_KEY is not set (dev only).
+ * Throws if TELEGRAM_ENCRYPTION_KEY is not configured.
  */
 export function encrypt(plaintext: string): string {
   const key = getKey();
   if (!key) {
-    if (process.env.NODE_ENV === 'production') {
-      console.error('[Telegram] TELEGRAM_ENCRYPTION_KEY is not set in production. Bot tokens will not be encrypted!');
-    } else {
-      console.warn('[Telegram] TELEGRAM_ENCRYPTION_KEY not set — storing bot token as plaintext (dev only).');
-    }
-    return plaintext;
+    throw new Error('TELEGRAM_ENCRYPTION_KEY is not configured. Cannot encrypt bot token. Set this environment variable before configuring Telegram.');
   }
 
   const iv = crypto.randomBytes(12);

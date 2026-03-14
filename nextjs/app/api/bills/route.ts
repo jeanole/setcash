@@ -32,8 +32,8 @@ const createBillSchema = z.object({
 });
 
 // Calculate bill number for a user within a project (1.01-1.20, 2.01-2.20, etc.)
-async function calculateBillNumber(userEmail: string, projectId: string): Promise<string> {
-  const count = await prisma.bill.count({
+async function calculateBillNumber(userEmail: string, projectId: string, client: typeof prisma = prisma): Promise<string> {
+  const count = await client.bill.count({
     where: {
       submittedByEmail: { equals: userEmail, mode: 'insensitive' },
       projectId,
@@ -159,6 +159,20 @@ async function saveAllocations(
   }
 }
 
+// Pagination query schema for GET /api/bills
+const getBillsQuerySchema = z.object({
+  page: z
+    .string()
+    .optional()
+    .transform((v) => (v ? parseInt(v, 10) : 1))
+    .pipe(z.number().int().min(1)),
+  pageSize: z
+    .string()
+    .optional()
+    .transform((v) => (v ? parseInt(v, 10) : 50))
+    .pipe(z.number().int().min(1).max(200)),
+});
+
 // GET /api/bills - List all bills for current project
 export async function GET(req: NextRequest) {
   try {
@@ -186,36 +200,54 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Get all bills with related data
-    const bills = await prisma.bill.findMany({
-      where: { projectId },
-      orderBy: { createdAt: 'asc' },
-      include: {
-        images: {
-          orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
-          select: {
-            id: true,
-            filename: true,
-            filePath: true,
-            sortOrder: true,
-          },
-        },
-        motives: {
-          include: {
-            motive: {
-              select: { name: true },
-            },
-          },
-        },
-        categories: {
-          include: {
-            category: {
-              select: { name: true },
-            },
-          },
-        },
-      },
+    // Parse and validate pagination params
+    const { searchParams } = new URL(req.url);
+    const queryParsed = getBillsQuerySchema.safeParse({
+      page: searchParams.get('page') ?? undefined,
+      pageSize: searchParams.get('pageSize') ?? undefined,
     });
+    if (!queryParsed.success) {
+      return NextResponse.json({ error: 'Invalid query parameters' }, { status: 400 });
+    }
+    const { page, pageSize } = queryParsed.data;
+
+    const where = { projectId };
+
+    // Run count and data fetch in parallel
+    const [total, bills] = await Promise.all([
+      prisma.bill.count({ where }),
+      prisma.bill.findMany({
+        where,
+        orderBy: { createdAt: 'asc' },
+        take: pageSize,
+        skip: (page - 1) * pageSize,
+        include: {
+          images: {
+            orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+            select: {
+              id: true,
+              filename: true,
+              filePath: true,
+              sortOrder: true,
+            },
+          },
+          motives: {
+            include: {
+              motive: {
+                select: { name: true },
+              },
+            },
+          },
+          categories: {
+            include: {
+              category: {
+                select: { name: true },
+              },
+            },
+          },
+        },
+      }),
+    ]);
 
     // Get user roles for this project
     const userRoles = await prisma.projectMember.findMany({
@@ -271,7 +303,7 @@ export async function GET(req: NextRequest) {
       ocrFields: b.ocrFields as string[] | null,
     }));
 
-    return NextResponse.json(mapped);
+    return NextResponse.json({ bills: mapped, total, page, pageSize });
   } catch (error) {
     console.error('Error fetching bills:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -345,9 +377,6 @@ export async function POST(req: NextRequest) {
       console.warn('Failed to parse categoryAllocations:', e);
     }
 
-    // Calculate bill number
-    const billNumber = await calculateBillNumber(session.user.email, projectId);
-
     // Determine status based on vendor and amount
     const totalAmount = brutto19 + brutto7 + brutto0;
     const status: 'draft' | 'confirmed' = !vendor || vendor.trim() === '' || totalAmount === 0 ? 'draft' : 'confirmed';
@@ -364,26 +393,30 @@ export async function POST(req: NextRequest) {
       motiveDisplay = motives.map((m) => m.name).filter(Boolean).join(', ');
     }
 
-    // Create bill
-    const bill = await prisma.bill.create({
-      data: {
-        date: new Date(date),
-        submittedByEmail: session.user.email,
-        billNumber,
-        type,
-        vendor,
-        item,
-        comment,
-        motiveLegacy: motiveDisplay,
-        brutto19,
-        brutto7,
-        brutto0,
-        grossAmount: totalAmount,
-        nettoAmount,
-        projectId,
-        status,
-      },
-    });
+    // Create bill — calculate bill number inside a serializable transaction to prevent
+    // duplicate bill numbers under concurrent requests (BUG-59)
+    const bill = await prisma.$transaction(async (tx) => {
+      const billNumber = await calculateBillNumber(session.user.email, projectId, tx as typeof prisma);
+      return tx.bill.create({
+        data: {
+          date: new Date(date),
+          submittedByEmail: session.user.email,
+          billNumber,
+          type,
+          vendor,
+          item,
+          comment,
+          motiveLegacy: motiveDisplay,
+          brutto19,
+          brutto7,
+          brutto0,
+          grossAmount: totalAmount,
+          nettoAmount,
+          projectId,
+          status,
+        },
+      });
+    }, { isolationLevel: 'Serializable' });
 
     // Handle file uploads
     const uploadedFiles = getUploadedFiles(files, 'photos');
@@ -396,7 +429,7 @@ export async function POST(req: NextRequest) {
         const f = uploadedFiles[i];
         const ext = path.extname(f.originalFilename || '') || '.jpg';
         const suffix = uploadedFiles.length > 1 ? `_${i + 1}` : '';
-        const savedFilename = generateFilename(userFolder, billNumber, dateStr, suffix, f.originalFilename || '');
+        const savedFilename = generateFilename(userFolder, bill.billNumber ?? bill.id, dateStr, suffix, f.originalFilename || '');
         const relPath = `${userFolder}/${savedFilename}`;
         const savedFilePath = path.join(UPLOADS_DIR, relPath);
 

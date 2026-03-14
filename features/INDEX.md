@@ -1,6 +1,6 @@
 # SetCash — Project Index
 
-**Next Available IDs:** PROJ-21 · BUG-45 · CR-15
+**Next Available IDs:** PROJ-21 · BUG-84 · CR-15
 
 | ID | Type | Title | Status | Priority | Feature | Date |
 |----|------|-------|--------|----------|---------|------|
@@ -82,3 +82,42 @@
 | CR-13 | CR | Require Invite Token for All Signups (No Open Registration) | Pending Review | Medium | PROJ-10 | 2026-03-13 |
 | [PROJ-20](PROJ-20-user-profile-edit.md) | Feature | User Profile Edit Panel | In Progress | Medium | PROJ-5 | 2026-03-13 |
 | CR-14 | CR | Add User Profile Edit Panel | Pending Review | Medium | PROJ-20 | 2026-03-13 |
+| [BUG-45](BUG-45-jwt-session-update-privilege-escalation.md) | Bug | JWT Session Update Trusts Client-Supplied Role — Privilege Escalation | Resolved | High | PROJ-5 | 2026-03-14 |
+| [BUG-46](BUG-46-bill-image-routes-missing-ownership-check.md) | Bug | Bill Image Upload/Replace/Delete Routes Missing Owner-or-Admin Check | Resolved | High | PROJ-7 | 2026-03-14 |
+| [BUG-47](BUG-47-bills-api-missing-pagination-limit.md) | Bug | GET /api/bills and /api/bills/log Have No Pagination Limit | Resolved | High | PROJ-7 | 2026-03-14 |
+| [BUG-48](BUG-48-google-credentials-global-not-project-scoped.md) | Bug | Google Credentials File Is Global — Any Project Admin Overwrites All Projects | Resolved | High | PROJ-12 | 2026-03-14 |
+| [BUG-49](BUG-49-telegram-encryption-silent-plaintext-fallback.md) | Bug | Telegram Token Encryption Silently Falls Back to Plaintext When Key Missing | Resolved | High | PROJ-12 | 2026-03-14 |
+| [BUG-50](BUG-50-telegram-link-code-no-rate-limiting.md) | Bug | No Rate Limiting on Telegram Link Code Generation | Resolved | High | PROJ-12 | 2026-03-14 |
+| [BUG-51](BUG-51-motive-category-missing-db-unique-constraint.md) | Bug | No Database Unique Constraint on Motive/Category (projectId, name) | Resolved | High | PROJ-9 | 2026-03-14 |
+| [BUG-52](BUG-52-motive-category-name-not-trimmed.md) | Bug | Motive/Category Name Not Trimmed — Whitespace-Only Names Accepted | Resolved | High | PROJ-9 | 2026-03-14 |
+| [BUG-53](BUG-53-project-deletion-missing-transaction.md) | Bug | Project Deletion Runs Sequential Deletes Without a Transaction | Resolved | Medium | PROJ-5 | 2026-03-14 |
+| [BUG-54](BUG-54-user-deletion-missing-transaction.md) | Bug | User Deletion Not Wrapped in Transaction | Resolved | Medium | PROJ-17 | 2026-03-14 |
+| [BUG-55](BUG-55-admin-user-update-bypasses-zod.md) | Bug | Admin User Update Bypasses Zod Validation on resetPassword Path | Resolved | Medium | PROJ-17 | 2026-03-14 |
+| [BUG-56](BUG-56-password-change-no-rate-limiting.md) | Bug | No Rate Limiting on Password Change Endpoint | Resolved | Medium | PROJ-20 | 2026-03-14 |
+| [BUG-57](BUG-57-rate-limiter-noop-without-upstash.md) | Bug | Rate Limiter Is a Silent No-Op When Upstash Redis Is Not Configured | Open | Medium | PROJ-19 | 2026-03-14 |
+| [BUG-58](BUG-58-ssrf-dns-rebinding-bypass.md) | Bug | SSRF Check Does Not Resolve DNS — DNS Rebinding Bypass Possible | Resolved | Medium | PROJ-19 | 2026-03-14 |
+| [BUG-59](BUG-59-bill-number-race-condition.md) | Bug | Bill Number Generation Race Condition Produces Duplicates | Resolved | Medium | PROJ-7 | 2026-03-14 |
+| [BUG-60](BUG-60-budget-pdf-missing-project-membership-check.md) | Bug | Budget Matrix PDF Missing Project Membership Verification | Resolved | Medium | PROJ-11 | 2026-03-14 |
+| [BUG-61](BUG-61-pdf-content-disposition-header-injection.md) | Bug | User PDF Content-Disposition Filename Built from Unsanitized Email | Resolved | Medium | PROJ-11 | 2026-03-14 |
+| [BUG-62](BUG-62-no-rate-limiting-on-exports.md) | Bug | No Rate Limiting on Export and Report Endpoints | Resolved | Medium | PROJ-8 | 2026-03-14 |
+| [BUG-63](BUG-63-bulk-update-array-no-max-limit.md) | Bug | Budget Bulk Update Zod Array Has No Maximum Size Limit | Resolved | Medium | PROJ-8 | 2026-03-14 |
+| [BUG-64](BUG-64-bulk-update-motive-category-not-validated-against-project.md) | Bug | Budget Bulk Update motiveId/categoryId Not Validated Against Current Project | Resolved | Medium | PROJ-8 | 2026-03-14 |
+| [BUG-65](BUG-65-telegram-api-fetch-no-timeout.md) | Bug | Telegram API Validation Fetch Has No Timeout | Resolved | Medium | PROJ-12 | 2026-03-14 |
+| [BUG-66](BUG-66-google-sheets-sync-unbounded-query.md) | Bug | Google Sheets Sync Fetches All Bills Unbounded — OOM Risk | Resolved | Medium | PROJ-12 | 2026-03-14 |
+| [BUG-67](BUG-67-google-sheets-no-concurrent-sync-protection.md) | Bug | Google Sheets Sync Has No Concurrency Protection | Resolved | Medium | PROJ-12 | 2026-03-14 |
+| [BUG-68](BUG-68-admin-member-self-modification-unrestricted.md) | Bug | Admin Can Self-Modify Own Project Member Record Without Restriction | Resolved | Medium | PROJ-10 | 2026-03-14 |
+| [BUG-69](BUG-69-invite-route-creates-own-prisma-client.md) | Bug | Invite Route Creates Its Own PrismaClient Instead of Using Shared Singleton | Resolved | Medium | PROJ-10 | 2026-03-14 |
+| [BUG-70](BUG-70-motive-cascade-delete-not-in-transaction.md) | Bug | Motive/Category Manual Cascade Delete Not Wrapped in Transaction | Resolved | Medium | PROJ-9 | 2026-03-14 |
+| [BUG-71](BUG-71-reset-password-entropy-too-low.md) | Bug | Admin-Generated Reset Password Is 8 Characters, Not 12 as Specified | Resolved | Low | PROJ-5 | 2026-03-14 |
+| [BUG-72](BUG-72-credentials-login-case-sensitive-email.md) | Bug | Credentials Login Uses Case-Sensitive Email Match | Resolved | Low | PROJ-5 | 2026-03-14 |
+| [BUG-73](BUG-73-trust-host-disables-host-validation.md) | Bug | trustHost: true Disables Host Header Validation in NextAuth | Resolved | Low | PROJ-5 | 2026-03-14 |
+| [BUG-74](BUG-74-ocr-prompt-injection-via-receipt.md) | Bug | OCR AI Response Parsed With Relaxed Regex — Prompt Injection Risk | Resolved | Low | PROJ-19 | 2026-03-14 |
+| [BUG-75](BUG-75-vgeld-list-no-pagination.md) | Bug | GET /api/vgeld Has No Pagination Limit | Resolved | Low | PROJ-15 | 2026-03-14 |
+| [BUG-76](BUG-76-bulk-delete-unlimited-array.md) | Bug | Bill Bulk Delete Accepts Unlimited ID Array | Resolved | Low | PROJ-7 | 2026-03-14 |
+| [BUG-77](BUG-77-file-upload-extension-only-validation.md) | Bug | File Upload Validates Type by Extension Only, Not Magic Bytes | Resolved | Low | PROJ-7 | 2026-03-14 |
+| [BUG-78](BUG-78-telegram-encryption-key-not-in-env-test-example.md) | Bug | TELEGRAM_ENCRYPTION_KEY Not Documented in .env.test.example | Resolved | Low | PROJ-12 | 2026-03-14 |
+| [BUG-79](BUG-79-telegram-link-code-modular-bias.md) | Bug | Telegram Link Code Generation Has Slight Modular Bias | Resolved | Low | PROJ-12 | 2026-03-14 |
+| [BUG-80](BUG-80-telegram-photo-download-no-extension-validation.md) | Bug | Telegram Photo Download Does Not Validate File Extension | Resolved | Low | PROJ-12 | 2026-03-14 |
+| [BUG-81](BUG-81-google-sheet-error-leaks-internal-details.md) | Bug | Google Sheet Sync Error Message Leaks Internal Details to Client | Resolved | Low | PROJ-12 | 2026-03-14 |
+| [BUG-82](BUG-82-categories-motives-get-returns-403-not-404.md) | Bug | Motive/Category GET Endpoints Return 403 Instead of 404 for Non-Members | Resolved | Low | PROJ-9 | 2026-03-14 |
+| [BUG-83](BUG-83-invite-endpoint-no-rate-limiting.md) | Bug | No Rate Limiting on Project Invite Endpoint — Email Spam Risk | Resolved | Low | PROJ-10 | 2026-03-14 |

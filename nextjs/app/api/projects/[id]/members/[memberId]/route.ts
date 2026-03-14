@@ -45,6 +45,11 @@ export async function PUT(
       return NextResponse.json({ error: 'Member not found' }, { status: 404 });
     }
 
+    // Non-owners cannot modify their own membership record
+    if (targetMember.userEmail === session.user.email && currentMembership.role !== 'owner') {
+      return NextResponse.json({ error: 'Cannot modify your own membership record' }, { status: 403 });
+    }
+
     const body = await request.json();
     const validated = updateSchema.parse(body);
 

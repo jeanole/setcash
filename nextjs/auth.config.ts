@@ -8,6 +8,8 @@ import type { NextAuthConfig } from 'next-auth';
 
 export const authConfig = {
   session: { strategy: 'jwt' as const },
+  // trustHost: true is required for Docker/reverse-proxy deployments.
+  // Ensure the upstream proxy (nginx/Traefik) sets the Host header correctly.
   trustHost: true,
 
   pages: {

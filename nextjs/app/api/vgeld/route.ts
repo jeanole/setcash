@@ -7,6 +7,11 @@ import { auth } from '@/auth';
 import { db as prisma } from '@/lib/db';
 import { z } from 'zod';
 
+// Validation schema for GET query params
+const listVgeldSchema = z.object({
+  limit: z.coerce.number().int().min(1).max(500).default(200),
+});
+
 // Validation schema for creating a V-Geld transfer
 const createVgeldSchema = z.object({
   amount: z.number().positive('Amount must be a positive number').multipleOf(0.01, 'Amount must have at most 2 decimal places'),
@@ -41,9 +46,15 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
+    const queryParsed = listVgeldSchema.safeParse({
+      limit: req.nextUrl.searchParams.get('limit') ?? undefined,
+    });
+    const limit = queryParsed.success ? queryParsed.data.limit : 200;
+
     const transfers = await prisma.vgeld.findMany({
       where: { projectId },
       orderBy: { date: 'desc' },
+      take: limit,
     });
 
     const mapped = transfers.map((t) => ({

@@ -4,7 +4,7 @@ import { prisma } from '@/lib/db';
 import { z } from 'zod';
 
 const createSchema = z.object({
-  name: z.string().min(1).max(100),
+  name: z.string().trim().min(1).max(100),
   budget: z.number().min(0).optional().default(0),
 });
 
@@ -32,7 +32,7 @@ export async function GET(
     });
 
     if (!membership) {
-      return NextResponse.json({ error: 'Not a member of this project' }, { status: 403 });
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
     const categories = await prisma.category.findMany({
@@ -133,6 +133,9 @@ export async function POST(
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.issues[0].message }, { status: 400 });
+    }
+    if ((error as any)?.code === 'P2002') {
+      return NextResponse.json({ error: 'A category with this name already exists' }, { status: 409 });
     }
     console.error('Error creating category:', error);
     return NextResponse.json({ error: 'Failed to create category' }, { status: 500 });

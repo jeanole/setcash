@@ -130,6 +130,8 @@ if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   session: { strategy: 'jwt' },
+  // trustHost: true is required for Docker/reverse-proxy deployments.
+  // Ensure the upstream proxy (nginx/Traefik) sets the Host header correctly.
   trustHost: true,
 
   pages: {
@@ -157,8 +159,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (!parsed.success) return null;
         const { email, password } = parsed.data;
 
-        const user = await prisma.user.findUnique({
-          where: { email },
+        const user = await prisma.user.findFirst({
+          where: { email: { equals: email, mode: 'insensitive' } },
           include: {
             memberships: { select: { projectId: true, role: true } },
           },
@@ -264,21 +266,54 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
       // ------------------------------------------------------------------
       // Handle session update trigger from client (e.g., after project switch)
-      // Use the session data passed from updateSession() directly — it was
-      // validated server-side by POST /api/projects/switch before being sent.
+      // currentProjectId and currentProjectName are taken from the session payload,
+      // but currentProjectRole is ALWAYS re-fetched from the database to prevent
+      // clients from escalating their own role via updateSession().
       // ------------------------------------------------------------------
       if (trigger === 'update' && session) {
         if ('currentProjectId' in session) {
           token.currentProjectId = (session.currentProjectId as string | null) ?? null;
         }
-        if ('currentProjectRole' in session) {
-          token.currentProjectRole = (session.currentProjectRole as 'user' | 'admin' | 'owner' | null) ?? null;
-          if (token.currentProjectRole) {
-            token.role = token.currentProjectRole;
-          }
-        }
         if ('currentProjectName' in session) {
           token.currentProjectName = (session.currentProjectName as string | null) ?? null;
+        }
+
+        // Re-validate the role from the database — never trust the client-supplied value.
+        if (token.currentProjectId && userEmail) {
+          try {
+            const dbUser = await prisma.user.findUnique({
+              where: { email: userEmail },
+              select: { isSuperAdmin: true },
+            });
+
+            if (dbUser?.isSuperAdmin) {
+              // Superadmins always act as admin in any project they switch into.
+              token.currentProjectRole = 'admin';
+              token.role = 'superadmin';
+            } else {
+              const member = await prisma.projectMember.findUnique({
+                where: {
+                  projectId_userEmail: {
+                    projectId: token.currentProjectId,
+                    userEmail,
+                  },
+                },
+              });
+
+              if (member) {
+                token.currentProjectRole = member.role as 'user' | 'admin' | 'owner';
+                token.role = token.currentProjectRole;
+              } else {
+                // User is not a member of the requested project — do not update role fields.
+                token.currentProjectId = null;
+                token.currentProjectRole = null;
+                token.currentProjectName = null;
+              }
+            }
+          } catch (error) {
+            console.error('Error validating project role in JWT update trigger:', error);
+            // Keep existing token values on error — do not apply client-supplied role.
+          }
         }
       }
       // ------------------------------------------------------------------

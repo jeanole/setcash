@@ -4,7 +4,7 @@ import { prisma } from '@/lib/db';
 import { z } from 'zod';
 
 const updateSchema = z.object({
-  name: z.string().min(1).max(100).optional(),
+  name: z.string().trim().min(1).max(100).optional(),
   budget: z.number().min(0).optional(),
 });
 
@@ -119,6 +119,9 @@ export async function PUT(
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.issues[0].message }, { status: 400 });
     }
+    if ((error as any)?.code === 'P2002') {
+      return NextResponse.json({ error: 'A motive with this name already exists' }, { status: 409 });
+    }
     console.error('Error updating motive:', error);
     return NextResponse.json({ error: 'Failed to update motive' }, { status: 500 });
   }
@@ -162,20 +165,12 @@ export async function DELETE(
       );
     }
 
-    // Delete bill motive allocations first (cascade)
-    await prisma.billMotive.deleteMany({
-      where: { motiveId },
-    });
-
-    // Delete budget matrix entries
-    await prisma.budgetMatrix.deleteMany({
-      where: { motiveId },
-    });
-
-    // Delete the motive
-    await prisma.motive.delete({
-      where: { id: motiveId },
-    });
+    // Delete in a transaction to ensure atomicity
+    await prisma.$transaction([
+      prisma.billMotive.deleteMany({ where: { motiveId } }),
+      prisma.budgetMatrix.deleteMany({ where: { motiveId } }),
+      prisma.motive.delete({ where: { id: motiveId } }),
+    ]);
 
     return NextResponse.json({ success: true });
   } catch (error) {

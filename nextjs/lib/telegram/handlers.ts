@@ -42,7 +42,13 @@ export async function downloadTelegramFile(
   // Access the token via the internal options
   const token = (bot as any).token as string;
   const url = `https://api.telegram.org/file/bot${token}/${filePath}`;
-  const ext = path.extname(filePath) || '.jpg';
+  const ext = (path.extname(filePath) || '.jpg').toLowerCase();
+
+  const ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.pdf'];
+  if (!ALLOWED_EXTENSIONS.includes(ext)) {
+    throw new Error(`File extension not allowed: ${ext}`);
+  }
+
   const savedName = `tg_${Date.now()}_${Math.random().toString(36).slice(2)}${ext}`;
 
   if (!fs.existsSync(UPLOADS_DIR)) {

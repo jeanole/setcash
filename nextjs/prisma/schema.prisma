@@ -217,6 +217,7 @@ model Motive {
   billMotives  BillMotive[]
   budgetMatrix BudgetMatrix[]
 
+  @@unique([projectId, name])
   @@index([projectId])
 }
 
@@ -231,6 +232,7 @@ model Category {
   billCategories BillCategory[]
   budgetMatrix  BudgetMatrix[]
 
+  @@unique([projectId, name])
   @@index([projectId])
 }
 

@@ -14,11 +14,11 @@ export function useBills() {
     setIsLoading(true);
     setError(null);
     try {
-      const [billsData, logsData] = await Promise.all([
+      const [billsResponse, logsData] = await Promise.all([
         api.getBills(),
         api.getEditLogs().catch(() => [] as EditLog[]),
       ]);
-      setBills(billsData);
+      setBills(billsResponse.bills);
       setLogs(logsData);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load bills');

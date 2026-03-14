@@ -4,7 +4,7 @@ import { prisma } from '@/lib/db';
 import { z } from 'zod';
 
 const updateSchema = z.object({
-  name: z.string().min(1).max(100).optional(),
+  name: z.string().trim().min(1).max(100).optional(),
   budget: z.number().min(0).optional(),
 });
 
@@ -119,6 +119,9 @@ export async function PUT(
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.issues[0].message }, { status: 400 });
     }
+    if ((error as any)?.code === 'P2002') {
+      return NextResponse.json({ error: 'A category with this name already exists' }, { status: 409 });
+    }
     console.error('Error updating category:', error);
     return NextResponse.json({ error: 'Failed to update category' }, { status: 500 });
   }
@@ -162,20 +165,12 @@ export async function DELETE(
       );
     }
 
-    // Delete bill category allocations first (cascade)
-    await prisma.billCategory.deleteMany({
-      where: { categoryId },
-    });
-
-    // Delete budget matrix entries
-    await prisma.budgetMatrix.deleteMany({
-      where: { categoryId },
-    });
-
-    // Delete the category
-    await prisma.category.delete({
-      where: { id: categoryId },
-    });
+    // Delete in a transaction to ensure atomicity
+    await prisma.$transaction([
+      prisma.billCategory.deleteMany({ where: { categoryId } }),
+      prisma.budgetMatrix.deleteMany({ where: { categoryId } }),
+      prisma.category.delete({ where: { id: categoryId } }),
+    ]);
 
     return NextResponse.json({ success: true });
   } catch (error) {

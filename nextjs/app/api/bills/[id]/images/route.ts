@@ -64,6 +64,17 @@ export async function POST(
       return NextResponse.json({ error: 'Bill not found' }, { status: 404 });
     }
 
+    // Check permissions - only submitter, project admin/owner, or superadmin can add images
+    const isOwner = bill.submittedByEmail.toLowerCase() === session.user.email.toLowerCase();
+    const isAdmin =
+      session.user.role === 'admin' ||
+      session.user.role === 'owner' ||
+      session.user.role === 'superadmin';
+
+    if (!isOwner && !isAdmin) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     // Parse multipart form
     const { fields, files } = await parseForm(req);
 

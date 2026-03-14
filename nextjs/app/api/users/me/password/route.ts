@@ -7,6 +7,7 @@ import { db } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth/session';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
+import { passwordChangeLimiter } from '@/lib/ratelimit';
 
 // Validation schema for password change
 const ChangePasswordSchema = z.object({
@@ -27,6 +28,15 @@ export async function PATCH(req: NextRequest) {
     const sessionUser = await getCurrentUser();
     if (!sessionUser) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Rate limit by user email
+    const { success } = await passwordChangeLimiter.limit(sessionUser.email);
+    if (!success) {
+      return NextResponse.json(
+        { error: 'Too many requests. Please try again later.' },
+        { status: 429 }
+      );
     }
 
     const body = await req.json();

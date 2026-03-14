@@ -8,6 +8,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/db';
+import { exportLimiter } from '@/lib/ratelimit';
 import { PassThrough } from 'stream';
 // @ts-ignore
 import PDFDocument from 'pdfkit';
@@ -22,6 +23,29 @@ export async function GET() {
     const projectId = session.user.currentProjectId;
     if (!projectId) {
       return NextResponse.json({ error: 'No project selected' }, { status: 400 });
+    }
+
+    // Rate limit by user email
+    const { success } = await exportLimiter.limit(session.user.email);
+    if (!success) {
+      return NextResponse.json(
+        { error: 'Too many requests. Please try again later.' },
+        { status: 429 }
+      );
+    }
+
+    // Verify project membership
+    const membership = await prisma.projectMember.findUnique({
+      where: {
+        projectId_userEmail: {
+          projectId,
+          userEmail: session.user.email,
+        },
+      },
+    });
+
+    if (!membership && session.user.role !== 'superadmin') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     // Query motives, categories, budget matrix
