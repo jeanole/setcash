@@ -1,6 +1,6 @@
 # PROJ-12: Integrations (Google Sheets + Telegram)
 
-## Status: Planned
+## Status: Change Requested
 **Created:** 2026-03-01
 **Last Updated:** 2026-03-04
 
@@ -959,6 +959,311 @@ Exact format (inline text, accordion, tooltip, help modal) TBD — needs discuss
 - **Regression:** Pass -- existing Telegram and OCR settings functionality unchanged
 - **Production Ready:** YES
 - **Recommendation:** Deploy. Both bugs are cosmetic/minor and can be fixed in the next sprint.
+
+### CR-23: Enrich Telegram Upload Response with OCR Fields, Errors, and Bill Link
+**Requested:** 2026-03-14 | **Priority:** Medium | **Status:** Pending Review
+
+**Current Behavior:**
+After a user sends a receipt photo via Telegram, the bot acknowledges the upload but does not include OCR extraction results in its reply. The user has no way to know from Telegram whether the analysis succeeded, which fields were found, or where to view the bill.
+
+**Desired Behavior:**
+After a successful upload and OCR analysis, the Telegram bot reply should include:
+1. **Recognized fields** — a formatted summary of whatever was extracted (e.g. "Vendor: REWE · Date: 14.03.2026 · Amount: 24,50 €")
+2. **Error messages** — if OCR fails or fields are missing, the bot explains what went wrong (e.g. "Could not read date — please verify manually")
+3. **Link to bill view** — a URL to open the bill directly in the web app (e.g. `https://app.example.com/bills/<id>`)
+
+**Rationale:**
+Users upload receipts via Telegram for speed and convenience. Without seeing the extracted data in the reply, they have to switch to the web app to verify — defeating the purpose of the mobile-first flow. Showing fields + a direct link keeps the entire workflow inside Telegram.
+
+**Proposed Acceptance Criteria:**
+- [ ] After photo upload, bot sends an initial acknowledgement ("Bill saved, analysing…")
+- [ ] Once OCR completes, bot sends a follow-up message listing extracted fields in a readable format (skip null fields)
+- [ ] If OCR fails, bot sends a failure message with the reason instead of field list
+- [ ] Message includes a "View bill" link: `{NEXTAUTH_URL}/bills/{billId}`
+- [ ] Link is only included when `NEXTAUTH_URL` is configured (graceful omission otherwise)
+- [ ] Follow-up message is sent asynchronously — does not block the initial acknowledgement
+- [ ] If the project has OCR disabled, the bill-saved confirmation still includes the bill link (no OCR summary)
+
+**Resolution:** Pending
+
+## QA Test Results — CR-23
+
+**Round:** 1
+**Date:** 2026-03-14
+**Method:** Code review
+**Commit tested:** 22bd119
+**File reviewed:** `nextjs/lib/telegram/handlers.ts`
+
+### Summary
+- Acceptance Criteria: 7/7 passed
+- Edge Cases: 7/8 passed
+- Security: 4/5 passed
+- Regression: 6/7 passed
+- Bugs found: 3 (0 critical, 0 high, 1 medium, 2 low)
+
+### Bugs Found
+
+#### BUG-86: OcrLog errorDetail leaked verbatim to Telegram user [Backend]
+- **Severity:** Medium
+- **File:** `nextjs/lib/telegram/handlers.ts:242`
+- **Steps to Reproduce:**
+  1. Upload a photo via Telegram with OCR enabled
+  2. OCR fails with an internal error (e.g., provider returns error with API endpoint URL or partial key in the message)
+  3. Expected: User sees a generic failure message like "Analysis failed. Please check the bill manually."
+  4. Actual: User sees the raw `errorDetail` from OcrLog, which may contain internal API URLs, partial credentials, stack traces, or other sensitive server-side information
+- **Priority:** Fix before deployment
+
+#### BUG-87: Mixed German/English in ACK message when OCR is enabled [Backend]
+- **Severity:** Low
+- **File:** `nextjs/lib/telegram/handlers.ts:377,336`
+- **Steps to Reproduce:**
+  1. Send a photo to the Telegram bot with OCR enabled
+  2. Expected: Consistent language in the ACK message (either all German or all English)
+  3. Actual: Message body is German ("Foto empfangen -- Beleg als Entwurf gespeichert.") but OCR note is English ("Analysing bill..."). The original German OCR note "Beleganalyse lauft im Hintergrund." was replaced with English. Additionally, the German instruction "Bitte in SetCash vervollstandigen." is now omitted when OCR is enabled, whereas previously both lines were shown.
+- **Priority:** Fix in next sprint
+
+#### BUG-88: Date formatting uses local timezone instead of UTC [Backend]
+- **Severity:** Low
+- **File:** `nextjs/lib/telegram/handlers.ts:202-205`
+- **Steps to Reproduce:**
+  1. Store a bill with a date near midnight UTC (e.g., 2026-03-14T23:30:00Z)
+  2. Run the server in a non-UTC timezone (e.g., UTC-5)
+  3. Trigger OCR follow-up for that bill
+  4. Expected: Date displayed as 14.03.2026 (matching the stored date)
+  5. Actual: Date displayed as 14.03.2026 on UTC servers but could show 15.03.2026 on UTC+ servers, or 13.03.2026 on UTC- servers, because `getDate()`, `getMonth()`, `getFullYear()` use the server's local timezone rather than `getUTCDate()`, `getUTCMonth()`, `getUTCFullYear()`
+- **Priority:** Fix in next sprint
+
+### Detailed Results
+
+#### AC-1: Initial acknowledgement with "Analysing bill..."
+- [x] Single photo path sends ACK with "Analysing bill..." when OCR enabled (line 377)
+- [x] Media group path sends ACK with "Analysing bill..." when OCR enabled (line 336)
+- [x] ACK sent immediately after fire-and-forget OCR kick-off
+
+#### AC-2: Follow-up with extracted fields
+- [x] `sendOcrFollowUp` checks `ocrStatus === 'done'` and reads `ocrFields` array (line 188-191)
+- [x] Non-null fields formatted correctly: vendor as-is, date DD.MM.YYYY, amounts with `.toFixed(2)` + EUR, type as-is
+- [x] Null/empty fields skipped via `if` guards in each case branch
+- [x] Message prefixed with "Analysis complete:" when fields found (line 231)
+
+#### AC-3: Follow-up on OCR failure
+- [x] Checks `ocrStatus === 'failed'` (line 235)
+- [x] Queries `OcrLog` with `orderBy: { timestamp: 'desc' }` for latest entry (line 236-239)
+- [x] Falls back to "Unknown error" if no OcrLog found (line 241)
+- [x] Sends "Analysis failed: {reason}" message (line 242)
+
+#### AC-4: Bill link included
+- [x] `formatBillLink` returns `{NEXTAUTH_URL}/bills/{billId}` (line 156)
+- [x] Link appended to follow-up message (lines 247-249)
+- [x] Link appended to single photo ACK (lines 378-379)
+- [x] Link appended to media group ACK (lines 337-338)
+
+#### AC-5: Graceful omission when NEXTAUTH_URL not set
+- [x] `formatBillLink` returns `null` when `process.env.NEXTAUTH_URL` is falsy (line 155)
+- [x] ACK messages use `linkSuffix = link ? ... : ''` -- empty string when null
+- [x] Follow-up uses `if (link)` guard -- no append when null
+- [x] No crash, no "undefined" in output
+
+#### AC-6: Follow-up is async / non-blocking
+- [x] `runOcrJob` is not awaited -- `.then().catch()` chain used (lines 288-293)
+- [x] `maybeRunOcr` returns after initiating fire-and-forget chain
+- [x] ACK message sent after `maybeRunOcr` returns, not after OCR completes
+
+#### AC-7: OCR disabled path still includes bill link
+- [x] `maybeRunOcr` returns early when `!settings.ocrEnabled` (line 284)
+- [x] ACK message still includes `linkSuffix` with bill link (lines 378-383)
+- [x] No follow-up sent when OCR disabled (correct behavior)
+
+#### EC-1: Bill not found after OCR
+- [x] `sendOcrFollowUp` returns silently if `bill` is null (line 184)
+
+#### EC-2: ocrStatus is neither 'done' nor 'failed'
+- [x] `else { return; }` silently exits for unexpected statuses (lines 243-244)
+
+#### EC-3: ocrFields is null or empty array
+- [x] Null ocrFields converted to empty array via ternary (lines 189-191)
+- [x] Empty array produces "no fields could be extracted" message (lines 232-233)
+
+#### EC-4: OcrLog missing for failed bill
+- [x] Optional chaining `ocrLog?.errorDetail` with `|| 'Unknown error'` fallback (line 241)
+
+#### EC-5: Media group (album) follow-up
+- [x] `processMediaGroup` passes `bot` and `chatId` to `maybeRunOcr` (line 334)
+
+#### EC-6: All 8 field types in follow-up
+- [x] vendor (line 198), date (line 200), item (line 209), type (line 213)
+- [x] brutto19 (line 216), brutto7 (line 219), brutto0 (line 222), amount (line 225)
+- [x] Each has correct formatting in the switch block
+
+#### EC-7: Date edge case -- timezone handling
+- [ ] BUG-88: `getDate()`, `getMonth()`, `getFullYear()` use server local timezone, not UTC
+
+#### EC-8: bot.sendMessage failure in follow-up
+- [x] `.catch(() => {})` silently swallows Telegram API errors (line 252)
+
+#### SEC-1: formatBillLink -- no injection risk
+- [x] Only reads `process.env.NEXTAUTH_URL` (server-controlled) and `billId` (UUID). No user input.
+
+#### SEC-2: sendOcrFollowUp -- no Telegram markdown injection
+- [x] No `parse_mode` specified in `bot.sendMessage` -- Telegram treats as plain text. Safe.
+
+#### SEC-3: No new API endpoints exposed
+- [x] Only internal functions added to `handlers.ts`. No new route files.
+
+#### SEC-4: No new auth surface
+- [x] `handleMessage` auth flow unchanged -- photo handler still checks `telegramLink` before processing
+
+#### SEC-5: OcrLog errorDetail information leakage
+- [ ] BUG-86: `errorDetail` sent verbatim to user -- may contain sensitive internal error info
+
+#### REG-1: /start handler unchanged
+- [x] Lines 397-405 identical to pre-CR-23
+
+#### REG-2: /link handler unchanged
+- [x] Lines 408-443 identical to pre-CR-23
+
+#### REG-3: Photo handler auth flow unchanged
+- [x] TelegramLink lookup and unlinked user response identical (lines 446-461)
+
+#### REG-4: Download + createDraftBill unchanged
+- [x] Both functions untouched by the diff
+
+#### REG-5: Media group buffering unchanged
+- [x] Buffer logic with `mediaGroupBuffers` Map, `setTimeout` 1500ms unchanged
+
+#### REG-6: German ACK text preserved
+- [ ] BUG-87: OCR note changed from German to English; German instruction omitted when OCR enabled
+
+#### REG-7: maybeRunOcr still fire-and-forget
+- [x] Signature changed to accept `bot` and `chatId`, but fire-and-forget pattern preserved
+
+### Production Readiness
+- **Production Ready:** NO
+- **Recommendation:** Fix BUG-86 (information leakage via errorDetail) before deployment. BUG-87 and BUG-88 are low severity and can be fixed in the next sprint.
+
+## QA Test Results — CR-23 Round 2
+
+**Round:** 2
+**Date:** 2026-03-14
+**Method:** Code review
+**Commit tested:** c31cd7b
+**File reviewed:** `nextjs/lib/telegram/handlers.ts`, `nextjs/lib/ocr.ts`
+
+### Summary
+- Acceptance Criteria: 7/7 passed
+- Edge Cases: 9/9 passed
+- Security: 5/5 passed
+- Regression: 5/5 passed
+- Previous bugs: 3/3 resolved
+- New bugs found: 0
+
+### Bug Fix Verification
+
+- BUG-86: [RESOLVED] -- `errorDetail` is now mapped through a `SAFE_REASONS` allowlist (handlers.ts lines 243-253). Eight known OCR error strings from `ocr.ts` `fail()` calls and `analyseImage()` throws are mapped to safe user-facing descriptions. All unknown/dynamic error strings (provider HTTP error bodies, SSRF config errors, "Bill not found", etc.) fall through to the generic message "Analysis could not be completed" via the nullish coalescing operator (`??`). No internal details leak to Telegram users.
+- BUG-87: [RESOLVED] -- German OCR note "Beleganalyse lauft im Hintergrund." restored in both `processSinglePhoto` (line 389) and `processMediaGroup` (line 348). "Bitte in SetCash vervollstaendigen." is present in all paths: appended after the OCR note when OCR is enabled, and shown alone when OCR is disabled. Language is consistently German throughout the ACK message.
+- BUG-88: [RESOLVED] -- Date formatting in `sendOcrFollowUp` (lines 203-205) now uses `getUTCDate()`, `getUTCMonth()`, `getUTCFullYear()` instead of local timezone equivalents. Dates will display correctly regardless of server timezone.
+
+### Detailed Results
+
+#### AC-1: Initial acknowledgement
+- [x] ACK includes German "Beleganalyse lauft im Hintergrund." when OCR enabled (both single photo line 389 and media group line 348)
+- [x] ACK includes "Bitte in SetCash vervollstaendigen." in both OCR-enabled and OCR-disabled paths
+- [x] Bill link appended via `linkSuffix` when NEXTAUTH_URL set
+
+#### AC-2: Follow-up with extracted fields
+- [x] `sendOcrFollowUp` checks `ocrStatus === 'done'` and reads `ocrFields` array
+- [x] Fields formatted correctly: vendor as-is, date DD.MM.YYYY using UTC, amounts with `.toFixed(2)` + EUR, type as-is
+- [x] Null/empty fields skipped via `if` guards in each case branch
+
+#### AC-3: Follow-up on OCR failure
+- [x] Checks `ocrStatus === 'failed'` and queries OcrLog for latest entry
+- [x] Error sanitized via SAFE_REASONS allowlist -- unknown errors become "Analysis could not be completed"
+- [x] Falls back to "Unknown error" if no OcrLog found, which then maps to generic message
+
+#### AC-4: Bill link included
+- [x] `formatBillLink` returns `{NEXTAUTH_URL}/bills/{billId}`
+- [x] Link appended to follow-up message (lines 259-262)
+- [x] Link appended to single photo ACK and media group ACK
+
+#### AC-5: Graceful omission when NEXTAUTH_URL not set
+- [x] `formatBillLink` returns null when NEXTAUTH_URL is falsy
+- [x] ACK messages use `linkSuffix = link ? ... : ''` -- empty string when null
+- [x] Follow-up uses `if (link)` guard -- no append when null
+
+#### AC-6: Follow-up is async / non-blocking
+- [x] `runOcrJob` is not awaited -- `.then().catch()` chain used (fire-and-forget)
+- [x] ACK message sent after `maybeRunOcr` returns, not after OCR completes
+
+#### AC-7: OCR disabled path still includes bill link
+- [x] `maybeRunOcr` returns early when `!settings.ocrEnabled`
+- [x] ACK message still includes `linkSuffix` with bill link
+- [x] No follow-up sent when OCR disabled (correct)
+
+#### EC-1: Bill not found after OCR
+- [x] `sendOcrFollowUp` returns silently if `bill` is null (line 185)
+
+#### EC-2: ocrStatus is neither done nor failed
+- [x] `else { return; }` silently exits for unexpected statuses (lines 255-257)
+
+#### EC-3: ocrFields is null or empty array
+- [x] Null ocrFields converted to empty array via ternary (lines 189-191)
+- [x] Empty array produces "no fields could be extracted" message
+
+#### EC-4: OcrLog missing for failed bill
+- [x] `ocrLog?.errorDetail || 'Unknown error'` fallback, then mapped through SAFE_REASONS to generic message
+
+#### EC-5: Media group (album) follow-up
+- [x] `processMediaGroup` passes `bot` and `chatId` to `maybeRunOcr` (line 346)
+
+#### EC-6: All 8 field types in follow-up
+- [x] vendor, date, item, type, brutto19, brutto7, brutto0, amount -- all handled with correct formatting
+
+#### EC-7: Date uses UTC (BUG-88 fix verification)
+- [x] `getUTCDate()`, `getUTCMonth()`, `getUTCFullYear()` used (lines 203-205)
+
+#### EC-8: bot.sendMessage failure silently caught
+- [x] `.catch(() => {})` on follow-up sendMessage (line 264)
+
+#### EC-9: Error sanitization edge cases
+- [x] 8 known OCR error strings mapped to safe descriptions in SAFE_REASONS
+- [x] Unknown/dynamic error strings (provider HTTP bodies, SSRF errors, "Bill not found", "Unknown provider: X", "No JSON found in provider response") all map to generic "Analysis could not be completed"
+- [x] Null/empty errorDetail falls back to "Unknown error" which is not in SAFE_REASONS, correctly mapping to generic message
+- [x] Cross-checked all `fail()` calls in `ocr.ts` and all `throw new Error()` in `analyseImage()` -- no gaps
+
+#### SEC-1: errorDetail allowlist -- no internal details leak
+- [x] SAFE_REASONS allowlist with `??` fallback ensures only known-safe strings reach the user
+
+#### SEC-2: All known OCR error strings covered
+- [x] Verified against all `fail()` calls in `ocr.ts` (lines 479, 483, 489, 501, 505, 509, 523, 527, 555) and `analyseImage()` throws (lines 216, 230, 231, 232, 263, 277, 278, 279, 318, 333, 334, 341, 354)
+- [x] User-relevant errors (invalid key, rate limit, timeout, no image, not enabled/configured, key read error) are in the map; infrastructure errors correctly fall to generic
+
+#### SEC-3: No new auth surface
+- [x] No new API routes; internal functions only
+
+#### SEC-4: Telegram markdown injection
+- [x] No `parse_mode` specified in `bot.sendMessage` -- plain text mode. Vendor/item values cannot inject formatting
+
+#### SEC-5: formatBillLink -- no injection
+- [x] Only reads server-controlled NEXTAUTH_URL and UUID billId. No user input in URL construction
+
+#### REG-1: /start and /link handlers unchanged
+- [x] Lines 409-454 identical to pre-CR-23
+
+#### REG-2: Photo auth flow unchanged
+- [x] TelegramLink lookup and unlinked user response identical (lines 458-473)
+
+#### REG-3: Media group buffering unchanged
+- [x] Buffer logic with `mediaGroupBuffers` Map, `setTimeout` 1500ms unchanged
+
+#### REG-4: German ACK text consistent in both single-photo and album paths
+- [x] Both `processSinglePhoto` (line 389) and `processMediaGroup` (line 348) use identical German text patterns
+
+#### REG-5: maybeRunOcr still fire-and-forget
+- [x] `.then().catch()` pattern preserved; signature accepts `bot` and `chatId` for follow-up
+
+### Production Readiness
+- **Production Ready:** YES
+- **Recommendation:** All three bugs from Round 1 are resolved. No new bugs found. Ready for deployment.
 
 ## Deployment
 _To be added by /deploy_

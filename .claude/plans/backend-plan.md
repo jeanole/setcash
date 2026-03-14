@@ -1,114 +1,149 @@
-# Backend Implementation Plan — PROJ-20 User Profile Edit Panel
+# Backend Implementation Plan — CR-23
 
 ## Feature
-PROJ-20: User Profile Edit Panel — `features/PROJ-20-user-profile-edit.md`
+CR-23: Enrich Telegram Upload Response with OCR Fields, Errors, and Bill Link
+Spec: `features/PROJ-12-integrations.md` → Change Requests → CR-23
 
 ## Context Summary
-- All app code in `nextjs/`
-- Auth: NextAuth v5 with JWT sessions, bcryptjs for password hashing
-- DB: PostgreSQL via Prisma ORM; client at `lib/db.ts`
-- Session helper: `lib/auth/session.ts` — `getCurrentUser()` returns `{ id, email, role, currentProjectId }`
-- Admin user routes exist at `app/api/admin/users/` — our new routes are separate self-service routes
-- Password validation pattern: min 8 chars, regex `^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)` (from admin users route)
-- Zod validation pattern used across all API routes
-- User model fields: id, email, passwordHash, emailVerified, isSuperAdmin, isActive, createdAt, defaultProjectId, legacyId
-- No `username`, `firstName`, `lastName`, `mobile` columns exist yet
+- Telegram handlers live in `nextjs/lib/telegram/handlers.ts`
+- `processSinglePhoto()` and `processMediaGroup()` both: download → create bill → fire-and-forget OCR → send static ACK
+- `maybeRunOcr()` calls `runOcrJob()` fire-and-forget, no way to send results back
+- `runOcrJob()` in `lib/ocr.ts` updates bill with `ocrStatus`, `ocrFields`, and writes extracted values to bill fields
+- Bot messages are currently in German; OCR follow-up should be in English
+- `NEXTAUTH_URL` env var holds the app base URL
 
 ## User Decisions
-- Password change is inline (current password + new password), not email-based reset
-- Username must be unique case-insensitively
-- All new fields are optional/nullable
-- No rate limiting needed for profile updates (already behind auth)
+- **Language:** OCR follow-up messages in English (existing German messages unchanged)
+- **Bill link:** Always include when `NEXTAUTH_URL` is set
 
 ## Open Bug Reports to Address
-None
-
-## Database — Prisma Schema Change
-
-Add 4 nullable columns to the `User` model:
-
-| Field | Type | Constraint |
-|-------|------|-----------|
-| `username` | String? | `@unique` (case-insensitive enforced in code) |
-| `firstName` | String? | None |
-| `lastName` | String? | None |
-| `mobile` | String? | None |
-
-Migration: `npx prisma migrate dev --name add_user_profile_fields`
-
-## API Endpoints
-
-### 1. `GET /api/users/me`
-- **Auth:** Authenticated user (use `getCurrentUser()`)
-- **Logic:**
-  1. Get session user via `getCurrentUser()`
-  2. If no session → 401
-  3. Fetch user from DB by `session.id`, select: `email, username, firstName, lastName, mobile`
-  4. Return user fields
-- **Response:** `{ email, username, firstName, lastName, mobile }`
-- **Errors:** 401 unauthenticated, 500 internal
-
-### 2. `PATCH /api/users/me`
-- **Auth:** Authenticated user
-- **Input (Zod):**
-  ```
-  {
-    username: z.string().max(50).nullable().optional(),
-    firstName: z.string().max(100).nullable().optional(),
-    lastName: z.string().max(100).nullable().optional(),
-    mobile: z.string().max(30).nullable().optional()
-  }
-  ```
-- **Logic:**
-  1. Get session user → 401 if missing
-  2. Validate body with Zod → 400 if invalid
-  3. If username provided and non-null: check uniqueness case-insensitively (exclude current user) → 409 if taken
-  4. Update user record with provided fields
-  5. Return updated fields
-- **Response:** `{ email, username, firstName, lastName, mobile }`
-- **Errors:** 401, 400, 409 (username taken), 500
-
-### 3. `PATCH /api/users/me/password`
-- **Auth:** Authenticated user
-- **Input (Zod):**
-  ```
-  {
-    currentPassword: z.string().min(1),
-    newPassword: z.string().min(8).regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
-  }
-  ```
-- **Logic:**
-  1. Get session user → 401 if missing
-  2. Validate body → 400 if invalid
-  3. Fetch user by ID, get `passwordHash`
-  4. Compare `currentPassword` with `passwordHash` via `bcrypt.compare` → 401 if wrong
-  5. Hash `newPassword` with bcrypt (12 rounds)
-  6. Update `User.passwordHash`
-  7. Return 200 `{ message: "Password updated successfully" }`
-- **Errors:** 401 (unauthenticated or wrong password), 400 (validation), 500
-
-## New Files to Create
-
-1. `app/api/users/me/route.ts` — GET + PATCH handlers
-2. `app/api/users/me/password/route.ts` — PATCH handler
-3. Prisma migration (auto-generated)
+None for PROJ-12
 
 ## Files to Modify
 
-1. `prisma/schema.prisma` — Add 4 fields to User model
-2. `app/(protected)/layout.tsx` — Fetch profile fields from DB and pass to AppShell (the frontend plan already modified this but may need adjusting to actually query DB)
+### 1. `nextjs/lib/telegram/handlers.ts` — Main changes
+
+**Modify `maybeRunOcr()`** to accept `bot` and `chatId`, and send follow-up after OCR:
+
+```typescript
+async function maybeRunOcr(
+  billId: string,
+  projectId: string,
+  bot: TelegramBot,
+  chatId: number
+): Promise<void> {
+  const settings = await getProjectSettings(projectId);
+  if (!settings.ocrEnabled) return;
+
+  try {
+    const { runOcrJob } = await import('../ocr');
+    // Await OCR, then send follow-up — entire block is fire-and-forget from caller
+    runOcrJob(billId, projectId)
+      .then(() => sendOcrFollowUp(bot, chatId, billId))
+      .catch((e: Error) => {
+        console.error(`[OCR] Unhandled error for bill #${billId}:`, e.message);
+        sendOcrFailureMessage(bot, chatId, billId, e.message);
+      });
+  } catch (e) {
+    console.error('[Telegram] Failed to import OCR module:', (e as Error).message);
+  }
+}
+```
+
+**Add `sendOcrFollowUp()` function:**
+- Read bill from DB: `ocrStatus`, `ocrFields`, `vendor`, `date`, `item`, `type`, `brutto19`, `brutto7`, `brutto0`, `grossAmount`
+- If `ocrStatus === 'done'` and fields were written:
+  - Format each non-null extracted field as a line: `Vendor: REWE`, `Date: 14.03.2026`, `Amount: 24,50 €`, etc.
+  - Format amounts with 2 decimal places and `€` suffix
+  - Format date in `DD.MM.YYYY` locale format
+  - Skip null/empty fields
+- If `ocrStatus === 'failed'`:
+  - Read latest `OcrLog` for the bill to get `errorDetail`
+  - Send failure message with reason
+- If `ocrStatus === 'done'` but no fields written:
+  - Send "Analysis complete — no fields could be extracted"
+- Append bill link if `NEXTAUTH_URL` is set
+
+**Add `sendOcrFailureMessage()` function:**
+- Sends: `"⚠️ Analysis failed: {reason}"`
+- Appends bill link
+
+**Add `formatBillLink()` helper:**
+- Returns `{NEXTAUTH_URL}/bills/{billId}` if env var set, else `null`
+
+**Update initial ACK messages** in `processSinglePhoto()` and `processMediaGroup()`:
+- Include bill link in the ACK message (not just the follow-up)
+- Change OCR note from `"Beleganalyse läuft im Hintergrund."` to `"Analysing bill…"` (English, per user decision)
+- If OCR disabled: ACK still includes bill link, no follow-up
+
+**Update `maybeRunOcr()` call sites:**
+- `processSinglePhoto()`: pass `bot` and `msg.chat.id`
+- `processMediaGroup()`: pass `bot` and `chatId`
+
+### Message Format
+
+**Success (fields extracted):**
+```
+✅ Analysis complete:
+Vendor: REWE
+Date: 14.03.2026
+Amount: 24,50 €
+Type: Kassenbon
+
+🔗 View bill: https://app.setcash.com/bills/abc123
+```
+
+**Success (no fields):**
+```
+✅ Analysis complete — no fields could be extracted. Please fill in manually.
+
+🔗 View bill: https://app.setcash.com/bills/abc123
+```
+
+**Failure:**
+```
+⚠️ Analysis failed: Invalid API key
+
+🔗 View bill: https://app.setcash.com/bills/abc123
+```
+
+**Initial ACK (single photo, OCR enabled):**
+```
+✓ Foto empfangen – Beleg als Entwurf gespeichert.
+Analysing bill…
+
+🔗 View bill: https://app.setcash.com/bills/abc123
+```
+
+**Initial ACK (OCR disabled):**
+```
+✓ Foto empfangen – Beleg als Entwurf gespeichert.
+Bitte in SetCash vervollständigen.
+
+🔗 View bill: https://app.setcash.com/bills/abc123
+```
+
+## No New Files
+All changes in `handlers.ts`.
+
+## No Database Changes
+Reads existing bill fields and OcrLog — no schema modifications.
+
+## No New API Endpoints
+All logic is internal to the Telegram handler.
 
 ## Checklist
-- [ ] Add `username`, `firstName`, `lastName`, `mobile` to Prisma User model
-- [ ] Create + apply Prisma migration
-- [ ] Create `GET /api/users/me` — returns profile fields for authenticated user
-- [ ] Create `PATCH /api/users/me` — updates profile fields with Zod validation
-- [ ] Username uniqueness check (case-insensitive, exclude self) → 409
-- [ ] Create `PATCH /api/users/me/password` — validates current password, hashes + saves new
-- [ ] All endpoints check auth via `getCurrentUser()`
-- [ ] Max length validation on all string fields
-- [ ] bcrypt compare for current password verification
-- [ ] bcrypt hash (12 rounds) for new password
-- [ ] Password regex matches signup pattern
-- [ ] Ensure `app/(protected)/layout.tsx` fetches the new fields from DB
-- [ ] Validate with `npx tsc --noEmit`
+- [ ] `maybeRunOcr()` accepts `bot` and `chatId`
+- [ ] `sendOcrFollowUp()` reads bill + formats extracted fields
+- [ ] `sendOcrFailureMessage()` reads OcrLog + sends error reason
+- [ ] `formatBillLink()` uses `NEXTAUTH_URL` env var
+- [ ] Bill link included in initial ACK message
+- [ ] Bill link included in follow-up message
+- [ ] Follow-up is async (fire-and-forget from handler perspective)
+- [ ] Skip null/empty fields in follow-up
+- [ ] Amounts formatted with 2 decimal places + €
+- [ ] Date formatted as DD.MM.YYYY
+- [ ] OCR-disabled path still includes bill link in ACK
+- [ ] Media group (album) path also sends follow-up
+- [ ] No changes to existing German ACK text (except OCR note → English)
+- [ ] TypeScript compiles: `npx tsc --noEmit`

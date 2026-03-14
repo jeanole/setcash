@@ -122,6 +122,31 @@ Return ONLY a valid JSON object with exactly these keys (use null for unknown/mi
 }
 Return nothing except the JSON object.`;
 
+const OCR_SYSTEM_PROMPT = `You are a receipt/invoice data extraction system. Extract structured data from receipt and invoice images.
+
+Extract the following fields:
+- date: string in ISO 8601 format (YYYY-MM-DD), the date on the receipt/invoice
+- vendor: string, the merchant or store name
+- item: string, a short description of the goods or service purchased
+- type: one of "Kassenbon", "Rechnung", or "Quittung"
+- brutto19: number, the gross amount subject to 19% VAT
+- brutto7: number, the gross amount subject to 7% VAT
+- brutto0: number, the VAT-exempt gross amount
+- amount: number, the total gross amount on the document
+
+Rules:
+- Return null for any field that cannot be found or determined from the image
+- Return ONLY a valid JSON object — no markdown, no code fences, no explanation
+- Output schema: { "date": string|null, "vendor": string|null, "item": string|null, "type": string|null, "brutto19": number|null, "brutto7": number|null, "brutto0": number|null, "amount": number|null }`;
+
+// ── Provider defaults ─────────────────────────────────────────────────────────
+const PROVIDER_DEFAULTS: Record<string, { url: string; model: string }> = {
+  openai:   { url: 'https://api.openai.com/v1',                         model: 'gpt-4o' },
+  qwen25vl: { url: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-vl-max' },
+  qwen3vl:  { url: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-vl-max-latest' },
+  deepseek: { url: 'https://api.deepseek.com/v1',                       model: 'deepseek-chat' },
+};
+
 const OCR_FETCH_TIMEOUT_MS = 60_000;
 
 // ── Provider: call AI vision API ─────────────────────────────────────────────
@@ -150,11 +175,17 @@ async function analyseImage(
 ): Promise<AnalyseResult> {
   const dataUrl = `data:${mimeType};base64,${base64}`;
 
-  if (provider === 'openai' || provider === 'custom') {
-    const url =
+  const OPENAI_COMPAT_PROVIDERS = new Set(['openai', 'custom', 'qwen25vl', 'qwen3vl', 'deepseek']);
+  if (OPENAI_COMPAT_PROVIDERS.has(provider)) {
+    const resolvedBaseUrl =
       provider === 'custom'
-        ? `${baseUrl}/chat/completions`
-        : 'https://api.openai.com/v1/chat/completions';
+        ? baseUrl
+        : (baseUrl || PROVIDER_DEFAULTS[provider]?.url || 'https://api.openai.com/v1');
+    const url = `${resolvedBaseUrl}/chat/completions`;
+    const model =
+      provider === 'custom'
+        ? 'gpt-4o'
+        : (PROVIDER_DEFAULTS[provider]?.model || 'gpt-4o');
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), OCR_FETCH_TIMEOUT_MS);
     let resp: Response;
@@ -166,8 +197,9 @@ async function analyseImage(
           Authorization: `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
-          model: 'gpt-4o',
+          model,
           messages: [
+            { role: 'system', content: OCR_SYSTEM_PROMPT },
             {
               role: 'user',
               content: [
@@ -194,7 +226,7 @@ async function analyseImage(
         msg = JSON.parse(rawBody)?.error?.message;
       } catch {}
       msg = msg || resp.statusText;
-      console.error(`[OCR] Provider HTTP ${resp.status} (openai/custom): ${truncated}`);
+      console.error(`[OCR] Provider HTTP ${resp.status} (${provider}): ${truncated}`);
       if (resp.status === 401) throw new Error('Invalid API key');
       if (resp.status === 429) throw new Error('Rate limit exceeded');
       throw new Error(msg || `Provider error ${resp.status}`);
@@ -215,6 +247,7 @@ async function analyseImage(
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
         body: JSON.stringify({
+          systemInstruction: { parts: [{ text: OCR_SYSTEM_PROMPT }] },
           contents: [
             {
               parts: [
@@ -265,6 +298,7 @@ async function analyseImage(
         body: JSON.stringify({
           model: 'claude-3-5-haiku-20241022',
           max_tokens: 512,
+          system: OCR_SYSTEM_PROMPT,
           messages: [
             {
               role: 'user',
@@ -461,14 +495,19 @@ export async function runOcrJob(billId: string, projectId: string): Promise<void
       `[OCR] Bill ${billId} (project ${projectId}): analysis started — provider: ${provider}`
     );
 
-    // 3. Validate custom base URL
+    // 3. Validate base URL (required for custom; SSRF-checked whenever user supplies one)
     if (provider === 'custom') {
       if (!baseUrl || !baseUrl.startsWith('https://')) {
         return fail('Custom provider base URL must start with https://', 'ConfigError');
       }
+    }
+    if (baseUrl) {
+      if (!baseUrl.startsWith('https://')) {
+        return fail('Provider base URL must start with https://', 'ConfigError');
+      }
       if (await isPrivateUrl(baseUrl)) {
         return fail(
-          'Custom provider base URL must not point to a private or reserved address',
+          'Provider base URL must not point to a private or reserved address',
           'SSRFError'
         );
       }

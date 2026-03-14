@@ -12,11 +12,22 @@ interface OcrSettingsFormProps {
 }
 
 const PROVIDERS = [
-  { value: 'openai', label: 'OpenAI (GPT-4o)' },
-  { value: 'gemini', label: 'Google Gemini 1.5 Flash' },
-  { value: 'claude', label: 'Anthropic Claude 3.5 Haiku' },
-  { value: 'custom', label: 'Custom (OpenAI-compatible)' },
+  { value: 'openai',   label: 'OpenAI (GPT-4o)' },
+  { value: 'gemini',   label: 'Google Gemini 1.5 Flash' },
+  { value: 'claude',   label: 'Anthropic Claude 3.5 Haiku' },
+  { value: 'qwen25vl', label: 'Qwen2.5-VL (Alibaba)' },
+  { value: 'qwen3vl',  label: 'Qwen3-VL (Alibaba)' },
+  { value: 'deepseek', label: 'DeepSeek' },
+  { value: 'custom',   label: 'Custom (OpenAI-compatible)' },
 ] as const;
+
+const DEFAULT_BASE_URLS: Record<string, string> = {
+  qwen25vl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+  qwen3vl:  'https://dashscope.aliyuncs.com/compatible-mode/v1',
+  deepseek: 'https://api.deepseek.com/v1',
+};
+
+const PROVIDERS_WITH_BASE_URL = new Set(['custom', 'qwen25vl', 'qwen3vl', 'deepseek']);
 
 export default function OcrSettingsForm({ initialSettings }: OcrSettingsFormProps) {
   const [ocrEnabled, setOcrEnabled] = useState(initialSettings.ocrEnabled);
@@ -41,13 +52,13 @@ export default function OcrSettingsForm({ initialSettings }: OcrSettingsFormProp
       try {
         const payload: {
           ocrEnabled: boolean;
-          ocrProvider: 'openai' | 'gemini' | 'claude' | 'custom';
+          ocrProvider: 'openai' | 'gemini' | 'claude' | 'custom' | 'qwen25vl' | 'qwen3vl' | 'deepseek';
           ocrBaseUrl: string | null;
           ocrApiKey?: string;
         } = {
           ocrEnabled,
-          ocrProvider: ocrProvider as 'openai' | 'gemini' | 'claude' | 'custom',
-          ocrBaseUrl: ocrProvider === 'custom' ? ocrBaseUrl.trim() || null : null,
+          ocrProvider: ocrProvider as 'openai' | 'gemini' | 'claude' | 'custom' | 'qwen25vl' | 'qwen3vl' | 'deepseek',
+          ocrBaseUrl: PROVIDERS_WITH_BASE_URL.has(ocrProvider) ? ocrBaseUrl.trim() || null : null,
         };
 
         // Only include API key if the user typed something
@@ -101,6 +112,24 @@ export default function OcrSettingsForm({ initialSettings }: OcrSettingsFormProp
       { step: 'Your provider must be OpenAI-compatible' },
       { step: 'Enter the base URL', detail: 'e.g., https://your-provider.com/v1' },
       { step: 'Enter the API key from your provider' },
+    ],
+    qwen25vl: [
+      { step: 'Go to dashscope.console.aliyun.com → API Keys' },
+      { step: 'Create or copy your DashScope API key' },
+      { step: 'Paste it in the API Key field below' },
+      { step: 'Model used: Qwen-VL-Max (vision-capable)' },
+    ],
+    qwen3vl: [
+      { step: 'Go to dashscope.console.aliyun.com → API Keys' },
+      { step: 'Create or copy your DashScope API key' },
+      { step: 'Paste it in the API Key field below' },
+      { step: 'Model used: Qwen-VL-Max-Latest (Qwen3-VL)' },
+    ],
+    deepseek: [
+      { step: 'Go to platform.deepseek.com → API Keys' },
+      { step: 'Create a new API key' },
+      { step: 'Paste it in the API Key field below' },
+      { step: 'Model used: DeepSeek-Chat (vision-capable)' },
     ],
   };
 
@@ -173,7 +202,15 @@ export default function OcrSettingsForm({ initialSettings }: OcrSettingsFormProp
           <select
             id="ocr-provider"
             value={ocrProvider}
-            onChange={(e) => setOcrProvider(e.target.value)}
+            onChange={(e) => {
+              const next = e.target.value;
+              setOcrProvider(next);
+              if (DEFAULT_BASE_URLS[next]) {
+                setOcrBaseUrl(DEFAULT_BASE_URLS[next]);
+              } else if (!PROVIDERS_WITH_BASE_URL.has(next)) {
+                setOcrBaseUrl('');
+              }
+            }}
             disabled={!ocrEnabled}
             className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#6366f1] focus:border-[#6366f1] disabled:opacity-50 disabled:cursor-not-allowed"
           >
@@ -210,8 +247,8 @@ export default function OcrSettingsForm({ initialSettings }: OcrSettingsFormProp
           </p>
         </div>
 
-        {/* Base URL — only for custom provider */}
-        {ocrProvider === 'custom' && (
+        {/* Base URL — for custom and named providers with a configurable endpoint */}
+        {PROVIDERS_WITH_BASE_URL.has(ocrProvider) && (
           <div>
             <label
               htmlFor="ocr-base-url"

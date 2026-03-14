@@ -1,6 +1,6 @@
 # PROJ-19: OCR / AI Bill Analysis (Next.js)
 
-## Status: In Review
+## Status: Change Requested
 **Created:** 2026-03-07
 **Last Updated:** 2026-03-07
 
@@ -372,3 +372,161 @@ model OcrLog {
 - SEC-8: PASS -- `ocr.ts` line 435: `!baseUrl.startsWith('https://')` check before HTTP call.
 - SEC-9: PASS -- `ocr.ts` lines 27-35: production startup guard checks encryption secret.
 - SEC-10: PASS -- `project-settings/route.ts` line 183: `!data.ocrApiKey.startsWith('...')` guard prevents double-encryption of masked value.
+
+---
+
+## Change Requests
+
+### CR-22: Add Qwen2.5-VL / Qwen3-VL / DeepSeek Providers + Structured System Prompt
+**Requested:** 2026-03-14 | **Priority:** Medium | **Status:** Pending Review
+
+**Current Behavior:**
+Provider dropdown offers four options: OpenAI GPT-4o, Google Gemini 1.5 Flash, Anthropic Claude 3.5 Haiku, and Custom (OpenAI-compatible). The prompt sent to the LLM is a single user message with no system prompt, meaning the model must infer the desired output format and fields from the prompt text alone.
+
+**Desired Behavior:**
+1. Add **Qwen2.5-VL** and **Qwen3-VL** (Alibaba DashScope) as named providers with their default base URL pre-filled.
+2. Add **DeepSeek** (DeepSeek-VL2 or compatible vision model) as a named provider with its default base URL pre-filled.
+3. Add a **structured system prompt** sent to all providers before the user message, listing: the exact field names to extract (`date`, `vendor`, `item`, `type`, `brutto19`, `brutto7`, `brutto0`, `amount`), their types/formats (e.g. date as ISO 8601, amounts as numbers), and the required JSON output schema. Fields not found on the bill should be returned as `null`.
+
+**Rationale:**
+Qwen VL and DeepSeek vision models are strong, cost-competitive alternatives to the current providers — especially relevant for self-hosted or China-region deployments. The system prompt improvement benefits **all** providers: explicitly listing fields and the JSON schema reduces hallucinations, improves consistency, and removes ambiguity for models that don't follow implicit conventions as reliably as GPT-4o.
+
+**Proposed Acceptance Criteria:**
+- [ ] Settings dropdown adds `Qwen2.5-VL`, `Qwen3-VL`, and `DeepSeek` as named options alongside the existing four
+- [ ] Selecting Qwen2.5-VL or Qwen3-VL pre-fills the base URL with the Alibaba DashScope endpoint; selecting DeepSeek pre-fills the DeepSeek API endpoint
+- [ ] Pre-filled base URL is editable (user can override) and the field remains visible (same as Custom behavior)
+- [ ] `analyseImage` (or equivalent) sends a **system prompt** to all providers that explicitly lists: all extractable field names, their expected types/formats, the JSON output schema, and a `null`-if-not-found instruction
+- [ ] System prompt is defined as a constant (e.g. `OCR_SYSTEM_PROMPT`) separate from the user message (`OCR_PROMPT`)
+- [ ] Providers that use a messages array (OpenAI-compatible, Anthropic) include the system prompt as the first message or `system` field; Gemini uses the `systemInstruction` field
+- [ ] All existing provider integrations (OpenAI, Gemini, Anthropic, Custom) continue to work unchanged
+- [ ] `OcrLog.provider` correctly records the new provider names
+
+**Resolution:** Pending
+
+---
+
+## QA Test Results — CR-22
+
+**Round:** 1
+**Date:** 2026-03-14
+**Method:** Code review
+
+### Summary
+- Acceptance Criteria: 8/8 passed
+- Edge Cases: 7/7 passed
+- Security: 5/5 passed
+- Regression: 6/6 passed
+- Bugs found: 0
+- Production Ready: YES
+
+### Bugs Found
+
+None.
+
+### Detailed Results
+
+#### Acceptance Criteria
+
+**AC-1: Settings dropdown adds new providers**
+- [x] `PROVIDERS` array in `OcrSettingsForm.tsx` includes `qwen25vl` ("Qwen2.5-VL (Alibaba)"), `qwen3vl` ("Qwen3-VL (Alibaba)"), `deepseek` ("DeepSeek")
+- [x] They appear before "Custom" in the list (Custom is last)
+- [x] Each has a distinct `value` slug
+
+**AC-2: Base URL pre-filled for new providers**
+- [x] Selecting qwen25vl pre-fills `ocrBaseUrl` with `https://dashscope.aliyuncs.com/compatible-mode/v1`
+- [x] Selecting qwen3vl pre-fills same DashScope URL
+- [x] Selecting deepseek pre-fills `https://api.deepseek.com/v1`
+- [x] Pre-filled value is editable (regular `<input>`, not readonly)
+- [x] Base URL field is visible for qwen25vl, qwen3vl, deepseek via `PROVIDERS_WITH_BASE_URL` set
+
+**AC-3: System prompt defined as constant**
+- [x] `OCR_SYSTEM_PROMPT` exists in `lib/ocr.ts` as a separate constant from `OCR_PROMPT`
+- [x] Lists all 8 fields: date, vendor, item, type, brutto19, brutto7, brutto0, amount
+- [x] Includes types/formats: ISO 8601 date, enum for type, numbers for amounts
+- [x] Specifies null-if-not-found rule
+- [x] Specifies JSON-only output (no markdown, no code fences)
+
+**AC-4: System prompt sent to OpenAI-compat providers**
+- [x] `OPENAI_COMPAT_PROVIDERS` set includes openai, custom, qwen25vl, qwen3vl, deepseek
+- [x] Messages array includes `{ role: 'system', content: OCR_SYSTEM_PROMPT }` as the first message (line 202)
+
+**AC-5: System prompt sent to Gemini**
+- [x] Gemini request body includes `systemInstruction: { parts: [{ text: OCR_SYSTEM_PROMPT }] }` (line 250)
+
+**AC-6: System prompt sent to Claude**
+- [x] Claude request body includes `system: OCR_SYSTEM_PROMPT` (line 300)
+
+**AC-7: Existing providers unchanged**
+- [x] OpenAI still hits `api.openai.com/v1/chat/completions` with model `gpt-4o` via `PROVIDER_DEFAULTS`
+- [x] Gemini still hits `generativelanguage.googleapis.com` with `gemini-1.5-flash` (hardcoded)
+- [x] Claude still hits `api.anthropic.com/v1/messages` with `claude-3-5-haiku-20241022` (hardcoded)
+- [x] Custom still uses `baseUrl + '/chat/completions'` with model `gpt-4o`
+
+**AC-8: OcrLog records correct provider name**
+- [x] `resolvedProvider` set from `settings.ocrProvider` on line 486; new provider values flow through to OcrLog unchanged
+
+#### Edge Cases
+
+**EC-1: Unknown provider value**
+- [x] `analyseImage()` throws `Error('Unknown provider: ${provider}')` on line 341 for any unrecognized provider
+
+**EC-2: New provider with no baseUrl set**
+- [x] qwen25vl/qwen3vl/deepseek fall back to `PROVIDER_DEFAULTS[provider].url` via line 183
+
+**EC-3: New provider with user-overridden baseUrl**
+- [x] User's URL takes precedence (line 183: `baseUrl || PROVIDER_DEFAULTS[provider]?.url`)
+- [x] SSRF check fires on user-supplied URL (lines 504-514: `if (baseUrl)` triggers `isPrivateUrl()`)
+
+**EC-4: Custom provider unchanged**
+- [x] Custom still requires baseUrl (line 181: `resolvedBaseUrl = baseUrl` with no fallback)
+- [x] Custom still uses `gpt-4o` model (line 187)
+
+**EC-5: Provider switch clears/fills baseUrl correctly**
+- [x] Switching from qwen25vl to openai clears baseUrl (openai is not in PROVIDERS_WITH_BASE_URL, triggers `setOcrBaseUrl('')`)
+- [x] Switching from openai to deepseek fills baseUrl from DEFAULT_BASE_URLS
+- [x] Switching from deepseek to custom keeps baseUrl (custom is in PROVIDERS_WITH_BASE_URL but not in DEFAULT_BASE_URLS, so neither branch fires)
+
+**EC-6: Zod validation rejects unknown providers**
+- [x] `z.enum(['openai', 'gemini', 'claude', 'custom', 'qwen25vl', 'qwen3vl', 'deepseek'])` on line 19 of route.ts; returns 422 on invalid values
+
+**EC-7: SSRF check scope**
+- [x] SSRF check fires when `baseUrl` is truthy (line 504), covering any provider with a user-supplied URL
+- [x] SSRF check skipped when `baseUrl` is null (named providers using their default URL from PROVIDER_DEFAULTS)
+
+#### Security Audit
+
+**SEC-1: Zod enum includes all new values**
+- [x] All 7 providers listed in Zod enum on route.ts line 19; no bypass possible for unlisted values
+
+**SEC-2: SSRF protection applies to user-overridden base URLs**
+- [x] Lines 504-514: https:// check and `isPrivateUrl()` check fire for any provider when baseUrl is truthy
+
+**SEC-3: No new secrets or credentials introduced**
+- [x] No new environment variables; new providers use the same `ocrApiKey` encryption flow
+
+**SEC-4: System prompt does not leak sensitive project data**
+- [x] `OCR_SYSTEM_PROMPT` contains only generic receipt parsing instructions; no project-specific or internal data
+
+**SEC-5: API key handling unchanged for new providers**
+- [x] New providers use same `Authorization: Bearer ${apiKey}` header in the OPENAI_COMPAT_PROVIDERS path
+- [x] Same encrypt/decrypt/mask flow via `encryptApiKey`, `decryptApiKey`, `maskApiKey`
+
+#### Regression Tests
+
+**REG-1: OpenAI provider code path**
+- [x] URL resolves to `https://api.openai.com/v1/chat/completions`, model `gpt-4o`, system prompt added, message structure unchanged
+
+**REG-2: Gemini provider code path**
+- [x] URL unchanged (`generativelanguage.googleapis.com`), `systemInstruction` field added, `contents` structure unchanged
+
+**REG-3: Claude provider code path**
+- [x] URL unchanged (`api.anthropic.com/v1/messages`), model `claude-3-5-haiku-20241022`, `system` field added, messages structure unchanged
+
+**REG-4: Custom provider code path**
+- [x] resolvedBaseUrl = user-supplied baseUrl (no fallback), model `gpt-4o`, system prompt added, same message structure
+
+**REG-5: Settings form save/load for existing providers**
+- [x] Payload sends `ocrBaseUrl: null` for openai/gemini/claude (not in PROVIDERS_WITH_BASE_URL), matching previous behavior
+
+**REG-6: handleSubmit payload shape for existing providers**
+- [x] Provider type union includes all 7 values; openai/gemini/claude payloads unchanged from prior behavior
