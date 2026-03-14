@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react';
 import { toast } from 'sonner';
 import SettingsSection from './SettingsSection';
+import SetupGuide from '@/components/ui/SetupGuide';
 import { updateProjectOcrSettings } from '@/lib/api/settings';
 import type { ProjectOcrSettings } from '@/lib/api/settings';
 
@@ -74,11 +75,60 @@ export default function OcrSettingsForm({ initialSettings }: OcrSettingsFormProp
       ? `...${initialSettings.ocrApiKey.slice(-4)}`
       : undefined;
 
+  const guideSteps: Record<string, { step: string; detail?: string }[]> = {
+    openai: [
+      { step: 'Go to platform.openai.com → API Keys' },
+      { step: 'Click "Create new secret key"' },
+      { step: 'Copy the key', detail: 'starts with sk-' },
+      { step: 'Paste it in the API Key field below' },
+      { step: 'Model used: GPT-4o (vision-capable)' },
+    ],
+    gemini: [
+      { step: 'Go to aistudio.google.com → Get API Key' },
+      { step: 'Create an API key for your project' },
+      { step: 'Copy the key' },
+      { step: 'Paste it in the API Key field below' },
+      { step: 'Model used: Gemini 1.5 Flash' },
+    ],
+    claude: [
+      { step: 'Go to console.anthropic.com → API Keys' },
+      { step: 'Create a new API key' },
+      { step: 'Copy the key', detail: 'starts with sk-ant-' },
+      { step: 'Paste it in the API Key field below' },
+      { step: 'Model used: Claude 3.5 Haiku' },
+    ],
+    custom: [
+      { step: 'Your provider must be OpenAI-compatible' },
+      { step: 'Enter the base URL', detail: 'e.g., https://your-provider.com/v1' },
+      { step: 'Enter the API key from your provider' },
+    ],
+  };
+
+  const currentGuideSteps = guideSteps[ocrProvider] ?? guideSteps.openai;
+
   return (
     <SettingsSection
       title="AI Bill Analysis"
       description="Configure AI-powered OCR to automatically extract fields from uploaded bill images."
     >
+      <div className="mb-6">
+        <SetupGuide title="How to set up AI Analysis">
+          <ol className="space-y-2 list-none pl-0">
+            {currentGuideSteps.map((item, index) => (
+              <li key={index} className="flex gap-2">
+                <span className="font-medium text-indigo-600 shrink-0">{index + 1}.</span>
+                <span className="text-slate-600">
+                  {item.step}
+                  {item.detail && (
+                    <> (<span className="font-semibold text-slate-800">{item.detail}</span>)</>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ol>
+        </SetupGuide>
+      </div>
+
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Enable toggle */}
         <div className="flex items-center justify-between">
