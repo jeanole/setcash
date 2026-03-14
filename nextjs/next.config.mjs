@@ -1,5 +1,18 @@
+import { execFileSync } from 'child_process';
+
+const gitCommit = (() => {
+  try {
+    return execFileSync('git', ['rev-parse', '--short', 'HEAD']).toString().trim();
+  } catch {
+    return 'dev';
+  }
+})();
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  env: {
+    NEXT_PUBLIC_GIT_COMMIT: gitCommit,
+  },
   output: 'standalone',
   serverExternalPackages: ['pdfkit', 'fontkit'],
   webpack: (config, { isServer }) => {

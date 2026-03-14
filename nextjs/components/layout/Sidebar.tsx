@@ -296,7 +296,9 @@ export default function Sidebar({ currentUser, isMobileOpen, onClose }: SidebarP
             <UserPlus className="w-3.5 h-3.5" />
             {canInviteToProject ? 'Invite to project' : 'Invite to SetCash'}
           </button>
-          <p className="text-xs text-slate-400 px-3">v2.0.0-next</p>
+          <p className="text-xs text-slate-400 px-3 font-mono">
+            {process.env.NEXT_PUBLIC_GIT_COMMIT ?? 'dev'}
+          </p>
         </div>
       </aside>
 
@@ -341,7 +343,9 @@ export default function Sidebar({ currentUser, isMobileOpen, onClose }: SidebarP
                 <UserPlus className="w-3.5 h-3.5" />
                 {canInviteToProject ? 'Invite to project' : 'Invite to SetCash'}
               </button>
-              <p className="text-xs text-slate-400 px-3">v2.0.0-next</p>
+              <p className="text-xs text-slate-400 px-3 font-mono">
+                {process.env.NEXT_PUBLIC_GIT_COMMIT ?? 'dev'}
+              </p>
             </div>
           </aside>
         </div>
