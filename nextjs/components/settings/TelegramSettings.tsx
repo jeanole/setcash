@@ -317,7 +317,7 @@ export default function TelegramSettings({
                   <span className="text-slate-600">
                     Click{' '}
                     <span className="font-semibold text-slate-800">Link Telegram Account</span>{' '}
-                    below to get a 6-digit code
+                    below to get a 6-character code
                   </span>
                 </li>
                 <li className="flex gap-2">
@@ -331,7 +331,7 @@ export default function TelegramSettings({
                   <span className="text-slate-600">
                     Send the message{' '}
                     <span className="font-semibold text-slate-800">/link YOUR_CODE</span> (e.g.,{' '}
-                    <span className="font-semibold text-slate-800">/link 482910</span>)
+                    <span className="font-semibold text-slate-800">/link A1B2C3</span>)
                   </span>
                 </li>
                 <li className="flex gap-2">
