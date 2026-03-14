@@ -1,6 +1,6 @@
 # PROJ-12: Integrations (Google Sheets + Telegram)
 
-## Status: Planned
+## Status: Change Requested
 **Created:** 2026-03-01
 **Last Updated:** 2026-03-04
 
@@ -959,6 +959,32 @@ Exact format (inline text, accordion, tooltip, help modal) TBD — needs discuss
 - **Regression:** Pass -- existing Telegram and OCR settings functionality unchanged
 - **Production Ready:** YES
 - **Recommendation:** Deploy. Both bugs are cosmetic/minor and can be fixed in the next sprint.
+
+### CR-23: Enrich Telegram Upload Response with OCR Fields, Errors, and Bill Link
+**Requested:** 2026-03-14 | **Priority:** Medium | **Status:** Pending Review
+
+**Current Behavior:**
+After a user sends a receipt photo via Telegram, the bot acknowledges the upload but does not include OCR extraction results in its reply. The user has no way to know from Telegram whether the analysis succeeded, which fields were found, or where to view the bill.
+
+**Desired Behavior:**
+After a successful upload and OCR analysis, the Telegram bot reply should include:
+1. **Recognized fields** — a formatted summary of whatever was extracted (e.g. "Vendor: REWE · Date: 14.03.2026 · Amount: 24,50 €")
+2. **Error messages** — if OCR fails or fields are missing, the bot explains what went wrong (e.g. "Could not read date — please verify manually")
+3. **Link to bill view** — a URL to open the bill directly in the web app (e.g. `https://app.example.com/bills/<id>`)
+
+**Rationale:**
+Users upload receipts via Telegram for speed and convenience. Without seeing the extracted data in the reply, they have to switch to the web app to verify — defeating the purpose of the mobile-first flow. Showing fields + a direct link keeps the entire workflow inside Telegram.
+
+**Proposed Acceptance Criteria:**
+- [ ] After photo upload, bot sends an initial acknowledgement ("Bill saved, analysing…")
+- [ ] Once OCR completes, bot sends a follow-up message listing extracted fields in a readable format (skip null fields)
+- [ ] If OCR fails, bot sends a failure message with the reason instead of field list
+- [ ] Message includes a "View bill" link: `{NEXTAUTH_URL}/bills/{billId}`
+- [ ] Link is only included when `NEXTAUTH_URL` is configured (graceful omission otherwise)
+- [ ] Follow-up message is sent asynchronously — does not block the initial acknowledgement
+- [ ] If the project has OCR disabled, the bill-saved confirmation still includes the bill link (no OCR summary)
+
+**Resolution:** Pending
 
 ## Deployment
 _To be added by /deploy_

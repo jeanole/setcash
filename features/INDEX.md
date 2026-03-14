@@ -1,6 +1,6 @@
 # SetCash — Project Index
 
-**Next Available IDs:** PROJ-21 · BUG-84 · CR-23
+**Next Available IDs:** PROJ-21 · BUG-84 · CR-24
 
 
 | ID | Type | Title | Status | Priority | Feature | Date |
@@ -104,6 +104,7 @@
 | [BUG-56](BUG-56-password-change-no-rate-limiting.md) | Bug | No Rate Limiting on Password Change Endpoint | Resolved | Medium | PROJ-20 | 2026-03-14 |
 | [BUG-57](BUG-57-rate-limiter-noop-without-upstash.md) | Bug | Rate Limiter Is a Silent No-Op When Upstash Redis Is Not Configured | Open | Medium | PROJ-19 | 2026-03-14 |
 | CR-22 | CR | Add Qwen2.5-VL / Qwen3-VL / DeepSeek Providers + Structured System Prompt | Pending Review | Medium | PROJ-19 | 2026-03-14 |
+| CR-23 | CR | Enrich Telegram Upload Response with OCR Fields, Errors, and Bill Link | Pending Review | Medium | PROJ-12 | 2026-03-14 |
 | [BUG-58](BUG-58-ssrf-dns-rebinding-bypass.md) | Bug | SSRF Check Does Not Resolve DNS — DNS Rebinding Bypass Possible | Resolved | Medium | PROJ-19 | 2026-03-14 |
 | [BUG-59](BUG-59-bill-number-race-condition.md) | Bug | Bill Number Generation Race Condition Produces Duplicates | Resolved | Medium | PROJ-7 | 2026-03-14 |
 | [BUG-60](BUG-60-budget-pdf-missing-project-membership-check.md) | Bug | Budget Matrix PDF Missing Project Membership Verification | Resolved | Medium | PROJ-11 | 2026-03-14 |
