@@ -1,6 +1,7 @@
 # SetCash — Project Index
 
-**Next Available IDs:** PROJ-21 · BUG-84 · CR-15
+**Next Available IDs:** PROJ-21 · BUG-84 · CR-22
+
 
 | ID | Type | Title | Status | Priority | Feature | Date |
 |----|------|-------|--------|----------|---------|------|
@@ -82,6 +83,13 @@
 | CR-13 | CR | Require Invite Token for All Signups (No Open Registration) | Pending Review | Medium | PROJ-10 | 2026-03-13 |
 | [PROJ-20](PROJ-20-user-profile-edit.md) | Feature | User Profile Edit Panel | In Progress | Medium | PROJ-5 | 2026-03-13 |
 | CR-14 | CR | Add User Profile Edit Panel | Pending Review | Medium | PROJ-20 | 2026-03-13 |
+| CR-15 | CR | Saved Filter Presets on Bills List | Discussion Needed | Medium | PROJ-7 | 2026-03-14 |
+| CR-16 | CR | User Onboarding Flow | Discussion Needed | Medium | PROJ-5 | 2026-03-14 |
+| CR-17 | CR | Bill-Level Comments / Discussion Thread | Discussion Needed | Medium | PROJ-7 | 2026-03-14 |
+| CR-18 | CR | Bulk Bill Status Actions | Discussion Needed | Medium | PROJ-7 | 2026-03-14 |
+| CR-19 | CR | Expanded Notification Triggers | Discussion Needed | High | PROJ-16 | 2026-03-14 |
+| CR-20 | CR | Dashboard Content & Widgets | Discussion Needed | High | PROJ-4 | 2026-03-14 |
+| CR-21 | CR | In-App Setup Guides for Telegram & AI/OCR | Deployed | Medium | PROJ-12 | 2026-03-14 |
 | [BUG-45](BUG-45-jwt-session-update-privilege-escalation.md) | Bug | JWT Session Update Trusts Client-Supplied Role — Privilege Escalation | Resolved | High | PROJ-5 | 2026-03-14 |
 | [BUG-46](BUG-46-bill-image-routes-missing-ownership-check.md) | Bug | Bill Image Upload/Replace/Delete Routes Missing Owner-or-Admin Check | Resolved | High | PROJ-7 | 2026-03-14 |
 | [BUG-47](BUG-47-bills-api-missing-pagination-limit.md) | Bug | GET /api/bills and /api/bills/log Have No Pagination Limit | Resolved | High | PROJ-7 | 2026-03-14 |

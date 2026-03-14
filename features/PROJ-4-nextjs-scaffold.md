@@ -473,5 +473,16 @@ first real pages are built.
 - **Production Ready:** YES
 - **Recommendation:** Mark PROJ-4 as Deployed. Remaining Low issues (BUG-5, 6, 8) are cosmetic/spec-wording and do not block deployment.
 
+## Change Requests
+
+### CR-20: Dashboard Content & Widgets
+**Requested:** 2026-03-14 | **Priority:** High | **Status:** Discussion Needed
+
+**Current Behavior:** The `/dashboard` route is a placeholder — "Server-rendered overview page, entry point after login." It has no defined content. Users see nothing actionable after logging in.
+
+**Desired Behavior:** A meaningful dashboard showing at-a-glance project health — e.g., pending approvals count, budget utilization summary, recent bill activity, V-Geld balance widget, quick-submit shortcut. Exact widgets, layout, and role-specific differences TBD — needs discussion before implementation.
+
+---
+
 ## Deployment
 _To be added by /deploy_
