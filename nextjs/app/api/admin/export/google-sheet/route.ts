@@ -11,6 +11,11 @@ import { auth } from '@/auth';
 import { prisma } from '@/lib/db';
 import { getSheets } from '@/lib/google';
 
+// Per-project in-memory sync lock (BUG-67)
+const syncLocks = new Map<string, boolean>();
+
+const BILL_EXPORT_LIMIT = 5000;
+
 export async function POST() {
   try {
     const session = await auth();
@@ -32,7 +37,14 @@ export async function POST() {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const sheets = await getSheets();
+    // BUG-67: Reject concurrent syncs for the same project
+    if (syncLocks.get(projectId)) {
+      return NextResponse.json({ error: 'Sync already in progress' }, { status: 409 });
+    }
+    syncLocks.set(projectId, true);
+
+    try {
+    const sheets = await getSheets(projectId);
     if (!sheets) {
       return NextResponse.json(
         {
@@ -60,10 +72,17 @@ export async function POST() {
     }
 
     // --- Gather data ---
+    // BUG-66: Cap at BILL_EXPORT_LIMIT to prevent OOM on large projects
     const bills = await prisma.bill.findMany({
       where: { projectId },
       orderBy: { id: 'asc' },
+      take: BILL_EXPORT_LIMIT,
     });
+    if (bills.length === BILL_EXPORT_LIMIT) {
+      console.warn(
+        `[Google Sheets export] Project ${projectId} has >= ${BILL_EXPORT_LIMIT} bills; only the first ${BILL_EXPORT_LIMIT} were exported.`
+      );
+    }
 
     const allMotiveAllocs = await prisma.billMotive.findMany({
       where: { bill: { projectId } },
@@ -354,11 +373,12 @@ export async function POST() {
 
     const sheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`;
     return NextResponse.json({ ok: true, sheetUrl });
+    } finally {
+      // BUG-67: Release the per-project sync lock
+      syncLocks.delete(projectId);
+    }
   } catch (error: any) {
-    console.error('Google Sheet export error:', error);
-    return NextResponse.json(
-      { error: 'Google Sheet export failed: ' + (error.message || 'Unknown error') },
-      { status: 500 }
-    );
+    console.error('Google Sheet export failed:', error);
+    return NextResponse.json({ error: 'Google Sheet export failed. Check server logs for details.' }, { status: 500 });
   }
 }

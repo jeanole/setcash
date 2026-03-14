@@ -360,6 +360,17 @@ Header (Server Component)
 - Limited to 50 notifications visible at once (performance protection)
 - Requires one new npm package: `date-fns` for human-readable timestamps
 
+## Change Requests
+
+### CR-19: Expanded Notification Triggers
+**Requested:** 2026-03-14 | **Priority:** High | **Status:** Discussion Needed
+
+**Current Behavior:** Only "invited to project" generates a notification. All other significant events (bill approved/rejected/paid, new bill submitted, V-Geld transfer received, budget overrun) happen silently.
+
+**Desired Behavior:** Notifications generated for a broader set of events so users and admins stay informed without having to poll each section manually. Which events trigger notifications (in-app vs. email) and the exact copy for each TBD — needs discussion before implementation.
+
+---
+
 ## QA Test Results
 _To be added by /qa_
 

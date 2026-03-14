@@ -62,6 +62,17 @@ export async function PUT(
       return NextResponse.json({ error: 'Bill not found' }, { status: 404 });
     }
 
+    // Check permissions - only submitter, project admin/owner, or superadmin can replace images
+    const isOwner = bill.submittedByEmail.toLowerCase() === session.user.email.toLowerCase();
+    const isAdmin =
+      session.user.role === 'admin' ||
+      session.user.role === 'owner' ||
+      session.user.role === 'superadmin';
+
+    if (!isOwner && !isAdmin) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     // Get image
     const image = await prisma.billImage.findFirst({
       where: { id: imageId, billId: id },
@@ -140,6 +151,17 @@ export async function DELETE(
 
     if (!bill) {
       return NextResponse.json({ error: 'Bill not found' }, { status: 404 });
+    }
+
+    // Check permissions - only submitter, project admin/owner, or superadmin can delete images
+    const isOwnerDel = bill.submittedByEmail.toLowerCase() === session.user.email.toLowerCase();
+    const isAdminDel =
+      session.user.role === 'admin' ||
+      session.user.role === 'owner' ||
+      session.user.role === 'superadmin';
+
+    if (!isOwnerDel && !isAdminDel) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     // Get image

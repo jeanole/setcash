@@ -9,6 +9,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/db';
 import { generateLinkCode } from '@/lib/telegram/codes';
+import { telegramLinkCodeLimiter } from '@/lib/ratelimit';
 
 export async function GET() {
   try {
@@ -25,6 +26,15 @@ export async function GET() {
     const userEmail = session.user.email;
     if (!userEmail) {
       return NextResponse.json({ error: 'No email associated with account' }, { status: 400 });
+    }
+
+    // Rate limit by user email
+    const { success } = await telegramLinkCodeLimiter.limit(userEmail);
+    if (!success) {
+      return NextResponse.json(
+        { error: 'Too many requests. Please try again later.' },
+        { status: 429 }
+      );
     }
 
     // Check if Telegram is enabled for this project

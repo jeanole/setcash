@@ -47,6 +47,11 @@ model User {
   isActive      Boolean   @default(true)
   createdAt     DateTime  @default(now())
 
+  username      String?   @unique
+  firstName     String?
+  lastName      String?
+  mobile        String?
+
   defaultProjectId String?
   defaultProject   Project? @relation("UserDefaultProject", fields: [defaultProjectId], references: [id])
 
@@ -212,6 +217,7 @@ model Motive {
   billMotives  BillMotive[]
   budgetMatrix BudgetMatrix[]
 
+  @@unique([projectId, name])
   @@index([projectId])
 }
 
@@ -226,6 +232,7 @@ model Category {
   billCategories BillCategory[]
   budgetMatrix  BudgetMatrix[]
 
+  @@unique([projectId, name])
   @@index([projectId])
 }
 

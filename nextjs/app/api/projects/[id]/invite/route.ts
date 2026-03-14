@@ -1,13 +1,10 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 import crypto from 'crypto';
 import { auth } from '@/auth';
+import { prisma } from '@/lib/db';
 import { sendInvitationEmail } from '@/lib/email';
-
-const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
-const prisma = globalForPrisma.prisma ?? new PrismaClient();
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+import { inviteLimiter } from '@/lib/ratelimit';
 
 const schema = z.object({
   email: z.string().email(),
@@ -45,6 +42,12 @@ export async function POST(
       return NextResponse.json({ error: 'Not a member of this project' }, { status: 403 });
     }
     inviterRole = membership.role;
+  }
+
+  // Rate limit: 20 invites per hour per project
+  const rl = await inviteLimiter.limit(projectId);
+  if (!rl.success) {
+    return NextResponse.json({ error: 'Too many invite requests. Please try again later.' }, { status: 429 });
   }
 
   // Only admins, owners, and superadmins can auto-add members to the project

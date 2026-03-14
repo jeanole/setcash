@@ -118,7 +118,16 @@ export async function PUT(req: NextRequest) {
       }
       // Validate against Telegram API before storing
       try {
-        const tgRes = await fetch(`https://api.telegram.org/bot${telegramBotToken}/getMe`);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        let tgRes: Response;
+        try {
+          tgRes = await fetch(`https://api.telegram.org/bot${telegramBotToken}/getMe`, {
+            signal: controller.signal,
+          });
+        } finally {
+          clearTimeout(timeoutId);
+        }
         const tgData = await tgRes.json();
         if (!tgData.ok) {
           return NextResponse.json(
@@ -126,7 +135,13 @@ export async function PUT(req: NextRequest) {
             { status: 400 }
           );
         }
-      } catch {
+      } catch (err: any) {
+        if (err?.name === 'AbortError') {
+          return NextResponse.json(
+            { error: 'Telegram API did not respond in time. Please try again.' },
+            { status: 504 }
+          );
+        }
         return NextResponse.json(
           { error: 'Could not reach Telegram to validate token. Check network connectivity.' },
           { status: 502 }

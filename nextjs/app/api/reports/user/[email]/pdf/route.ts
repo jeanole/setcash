@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/db';
+import { exportLimiter } from '@/lib/ratelimit';
 import { UPLOADS_DIR } from '@/lib/upload';
 import fs from 'fs';
 import path from 'path';
@@ -29,6 +30,15 @@ export async function GET(
     const projectId = session.user.currentProjectId;
     if (!projectId) {
       return NextResponse.json({ error: 'No project selected' }, { status: 400 });
+    }
+
+    // Rate limit by user email
+    const { success } = await exportLimiter.limit(session.user.email);
+    if (!success) {
+      return NextResponse.json(
+        { error: 'Too many requests. Please try again later.' },
+        { status: 429 }
+      );
     }
 
     const targetEmail = decodeURIComponent(params.email);
@@ -404,7 +414,8 @@ export async function GET(
     doc.end();
 
     const dateStr = new Date().toISOString().split('T')[0];
-    const filename = `report_${targetEmail.split('@')[0]}_${dateStr}.pdf`;
+    const emailLocal = targetEmail.split('@')[0].replace(/[^a-zA-Z0-9_\-]/g, '_');
+    const filename = `report_${emailLocal}_${dateStr}.pdf`;
 
     const stream = new ReadableStream({
       start(controller) {

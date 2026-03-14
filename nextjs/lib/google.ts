@@ -10,14 +10,14 @@ import { google } from 'googleapis';
 
 const DATA_DIR = path.join(process.cwd(), '..', 'data');
 
-export function getCredentialsPath(): string | null {
-  const dataPath = path.join(DATA_DIR, 'google-credentials.json');
+export function getCredentialsPath(projectId: string): string | null {
+  const dataPath = path.join(DATA_DIR, `google-credentials-${projectId}.json`);
   if (fs.existsSync(dataPath)) return dataPath;
   return null;
 }
 
-export async function getSheets() {
-  const credPath = getCredentialsPath();
+export async function getSheets(projectId: string) {
+  const credPath = getCredentialsPath(projectId);
   if (!credPath) return null;
   const auth = new google.auth.GoogleAuth({
     keyFile: credPath,
@@ -26,8 +26,8 @@ export async function getSheets() {
   return google.sheets({ version: 'v4', auth });
 }
 
-export function saveCredentials(jsonContent: string): void {
-  const credPath = path.join(DATA_DIR, 'google-credentials.json');
+export function saveCredentials(jsonContent: string, projectId: string): void {
+  const credPath = path.join(DATA_DIR, `google-credentials-${projectId}.json`);
   fs.writeFileSync(credPath, jsonContent, 'utf-8');
 }
 

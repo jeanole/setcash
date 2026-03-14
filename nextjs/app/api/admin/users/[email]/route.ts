@@ -9,6 +9,12 @@ import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { randomBytes } from 'crypto';
 
+// Validation schema for the resetPassword path
+const ResetPasswordSchema = z.object({
+  resetPassword: z.literal(true),
+  isSuperAdmin: z.boolean().optional(),
+});
+
 // Validation schema for updating users
 const UpdateUserSchema = z
   .object({
@@ -71,9 +77,20 @@ export async function PUT(
     const updates: { passwordHash?: string; isSuperAdmin?: boolean } = {};
 
     if (body.resetPassword === true) {
-      // Generate random 12-char password
-      plainPassword = randomBytes(6).toString('base64').slice(0, 12);
+      // Validate the resetPassword path with Zod
+      const resetValidation = ResetPasswordSchema.safeParse(body);
+      if (!resetValidation.success) {
+        return NextResponse.json(
+          { error: resetValidation.error.issues[0].message },
+          { status: 400 }
+        );
+      }
+      // Generate random 12-char password (9 bytes → 12 base64url chars, URL-safe alphabet)
+      plainPassword = randomBytes(9).toString('base64url').slice(0, 12);
       updates.passwordHash = await bcrypt.hash(plainPassword, 12);
+      if (resetValidation.data.isSuperAdmin !== undefined) {
+        updates.isSuperAdmin = resetValidation.data.isSuperAdmin;
+      }
     } else if (body.password) {
       // Validate custom password
       const validation = UpdateUserSchema.safeParse(body);
@@ -154,15 +171,13 @@ export async function DELETE(
       );
     }
 
-    // Delete user's project memberships (cascade handles this, but explicit for clarity)
-    await prisma.projectMember.deleteMany({
-      where: { userEmail: user.email },
-    });
-
-    // Delete user
-    await prisma.user.delete({
-      where: { id: user.id },
-    });
+    // Delete memberships and user in a single transaction
+    await prisma.$transaction([
+      // Delete user's project memberships (cascade handles this, but explicit for clarity)
+      prisma.projectMember.deleteMany({ where: { userEmail: user.email } }),
+      // Delete user
+      prisma.user.delete({ where: { id: user.id } }),
+    ]);
 
     return NextResponse.json({ ok: true });
   } catch (error) {

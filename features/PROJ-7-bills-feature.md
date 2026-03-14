@@ -989,5 +989,34 @@ No Critical or High severity bugs remain. The only new observation (OBS-1) is a 
 
 PIPELINE_RESULT: ready=YES bugs_frontend=0 bugs_backend=0
 
+---
+
+## Change Requests
+
+### CR-15: Saved Filter Presets on Bills List
+**Requested:** 2026-03-14 | **Priority:** Medium | **Status:** Discussion Needed
+
+**Current Behavior:** Filters reset on every page visit. Users must re-apply the same filter combinations repeatedly.
+
+**Desired Behavior:** Users can save named filter combinations (e.g., "My pending bills this week") and recall them from a dropdown on the bills list. Details TBD — needs discussion before implementation.
+
+---
+
+### CR-17: Bill-Level Comments / Discussion Thread
+**Requested:** 2026-03-14 | **Priority:** Medium | **Status:** Discussion Needed
+
+**Current Behavior:** No communication channel exists between bill submitter and admin beyond status changes. Admins cannot explain a rejection; submitters cannot ask questions about a bill.
+
+**Desired Behavior:** A comment/discussion thread attached to each bill visible to the submitter and all project admins. Details TBD — needs discussion before implementation.
+
+---
+
+### CR-18: Bulk Bill Status Actions
+**Requested:** 2026-03-14 | **Priority:** Medium | **Status:** Discussion Needed
+
+**Current Behavior:** Admins can bulk-delete bills but cannot bulk-approve, bulk-reject, or bulk-mark-as-paid. On busy productions this requires clicking through dozens of individual bills.
+
+**Desired Behavior:** Bulk status transitions (approve, reject, mark paid) available in the bills list alongside existing bulk delete. Details TBD — needs discussion before implementation.
+
 | [BUG-35](BUG-35-add-more-images-upload-fails.md) | Critical | Add More Images Upload Fails on Bill Detail Page | Open |
 | [BUG-36](BUG-36-image-preview-too-small.md) | Medium | Uploaded Image Previews Displayed Too Small | Open |

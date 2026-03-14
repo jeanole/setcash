@@ -826,8 +826,139 @@ Ship Google Sheets integration now (no lifecycle issues) and implement Telegram 
 
 ---
 
+## Change Requests
+
+### CR-21: In-App Setup Guides for Telegram & AI/OCR
+**Requested:** 2026-03-14 | **Priority:** Medium | **Status:** Discussion Needed
+
+**Current Behavior:** The Telegram settings page and AI/OCR settings page show configuration fields with no contextual help. New admins have no idea how to create a Telegram bot via @BotFather, where to get an OpenAI/Gemini/Claude API key, or what permissions/scopes are required.
+
+**Desired Behavior:** Each settings section includes a concise step-by-step inline guide (collapsible or tooltip) covering:
+- **Telegram:** Create bot via @BotFather → copy token → paste here → enable → link users via `/link <code>`
+- **AI/OCR:** Which provider to choose → where to find the API key → required model access
+
+Exact format (inline text, accordion, tooltip, help modal) TBD — needs discussion before implementation.
+
+---
+
 ## QA Test Results
-_To be added by /qa_
+
+**Tested:** 2026-03-14
+**Scope:** CR-21 (In-App Setup Guides for Telegram & AI/OCR)
+**Tester:** QA Engineer (AI)
+**Commit tested:** a56de09
+
+### Acceptance Criteria Status
+
+#### AC-1: SetupGuide component -- accessible expand/collapse
+- [x] Accordion button has `aria-expanded` attribute that toggles correctly
+- [x] Content region has `role="region"`
+- [x] Defaults to collapsed (`defaultOpen` defaults to false)
+- [x] Clicking toggles between expanded and collapsed
+- [x] Chevron icon switches between ChevronRight (collapsed) and ChevronDown (expanded)
+- [x] Grid-rows animation works smoothly (0fr to 1fr transition)
+- [ ] BUG-84: `role="region"` element has no `aria-labelledby` or `aria-label` (see Bugs Found)
+
+#### AC-2: AI Analysis guide -- provider-specific dynamic content
+- [x] Guide appears above the form inside SettingsSection
+- [x] When provider is OpenAI: shows platform.openai.com, sk- prefix, GPT-4o
+- [x] When provider is Gemini: shows aistudio.google.com, Gemini 1.5 Flash
+- [x] When provider is Claude: shows console.anthropic.com, sk-ant-, Claude 3.5 Haiku
+- [x] When provider is Custom: shows base URL instruction, 3 steps only
+- [x] Changing provider dropdown updates guide content live (no page reload)
+
+#### AC-3: Telegram admin guide -- BotFather setup steps
+- [x] Guide appears inside Bot Configuration section (admin-only)
+- [x] Shows 6 steps covering @BotFather, /newbot, token, paste, enable, status
+- [x] Only visible to admin users (not regular users)
+
+#### AC-4: Telegram user guide -- account linking steps
+- [x] Guide appears inside Link Your Account section
+- [x] Shows 5 steps covering code, bot, /link, confirmation, drafts
+- [x] Only visible when bot is enabled AND account is NOT yet linked
+- [x] Hidden when bot is disabled
+- [x] Hidden when account is already linked
+
+#### AC-5: Guide content accuracy
+- [x] All provider URLs are correct
+- [x] All key format hints are correct (sk-, sk-ant-)
+- [x] All model names are correct (GPT-4o, Gemini 1.5 Flash, Claude 3.5 Haiku)
+- [x] Telegram admin guide accurately describes the BotFather flow
+- [ ] BUG-85: Telegram user guide says "6-digit code" but the system uses 6-character alphanumeric codes (see Bugs Found)
+
+#### AC-6: Styling consistency
+- [x] Accordion uses indigo-50/60 background, indigo-100 border
+- [x] Step numbers use indigo-600
+- [x] Bold terms use slate-800 font-semibold
+- [x] Matches existing settings page color palette
+
+#### AC-7: No new npm dependencies
+- [x] No new entries in package.json (verified via git diff)
+
+#### AC-8: TypeScript compiles without errors
+- [x] `npx tsc --noEmit` completes with no errors
+
+#### AC-9: Responsive on mobile (375px+)
+- [x] Guide content uses flex layout with natural text wrapping (code review)
+- [x] No fixed widths that could cause horizontal overflow
+- [x] Accordion toggle button has `w-full` for full tappable area
+- [x] Chevron icon uses `shrink-0` to prevent collapse at narrow widths
+
+### Edge Cases Status
+
+#### EC-1: Guide accordion with defaultOpen=true
+- [x] `defaultOpen` prop accepted and passed to `useState` -- would work correctly
+
+#### EC-2: Rapid toggle clicking
+- [x] State toggle uses functional updater `setOpen((v) => !v)` -- safe for rapid clicks
+
+#### EC-3: Guide content when provider changes while accordion is open
+- [x] Steps update in-place without closing accordion (independent state)
+
+#### EC-4: Unknown provider fallback
+- [x] Falls back to OpenAI steps via `guideSteps[ocrProvider] ?? guideSteps.openai`
+
+#### EC-5: Non-admin user on Telegram page
+- [x] Admin guide wrapped in `{isAdmin && (...)}` -- not rendered for regular users
+- [x] User linking guide visible when conditions are met regardless of role
+
+### Security Audit Results
+- [x] No raw HTML injection (all content is JSX-escaped, no unsafe inner HTML usage)
+- [x] No clickable external links that could be spoofed (URLs rendered as plain text)
+- [x] No user input processed by guide components (all content is hardcoded)
+- [x] No new API endpoints introduced
+
+### Bugs Found
+
+#### BUG-84: SetupGuide region element lacks accessible label [Frontend]
+- **Severity:** Low
+- **Steps to Reproduce:**
+  1. Open any settings page with a SetupGuide component
+  2. Inspect the element with `role="region"`
+  3. Expected: Region has `aria-labelledby` pointing to the toggle button, so screen readers announce "How to set up AI Analysis, region"
+  4. Actual: Region has no `aria-labelledby` or `aria-label` attribute; screen readers announce a generic unlabeled region
+- **File:** `nextjs/components/ui/SetupGuide.tsx` line 33
+- **Priority:** Fix in next sprint
+
+#### BUG-85: User guide says "6-digit code" but codes are 6-character alphanumeric [Frontend]
+- **Severity:** Low
+- **Steps to Reproduce:**
+  1. Open Telegram settings as a non-admin user with bot enabled and account unlinked
+  2. Expand the "How to link your Telegram account" guide
+  3. Read step 1
+  4. Expected: Says "6-character code" (alphanumeric, e.g., A1B2C3)
+  5. Actual: Says "6-digit code" which implies numeric-only, contradicting the actual code format
+- **File:** `nextjs/components/settings/TelegramSettings.tsx` line 320
+- **Priority:** Fix in next sprint
+
+### Summary
+- **Acceptance Criteria:** 9/9 passed (2 with minor bugs)
+- **Edge Cases:** 5/5 passed
+- **Bugs Found:** 2 total (0 critical, 0 high, 0 medium, 2 low)
+- **Security:** Pass -- no issues found
+- **Regression:** Pass -- existing Telegram and OCR settings functionality unchanged
+- **Production Ready:** YES
+- **Recommendation:** Deploy. Both bugs are cosmetic/minor and can be fixed in the next sprint.
 
 ## Deployment
 _To be added by /deploy_

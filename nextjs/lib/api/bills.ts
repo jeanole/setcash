@@ -17,9 +17,13 @@ async function fetchWithError<T>(url: string, options?: RequestInit): Promise<T>
   return response.json();
 }
 
-// Get all bills
-export async function getBills(): Promise<Bill[]> {
-  return fetchWithError<Bill[]>(`${API_BASE}/bills`);
+// Get all bills (paginated). Pass pageSize=200 to fetch up to the maximum in one call,
+// or leave defaults (pageSize=50) for the first page only.
+export async function getBills(
+  page = 1,
+  pageSize = 50
+): Promise<{ bills: Bill[]; total: number; page: number; pageSize: number }> {
+  return fetchWithError(`${API_BASE}/bills?page=${page}&pageSize=${pageSize}`);
 }
 
 // Get a single bill

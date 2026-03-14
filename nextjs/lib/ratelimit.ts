@@ -8,68 +8,72 @@ import { Redis } from '@upstash/redis';
 // Rate limit configurations
 export const rateLimits = {
   // Bill creation: 10 requests per minute per user
-  billCreate: {
-    limiter: Ratelimit.slidingWindow(10, '1 m'),
-    name: 'bill_create',
-  },
+  billCreate: { max: 10, window: '1 m', name: 'bill_create' },
   // Bill re-analysis: 5 requests per minute per user
-  billAnalyse: {
-    limiter: Ratelimit.slidingWindow(5, '1 m'),
-    name: 'bill_analyse',
-  },
+  billAnalyse: { max: 5, window: '1 m', name: 'bill_analyse' },
   // Forgot password: 1 request per email per 5 minutes
-  forgotPassword: {
-    limiter: Ratelimit.slidingWindow(1, '5 m'),
-    name: 'forgot_password',
-  },
+  forgotPassword: { max: 1, window: '5 m', name: 'forgot_password' },
   // Sign up: 3 requests per IP per 10 minutes
-  signUp: {
-    limiter: Ratelimit.slidingWindow(3, '10 m'),
-    name: 'sign_up',
-  },
+  signUp: { max: 3, window: '10 m', name: 'sign_up' },
   // Resend verification: 1 request per email per 2 minutes
-  resendVerification: {
-    limiter: Ratelimit.slidingWindow(1, '2 m'),
-    name: 'resend_verification',
-  },
-  bugReport: {
-    limiter: Ratelimit.slidingWindow(3, '10 m'),
-    name: 'bug_report',
-  },
+  resendVerification: { max: 1, window: '2 m', name: 'resend_verification' },
+  bugReport: { max: 3, window: '10 m', name: 'bug_report' },
+  // Telegram link code generation: 5 requests per 10 minutes per user
+  telegramLinkCode: { max: 5, window: '10 m', name: 'telegram_link_code' },
+  // Password change: 5 attempts per 15 minutes per user
+  passwordChange: { max: 5, window: '15 m', name: 'password_change' },
+  // Export reports: 10 requests per minute per user
+  exportReport: { max: 10, window: '1 m', name: 'export_report' },
+  // Project invite: 20 requests per hour per project
+  inviteEmail: { max: 20, window: '1 h', name: 'invite_email' },
 } as const;
 
-// Mock rate limiter for local development when Redis is not configured
-class MockRatelimit {
-  async limit(_identifier: string): Promise<{ success: boolean; limit: number; remaining: number; reset: number }> {
-    // Always allow requests in mock mode
-    return {
-      success: true,
-      limit: 100,
-      remaining: 99,
-      reset: Date.now() + 60000,
-    };
+function parseWindow(window: string): number {
+  const [val, unit] = window.split(' ');
+  const n = parseInt(val, 10);
+  if (unit === 's') return n * 1000;
+  if (unit === 'm') return n * 60_000;
+  if (unit === 'h') return n * 3_600_000;
+  return 60_000;
+}
+
+// In-memory sliding window rate limiter — used when Redis is not configured
+class InMemoryRatelimit {
+  private windows = new Map<string, number[]>();
+
+  constructor(private max: number, private windowMs: number) {}
+
+  async limit(identifier: string): Promise<{ success: boolean; limit: number; remaining: number; reset: number }> {
+    const now = Date.now();
+    const hits = (this.windows.get(identifier) ?? []).filter(t => now - t < this.windowMs);
+
+    if (hits.length >= this.max) {
+      return { success: false, limit: this.max, remaining: 0, reset: now + this.windowMs };
+    }
+
+    hits.push(now);
+    this.windows.set(identifier, hits);
+    return { success: true, limit: this.max, remaining: this.max - hits.length, reset: now + this.windowMs };
   }
 }
 
 // Create rate limiter instances
-function createRateLimiter(config: { limiter: ReturnType<typeof Ratelimit.slidingWindow>; name: string }) {
+function createRateLimiter(config: { max: number; window: string; name: string }) {
   const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
   const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
 
-  // Use real Upstash Redis if configured, otherwise use mock for local dev
   if (redisUrl && redisToken) {
     return new Ratelimit({
       redis: Redis.fromEnv(),
-      limiter: config.limiter,
+      limiter: Ratelimit.slidingWindow(config.max, config.window as `${number} ${'s' | 'm' | 'h' | 'd'}`),
       analytics: true,
       prefix: `ratelimit:${config.name}`,
     });
   }
 
-  // Always warn that we're using mock rate limiting — all requests will be allowed
-  console.warn('[RateLimit] UPSTASH_REDIS_REST_URL not set — using mock rate limiter. All requests will be allowed.');
+  console.warn('[RateLimit] UPSTASH_REDIS_REST_URL not set — using in-memory rate limiter.');
 
-  return new MockRatelimit();
+  return new InMemoryRatelimit(config.max, parseWindow(config.window));
 }
 
 // Export rate limiter instances
@@ -79,3 +83,7 @@ export const forgotPasswordLimiter = createRateLimiter(rateLimits.forgotPassword
 export const signUpLimiter = createRateLimiter(rateLimits.signUp);
 export const resendVerificationLimiter = createRateLimiter(rateLimits.resendVerification);
 export const bugReportLimiter = createRateLimiter(rateLimits.bugReport);
+export const telegramLinkCodeLimiter = createRateLimiter(rateLimits.telegramLinkCode);
+export const passwordChangeLimiter = createRateLimiter(rateLimits.passwordChange);
+export const exportLimiter = createRateLimiter(rateLimits.exportReport);
+export const inviteLimiter = createRateLimiter(rateLimits.inviteEmail);

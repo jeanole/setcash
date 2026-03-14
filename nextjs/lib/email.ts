@@ -50,8 +50,23 @@ export async function sendPasswordResetEmail(email: string, resetUrl: string): P
                 <!-- Header -->
                 <tr>
                   <td style="background-color:#020617;padding:32px 40px;text-align:center;">
-                    <div style="width:48px;height:48px;border-radius:50%;background-color:#6366f1;display:inline-flex;align-items:center;justify-content:center;margin-bottom:12px;">
-                      <span style="color:#ffffff;font-size:18px;font-weight:bold;line-height:48px;display:block;">SC</span>
+                    <div style="margin-bottom:12px;display:inline-block;">
+                      <svg width="60" height="46" viewBox="0 0 60 46" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <g transform="rotate(-10 30 23)">
+                          <rect x="4" y="9" width="46" height="28" rx="4" fill="#14532d"/>
+                          <rect x="8" y="13" width="38" height="20" rx="2" fill="#166534" opacity="0.6"/>
+                        </g>
+                        <g transform="rotate(-4 30 23)">
+                          <rect x="4" y="9" width="46" height="28" rx="4" fill="#16a34a"/>
+                          <rect x="8" y="13" width="38" height="20" rx="2" fill="#15803d" opacity="0.5"/>
+                        </g>
+                        <rect x="4" y="9" width="46" height="28" rx="4" fill="#22c55e"/>
+                        <rect x="8" y="13" width="38" height="20" rx="2" fill="#16a34a" opacity="0.4"/>
+                        <ellipse cx="30" cy="23" rx="7" ry="7" fill="#16a34a"/>
+                        <text x="30" y="27" text-anchor="middle" font-family="Georgia,serif" font-size="12" font-weight="bold" fill="#bbf7d0">$</text>
+                        <rect x="8" y="13" width="7" height="4" rx="1" fill="#16a34a"/>
+                        <rect x="45" y="29" width="7" height="4" rx="1" fill="#16a34a"/>
+                      </svg>
                     </div>
                     <h1 style="color:#ffffff;font-size:24px;font-weight:700;margin:0;">SetCash</h1>
                   </td>
@@ -133,8 +148,23 @@ export async function sendVerificationEmail(email: string, verifyUrl: string): P
                 <!-- Header -->
                 <tr>
                   <td style="background-color:#020617;padding:32px 40px;text-align:center;">
-                    <div style="width:48px;height:48px;border-radius:50%;background-color:#6366f1;display:inline-flex;align-items:center;justify-content:center;margin-bottom:12px;">
-                      <span style="color:#ffffff;font-size:18px;font-weight:bold;line-height:48px;display:block;">SC</span>
+                    <div style="margin-bottom:12px;display:inline-block;">
+                      <svg width="60" height="46" viewBox="0 0 60 46" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <g transform="rotate(-10 30 23)">
+                          <rect x="4" y="9" width="46" height="28" rx="4" fill="#14532d"/>
+                          <rect x="8" y="13" width="38" height="20" rx="2" fill="#166534" opacity="0.6"/>
+                        </g>
+                        <g transform="rotate(-4 30 23)">
+                          <rect x="4" y="9" width="46" height="28" rx="4" fill="#16a34a"/>
+                          <rect x="8" y="13" width="38" height="20" rx="2" fill="#15803d" opacity="0.5"/>
+                        </g>
+                        <rect x="4" y="9" width="46" height="28" rx="4" fill="#22c55e"/>
+                        <rect x="8" y="13" width="38" height="20" rx="2" fill="#16a34a" opacity="0.4"/>
+                        <ellipse cx="30" cy="23" rx="7" ry="7" fill="#16a34a"/>
+                        <text x="30" y="27" text-anchor="middle" font-family="Georgia,serif" font-size="12" font-weight="bold" fill="#bbf7d0">$</text>
+                        <rect x="8" y="13" width="7" height="4" rx="1" fill="#16a34a"/>
+                        <rect x="45" y="29" width="7" height="4" rx="1" fill="#16a34a"/>
+                      </svg>
                     </div>
                     <h1 style="color:#ffffff;font-size:24px;font-weight:700;margin:0;">SetCash</h1>
                   </td>
@@ -229,8 +259,23 @@ export async function sendInvitationEmail(
                 <!-- Header -->
                 <tr>
                   <td style="background-color:#020617;padding:32px 40px;text-align:center;">
-                    <div style="width:48px;height:48px;border-radius:50%;background-color:#6366f1;display:inline-flex;align-items:center;justify-content:center;margin-bottom:12px;">
-                      <span style="color:#ffffff;font-size:18px;font-weight:bold;line-height:48px;display:block;">SC</span>
+                    <div style="margin-bottom:12px;display:inline-block;">
+                      <svg width="60" height="46" viewBox="0 0 60 46" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <g transform="rotate(-10 30 23)">
+                          <rect x="4" y="9" width="46" height="28" rx="4" fill="#14532d"/>
+                          <rect x="8" y="13" width="38" height="20" rx="2" fill="#166534" opacity="0.6"/>
+                        </g>
+                        <g transform="rotate(-4 30 23)">
+                          <rect x="4" y="9" width="46" height="28" rx="4" fill="#16a34a"/>
+                          <rect x="8" y="13" width="38" height="20" rx="2" fill="#15803d" opacity="0.5"/>
+                        </g>
+                        <rect x="4" y="9" width="46" height="28" rx="4" fill="#22c55e"/>
+                        <rect x="8" y="13" width="38" height="20" rx="2" fill="#16a34a" opacity="0.4"/>
+                        <ellipse cx="30" cy="23" rx="7" ry="7" fill="#16a34a"/>
+                        <text x="30" y="27" text-anchor="middle" font-family="Georgia,serif" font-size="12" font-weight="bold" fill="#bbf7d0">$</text>
+                        <rect x="8" y="13" width="7" height="4" rx="1" fill="#16a34a"/>
+                        <rect x="45" y="29" width="7" height="4" rx="1" fill="#16a34a"/>
+                      </svg>
                     </div>
                     <h1 style="color:#ffffff;font-size:24px;font-weight:700;margin:0;">SetCash</h1>
                   </td>
@@ -325,8 +370,23 @@ export async function sendPlatformInviteEmail(
                 <!-- Header -->
                 <tr>
                   <td style="background-color:#020617;padding:32px 40px;text-align:center;">
-                    <div style="width:48px;height:48px;border-radius:50%;background-color:#6366f1;display:inline-flex;align-items:center;justify-content:center;margin-bottom:12px;">
-                      <span style="color:#ffffff;font-size:18px;font-weight:bold;line-height:48px;display:block;">SC</span>
+                    <div style="margin-bottom:12px;display:inline-block;">
+                      <svg width="60" height="46" viewBox="0 0 60 46" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <g transform="rotate(-10 30 23)">
+                          <rect x="4" y="9" width="46" height="28" rx="4" fill="#14532d"/>
+                          <rect x="8" y="13" width="38" height="20" rx="2" fill="#166534" opacity="0.6"/>
+                        </g>
+                        <g transform="rotate(-4 30 23)">
+                          <rect x="4" y="9" width="46" height="28" rx="4" fill="#16a34a"/>
+                          <rect x="8" y="13" width="38" height="20" rx="2" fill="#15803d" opacity="0.5"/>
+                        </g>
+                        <rect x="4" y="9" width="46" height="28" rx="4" fill="#22c55e"/>
+                        <rect x="8" y="13" width="38" height="20" rx="2" fill="#16a34a" opacity="0.4"/>
+                        <ellipse cx="30" cy="23" rx="7" ry="7" fill="#16a34a"/>
+                        <text x="30" y="27" text-anchor="middle" font-family="Georgia,serif" font-size="12" font-weight="bold" fill="#bbf7d0">$</text>
+                        <rect x="8" y="13" width="7" height="4" rx="1" fill="#16a34a"/>
+                        <rect x="45" y="29" width="7" height="4" rx="1" fill="#16a34a"/>
+                      </svg>
                     </div>
                     <h1 style="color:#ffffff;font-size:24px;font-weight:700;margin:0;">SetCash</h1>
                   </td>

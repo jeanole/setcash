@@ -32,7 +32,18 @@
       "Bash(export PATH=\"$PATH:/c/Users/jensmoeller/AppData/Local/Programs/GitHub CLI:/c/Program Files/GitHub CLI\")",
       "WebFetch(domain:api.github.com)",
       "Bash(powershell -Command:*)",
-      "Bash(git pull:*)"
+      "Bash(git pull:*)",
+      "Bash(gh issue:*)",
+      "Bash(ls /mnt/c/Users/jensmoeller/code/vbudget/*.js /mnt/c/Users/jensmoeller/code/vbudget/*.yml /mnt/c/Users/jensmoeller/code/vbudget/*.json 2>/dev/null | grep -v node_modules | grep -v nextjs)",
+      "Bash(git rm:*)",
+      "Bash(ls nextjs/package-lock* nextjs/package.json 2>/dev/null)",
+      "Bash(ls /mnt/c/Users/jensmoeller/code/vbudget/nextjs/package*.json 2>/dev/null)",
+      "Bash(npm run:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx eslint:*)",
+      "Bash(git -C /mnt/c/Users/jensmoeller/code/vbudget add nextjs/components/layout/ProfileModal.tsx nextjs/components/layout/Header.tsx nextjs/components/layout/AppShell.tsx \"nextjs/app/\\(protected\\)/layout.tsx\" && git -C /mnt/c/Users/jensmoeller/code/vbudget commit -m \"$\\(cat <<'EOF'\nfeat\\(PROJ-20\\): Implement frontend for User Profile Edit Panel\n\nAdd ProfileModal component with profile info and password change sections,\nupdate Header avatar from div to clickable button, extend AppShell and\nprotected layout to wire user profile state and modal lifecycle.\n\nCo-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(npx prisma:*)",
+      "Bash(ls -la /mnt/c/Users/jensmoeller/code/vbudget/nextjs/.env* 2>&1)"
     ]
   }
 }

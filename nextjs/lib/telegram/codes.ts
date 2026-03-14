@@ -13,13 +13,25 @@ const CODE_LENGTH = 6;
 const TTL_MS = 10 * 60 * 1000; // 10 minutes
 
 /**
+ * Return an unbiased random index into alphabet using rejection sampling.
+ * Avoids modular bias that occurs when 256 is not evenly divisible by alphabet.length.
+ */
+function unbiasedRandomChar(alphabet: string): number {
+  const limit = Math.floor(256 / alphabet.length) * alphabet.length;
+  let byte: number;
+  do {
+    byte = crypto.randomBytes(1)[0];
+  } while (byte >= limit);
+  return byte % alphabet.length;
+}
+
+/**
  * Generate a cryptographically secure 6-character uppercase alphanumeric code.
  */
 function generateCode(): string {
-  const bytes = crypto.randomBytes(CODE_LENGTH);
   let code = '';
   for (let i = 0; i < CODE_LENGTH; i++) {
-    code += ALPHABET[bytes[i] % ALPHABET.length];
+    code += ALPHABET[unbiasedRandomChar(ALPHABET)];
   }
   return code;
 }

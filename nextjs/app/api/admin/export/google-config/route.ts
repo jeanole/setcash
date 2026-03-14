@@ -37,7 +37,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const hasCredentials = getCredentialsPath() !== null;
+    const hasCredentials = getCredentialsPath(projectId) !== null;
 
     const sheetIdSetting = await prisma.projectSettings.findUnique({
       where: { projectId_key: { projectId, key: 'exportSheetId' } },
@@ -110,11 +110,11 @@ export async function POST(req: NextRequest) {
           { status: 400 }
         );
       }
-      saveCredentials(credentialsJson);
+      saveCredentials(credentialsJson, projectId);
     }
 
     // Return updated status
-    const hasCredentials = getCredentialsPath() !== null;
+    const hasCredentials = getCredentialsPath(projectId) !== null;
     const sheetIdSetting = await prisma.projectSettings.findUnique({
       where: { projectId_key: { projectId, key: 'exportSheetId' } },
     });

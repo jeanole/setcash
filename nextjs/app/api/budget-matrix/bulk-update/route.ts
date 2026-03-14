@@ -15,7 +15,7 @@ const bulkUpdateSchema = z.object({
       categoryId: z.string(),
       amount: z.number().min(0),
     })
-  ),
+  ).max(1000),
 });
 
 // POST /api/budget-matrix/bulk-update - Bulk update budget matrix cells
@@ -53,6 +53,35 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const validated = bulkUpdateSchema.parse(body);
+
+    // Validate that all motiveIds and categoryIds belong to the current project
+    const distinctMotiveIds = [...new Set(validated.updates.map((u) => u.motiveId))];
+    const distinctCategoryIds = [...new Set(validated.updates.map((u) => u.categoryId))];
+
+    const [validMotives, validCategories] = await Promise.all([
+      prisma.motive.findMany({
+        where: { id: { in: distinctMotiveIds }, projectId },
+        select: { id: true },
+      }),
+      prisma.category.findMany({
+        where: { id: { in: distinctCategoryIds }, projectId },
+        select: { id: true },
+      }),
+    ]);
+
+    if (validMotives.length !== distinctMotiveIds.length) {
+      return NextResponse.json(
+        { error: 'One or more motives do not belong to the current project' },
+        { status: 400 }
+      );
+    }
+
+    if (validCategories.length !== distinctCategoryIds.length) {
+      return NextResponse.json(
+        { error: 'One or more categories do not belong to the current project' },
+        { status: 400 }
+      );
+    }
 
     // Perform bulk upsert for each cell
     const results = await prisma.$transaction(

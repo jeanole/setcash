@@ -89,17 +89,61 @@ export function getUploadedFile(files: Files, fieldName: string): File | null {
 }
 
 /**
+ * Detect file type from magic bytes (first 12 bytes of the file).
+ * Returns a normalized type string or null if unrecognised.
+ */
+function detectMagicType(filepath: string): string | null {
+  try {
+    const buf = fs.readFileSync(filepath).slice(0, 12);
+    // JPEG: FF D8 FF
+    if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'jpeg';
+    // PNG: 89 50 4E 47 0D 0A 1A 0A
+    if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return 'png';
+    // WebP: RIFF????WEBP — bytes 0-3 = RIFF, bytes 8-11 = WEBP
+    if (
+      buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46 &&
+      buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50
+    ) return 'webp';
+    // PDF: %PDF
+    if (buf[0] === 0x25 && buf[1] === 0x50 && buf[2] === 0x44 && buf[3] === 0x46) return 'pdf';
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/** Extension → allowed magic types */
+const EXT_TO_MAGIC: Record<string, string[]> = {
+  '.jpg':  ['jpeg'],
+  '.jpeg': ['jpeg'],
+  '.png':  ['png'],
+  '.webp': ['webp'],
+  '.pdf':  ['pdf'],
+};
+
+/**
  * Validate file type and size
  */
 export function validateFile(file: File): { valid: boolean; error?: string } {
   const ext = path.extname(file.originalFilename || '').toLowerCase();
-  
+
   if (!ALLOWED_EXTENSIONS.includes(ext)) {
     return { valid: false, error: `File type not allowed: ${ext}` };
   }
 
   if (file.size > MAX_FILE_SIZE) {
     return { valid: false, error: `File too large. Max size: ${MAX_FILE_SIZE / 1024 / 1024}MB` };
+  }
+
+  // Magic byte check — verify actual content matches the declared extension
+  if (file.filepath) {
+    const detectedType = detectMagicType(file.filepath);
+    const allowedTypes = EXT_TO_MAGIC[ext] ?? [];
+    if (!detectedType || !allowedTypes.includes(detectedType)) {
+      // Remove the temp file so it is not left on disk
+      try { fs.unlinkSync(file.filepath); } catch { /* ignore */ }
+      return { valid: false, error: `File content does not match declared type: ${ext}` };
+    }
   }
 
   return { valid: true };

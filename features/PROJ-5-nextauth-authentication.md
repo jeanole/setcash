@@ -745,4 +745,13 @@ See full spec: [CR-12-forgot-password-reset.md](CR-12-forgot-password-reset.md)
 
 **Requires:** Outbound email provider (Resend recommended — add `RESEND_API_KEY` to env).
 
+---
+
+### CR-16: User Onboarding Flow
+**Requested:** 2026-03-14 | **Priority:** Medium | **Status:** Discussion Needed
+
+**Current Behavior:** New users land on a blank dashboard with no guidance. There is no prompt to create a project, configure motives/categories, invite teammates, or submit a first bill.
+
+**Desired Behavior:** A lightweight onboarding flow for first-time users — e.g., a checklist widget or step-by-step wizard that guides through: create project → invite members → add motives/categories → submit first bill. Details TBD — needs discussion before implementation.
+
 **Resolution:** Pending

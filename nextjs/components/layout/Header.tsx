@@ -7,8 +7,11 @@ interface HeaderProps {
   title?: string;
   user?: {
     email: string;
+    username?: string | null;
+    firstName?: string | null;
   } | null;
   onMenuToggle?: () => void;
+  onProfileOpen?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -16,8 +19,10 @@ interface HeaderProps {
 // Shows hamburger menu (mobile), page title, and user controls
 // ---------------------------------------------------------------------------
 
-export default function Header({ title, user, onMenuToggle }: HeaderProps) {
-  const initials = user?.email ? user.email.charAt(0).toUpperCase() : '?';
+export default function Header({ title, user, onMenuToggle, onProfileOpen }: HeaderProps) {
+  const initials = user
+    ? (user.firstName ? user.firstName.charAt(0) : user.email.charAt(0)).toUpperCase()
+    : '?';
 
   return (
     <header
@@ -46,13 +51,14 @@ export default function Header({ title, user, onMenuToggle }: HeaderProps) {
             >
               {user.email}
             </span>
-            <div
-              className="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center text-white text-sm font-semibold shrink-0"
-              aria-label={`Signed in as ${user.email}`}
-              role="img"
+            <button
+              type="button"
+              onClick={onProfileOpen}
+              className="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center text-white text-sm font-semibold shrink-0 cursor-pointer hover:ring-2 hover:ring-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 ring-offset-1 transition-all"
+              aria-label={`Edit profile — signed in as ${user.email}`}
             >
               {initials}
-            </div>
+            </button>
             <SignOutButton />
           </>
         ) : (

@@ -11,7 +11,7 @@ import fs from 'fs';
 import { UPLOADS_DIR } from '@/lib/upload';
 
 const bulkDeleteSchema = z.object({
-  ids: z.array(z.string()).min(1),
+  ids: z.array(z.string()).min(1).max(500),
 });
 
 // POST /api/bills/bulk-delete - Bulk delete bills

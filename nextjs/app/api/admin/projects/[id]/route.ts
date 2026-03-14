@@ -33,41 +33,23 @@ export async function DELETE(
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
-    // Delete all related records explicitly
-    // Bills (cascade will handle billImages, billMotives, billCategories, editLogs, ocrLogs)
-    await prisma.bill.deleteMany({
-      where: { projectId: id },
-    });
-
-    // Motives (cascade will handle billMotives, budgetMatrix)
-    await prisma.motive.deleteMany({
-      where: { projectId: id },
-    });
-
-    // Categories (cascade will handle billCategories, budgetMatrix)
-    await prisma.category.deleteMany({
-      where: { projectId: id },
-    });
-
-    // Vgeld
-    await prisma.vgeld.deleteMany({
-      where: { projectId: id },
-    });
-
-    // EditLog entries not associated with bills (bill-related already deleted)
-    await prisma.editLog.deleteMany({
-      where: { projectId: id },
-    });
-
-    // BudgetMatrix
-    await prisma.budgetMatrix.deleteMany({
-      where: { projectId: id },
-    });
-
-    // Delete project (cascade handles members, positions, settings, notifications, telegramLinks)
-    await prisma.project.delete({
-      where: { id },
-    });
+    // Delete all related records explicitly inside a single transaction
+    await prisma.$transaction([
+      // Bills (cascade will handle billImages, billMotives, billCategories, editLogs, ocrLogs)
+      prisma.bill.deleteMany({ where: { projectId: id } }),
+      // Motives (cascade will handle billMotives, budgetMatrix)
+      prisma.motive.deleteMany({ where: { projectId: id } }),
+      // Categories (cascade will handle billCategories, budgetMatrix)
+      prisma.category.deleteMany({ where: { projectId: id } }),
+      // Vgeld
+      prisma.vgeld.deleteMany({ where: { projectId: id } }),
+      // EditLog entries not associated with bills (bill-related already deleted)
+      prisma.editLog.deleteMany({ where: { projectId: id } }),
+      // BudgetMatrix
+      prisma.budgetMatrix.deleteMany({ where: { projectId: id } }),
+      // Delete project (cascade handles members, positions, settings, notifications, telegramLinks)
+      prisma.project.delete({ where: { id } }),
+    ]);
 
     return NextResponse.json({ ok: true });
   } catch (error) {

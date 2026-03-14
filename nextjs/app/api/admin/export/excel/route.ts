@@ -9,6 +9,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/db';
+import { exportLimiter } from '@/lib/ratelimit';
 import { PassThrough } from 'stream';
 import ExcelJS from 'exceljs';
 
@@ -31,6 +32,15 @@ export async function GET() {
 
     if (!isAdmin) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    // Rate limit by user email
+    const { success } = await exportLimiter.limit(session.user.email);
+    if (!success) {
+      return NextResponse.json(
+        { error: 'Too many requests. Please try again later.' },
+        { status: 429 }
+      );
     }
 
     // Project settings
