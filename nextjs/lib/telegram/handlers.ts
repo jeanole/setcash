@@ -200,9 +200,9 @@ async function sendOcrFollowUp(
         case 'date':
           if (bill.date) {
             const d = new Date(bill.date);
-            const dd = String(d.getDate()).padStart(2, '0');
-            const mm = String(d.getMonth() + 1).padStart(2, '0');
-            const yyyy = d.getFullYear();
+            const dd = String(d.getUTCDate()).padStart(2, '0');
+            const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+            const yyyy = d.getUTCFullYear();
             lines.push(`Date: ${dd}.${mm}.${yyyy}`);
           }
           break;
@@ -238,7 +238,19 @@ async function sendOcrFollowUp(
       orderBy: { timestamp: 'desc' },
       select: { errorDetail: true },
     });
-    const reason = ocrLog?.errorDetail || 'Unknown error';
+    const rawReason = ocrLog?.errorDetail || 'Unknown error';
+    // Sanitize: only expose known safe error categories to the user, not internal details
+    const SAFE_REASONS: Record<string, string> = {
+      'Invalid API key': 'Invalid API key',
+      'Rate limit exceeded': 'Rate limit exceeded',
+      'Request timed out after 60s': 'Request timed out',
+      'No image attached to this bill': 'No image found on bill',
+      'Image file not found on disk': 'Image file unavailable',
+      'OCR not enabled for this project': 'OCR not enabled',
+      'OCR not configured for this project': 'OCR not configured',
+      'Could not read API key': 'API key configuration error',
+    };
+    const reason = SAFE_REASONS[rawReason] ?? 'Analysis could not be completed';
     message = `⚠️ Analysis failed: ${reason}`;
   } else {
     return;
@@ -333,7 +345,7 @@ async function processMediaGroup(
 
   await maybeRunOcr(billId, projectId, bot, chatId);
 
-  const ocrNote = settings.ocrEnabled ? '\nAnalysing bill…' : '\nBitte in SetCash vervollständigen.';
+  const ocrNote = settings.ocrEnabled ? '\nBeleganalyse läuft im Hintergrund.\nBitte in SetCash vervollständigen.' : '\nBitte in SetCash vervollständigen.';
   const link = formatBillLink(billId);
   const linkSuffix = link ? `\n\n🔗 View bill: ${link}` : '';
   bot
@@ -374,7 +386,7 @@ async function processSinglePhoto(
 
   await maybeRunOcr(billId, projectId, bot, msg.chat.id);
 
-  const ocrNote = settings.ocrEnabled ? '\nAnalysing bill…' : '\nBitte in SetCash vervollständigen.';
+  const ocrNote = settings.ocrEnabled ? '\nBeleganalyse läuft im Hintergrund.\nBitte in SetCash vervollständigen.' : '\nBitte in SetCash vervollständigen.';
   const link = formatBillLink(billId);
   const linkSuffix = link ? `\n\n🔗 View bill: ${link}` : '';
   bot
