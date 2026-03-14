@@ -51,7 +51,8 @@
       "Bash(for w:*)",
       "Bash(ls:*)",
       "Skill(deploy)",
-      "Bash(gh run:*)"
+      "Bash(gh run:*)",
+      "Skill(commit-commands:commit)"
     ]
   }
 }
