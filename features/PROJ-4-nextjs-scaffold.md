@@ -484,5 +484,155 @@ first real pages are built.
 
 ---
 
+## QA Test Results -- CR-20: Dashboard Content & Widgets
+
+**Tested:** 2026-03-14
+**Method:** Code review (no running server -- DATABASE_URL not available in test env)
+**Tester:** QA Engineer (AI)
+
+### Acceptance Criteria Status
+
+#### AC-1: Dashboard replaces placeholder
+- [x] page.tsx is a Server Component (no 'use client' directive)
+- [x] Auth check present -- redirects to /login if no session
+- [x] Data fetching via Promise.all (motive, category, stats, recent bills)
+- [x] Suspense wrapper with DashboardSkeleton fallback
+- [x] Renders DashboardClient with all widget data as props
+
+#### AC-2: KPI Cards (4 cards in responsive grid)
+- [x] KPI 1: Budget Spent -- shows formatCurrency(spent) vs total budget with percent bar
+- [x] KPI 2: Pending -- role-aware label ("Pending Approvals" for admin/owner, "My Open Bills" for user)
+- [x] KPI 3: V-Geld Balance -- shows formatCurrency(vgeldBalance) with overspent/available subtitle
+- [x] KPI 4: Bills This Month -- monthly count with role-scoped subtitle
+- [x] Grid: lg:grid-cols-4, sm:grid-cols-2, grid-cols-1
+- [x] Each card has title, value, subtitle, icon, optional percent bar, optional link
+- [x] KpiCard has proper ARIA: role="progressbar" with aria-valuenow/min/max, focus-visible ring
+
+#### AC-3: Spending Charts
+- [x] SpendingByMotiveChart: Horizontal BarChart (layout="vertical") showing top 5 motives
+- [x] SpendingByCategoryChart: PieChart donut (innerRadius="55%") with category breakdown
+- [x] "Other" bucket for 6+ categories in PieChart
+- [x] Both wrapped in ResponsiveContainer for auto-sizing
+- [x] Both have empty state "No spending data yet"
+- [x] Grid: md:grid-cols-2, grid-cols-1
+
+#### AC-4: Recent Bills List
+- [x] Shows bills with date, vendor, amount (brutto19+brutto7+brutto0), BillStatusBadge
+- [x] "View all" link to /bills with aria-label
+- [x] Empty state "No bills yet"
+- [x] Reuses existing BillStatusBadge component (size="sm") and formatCurrency/formatDate utils
+
+#### AC-5: Quick Actions
+- [x] 2x2 grid of Link shortcuts: New Bill to /bills, Spending to /spending, Budget to /budget, Reports to /reports
+- [x] Each has lucide-react icon, label, description
+- [x] hover:scale-[1.03] transition effect
+- [ ] BUG: Icon color does not change on hover (see BUG-1 below)
+
+#### AC-6: Role-Aware Logic
+- [x] getDashboardStats: admin/owner sees project-wide pending (status='pending'); user sees own bills (status in ['pending','draft'])
+- [x] getRecentBills: admin/owner sees all project bills; user sees own bills only
+- [x] KPI #2 label changes based on role
+- [x] Charts use project-level spending data (same for all roles via getSpendingByMotive/getSpendingByCategory)
+
+#### AC-7: Data Fetching Pattern
+- [x] No new API routes -- server-side data aggregation in lib/dashboard.ts
+- [x] Promise.all for parallel fetching in page.tsx
+- [x] Empty state when no project selected (projectId is null)
+
+#### AC-8: Sidebar Dashboard Entry
+- [x] Dashboard added as first item in NAV_ITEMS array (index 0)
+- [x] Has custom DashboardIcon SVG matching existing icon style
+- [x] isActive logic works for /dashboard route
+
+#### AC-9: Loading State
+- [x] DashboardSkeleton matches final grid layout (4 KPIs, 2 charts, recent bills + quick actions)
+- [x] Uses animate-pulse placeholders throughout
+- [x] aria-hidden="true" on skeleton elements
+- [x] Used as Suspense fallback in page.tsx
+
+#### AC-10: Animation
+- [x] DashboardClient outer container has animate-[vb-rise_0.4s_ease-out]
+- [x] DashboardSkeleton also has same animation for seamless transition
+
+### Edge Cases Status
+
+#### EC-1: Empty project (no bills, no motives, no categories)
+- [x] KPI values correctly show 0 / "0,00 EUR"
+- [x] Charts show "No spending data yet" (filters i.spent > 0 then checks length)
+- [x] Recent bills shows "No bills yet"
+- [x] No crashes -- all reduce calls start from 0
+
+#### EC-2: No project selected
+- [x] Dashboard renders with zeroed data, no DB calls made
+- [x] No errors thrown
+
+#### EC-3: Very large numbers
+- [x] formatCurrency uses Intl.NumberFormat which handles large numbers
+- [x] KPI card layout uses flex, no fixed widths -- accommodates long values
+
+#### EC-4: User with no V-Geld entries
+- [x] Null aggregate handled: Number(vgeldReceived._sum.amount ?? 0)
+- [x] V-Geld balance shows "0,00 EUR"
+
+#### EC-5: Charts with 5, 6, 7+ items
+- [x] BarChart: .slice(0, 5) gives exactly top 5
+- [x] PieChart: top 5 shown, rest.length > 0 creates "Other" bucket
+
+#### EC-6: Date serialization
+- [x] date: b.date.toISOString() converts Prisma Date to ISO string
+- [x] formatDate(bill.date) receives string, parses correctly
+
+### Security Audit Results
+
+- [x] Authentication: Redirects to /login if no session (page.tsx lines 19-22)
+- [x] Authorization: User cannot see admin/owner data -- role scoping in getDashboardStats and getRecentBills uses submittedByEmail filter for non-admin users
+- [x] No new API routes exposed: all data aggregation is server-side in lib/dashboard.ts
+- [x] No client-side data fetching: DashboardClient receives all data as props from server component
+- [x] No user input accepted: read-only dashboard with no forms or mutation endpoints
+- [x] V-Geld balance calculation matches /api/vgeld/balance logic (same query pattern: aggregate vgeld.amount minus confirmed bills brutto sum)
+- [x] recharts: no XSS vectors -- renders SVG, custom tooltips use React JSX (no unsafe HTML injection)
+- [x] Defense in depth: projectId comes from session.user.currentProjectId which is validated by auth system (membership check in auth.ts)
+
+### Responsive / Cross-Browser Assessment (Code Review)
+
+- [x] KPI grid: lg:grid-cols-4 (1440px), sm:grid-cols-2 (768px), grid-cols-1 (375px)
+- [x] Charts grid: md:grid-cols-2 (768px+), grid-cols-1 (below)
+- [x] Bottom row: md:grid-cols-2 (768px+), grid-cols-1 (below)
+- [x] Charts: ResponsiveContainer width="100%" height={300} for auto-resize
+- [x] Skeleton layout matches DashboardClient grid breakpoints
+
+### Regression Test Results
+
+- [x] Sidebar: All existing nav items (Bills, Spending, Budget, Reports, V-Geld, Settings) still present after Dashboard insertion
+- [x] Sidebar: isActive logic unchanged -- /bills special case preserved, generic startsWith pattern works for all routes
+- [x] Spending page: getSpendingByMotive/getSpendingByCategory/getSpendingTotals functions unchanged in lib/spending.ts
+- [x] V-Geld sidebar widget: VGeldBalance component still present and independent (client-side fetch to /api/vgeld/balance)
+- [x] Auth flow: dashboard page properly redirects unauthenticated users via auth() + redirect('/login')
+
+### Bugs Found
+
+#### BUG-1: QuickActions icon color does not change on hover [Frontend]
+- **Severity:** Low
+- **File:** nextjs/components/dashboard/QuickActions.tsx, line 50
+- **Description:** The icon span uses group-hover:text-indigo-600 but the parent Link element does not have the "group" class. This means the icon color will never transition to indigo on hover; only the card background/border transitions work.
+- **Steps to Reproduce:**
+  1. Go to /dashboard
+  2. Hover over any Quick Action card
+  3. Expected: Icon color changes to indigo-600
+  4. Actual: Icon remains text-slate-500
+- **Fix:** Add "group" class to the parent Link element
+- **Priority:** Nice to have
+
+### Summary
+- **Acceptance Criteria:** 10/10 passed (1 with cosmetic bug in AC-5)
+- **Edge Cases:** 6/6 passed
+- **Security:** All clear -- no issues found
+- **Regression:** 5/5 passed
+- **Bugs Found:** 1 total (0 critical, 0 high, 0 medium, 1 low)
+- **Production Ready:** YES
+- **Recommendation:** Deploy. The single low-severity bug (missing "group" class on QuickActions hover) is cosmetic and does not affect functionality.
+
+---
+
 ## Deployment
 _To be added by /deploy_
