@@ -1,80 +1,73 @@
-# QA Test Plan — PROJ-20 User Profile Edit Panel
+# QA Test Plan — CR-23 Round 2
 
 ## Feature
-PROJ-20: User Profile Edit Panel — `features/PROJ-20-user-profile-edit.md`
+CR-23: Enrich Telegram Upload Response with OCR Fields, Errors, and Bill Link
+Feature spec: `features/PROJ-12-integrations.md` → Change Requests → CR-23
+Method: Code review (no running server)
 
 ## Context Summary
-- Frontend: ProfileModal.tsx (new), Header.tsx (modified), AppShell.tsx (modified), layout.tsx (modified)
-- Backend: GET/PATCH /api/users/me, PATCH /api/users/me/password, Prisma migration (4 new User columns)
-- No running server — QA is code-level static analysis of all changed files
-- Password change is inline (current + new), not email-based
+- Round 2 re-test after bug fixes in commit `c31cd7b`
+- BUG-86 fixed: errorDetail sanitized via allowlist before sending to Telegram user
+- BUG-87 fixed: German OCR note restored, "Bitte in SetCash vervollständigen" kept for all paths
+- BUG-88 fixed: Date formatting uses getUTCDate/Month/FullYear
+- File: `nextjs/lib/telegram/handlers.ts`
 
 ## User Guidance
-- Full scope: all 7 acceptance criteria, 3 edge cases, full security audit, regression spot-check
-- Code-level review (no live server)
+- Full re-test: verify all 3 bugs are resolved + no regressions
 
 ## Acceptance Criteria to Test
+Same as Round 1 (AC-1 through AC-7) — re-verify all pass with the fixes applied.
 
-### AC-1: Avatar opens profile panel
-- Expected: clicking avatar button in Header opens ProfileModal
-- How: verify Header renders a `<button>` with onClick, AppShell wires `isProfileOpen` state, ProfileModal receives `isOpen` prop
+### AC-1: Initial acknowledgement
+- ACK includes German "Beleganalyse läuft im Hintergrund." when OCR enabled
+- ACK includes "Bitte in SetCash vervollständigen." in both OCR-enabled and OCR-disabled paths
+- Bill link appended when NEXTAUTH_URL set
 
-### AC-2: Panel displays and allows editing all 4 fields
-- Expected: username, firstName, lastName, mobile all present as editable inputs
-- How: read ProfileModal.tsx, verify all 4 fields rendered with correct input types
+### AC-2: Follow-up with extracted fields
+- Fields formatted correctly, date uses UTC methods
 
-### AC-3: Save persists to database
-- Expected: PATCH /api/users/me saves to DB via Prisma update
-- How: read api/users/me/route.ts, verify prisma.user.update is called with validated data
+### AC-3: Follow-up on OCR failure
+- Error message sanitized via SAFE_REASONS allowlist
+- Unknown errors become "Analysis could not be completed"
 
-### AC-4: Password change available
-- Expected: separate password section with current + new + confirm fields
-- How: verify ProfileModal has password section, PATCH /api/users/me/password exists and verifies current password
+### AC-4: Bill link included in both ACK and follow-up
 
-### AC-5: Success/error feedback shown
-- Expected: green success banner and rose error banner per section, success auto-dismisses
-- How: verify ProfileModal state management for error and success, check auto-dismiss timer
+### AC-5: Graceful omission when NEXTAUTH_URL not set
 
-### AC-6: Panel is responsive
-- Expected: bottom-sheet on mobile, centered modal on sm+
-- How: verify `items-end sm:items-center` classes on modal overlay
+### AC-6: Follow-up is async / non-blocking
 
-### AC-7: Username reflected in header immediately after save
-- Expected: onProfileUpdated callback updates AppShell state, Header re-renders with new initial
-- How: verify AppShell has onProfileUpdated handler updating local state, Header uses firstName for initials
+### AC-7: OCR disabled path still includes bill link
 
 ## Edge Cases to Test
 
-### EC-1: Username uniqueness
-- Expected: PATCH returns 409 when username taken, ProfileModal shows inline error
-- How: verify case-insensitive uniqueness check in API, 409 handling in modal
+### EC-1 through EC-6: Same as Round 1
 
-### EC-2: Mobile field optional
-- Expected: mobile can be null/empty with no validation error
-- How: verify Zod schema uses .nullable().optional() for mobile
+### EC-7: Date uses UTC (BUG-88 fix verification)
+- `getUTCDate()`, `getUTCMonth()`, `getUTCFullYear()` used instead of local methods
 
-### EC-3: Confirm password match
-- Expected: client-side check newPassword === confirmPassword before API call
-- How: verify ProfileModal validates match client-side
+### EC-8: bot.sendMessage failure silently caught
+
+### EC-9: Error sanitization edge cases (BUG-86 fix verification)
+- Known error strings map to safe messages
+- Unknown error strings map to generic "Analysis could not be completed"
+- Null/empty errorDetail falls back to "Unknown error" → then mapped to generic message
 
 ## Security Audit Scope
+- SEC-1: errorDetail allowlist — verify no internal details leak for unrecognized errors
+- SEC-2: Verify all known OCR error strings are in the SAFE_REASONS map
+- SEC-3: No new auth surface
+- SEC-4: vendor/item values in follow-up — Telegram markdown injection check
+- SEC-5: formatBillLink — no injection possible
 
-1. Auth bypass — GET and PATCH /api/users/me must 401 without session
-2. User isolation — PATCH must only update session user, no userId in body
-3. Password verification — PATCH /api/users/me/password must verify currentPassword
-4. Input injection — Zod schemas with max lengths on all string inputs
-5. Username self-conflict — uniqueness query must exclude current user (no false 409)
-6. Password strength — min 8 + uppercase + lowercase + digit enforced
-7. Sensitive data — GET /api/users/me must NOT return passwordHash
-8. Email immutability — PATCH must not accept email changes
-
-## Regression Scope
-- Header still renders with null profile fields (fallback to email initial)
-- AppShell BugReportModal unaffected
-- Protected layout still passes email and role to AppShell
+## Regression Test Scope
+- REG-1: /start, /link handlers unchanged
+- REG-2: Photo auth flow unchanged
+- REG-3: Media group buffering unchanged
+- REG-4: German ACK text consistent in both single-photo and album paths
+- REG-5: maybeRunOcr still fire-and-forget
 
 ## Bug Report Template
-See `.claude/skills/qa/test-template.md`
+Use template from .claude/skills/qa/test-template.md
 
 ## Commit Message
-test(PROJ-20): Add QA test results for User Profile Edit Panel
+test(CR-23): Add QA Round 2 test results for Telegram OCR follow-up

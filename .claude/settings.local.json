@@ -43,7 +43,15 @@
       "Bash(npx eslint:*)",
       "Bash(git -C /mnt/c/Users/jensmoeller/code/vbudget add nextjs/components/layout/ProfileModal.tsx nextjs/components/layout/Header.tsx nextjs/components/layout/AppShell.tsx \"nextjs/app/\\(protected\\)/layout.tsx\" && git -C /mnt/c/Users/jensmoeller/code/vbudget commit -m \"$\\(cat <<'EOF'\nfeat\\(PROJ-20\\): Implement frontend for User Profile Edit Panel\n\nAdd ProfileModal component with profile info and password change sections,\nupdate Header avatar from div to clickable button, extend AppShell and\nprotected layout to wire user profile state and modal lifecycle.\n\nCo-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>\nEOF\n\\)\")",
       "Bash(npx prisma:*)",
-      "Bash(ls -la /mnt/c/Users/jensmoeller/code/vbudget/nextjs/.env* 2>&1)"
+      "Bash(ls -la /mnt/c/Users/jensmoeller/code/vbudget/nextjs/.env* 2>&1)",
+      "Bash(for f:*)",
+      "Bash(do echo:*)",
+      "Read(//tmp/claude-1000/-mnt-c-Users-jensmoeller-code-vbudget/4ab37e54-f9a2-4eb6-bee0-2b55b72e5cc7/tasks/**)",
+      "Bash(done)",
+      "Bash(for w:*)",
+      "Bash(ls:*)",
+      "Skill(deploy)",
+      "Bash(gh run:*)"
     ]
   }
 }

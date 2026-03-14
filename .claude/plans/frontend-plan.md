@@ -1,116 +1,123 @@
-# Frontend Implementation Plan — PROJ-20 User Profile Edit Panel
+# Frontend Implementation Plan — CR-21
 
 ## Feature
-PROJ-20: User Profile Edit Panel — `features/PROJ-20-user-profile-edit.md`
+CR-21: In-App Setup Guides for Telegram & AI/OCR
+Spec: `features/PROJ-12-integrations.md` → Change Requests section
+Parent feature: PROJ-12 (Integrations)
 
 ## Context Summary
-- All app code in `nextjs/`
-- Header shows avatar initials (email[0]) + sign-out button — avatar is a plain `div`, not clickable
-- AppShell manages modal open/close state (pattern: `useState` flag passed to modal)
-- BugReportModal is the reference pattern for modals: fixed overlay, max-w-lg white card, slate form fields, indigo primary button
-- `currentUser` passed as `{ email, role }` from AppShell → Header — needs extending with new profile fields
-- No existing profile page or `/api/users/me` route
+- Settings pages already exist: `/settings/telegram` and `/settings/ai-analysis`
+- `TelegramSettings.tsx` — client component with admin bot config + user linking sections
+- `OcrSettingsForm.tsx` — client component with provider select, API key, enable toggle
+- Both use `SettingsSection` wrapper (white card with title + description)
+- Project uses Tailwind CSS 4, Lucide React icons, no additional UI library
+- No open bugs for PROJ-12
 
 ## User Decisions
-- Password change: inline (current password + new password fields), NOT email-based reset
+- **Guide format:** Collapsible accordion — a "How to set up" section that expands/collapses, placed above the form fields
+- **AI guide content:** Provider-specific — guide text updates dynamically when user selects OpenAI / Gemini / Claude / Custom, showing the correct URLs and key details
+- **Telegram guide scope:** Both admin and user guides — admin sees BotFather setup steps, all users see linking instructions
 
 ## Open Bug Reports to Address
 None
 
 ## Existing Components to Reuse
-- `BugReportModal` — modal structure, form field styling, error banner pattern
-- `SignOutButton` — stays next to avatar in header
-- Tailwind form classes consistent with codebase
+- `SettingsSection` — card wrapper with title/description
+- `OcrSettingsForm` — will be modified to add accordion above form
+- `TelegramSettings` — will be modified to add accordions in both admin and user sections
+- Lucide React — `ChevronDown`, `ChevronRight`, `HelpCircle`, `ExternalLink` icons available
 
 ## New Components to Build
 
-### 1. `components/layout/ProfileModal.tsx`
-**Props:**
-```ts
-interface ProfileModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  user: {
-    email: string;
-    username: string | null;
-    firstName: string | null;
-    lastName: string | null;
-    mobile: string | null;
-  };
-  onProfileUpdated: (updated: { username: string | null; firstName: string | null; lastName: string | null }) => void;
-}
-```
+### 1. `SetupGuide` — Reusable collapsible accordion
+- **Location:** `components/ui/SetupGuide.tsx`
+- **Props:**
+  ```typescript
+  interface SetupGuideProps {
+    title: string;           // e.g., "How to set up AI Analysis"
+    children: ReactNode;     // The guide content (steps)
+    defaultOpen?: boolean;   // Default collapsed (false)
+  }
+  ```
+- **Behavior:**
+  - Collapsed by default, shows `▶ {title}` with ChevronRight icon
+  - Expanded shows `▼ {title}` with ChevronDown icon + children
+  - Smooth height transition (CSS transition on grid-template-rows)
+  - Styled as a subtle info box: `bg-indigo-50/60 border border-indigo-100 rounded-lg`
+  - Accessible: `button` with `aria-expanded`, content region with `role="region"`
+- **Responsive:** Full-width, text wraps normally on mobile
 
-**Two sections separated by a divider:**
-1. Profile Info: username, first name, last name, mobile + Save button
-2. Change Password: current password, new password, confirm new password + Update Password button
+## Pages / Routes to Create or Modify
 
-Each section has its own loading state, error banner (rose), and success banner (green, auto-dismissed after 3s).
-Email shown as read-only (disabled input, bg-slate-50).
+### 1. Modify `components/settings/OcrSettingsForm.tsx`
+- Add `SetupGuide` accordion inside the `SettingsSection`, above the form
+- Guide content is **dynamic based on `ocrProvider` state**:
+  - **OpenAI:**
+    1. Go to platform.openai.com → API Keys
+    2. Click "Create new secret key"
+    3. Copy the key (starts with `sk-`)
+    4. Paste it in the API Key field below
+    5. Model used: GPT-4o (vision-capable)
+  - **Gemini:**
+    1. Go to aistudio.google.com → Get API Key
+    2. Create an API key for your project
+    3. Copy the key
+    4. Paste it in the API Key field below
+    5. Model used: Gemini 1.5 Flash
+  - **Claude:**
+    1. Go to console.anthropic.com → API Keys
+    2. Create a new API key
+    3. Copy the key (starts with `sk-ant-`)
+    4. Paste it in the API Key field below
+    5. Model used: Claude 3.5 Haiku
+  - **Custom:**
+    1. Your provider must be OpenAI-compatible
+    2. Enter the base URL (e.g., `https://your-provider.com/v1`)
+    3. Enter the API key from your provider
+- Each step is a numbered list item with concise text
+- Provider-specific URLs rendered as plain text (not links, to avoid external navigation issues)
 
-**Responsive:** `items-end sm:items-center` so it feels like a bottom sheet on mobile, centered modal on sm+
-
-### 2. Modify `components/layout/Header.tsx`
-- Extend `user` prop type: add `username?: string | null`, `firstName?: string | null`
-- Change avatar `div` → `button` with `onClick` prop (passed from AppShell)
-- Avatar initials: show `firstName[0]` if set, else `email[0]`
-- Add `cursor-pointer hover:ring-2 hover:ring-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-all` to avatar button
-
-### 3. Modify `components/layout/AppShell.tsx`
-- Extend `currentUser` prop type to include `username`, `firstName`, `lastName`, `mobile` (all optional/nullable)
-- Add `isProfileOpen` state (same pattern as `isBugReportOpen`)
-- Pass `onProfileOpen={() => setIsProfileOpen(true)}` to Header
-- Add `onProfileUpdated` handler that updates local `currentUser` state for immediate header re-render
-- Render `<ProfileModal>` alongside `<BugReportModal>`
-
-## Pages / Routes to Modify
-
-### `app/(protected)/layout.tsx`
-- Read current session user — extend to fetch/include `username`, `firstName`, `lastName`, `mobile` from the DB via `/api/users/me` or directly via Prisma
-- Pass all fields into AppShell `currentUser`
+### 2. Modify `components/settings/TelegramSettings.tsx`
+- **Admin section:** Add `SetupGuide` inside the "Bot Configuration" `SettingsSection`, above the status/toggle fields
+  - Title: "How to set up the Telegram Bot"
+  - Steps:
+    1. Open Telegram and search for **@BotFather**
+    2. Send `/newbot` and follow the prompts to name your bot
+    3. BotFather will give you a token (format: `123456789:ABC-DEF...`)
+    4. Paste the token in the "Bot Token" field below
+    5. Enable the toggle and click "Save Changes"
+    6. The bot will start polling — status should turn green
+- **User section:** Add `SetupGuide` inside the "Link Your Account" `SettingsSection` (visible when bot is enabled but account not linked)
+  - Title: "How to link your Telegram account"
+  - Steps:
+    1. Click "Link Telegram Account" below to get a 6-digit code
+    2. Open the project's Telegram bot in the Telegram app
+    3. Send the message `/link YOUR_CODE` (e.g., `/link 482910`)
+    4. You'll see a confirmation here and in Telegram
+    5. Once linked, you can send photos to the bot to create bill drafts
 
 ## Data Connection
-
-### GET `/api/users/me`
-- Called on ProfileModal open to load fresh data
-- Returns: `{ email, username, firstName, lastName, mobile }`
-
-### PATCH `/api/users/me`
-- Body: `{ username?, firstName?, lastName?, mobile? }`
-- 200: returns updated fields
-- 409: username already taken — show inline error
-
-### PATCH `/api/users/me/password`
-- Body: `{ currentPassword, newPassword }`
-- 200: success
-- 401: wrong current password
-- 400: password too weak (min 8 chars, at least 1 uppercase, 1 lowercase, 1 digit — same rules as signup)
-
-**Loading/error pattern:** Per-section `isLoading` + `error` state; `finally` always resets loading; success callback fires `onProfileUpdated`
+- No new API calls needed — all guide content is static text
+- AI guide reacts to existing `ocrProvider` state in `OcrSettingsForm`
+- Telegram guide uses existing `enabled` and `linked` props in `TelegramSettings`
 
 ## Design Specifications
-- Modal overlay: `fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/50`
-- Modal card: `w-full max-w-lg bg-white rounded-t-lg sm:rounded-lg shadow-xl max-h-[90vh] flex flex-col`
-- Form fields: `w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#6366f1] focus:border-[#6366f1]`
-- Read-only email: add `bg-slate-50 text-slate-400 cursor-not-allowed`
-- Primary button: `bg-[#6366f1] text-white hover:bg-[#4f46e5] disabled:opacity-50`
-- Error banner: `p-3 bg-rose-50 border border-rose-200 rounded-md text-sm text-rose-600`
-- Success banner: `p-3 bg-green-50 border border-green-200 rounded-md text-sm text-green-700`
-- Section divider: `border-t border-slate-200 mt-6 pt-6`
-- Avatar button ring: `hover:ring-2 hover:ring-indigo-400 focus:ring-2 focus:ring-indigo-400 ring-offset-1`
+- **Accordion container:** `bg-indigo-50/60 border border-indigo-100 rounded-lg px-4 py-3`
+- **Toggle button:** `text-sm font-medium text-indigo-700 flex items-center gap-2 w-full`
+- **Chevron icon:** `w-4 h-4 text-indigo-500 transition-transform duration-200`
+- **Expanded content:** `mt-3 text-sm text-slate-700 space-y-2`
+- **Step numbers:** `font-medium text-indigo-600` for the number, rest in `text-slate-600`
+- **Bold terms** (like @BotFather, key formats): `font-semibold text-slate-800`
+- **Animation:** CSS grid-rows trick: `grid transition-[grid-template-rows] duration-200 ease-in-out` with `grid-rows-[0fr]` → `grid-rows-[1fr]`
+- Matches existing settings page styling (indigo accent, slate text, white cards)
 
 ## Checklist
-- [ ] ProfileModal built with profile section + password change section
-- [ ] Header avatar changed from div to button, triggers modal open
-- [ ] Avatar initials show firstName[0] if set, else email[0]
-- [ ] AppShell wires isProfileOpen state and onProfileUpdated callback
-- [ ] Protected layout passes username/firstName/lastName/mobile to AppShell
-- [ ] GET /api/users/me fetches fresh data on modal open
-- [ ] PATCH /api/users/me saves profile — 409 username conflict shown inline
-- [ ] PATCH /api/users/me/password validates current password, saves new
-- [ ] Loading states reset in all code paths (success, error, finally)
-- [ ] Success banners auto-dismiss after 3s
-- [ ] onProfileUpdated updates header immediately (no page reload)
-- [ ] Responsive: bottom sheet mobile, centered modal desktop
-- [ ] Email field read-only
-- [ ] Mobile field optional (no validation required)
+- [ ] `SetupGuide` component created with accessible expand/collapse
+- [ ] AI Analysis guide added with provider-specific dynamic content
+- [ ] Telegram admin guide added in Bot Configuration section
+- [ ] Telegram user guide added in Link Your Account section (when not yet linked)
+- [ ] Accordion defaults to collapsed
+- [ ] Guide content is accurate and concise
+- [ ] Responsive on mobile (375px+)
+- [ ] No new npm dependencies
+- [ ] TypeScript compiles without errors
