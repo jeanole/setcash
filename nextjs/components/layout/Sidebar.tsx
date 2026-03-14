@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import dynamic from 'next/dynamic';
+import Link from 'next/link';
 import { cn, formatCurrency } from '@/lib/utils';
 import { X, UserPlus } from 'lucide-react';
 import SuperAdminModal from '@/components/superadmin/SuperAdminModal';
@@ -84,7 +85,6 @@ function SettingsIcon({ className }: { className?: string }) {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { label: 'Dashboard', href: '/dashboard', icon: DashboardIcon },
   { label: 'Bills', href: '/bills', icon: BillsIcon },
   { label: 'Spending', href: '/spending', icon: SpendingIcon },
   { label: 'Budget', href: '/budget', icon: BudgetIcon },
@@ -274,8 +274,10 @@ export default function Sidebar({ currentUser, isMobileOpen, onClose }: SidebarP
         aria-label="Primary navigation"
       >
         <div className="px-6 py-5 border-b border-slate-200">
-          <span className="text-xl font-bold text-slate-800 tracking-tight">SetCash</span>
-          <p className="text-xs text-slate-400 mt-0.5">expense tracker</p>
+          <Link href="/dashboard" className="block hover:opacity-80 transition-opacity">
+            <span className="text-xl font-bold text-slate-800 tracking-tight">SetCash</span>
+            <p className="text-xs text-slate-400 mt-0.5">expense tracker</p>
+          </Link>
         </div>
         <ProjectSwitcher />
         <nav className="flex-1 px-3 py-4 space-y-1" aria-label="Main menu">
@@ -306,10 +308,10 @@ export default function Sidebar({ currentUser, isMobileOpen, onClose }: SidebarP
             aria-label="Mobile navigation"
           >
             <div className="flex items-center justify-between px-4 py-4 border-b border-slate-200">
-              <div>
+              <Link href="/dashboard" onClick={onClose} className="hover:opacity-80 transition-opacity">
                 <span className="text-xl font-bold text-slate-800 tracking-tight">SetCash</span>
                 <p className="text-xs text-slate-400 mt-0.5">expense tracker</p>
-              </div>
+              </Link>
               <button
                 type="button"
                 onClick={onClose}
