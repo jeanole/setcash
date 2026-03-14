@@ -1,6 +1,6 @@
 # PROJ-19: OCR / AI Bill Analysis (Next.js)
 
-## Status: In Review
+## Status: Change Requested
 **Created:** 2026-03-07
 **Last Updated:** 2026-03-07
 
@@ -372,3 +372,33 @@ model OcrLog {
 - SEC-8: PASS -- `ocr.ts` line 435: `!baseUrl.startsWith('https://')` check before HTTP call.
 - SEC-9: PASS -- `ocr.ts` lines 27-35: production startup guard checks encryption secret.
 - SEC-10: PASS -- `project-settings/route.ts` line 183: `!data.ocrApiKey.startsWith('...')` guard prevents double-encryption of masked value.
+
+---
+
+## Change Requests
+
+### CR-22: Add Qwen2.5-VL / Qwen3-VL / DeepSeek Providers + Structured System Prompt
+**Requested:** 2026-03-14 | **Priority:** Medium | **Status:** Pending Review
+
+**Current Behavior:**
+Provider dropdown offers four options: OpenAI GPT-4o, Google Gemini 1.5 Flash, Anthropic Claude 3.5 Haiku, and Custom (OpenAI-compatible). The prompt sent to the LLM is a single user message with no system prompt, meaning the model must infer the desired output format and fields from the prompt text alone.
+
+**Desired Behavior:**
+1. Add **Qwen2.5-VL** and **Qwen3-VL** (Alibaba DashScope) as named providers with their default base URL pre-filled.
+2. Add **DeepSeek** (DeepSeek-VL2 or compatible vision model) as a named provider with its default base URL pre-filled.
+3. Add a **structured system prompt** sent to all providers before the user message, listing: the exact field names to extract (`date`, `vendor`, `item`, `type`, `brutto19`, `brutto7`, `brutto0`, `amount`), their types/formats (e.g. date as ISO 8601, amounts as numbers), and the required JSON output schema. Fields not found on the bill should be returned as `null`.
+
+**Rationale:**
+Qwen VL and DeepSeek vision models are strong, cost-competitive alternatives to the current providers — especially relevant for self-hosted or China-region deployments. The system prompt improvement benefits **all** providers: explicitly listing fields and the JSON schema reduces hallucinations, improves consistency, and removes ambiguity for models that don't follow implicit conventions as reliably as GPT-4o.
+
+**Proposed Acceptance Criteria:**
+- [ ] Settings dropdown adds `Qwen2.5-VL`, `Qwen3-VL`, and `DeepSeek` as named options alongside the existing four
+- [ ] Selecting Qwen2.5-VL or Qwen3-VL pre-fills the base URL with the Alibaba DashScope endpoint; selecting DeepSeek pre-fills the DeepSeek API endpoint
+- [ ] Pre-filled base URL is editable (user can override) and the field remains visible (same as Custom behavior)
+- [ ] `analyseImage` (or equivalent) sends a **system prompt** to all providers that explicitly lists: all extractable field names, their expected types/formats, the JSON output schema, and a `null`-if-not-found instruction
+- [ ] System prompt is defined as a constant (e.g. `OCR_SYSTEM_PROMPT`) separate from the user message (`OCR_PROMPT`)
+- [ ] Providers that use a messages array (OpenAI-compatible, Anthropic) include the system prompt as the first message or `system` field; Gemini uses the `systemInstruction` field
+- [ ] All existing provider integrations (OpenAI, Gemini, Anthropic, Custom) continue to work unchanged
+- [ ] `OcrLog.provider` correctly records the new provider names
+
+**Resolution:** Pending
