@@ -148,6 +148,111 @@ export async function createDraftBill(
 }
 
 /**
+ * Return the full URL for a bill detail page, or null if NEXTAUTH_URL is not set.
+ */
+export function formatBillLink(billId: string): string | null {
+  const base = process.env.NEXTAUTH_URL;
+  if (!base) return null;
+  return `${base}/bills/${billId}`;
+}
+
+/**
+ * Send an OCR follow-up message after analysis completes.
+ * Reads bill.ocrStatus and ocrFields from the DB and formats a result message.
+ */
+async function sendOcrFollowUp(
+  bot: TelegramBot,
+  chatId: number,
+  billId: string
+): Promise<void> {
+  const bill = await prisma.bill.findUnique({
+    where: { id: billId },
+    select: {
+      ocrStatus: true,
+      ocrFields: true,
+      vendor: true,
+      date: true,
+      item: true,
+      type: true,
+      brutto19: true,
+      brutto7: true,
+      brutto0: true,
+      grossAmount: true,
+    },
+  });
+
+  if (!bill) return;
+
+  let message: string;
+
+  if (bill.ocrStatus === 'done') {
+    const writtenFields: string[] = Array.isArray(bill.ocrFields)
+      ? (bill.ocrFields as string[])
+      : [];
+
+    const lines: string[] = [];
+
+    for (const field of writtenFields) {
+      switch (field) {
+        case 'vendor':
+          if (bill.vendor) lines.push(`Vendor: ${bill.vendor}`);
+          break;
+        case 'date':
+          if (bill.date) {
+            const d = new Date(bill.date);
+            const dd = String(d.getDate()).padStart(2, '0');
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const yyyy = d.getFullYear();
+            lines.push(`Date: ${dd}.${mm}.${yyyy}`);
+          }
+          break;
+        case 'item':
+          if (bill.item) lines.push(`Item: ${bill.item}`);
+          break;
+        case 'type':
+          if (bill.type) lines.push(`Type: ${bill.type}`);
+          break;
+        case 'brutto19':
+          if (bill.brutto19 != null) lines.push(`19% VAT: ${Number(bill.brutto19).toFixed(2)} €`);
+          break;
+        case 'brutto7':
+          if (bill.brutto7 != null) lines.push(`7% VAT: ${Number(bill.brutto7).toFixed(2)} €`);
+          break;
+        case 'brutto0':
+          if (bill.brutto0 != null) lines.push(`VAT-exempt: ${Number(bill.brutto0).toFixed(2)} €`);
+          break;
+        case 'amount':
+          if (bill.grossAmount != null) lines.push(`Amount: ${Number(bill.grossAmount).toFixed(2)} €`);
+          break;
+      }
+    }
+
+    if (lines.length > 0) {
+      message = `✅ Analysis complete:\n${lines.join('\n')}`;
+    } else {
+      message = '✅ Analysis complete — no fields could be extracted. Please fill in manually.';
+    }
+  } else if (bill.ocrStatus === 'failed') {
+    const ocrLog = await prisma.ocrLog.findFirst({
+      where: { billId },
+      orderBy: { timestamp: 'desc' },
+      select: { errorDetail: true },
+    });
+    const reason = ocrLog?.errorDetail || 'Unknown error';
+    message = `⚠️ Analysis failed: ${reason}`;
+  } else {
+    return;
+  }
+
+  const link = formatBillLink(billId);
+  if (link) {
+    message += `\n\n🔗 View bill: ${link}`;
+  }
+
+  bot.sendMessage(chatId, message).catch(() => {});
+}
+
+/**
  * Get project settings as a key/value record.
  */
 async function getProjectSettings(projectId: string): Promise<Record<string, unknown>> {
@@ -167,16 +272,25 @@ async function getProjectSettings(projectId: string): Promise<Record<string, unk
 
 /**
  * Trigger OCR fire-and-forget if enabled for the project.
+ * After OCR completes (success or failure), sends a follow-up message to the user.
  */
-async function maybeRunOcr(billId: string, projectId: string): Promise<void> {
+async function maybeRunOcr(
+  billId: string,
+  projectId: string,
+  bot: TelegramBot,
+  chatId: number
+): Promise<void> {
   const settings = await getProjectSettings(projectId);
   if (!settings.ocrEnabled) return;
 
   try {
     const { runOcrJob } = await import('../ocr');
-    runOcrJob(billId, projectId).catch((e: Error) =>
-      console.error(`[OCR] Unhandled error for bill #${billId}:`, e.message)
-    );
+    runOcrJob(billId, projectId)
+      .then(() => sendOcrFollowUp(bot, chatId, billId))
+      .catch((e: Error) => {
+        console.error(`[OCR] Unhandled error for bill #${billId}:`, e.message);
+        sendOcrFollowUp(bot, chatId, billId);
+      });
   } catch (e) {
     console.error('[Telegram] Failed to import OCR module:', (e as Error).message);
   }
@@ -214,15 +328,18 @@ async function processMediaGroup(
     `[TG ${projectId}] Created draft bill #${billId} with ${photos.length} image(s) for ${userEmail}`
   );
 
-  await maybeRunOcr(billId, projectId);
-
   const settings = await getProjectSettings(projectId);
-  const ocrNote = settings.ocrEnabled ? '\nBeleganalyse läuft im Hintergrund.' : '';
   const chatId = buf.messages[0].chat.id;
+
+  await maybeRunOcr(billId, projectId, bot, chatId);
+
+  const ocrNote = settings.ocrEnabled ? '\nAnalysing bill…' : '\nBitte in SetCash vervollständigen.';
+  const link = formatBillLink(billId);
+  const linkSuffix = link ? `\n\n🔗 View bill: ${link}` : '';
   bot
     .sendMessage(
       chatId,
-      `✓ ${photos.length} Foto(s) empfangen – Beleg als Entwurf gespeichert.\nBitte in SetCash vervollständigen.${ocrNote}`
+      `✓ ${photos.length} Foto(s) empfangen – Beleg als Entwurf gespeichert.${ocrNote}${linkSuffix}`
     )
     .catch(() => {});
 }
@@ -253,14 +370,17 @@ async function processSinglePhoto(
   const billId = await createDraftBill(projectId, userEmail, [downloaded], caption);
   console.log(`[TG ${projectId}] Created draft bill #${billId} for ${userEmail}`);
 
-  await maybeRunOcr(billId, projectId);
-
   const settings = await getProjectSettings(projectId);
-  const ocrNote = settings.ocrEnabled ? '\nBeleganalyse läuft im Hintergrund.' : '';
+
+  await maybeRunOcr(billId, projectId, bot, msg.chat.id);
+
+  const ocrNote = settings.ocrEnabled ? '\nAnalysing bill…' : '\nBitte in SetCash vervollständigen.';
+  const link = formatBillLink(billId);
+  const linkSuffix = link ? `\n\n🔗 View bill: ${link}` : '';
   bot
     .sendMessage(
       msg.chat.id,
-      `✓ Foto empfangen – Beleg als Entwurf gespeichert.\nBitte in SetCash vervollständigen.${ocrNote}`
+      `✓ Foto empfangen – Beleg als Entwurf gespeichert.${ocrNote}${linkSuffix}`
     )
     .catch(() => {});
 }
