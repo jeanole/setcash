@@ -1,6 +1,7 @@
 'use client';
 
 import SignOutButton from '@/components/auth/SignOutButton';
+import NotificationBell from '@/components/layout/NotificationBell';
 import { Menu } from 'lucide-react';
 
 interface HeaderProps {
@@ -43,6 +44,7 @@ export default function Header({ title, user, onMenuToggle, onProfileOpen }: Hea
       </h1>
 
       <div className="ml-auto flex items-center gap-3">
+        <NotificationBell />
         {user ? (
           <>
             <span

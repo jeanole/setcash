@@ -28,6 +28,7 @@
     "archiver": "^7.0.1",
     "bcryptjs": "^3.0.3",
     "cropperjs": "^2.1.0",
+    "date-fns": "^4.1.0",
     "exceljs": "^4.4.0",
     "formidable": "^3.5.4",
     "googleapis": "^171.4.0",
