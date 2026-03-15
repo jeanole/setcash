@@ -1,6 +1,6 @@
 # PROJ-15: V-Geld (Advance Money)
 
-## Status: Planned
+## Status: Change Requested
 **Created:** 2026-03-04
 **Last Updated:** 2026-03-04
 
@@ -861,3 +861,33 @@ None.
 
 ## Deployment
 _To be added by /deploy_
+
+## Change Requests
+
+### CR-25: Any User Can Create Transfer; Admin Confirms; Show Confirmed By
+**Requested:** 2026-03-15 | **Priority:** Medium | **Status:** Pending Review
+
+**Current Behavior:**
+- Only admins can create V-Geld transfers (POST /api/vgeld is admin-only)
+- There is no confirmation step — transfers are immediately final
+- No "confirmed by" field is stored or displayed
+
+**Desired Behavior:**
+- Any project member (user or admin) can create a transfer
+- Admins can confirm a transfer via a "Confirm" button on each row in the admin table
+- The `confirmedBy` field records the email of the admin who confirmed it
+- "Confirmed By" is displayed on the transfer row (both user view and admin view)
+
+**Rationale:**
+Users need to be able to initiate their own advance money requests; admins then review and confirm. This adds a lightweight approval step without changing the balance calculation semantics.
+
+**Proposed Acceptance Criteria:**
+- [ ] POST /api/vgeld is accessible to all authenticated project members (not admin-only)
+- [ ] New PATCH /api/vgeld/[id]/confirm endpoint: admin-only, sets `confirmedBy = currentUser.email`
+- [ ] `Vgeld` schema gains a `confirmedBy String?` field (nullable — null = not yet confirmed)
+- [ ] Admin table shows a "Confirm" button on rows where `confirmedBy` is null
+- [ ] After confirmation, "Confirm" button is replaced by the confirming admin's email (or name)
+- [ ] User transfer history table shows a "Confirmed By" column (dash if not yet confirmed)
+- [ ] Balance calculation is unchanged (all transfers count regardless of confirmed status)
+
+**Resolution:** Pending
