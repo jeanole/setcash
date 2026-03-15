@@ -94,17 +94,20 @@ export async function POST(req: NextRequest) {
   // Generate link code
   const { code, expires } = await generateLinkCode(userEmail, projectId);
 
-  // Create in-app notification for the target user
+  const deepLink = `https://t.me/${botUsername}?start=${code}`;
+
+  // Create in-app notification for the target user — store deepLink in message as JSON
   await prisma.notification.create({
     data: {
       userEmail,
       type: 'telegram_invite',
-      message: `An admin has sent you a Telegram bot link. Open the link to connect your account.`,
+      message: JSON.stringify({
+        text: 'An admin has sent you a Telegram bot invite link. Tap to open the bot and connect your account.',
+        url: deepLink,
+      }),
       projectId,
     },
   });
-
-  const deepLink = `https://t.me/${botUsername}?start=${code}`;
 
   return NextResponse.json({ deepLink, expires });
 }

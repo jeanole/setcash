@@ -2,8 +2,18 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Bell, BellOff, Mail, UserPlus, X } from 'lucide-react';
+import { Bell, BellOff, Mail, MessageCircle, UserPlus, X } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+
+function parseMessage(raw: string): { text: string; url?: string } {
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed.text === 'string') return parsed;
+  } catch {
+    // plain string
+  }
+  return { text: raw };
+}
 
 interface AppNotification {
   id: string;
@@ -90,12 +100,16 @@ export default function NotificationBell() {
 
   const handleNotificationClick = async (n: AppNotification) => {
     if (!n.isRead) await markAsRead(n.id);
+    if (n.type === 'telegram_invite') {
+      const { url } = parseMessage(n.message);
+      if (url) window.open(url, '_blank', 'noopener,noreferrer');
+      return;
+    }
     setOpen(false);
     if (n.type === 'project_invite') {
-      // Added to a project — go to projects settings to switch into it
       router.push('/settings/projects');
     }
-    // pending_invite: user has been invited but not yet added — no in-app action, email has the link
+    // pending_invite: action is in email, just mark read
   };
 
   return (
@@ -156,48 +170,55 @@ export default function NotificationBell() {
                 <p className="text-xs text-zinc-400">We&apos;ll notify you when something happens</p>
               </div>
             ) : (
-              notifications.map((n) => (
-                <button
-                  key={n.id}
-                  onClick={() => handleNotificationClick(n)}
-                  className={`w-full text-left flex gap-3 px-4 py-3 hover:bg-zinc-50 transition-colors border-l-2 ${
-                    n.isRead ? 'border-l-transparent' : 'border-l-[var(--vb-accent)]'
-                  }`}
-                >
-                  <div className="shrink-0 w-8 h-8 rounded-full bg-[var(--vb-accent-light)] border border-[var(--vb-accent)] flex items-center justify-center">
-                    {n.type === 'pending_invite'
-                      ? <Mail className="w-4 h-4 text-zinc-700" />
-                      : <UserPlus className="w-4 h-4 text-zinc-700" />
-                    }
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p
-                      className={`text-sm leading-snug line-clamp-2 ${
-                        n.isRead ? 'text-zinc-500' : 'text-zinc-800 font-medium'
-                      }`}
-                    >
-                      {n.message}
-                    </p>
-                    {n.type === 'pending_invite' && (
-                      <p className="text-xs text-zinc-400 mt-0.5 italic">Check your email for the invite link</p>
-                    )}
-                    <div className="flex items-center gap-1.5 mt-1">
-                      {n.projectName && (
-                        <>
-                          <span className="text-xs text-zinc-400">{n.projectName}</span>
-                          <span className="text-zinc-300">·</span>
-                        </>
-                      )}
-                      <span className="text-xs text-zinc-400">
-                        {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true })}
-                      </span>
+              notifications.map((n) => {
+                const { text, url } = parseMessage(n.message);
+                const icon = n.type === 'telegram_invite'
+                  ? <MessageCircle className="w-4 h-4 text-zinc-700" />
+                  : n.type === 'pending_invite'
+                  ? <Mail className="w-4 h-4 text-zinc-700" />
+                  : <UserPlus className="w-4 h-4 text-zinc-700" />;
+
+                return (
+                  <button
+                    key={n.id}
+                    onClick={() => handleNotificationClick(n)}
+                    className={`w-full text-left flex gap-3 px-4 py-3 hover:bg-zinc-50 transition-colors border-l-2 ${
+                      n.isRead ? 'border-l-transparent' : 'border-l-[var(--vb-accent)]'
+                    }`}
+                  >
+                    <div className="shrink-0 w-8 h-8 rounded-full bg-[var(--vb-accent-light)] border border-[var(--vb-accent)] flex items-center justify-center">
+                      {icon}
                     </div>
-                  </div>
-                  {!n.isRead && (
-                    <span className="shrink-0 w-2 h-2 rounded-full bg-[var(--vb-accent)] mt-1.5" />
-                  )}
-                </button>
-              ))
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-sm leading-snug line-clamp-2 ${n.isRead ? 'text-zinc-500' : 'text-zinc-800 font-medium'}`}>
+                        {text}
+                      </p>
+                      {n.type === 'pending_invite' && (
+                        <p className="text-xs text-zinc-400 mt-0.5 italic">Check your email for the invite link</p>
+                      )}
+                      {n.type === 'telegram_invite' && url && (
+                        <span className="inline-flex items-center gap-1 mt-1 text-xs font-medium text-[#229ED9]">
+                          <MessageCircle className="w-3 h-3" /> Open Telegram
+                        </span>
+                      )}
+                      <div className="flex items-center gap-1.5 mt-1">
+                        {n.projectName && (
+                          <>
+                            <span className="text-xs text-zinc-400">{n.projectName}</span>
+                            <span className="text-zinc-300">·</span>
+                          </>
+                        )}
+                        <span className="text-xs text-zinc-400">
+                          {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true })}
+                        </span>
+                      </div>
+                    </div>
+                    {!n.isRead && (
+                      <span className="shrink-0 w-2 h-2 rounded-full bg-[var(--vb-accent)] mt-1.5" />
+                    )}
+                  </button>
+                );
+              })
             )}
           </div>
         </div>
