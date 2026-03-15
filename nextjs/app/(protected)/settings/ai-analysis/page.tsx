@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/db';
 import OcrSettingsForm from '@/components/settings/OcrSettingsForm';
+import OcrLogTable from '@/components/settings/OcrLogTable';
 import type { ProjectOcrSettings } from '@/lib/api/settings';
 import { maskApiKey } from '@/lib/ocr';
 
@@ -71,5 +72,14 @@ export default async function AiAnalysisSettingsPage() {
     );
   }
 
-  return <OcrSettingsForm initialSettings={settings} />;
+  return (
+    <div className="space-y-8">
+      <OcrSettingsForm initialSettings={settings} />
+
+      <section>
+        <h2 className="text-lg font-semibold text-slate-800 mb-4">AI Analysis Log</h2>
+        <OcrLogTable />
+      </section>
+    </div>
+  );
 }

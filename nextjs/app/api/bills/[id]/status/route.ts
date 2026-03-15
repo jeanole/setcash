@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { BillStatus } from '@prisma/client';
 
 const updateStatusSchema = z.object({
-  status: z.enum(['confirmed', 'pending', 'approved', 'rejected', 'paid']),
+  status: z.enum(['draft', 'confirmed', 'pending', 'approved', 'rejected', 'paid']),
 });
 
 // PATCH /api/bills/[id]/status - Update status (approve/reject/paid)
@@ -28,17 +28,14 @@ export async function PATCH(
       return NextResponse.json({ error: 'No project selected' }, { status: 400 });
     }
 
-    // Check admin permission for status changes
-    if (session.user.role !== 'admin' && session.user.role !== 'owner' && session.user.role !== 'superadmin') {
-      return NextResponse.json({ error: 'Forbidden - admin only' }, { status: 403 });
-    }
+    const isAdmin = session.user.role === 'admin' || session.user.role === 'owner' || session.user.role === 'superadmin';
 
     const { id } = params;
 
     // Verify bill belongs to this project
     const bill = await prisma.bill.findFirst({
       where: { id, projectId },
-      select: { id: true, status: true },
+      select: { id: true, status: true, submittedByEmail: true },
     });
 
     if (!bill) {
@@ -56,6 +53,20 @@ export async function PATCH(
     }
 
     const { status } = validation.data;
+
+    // Authorization: admin/owner/superadmin has full access;
+    // bill author can only approve or revert to draft when bill is in confirmed status
+    if (!isAdmin) {
+      const isAuthor = session.user.email === bill.submittedByEmail;
+      const isSelfApprovalAllowed =
+        isAuthor &&
+        bill.status === 'confirmed' &&
+        (status === 'approved' || status === 'draft');
+
+      if (!isSelfApprovalAllowed) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+    }
 
     // Update bill status
     await prisma.bill.update({

@@ -161,6 +161,13 @@ export default function BillDetailPage({ params }: BillDetailPageProps) {
     }
   };
 
+  const handleRevertDraft = async () => {
+    const success = await updateStatus('draft');
+    if (success) {
+      setResult({ type: 'success', message: 'Bill reverted to draft' });
+    }
+  };
+
   const handleDelete = async () => {
     if (!confirm('Are you sure you want to delete this bill? This cannot be undone.')) {
       return;
@@ -188,7 +195,9 @@ export default function BillDetailPage({ params }: BillDetailPageProps) {
 
   const { data: session } = useSession();
   const isAdmin = session?.user?.role === 'admin' || session?.user?.role === 'owner' || session?.user?.role === 'superadmin';
-  const canDelete = isAdmin || session?.user?.email === bill?.email;
+  const isAuthor = session?.user?.email === bill?.email;
+  const canDelete = isAdmin || isAuthor;
+  const canSelfApprove = isAuthor && !isAdmin && bill?.status === 'confirmed';
   const [hasOcrEnabled, setHasOcrEnabled] = useState(false);
 
   // Fetch OCR enabled flag from project settings (admins only)
@@ -286,8 +295,10 @@ export default function BillDetailPage({ params }: BillDetailPageProps) {
         onReject={handleReject}
         onDelete={handleDelete}
         onAnalyse={handleAnalyse}
+        onRevertDraft={handleRevertDraft}
         isAdmin={isAdmin}
         canDelete={canDelete}
+        canSelfApprove={canSelfApprove}
         hasOcrEnabled={hasOcrEnabled}
         isAnalysing={isAnalysing || bill.ocrStatus === 'pending'}
       />

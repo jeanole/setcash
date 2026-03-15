@@ -1,6 +1,6 @@
 # SetCash — Project Index
 
-**Next Available IDs:** PROJ-21 · BUG-84 · CR-24
+**Next Available IDs:** PROJ-21 · BUG-84 · CR-25
 
 
 | ID | Type | Title | Status | Priority | Feature | Date |
@@ -88,7 +88,7 @@
 | CR-17 | CR | Bill-Level Comments / Discussion Thread | Discussion Needed | Medium | PROJ-7 | 2026-03-14 |
 | CR-18 | CR | Bulk Bill Status Actions | Discussion Needed | Medium | PROJ-7 | 2026-03-14 |
 | CR-19 | CR | Expanded Notification Triggers | Discussion Needed | High | PROJ-16 | 2026-03-14 |
-| CR-20 | CR | Dashboard Content & Widgets | Discussion Needed | High | PROJ-4 | 2026-03-14 |
+| CR-20 | CR | Dashboard Content & Widgets | Deployed | High | PROJ-4 | 2026-03-14 |
 | CR-21 | CR | In-App Setup Guides for Telegram & AI/OCR | Deployed | Medium | PROJ-12 | 2026-03-14 |
 | [BUG-45](BUG-45-jwt-session-update-privilege-escalation.md) | Bug | JWT Session Update Trusts Client-Supplied Role — Privilege Escalation | Resolved | High | PROJ-5 | 2026-03-14 |
 | [BUG-46](BUG-46-bill-image-routes-missing-ownership-check.md) | Bug | Bill Image Upload/Replace/Delete Routes Missing Owner-or-Admin Check | Resolved | High | PROJ-7 | 2026-03-14 |
@@ -103,8 +103,8 @@
 | [BUG-55](BUG-55-admin-user-update-bypasses-zod.md) | Bug | Admin User Update Bypasses Zod Validation on resetPassword Path | Resolved | Medium | PROJ-17 | 2026-03-14 |
 | [BUG-56](BUG-56-password-change-no-rate-limiting.md) | Bug | No Rate Limiting on Password Change Endpoint | Resolved | Medium | PROJ-20 | 2026-03-14 |
 | [BUG-57](BUG-57-rate-limiter-noop-without-upstash.md) | Bug | Rate Limiter Is a Silent No-Op When Upstash Redis Is Not Configured | Open | Medium | PROJ-19 | 2026-03-14 |
-| CR-22 | CR | Add Qwen2.5-VL / Qwen3-VL / DeepSeek Providers + Structured System Prompt | Pending Review | Medium | PROJ-19 | 2026-03-14 |
-| CR-23 | CR | Enrich Telegram Upload Response with OCR Fields, Errors, and Bill Link | Pending Review | Medium | PROJ-12 | 2026-03-14 |
+| CR-22 | CR | Add Qwen2.5-VL / Qwen3-VL / DeepSeek Providers + Structured System Prompt | Deployed | Medium | PROJ-19 | 2026-03-14 |
+| CR-23 | CR | Enrich Telegram Upload Response with OCR Fields, Errors, and Bill Link | Deployed | Medium | PROJ-12 | 2026-03-14 |
 | [BUG-58](BUG-58-ssrf-dns-rebinding-bypass.md) | Bug | SSRF Check Does Not Resolve DNS — DNS Rebinding Bypass Possible | Resolved | Medium | PROJ-19 | 2026-03-14 |
 | [BUG-59](BUG-59-bill-number-race-condition.md) | Bug | Bill Number Generation Race Condition Produces Duplicates | Resolved | Medium | PROJ-7 | 2026-03-14 |
 | [BUG-60](BUG-60-budget-pdf-missing-project-membership-check.md) | Bug | Budget Matrix PDF Missing Project Membership Verification | Resolved | Medium | PROJ-11 | 2026-03-14 |
@@ -131,3 +131,4 @@
 | [BUG-81](BUG-81-google-sheet-error-leaks-internal-details.md) | Bug | Google Sheet Sync Error Message Leaks Internal Details to Client | Resolved | Low | PROJ-12 | 2026-03-14 |
 | [BUG-82](BUG-82-categories-motives-get-returns-403-not-404.md) | Bug | Motive/Category GET Endpoints Return 403 Instead of 404 for Non-Members | Resolved | Low | PROJ-9 | 2026-03-14 |
 | [BUG-83](BUG-83-invite-endpoint-no-rate-limiting.md) | Bug | No Rate Limiting on Project Invite Endpoint — Email Spam Risk | Resolved | Low | PROJ-10 | 2026-03-14 |
+| CR-24 | CR | AI Log Viewer in AI Analysis Settings | Deployed | Medium | PROJ-19 | 2026-03-15 |
