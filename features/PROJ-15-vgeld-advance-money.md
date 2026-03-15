@@ -862,6 +862,72 @@ None.
 ## Deployment
 _To be added by /deploy_
 
+## Tech Design Revision (CR-25) — Transfer Roles + Confirm Workflow
+
+### What Changes vs. Original Design
+
+The original design had a single-step model: admin creates a transfer, it is immediately final. CR-25 introduces a two-step workflow — any project member creates, an admin confirms — plus an audit trail field (`confirmedBy`).
+
+### Component Structure (Revised Sections)
+
+```
+V-Geld Page
+├── Page Header
+│   ├── Title "V-Geld"
+│   └── "Add V-Geld Transfer" Button ← NOW all users (was admin-only)
+│
+├── Transfers Table
+│   ├── Date | Amount | From | [To - admin only] | Created By
+│   └── NEW: "Confirmed By" column
+│       ├── Unconfirmed → "—" + "Confirm" button (admin only)
+│       └── Confirmed   → confirming admin's email; no button
+│
+└── Admin Summary Table (unchanged)
+
+Add Transfer Modal
+├── Was: admin-only
+└── Now: all project members (fields unchanged)
+```
+
+### Data Model (Revised)
+
+**`Vgeld` record — one new field:**
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `confirmedBy` | nullable string | `null` = not yet confirmed; email = admin who confirmed |
+
+- Requires a **Prisma migration** (existing rows default to `null` — no data loss)
+- GET `/api/vgeld` response gains `confirmedBy: string | null` on every item
+
+### API Changes
+
+| Endpoint | Before | After |
+|----------|--------|-------|
+| `POST /api/vgeld` | Admin-only | Any project member |
+| `GET /api/vgeld` | Returns `{id, date, amount, from, to, createdBy}` | Adds `confirmedBy` field |
+| `PATCH /api/vgeld/[id]/confirm` | Doesn't exist | **New.** Admin-only. Sets `confirmedBy = admin's email`. |
+
+### Files to Modify
+
+| File | Change |
+|------|--------|
+| `nextjs/prisma/schema.prisma` | Add `confirmedBy String?` to `Vgeld` model |
+| `nextjs/prisma/migrations/` | New migration (auto-generated) |
+| `nextjs/app/api/vgeld/route.ts` | Remove admin guard on POST; add `confirmedBy` to GET response |
+| `nextjs/app/api/vgeld/[id]/route.ts` | Add PATCH handler for confirm action |
+| `nextjs/app/(protected)/vgeld/page.tsx` | All-user modal button; "Confirmed By" column; admin Confirm button per row |
+
+### Tech Decisions
+
+| Decision | Choice | Why |
+|----------|--------|-----|
+| PATCH vs POST for confirm | `PATCH /[id]/confirm` | Semantically correct partial update; shares file with existing DELETE |
+| `confirmedBy` stores email, not user ID | Email string | Consistent with existing `createdBy` pattern; no join needed to display |
+| No separate status field | Use `confirmedBy IS NULL` as unconfirmed signal | Balance calc unchanged regardless; separate status would add complexity for no benefit |
+
+---
+
 ## Change Requests
 
 ### CR-25: Any User Can Create Transfer; Admin Confirms; Show Confirmed By
