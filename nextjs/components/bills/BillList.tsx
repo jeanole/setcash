@@ -78,7 +78,10 @@ export default function BillList({ bills, onDelete, isAdmin, currentUserEmail, i
     }
   };
 
-  const calculateTotal = (bill: Bill) => (bill.brutto19 || 0) + (bill.brutto7 || 0) + (bill.brutto0 || 0);
+  const calculateTotal = (bill: Bill) => {
+    const bruttoSum = (bill.brutto19 || 0) + (bill.brutto7 || 0) + (bill.brutto0 || 0);
+    return bruttoSum > 0 ? bruttoSum : (bill.amount || 0);
+  };
 
   const SortIcon = ({ column }: { column: string }) => {
     if (sort.column !== column) {

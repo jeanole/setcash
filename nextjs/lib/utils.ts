@@ -72,8 +72,9 @@ export function calculateNetto(brutto19: number, brutto7: number, brutto0: numbe
 /**
  * Calculate total brutto amount
  */
-export function calculateTotal(brutto19: number, brutto7: number, brutto0: number): number {
-  return (brutto19 || 0) + (brutto7 || 0) + (brutto0 || 0);
+export function calculateTotal(brutto19: number, brutto7: number, brutto0: number, grossAmount?: number): number {
+  const bruttoSum = (brutto19 || 0) + (brutto7 || 0) + (brutto0 || 0);
+  return bruttoSum > 0 ? bruttoSum : (grossAmount || 0);
 }
 
 /**

@@ -247,7 +247,7 @@ export default function BillDetailPage({ params }: BillDetailPageProps) {
     );
   }
 
-  const total = calculateTotal(bill.brutto19, bill.brutto7, bill.brutto0);
+  const total = calculateTotal(bill.brutto19, bill.brutto7, bill.brutto0, bill.amount);
   // Set of field names populated by OCR — used to apply amber highlight
   const ocrFieldSet = new Set(bill.ocrFields || []);
   const formTotal = formData
