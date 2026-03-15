@@ -80,7 +80,7 @@ export default function PositionRow({
             onKeyDown={handleKeyDown}
             onBlur={handleSave}
             disabled={isSaving}
-            className="flex-1 px-2 py-1 text-sm border border-indigo-300 rounded focus:ring-2 focus:ring-[#6366f1]/20 focus:border-[#6366f1] outline-none"
+            className="flex-1 px-2 py-1 text-sm border border-indigo-300 rounded focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] outline-none"
             maxLength={50}
           />
           <button
@@ -115,7 +115,7 @@ export default function PositionRow({
               <>
                 <button
                   onClick={handleStartEdit}
-                  className="p-2 text-slate-400 hover:text-[#6366f1] hover:bg-indigo-50 rounded-lg transition-colors"
+                  className="p-2 text-slate-400 hover:text-[var(--accent)] hover:bg-indigo-50 rounded-lg transition-colors"
                   title="Edit"
                 >
                   <Pencil className="w-4 h-4" />

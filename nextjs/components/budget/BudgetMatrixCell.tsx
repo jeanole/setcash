@@ -115,7 +115,7 @@ export default function BudgetMatrixCell({
 
   if (isEditing) {
     return (
-      <div className="p-2 bg-indigo-50 border-2 border-[#6366f1] rounded">
+      <div className="p-2 bg-indigo-50 border-2 border-[var(--accent)] rounded">
         <input
           ref={inputRef}
           type="number"
@@ -126,7 +126,7 @@ export default function BudgetMatrixCell({
           min="0"
           step="0.01"
           autoFocus
-          className="w-full px-2 py-1 text-sm border border-zinc-300 rounded focus:outline-none focus:ring-2 focus:ring-[#6366f1] font-mono-numbers"
+          className="w-full px-2 py-1 text-sm border border-zinc-300 rounded focus:outline-none focus:ring-2 focus:ring-[var(--accent)] font-mono-numbers"
         />
       </div>
     );

@@ -183,7 +183,7 @@ function AddTransferModal({ isOpen, onClose, onSuccess, projectId }: AddTransfer
               required
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#6366f1] focus:border-transparent"
+              className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-transparent"
               placeholder="0.00"
             />
           </div>
@@ -198,7 +198,7 @@ function AddTransferModal({ isOpen, onClose, onSuccess, projectId }: AddTransfer
               required
               value={to}
               onChange={(e) => setTo(e.target.value)}
-              className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#6366f1] focus:border-transparent bg-white"
+              className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-transparent bg-white"
             >
               {members.length === 0 && (
                 <option value="" disabled>Loading members...</option>
@@ -221,7 +221,7 @@ function AddTransferModal({ isOpen, onClose, onSuccess, projectId }: AddTransfer
               type="text"
               value={from}
               onChange={(e) => setFrom(e.target.value)}
-              className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#6366f1] focus:border-transparent"
+              className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-transparent"
               placeholder="External"
             />
           </div>

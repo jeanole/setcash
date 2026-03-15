@@ -56,7 +56,7 @@ export default function Header({ title, user, onMenuToggle, onProfileOpen }: Hea
             <button
               type="button"
               onClick={onProfileOpen}
-              className="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center text-white text-sm font-semibold shrink-0 cursor-pointer hover:ring-2 hover:ring-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 ring-offset-1 transition-all"
+              className="w-8 h-8 rounded-full bg-[var(--accent)] flex items-center justify-center text-zinc-900 text-sm font-semibold shrink-0 cursor-pointer hover:ring-2 hover:ring-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)] ring-offset-1 transition-all"
               aria-label={`Edit profile — signed in as ${user.email}`}
             >
               {initials}

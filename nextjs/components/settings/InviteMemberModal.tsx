@@ -135,7 +135,7 @@ export default function InviteMemberModal({
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="colleague@example.com"
-              className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#6366f1] focus:border-[#6366f1]"
+              className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)]"
             />
             <p className="mt-1 text-xs text-slate-500">
               {isPlatform
@@ -157,7 +157,7 @@ export default function InviteMemberModal({
               onChange={(e) => setMessage(e.target.value)}
               rows={3}
               maxLength={500}
-              className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#6366f1] focus:border-[#6366f1] resize-none"
+              className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] resize-none"
             />
             <p className="mt-1 text-xs text-slate-400 text-right">
               {message.length}/500
@@ -175,7 +175,7 @@ export default function InviteMemberModal({
             <button
               type="submit"
               disabled={isLoading}
-              className="flex items-center gap-2 px-4 py-2 bg-[#6366f1] text-white rounded-md font-medium hover:bg-[#4f46e5] disabled:opacity-50 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-[var(--accent)] text-zinc-900 rounded-md font-medium hover:bg-[var(--accent-hover)] disabled:opacity-50 transition-colors"
             >
               <Send className="w-4 h-4" />
               {isLoading ? 'Sending...' : 'Send Invite'}

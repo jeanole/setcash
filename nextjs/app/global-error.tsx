@@ -44,7 +44,7 @@ export default function GlobalError({
             <button
               onClick={() => window.location.reload()}
               style={{
-                backgroundColor: '#6366f1',
+                backgroundColor: 'var(--accent)',
                 color: '#ffffff',
                 border: 'none',
                 borderRadius: '8px',
@@ -86,7 +86,7 @@ export default function GlobalError({
           <button
             onClick={reset}
             style={{
-              backgroundColor: '#6366f1',
+              backgroundColor: 'var(--accent)',
               color: '#ffffff',
               border: 'none',
               borderRadius: '8px',

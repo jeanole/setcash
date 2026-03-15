@@ -8,7 +8,7 @@ interface SpendingByCategoryChartProps {
 }
 
 const COLORS = [
-  '#6366f1', // indigo
+  'var(--accent)', // indigo
   '#3b82f6', // blue
   '#f59e0b', // amber
   '#10b981', // emerald

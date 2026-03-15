@@ -50,7 +50,7 @@ export default function BillFilters({
           value={filters.search}
           onChange={(e) => handleChange('search', e.target.value)}
           placeholder="Vendor, item, comment..."
-          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-[#6366f1]/20 focus:border-[#6366f1] outline-none transition-colors"
+          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] outline-none transition-colors"
         />
       </div>
 
@@ -62,7 +62,7 @@ export default function BillFilters({
         <select
           value={filters.person}
           onChange={(e) => handleChange('person', e.target.value)}
-          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-[#6366f1]/20 focus:border-[#6366f1] outline-none transition-colors bg-white"
+          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] outline-none transition-colors bg-white"
         >
           <option value="">All Persons</option>
           {options.persons.map((person) => (
@@ -81,7 +81,7 @@ export default function BillFilters({
         <select
           value={filters.motive}
           onChange={(e) => handleChange('motive', e.target.value)}
-          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-[#6366f1]/20 focus:border-[#6366f1] outline-none transition-colors bg-white"
+          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] outline-none transition-colors bg-white"
         >
           <option value="">All Motives</option>
           {options.motives.map((motive) => (
@@ -100,7 +100,7 @@ export default function BillFilters({
         <select
           value={filters.category}
           onChange={(e) => handleChange('category', e.target.value)}
-          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-[#6366f1]/20 focus:border-[#6366f1] outline-none transition-colors bg-white"
+          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] outline-none transition-colors bg-white"
         >
           <option value="">All Categories</option>
           {options.categories.map((category) => (
@@ -119,7 +119,7 @@ export default function BillFilters({
         <select
           value={filters.role}
           onChange={(e) => handleChange('role', e.target.value)}
-          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-[#6366f1]/20 focus:border-[#6366f1] outline-none transition-colors bg-white"
+          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] outline-none transition-colors bg-white"
         >
           <option value="">All Roles</option>
           {options.roles.map((role) => (
@@ -138,7 +138,7 @@ export default function BillFilters({
         <select
           value={filters.type}
           onChange={(e) => handleChange('type', e.target.value)}
-          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-[#6366f1]/20 focus:border-[#6366f1] outline-none transition-colors bg-white"
+          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] outline-none transition-colors bg-white"
         >
           <option value="">All Types</option>
           {options.types.map((type) => (
@@ -159,14 +159,14 @@ export default function BillFilters({
             type="date"
             value={filters.dateFrom}
             onChange={(e) => handleChange('dateFrom', e.target.value)}
-            className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-[#6366f1]/20 focus:border-[#6366f1] outline-none transition-colors"
+            className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] outline-none transition-colors"
           />
           <span className="text-slate-400">–</span>
           <input
             type="date"
             value={filters.dateTo}
             onChange={(e) => handleChange('dateTo', e.target.value)}
-            className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-[#6366f1]/20 focus:border-[#6366f1] outline-none transition-colors"
+            className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] outline-none transition-colors"
           />
         </div>
       </div>
@@ -206,7 +206,7 @@ export default function BillFilters({
             {hasActiveFilters && (
               <button
                 onClick={handleReset}
-                className="self-start text-sm text-[#6366f1] hover:text-[#6366f1] font-medium"
+                className="self-start text-sm text-[var(--accent)] hover:text-[var(--accent)] font-medium"
               >
                 Reset all filters
               </button>
@@ -222,7 +222,7 @@ export default function BillFilters({
           {hasActiveFilters && (
             <button
               onClick={handleReset}
-              className="text-sm text-[#6366f1] hover:text-[#6366f1] font-medium px-3 py-2"
+              className="text-sm text-[var(--accent)] hover:text-[var(--accent)] font-medium px-3 py-2"
             >
               Reset
             </button>

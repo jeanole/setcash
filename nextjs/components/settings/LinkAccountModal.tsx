@@ -132,7 +132,7 @@ export default function LinkAccountModal({ onClose, onLinked }: LinkAccountModal
               <button
                 onClick={generateCode}
                 disabled={loading}
-                className="text-[#6366f1] hover:underline disabled:opacity-50 text-sm"
+                className="text-[var(--accent)] hover:underline disabled:opacity-50 text-sm"
               >
                 Generate new code
               </button>

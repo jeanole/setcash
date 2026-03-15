@@ -106,7 +106,7 @@ export default function PositionsList({
                   onBlur={handleSaveEdit}
                   autoFocus
                   maxLength={50}
-                  className="flex-1 px-2 py-1 text-sm border border-slate-300 rounded focus:outline-none focus:ring-2 focus:ring-[#6366f1]"
+                  className="flex-1 px-2 py-1 text-sm border border-slate-300 rounded focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
                 />
                 <button
                   onClick={handleSaveEdit}
@@ -129,7 +129,7 @@ export default function PositionsList({
                     className={`text-left ${
                       isProtected(position.name)
                         ? 'cursor-default font-medium text-slate-700'
-                        : 'cursor-pointer hover:text-[#6366f1]'
+                        : 'cursor-pointer hover:text-[var(--accent)]'
                     }`}
                     disabled={isProtected(position.name)}
                   >
@@ -164,7 +164,7 @@ export default function PositionsList({
               placeholder="Position name"
               maxLength={50}
               autoFocus
-              className="flex-1 px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#6366f1]"
+              className="flex-1 px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
             />
             <button
               type="submit"
@@ -187,7 +187,7 @@ export default function PositionsList({
         ) : (
           <button
             onClick={() => setIsAdding(true)}
-            className="flex items-center gap-2 w-full px-4 py-3 text-sm font-medium text-[#6366f1] bg-indigo-50 rounded-lg border border-dashed border-indigo-200 hover:bg-indigo-100 transition-colors"
+            className="flex items-center gap-2 w-full px-4 py-3 text-sm font-medium text-[var(--accent)] bg-indigo-50 rounded-lg border border-dashed border-indigo-200 hover:bg-indigo-100 transition-colors"
           >
             <Plus className="w-4 h-4" />
             Add Position
