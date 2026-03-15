@@ -29,6 +29,11 @@ export async function GET() {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
+    const members = await prisma.projectMember.findMany({
+      where: { projectId },
+      select: { userEmail: true },
+    });
+
     const links = await prisma.telegramLink.findMany({
       where: { projectId },
       orderBy: { linkedAt: 'desc' },
@@ -40,7 +45,10 @@ export async function GET() {
       },
     });
 
-    return NextResponse.json(links);
+    const linkedEmails = new Set(links.map((l) => l.userEmail));
+    const unlinked = members.map((m) => m.userEmail).filter((e) => !linkedEmails.has(e));
+
+    return NextResponse.json({ linked: links, unlinked });
   } catch (error) {
     console.error('Error fetching Telegram links:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
