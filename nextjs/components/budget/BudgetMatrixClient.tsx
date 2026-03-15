@@ -398,7 +398,7 @@ export default function BudgetMatrixClient({
             onClick={() => setAmountMode('brutto')}
             className={`px-3 py-1.5 text-xs font-medium transition-colors ${
               amountMode === 'brutto'
-                ? 'bg-[var(--accent)] text-zinc-900'
+                ? 'bg-[#6366f1] text-white'
                 : 'bg-white text-zinc-500 hover:bg-zinc-50 hover:text-zinc-700'
             }`}
             aria-pressed={amountMode === 'brutto'}
@@ -410,7 +410,7 @@ export default function BudgetMatrixClient({
             onClick={() => setAmountMode('netto')}
             className={`px-3 py-1.5 text-xs font-medium border-l border-zinc-200 transition-colors ${
               amountMode === 'netto'
-                ? 'bg-[var(--accent)] text-zinc-900'
+                ? 'bg-[#6366f1] text-white'
                 : 'bg-white text-zinc-500 hover:bg-zinc-50 hover:text-zinc-700'
             }`}
             aria-pressed={amountMode === 'netto'}

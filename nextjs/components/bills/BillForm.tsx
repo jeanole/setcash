@@ -135,7 +135,7 @@ export default function BillForm({
               required
               value={formData.date}
               onChange={(e) => updateField('date', e.target.value)}
-              className="w-full px-3 py-2 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] outline-none transition-colors font-mono-numbers"
+              className="w-full px-3 py-2 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-[#6366f1]/20 focus:border-[#6366f1] outline-none transition-colors font-mono-numbers"
             />
           </div>
 
@@ -147,7 +147,7 @@ export default function BillForm({
             <select
               value={formData.type}
               onChange={(e) => updateField('type', e.target.value)}
-              className="w-full px-3 py-2 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] outline-none transition-colors bg-white"
+              className="w-full px-3 py-2 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-[#6366f1]/20 focus:border-[#6366f1] outline-none transition-colors bg-white"
             >
               <option value="Kauf">Kauf</option>
               <option value="Rechnung">Rechnung</option>
@@ -167,7 +167,7 @@ export default function BillForm({
               value={formData.vendor}
               onChange={(e) => updateField('vendor', e.target.value)}
               placeholder="Store or company name"
-              className="w-full px-3 py-2 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] outline-none transition-colors"
+              className="w-full px-3 py-2 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-[#6366f1]/20 focus:border-[#6366f1] outline-none transition-colors"
             />
           </div>
 
@@ -181,7 +181,7 @@ export default function BillForm({
               value={formData.item}
               onChange={(e) => updateField('item', e.target.value)}
               placeholder="What was purchased"
-              className="w-full px-3 py-2 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] outline-none transition-colors"
+              className="w-full px-3 py-2 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-[#6366f1]/20 focus:border-[#6366f1] outline-none transition-colors"
             />
           </div>
         </div>
@@ -196,7 +196,7 @@ export default function BillForm({
             onChange={(e) => updateField('comment', e.target.value)}
             placeholder="Additional notes..."
             rows={3}
-            className="w-full px-3 py-2 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] outline-none transition-colors resize-y"
+            className="w-full px-3 py-2 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-[#6366f1]/20 focus:border-[#6366f1] outline-none transition-colors resize-y"
           />
         </div>
       </section>
@@ -221,7 +221,7 @@ export default function BillForm({
                 step="0.01"
                 value={formData.brutto19 || ''}
                 onChange={(e) => updateNumberField('brutto19', e.target.value)}
-                className="w-full pl-8 pr-3 py-2 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] outline-none transition-colors font-mono-numbers"
+                className="w-full pl-8 pr-3 py-2 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-[#6366f1]/20 focus:border-[#6366f1] outline-none transition-colors font-mono-numbers"
                 placeholder="0.00"
               />
             </div>
@@ -245,7 +245,7 @@ export default function BillForm({
                 step="0.01"
                 value={formData.brutto7 || ''}
                 onChange={(e) => updateNumberField('brutto7', e.target.value)}
-                className="w-full pl-8 pr-3 py-2 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] outline-none transition-colors font-mono-numbers"
+                className="w-full pl-8 pr-3 py-2 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-[#6366f1]/20 focus:border-[#6366f1] outline-none transition-colors font-mono-numbers"
                 placeholder="0.00"
               />
             </div>
@@ -269,7 +269,7 @@ export default function BillForm({
                 step="0.01"
                 value={formData.brutto0 || ''}
                 onChange={(e) => updateNumberField('brutto0', e.target.value)}
-                className="w-full pl-8 pr-3 py-2 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] outline-none transition-colors font-mono-numbers"
+                className="w-full pl-8 pr-3 py-2 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-[#6366f1]/20 focus:border-[#6366f1] outline-none transition-colors font-mono-numbers"
                 placeholder="0.00"
               />
             </div>
@@ -353,10 +353,10 @@ export default function BillForm({
             type="submit"
             disabled={isSubmitting || validationErrors.length > 0}
             className={cn(
-              'px-6 py-2 bg-[var(--accent)] text-zinc-900 font-medium rounded-lg transition-colors',
+              'px-6 py-2 bg-[#6366f1] text-white font-medium rounded-lg transition-colors',
               isSubmitting || validationErrors.length > 0
                 ? 'opacity-50 cursor-not-allowed'
-                : 'hover:bg-[var(--accent-hover)]'
+                : 'hover:bg-[#4f46e5]'
             )}
           >
             {isSubmitting ? 'Saving...' : initialData?.id ? 'Save Changes' : 'Create Bill'}

@@ -200,11 +200,11 @@ export default function ProfileModal({
   if (!isOpen) return null;
 
   const inputClass =
-    'w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)]';
+    'w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#6366f1] focus:border-[#6366f1]';
   const readOnlyInputClass =
     'w-full px-3 py-2 border border-slate-300 rounded-md bg-slate-50 text-slate-400 cursor-not-allowed';
   const primaryBtnClass =
-    'px-4 py-2 bg-[var(--accent)] text-zinc-900 rounded-md font-medium hover:bg-[var(--accent-hover)] disabled:opacity-50 transition-colors';
+    'px-4 py-2 bg-[#6366f1] text-white rounded-md font-medium hover:bg-[#4f46e5] disabled:opacity-50 transition-colors';
   const labelClass = 'block text-sm font-medium text-slate-700 mb-1';
   const errorBannerClass =
     'p-3 bg-rose-50 border border-rose-200 rounded-md text-sm text-rose-600';

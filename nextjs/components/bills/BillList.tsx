@@ -87,7 +87,7 @@ export default function BillList({ bills, onDelete, isAdmin, currentUserEmail, i
     if (sort.column !== column) {
       return <span className="ml-1 text-zinc-300 opacity-0 group-hover:opacity-100">↕</span>;
     }
-    return <span className="ml-1 text-[var(--accent)]">{sort.dir === 'asc' ? '↑' : '↓'}</span>;
+    return <span className="ml-1 text-[#6366f1]">{sort.dir === 'asc' ? '↑' : '↓'}</span>;
   };
 
   if (isLoading) {
@@ -146,7 +146,7 @@ export default function BillList({ bills, onDelete, isAdmin, currentUserEmail, i
                         if (el) el.indeterminate = selectedIds.length > 0 && selectedIds.length < sortedBills.length;
                       }}
                       onChange={toggleSelectAll}
-                      className="rounded border-zinc-300 text-[var(--accent)] focus:ring-[var(--accent)]"
+                      className="rounded border-zinc-300 text-[#6366f1] focus:ring-[#6366f1]"
                     />
                   </th>
                 )}
@@ -191,7 +191,7 @@ export default function BillList({ bills, onDelete, isAdmin, currentUserEmail, i
                           type="checkbox"
                           checked={isSelected}
                           onChange={() => toggleSelect(bill.id)}
-                          className="rounded border-zinc-300 text-[var(--accent)] focus:ring-[var(--accent)]"
+                          className="rounded border-zinc-300 text-[#6366f1] focus:ring-[#6366f1]"
                         />
                       </td>
                     )}
@@ -217,7 +217,7 @@ export default function BillList({ bills, onDelete, isAdmin, currentUserEmail, i
                       <div className="flex items-center gap-1.5">
                         <button
                           onClick={() => router.push(`/bills/${bill.id}`)}
-                          className="text-sm px-3 py-1.5 bg-indigo-50/40 text-[var(--accent)] rounded-lg hover:bg-indigo-50 transition-colors"
+                          className="text-sm px-3 py-1.5 bg-indigo-50/40 text-[#6366f1] rounded-lg hover:bg-indigo-50 transition-colors"
                         >
                           View
                         </button>
@@ -258,7 +258,7 @@ export default function BillList({ bills, onDelete, isAdmin, currentUserEmail, i
               onClick={() => router.push(`/bills/${bill.id}`)}
               className={cn(
                 'bg-white rounded-xl border border-[var(--vb-card-border)] shadow-[var(--vb-shadow-sm)] p-4 transition-colors cursor-pointer',
-                isSelected && 'ring-2 ring-[var(--accent)]',
+                isSelected && 'ring-2 ring-[#6366f1]',
                 isDraft && 'border-rose-200'
               )}
             >
@@ -270,7 +270,7 @@ export default function BillList({ bills, onDelete, isAdmin, currentUserEmail, i
                       checked={isSelected}
                       onChange={() => toggleSelect(bill.id)}
                       onClick={(e) => e.stopPropagation()}
-                      className="rounded border-zinc-300 text-[var(--accent)] focus:ring-[var(--accent)]"
+                      className="rounded border-zinc-300 text-[#6366f1] focus:ring-[#6366f1]"
                     />
                   )}
                   <div>
@@ -300,7 +300,7 @@ export default function BillList({ bills, onDelete, isAdmin, currentUserEmail, i
               <div className="mt-3 flex gap-2" onClick={(e) => e.stopPropagation()}>
                 <button
                   onClick={() => router.push(`/bills/${bill.id}`)}
-                  className="flex-1 text-sm px-3 py-2 bg-indigo-50/40 text-[var(--accent)] rounded-lg hover:bg-indigo-50 transition-colors"
+                  className="flex-1 text-sm px-3 py-2 bg-indigo-50/40 text-[#6366f1] rounded-lg hover:bg-indigo-50 transition-colors"
                 >
                   View Details
                 </button>
@@ -327,7 +327,7 @@ export default function BillList({ bills, onDelete, isAdmin, currentUserEmail, i
       {/* Bulk actions */}
       {isAdmin && selectedIds.length > 0 && (
         <div className="flex items-center justify-between bg-indigo-50/40 border border-[var(--vb-card-border)] rounded-lg p-4 animate-[vb-rise_0.2s_ease-out]">
-          <span className="text-sm text-[var(--accent)]">{selectedIds.length} bill(s) selected</span>
+          <span className="text-sm text-[#6366f1]">{selectedIds.length} bill(s) selected</span>
           <button
             onClick={() => {
               if (confirm(`Delete ${selectedIds.length} selected bill(s)?`)) {

@@ -119,7 +119,7 @@ export default function BudgetMatrixTable({
         ) : (
           <a
             href="/settings/motives"
-            className="text-[var(--accent)] hover:text-[var(--accent-hover)] text-sm font-medium"
+            className="text-[#6366f1] hover:text-[#4f46e5] text-sm font-medium"
           >
             Go to Settings to add motives →
           </a>
@@ -137,7 +137,7 @@ export default function BudgetMatrixTable({
         ) : (
           <a
             href="/settings/categories"
-            className="text-[var(--accent)] hover:text-[var(--accent-hover)] text-sm font-medium"
+            className="text-[#6366f1] hover:text-[#4f46e5] text-sm font-medium"
           >
             Go to Settings to add categories →
           </a>
@@ -177,7 +177,7 @@ export default function BudgetMatrixTable({
                         }
                       }}
                       onBlur={() => setRenamingMotive(null)}
-                      className="w-full px-2 py-1 text-sm border border-[var(--accent)] rounded focus:outline-none bg-indigo-50"
+                      className="w-full px-2 py-1 text-sm border border-[#6366f1] rounded focus:outline-none bg-indigo-50"
                     />
                   </div>
                 ) : (
@@ -237,13 +237,13 @@ export default function BudgetMatrixTable({
                       }
                     }}
                     onBlur={() => { setAddMotiveValue(''); setIsAddingMotive(false); }}
-                    className="w-full px-2 py-1 text-xs border border-[var(--accent)] rounded focus:outline-none bg-indigo-50"
+                    className="w-full px-2 py-1 text-xs border border-[#6366f1] rounded focus:outline-none bg-indigo-50"
                   />
                 ) : (
                   <button
                     type="button"
                     onClick={() => setIsAddingMotive(true)}
-                    className="flex items-center gap-1 text-xs text-zinc-400 hover:text-[var(--accent)] transition-colors"
+                    className="flex items-center gap-1 text-xs text-zinc-400 hover:text-[#6366f1] transition-colors"
                     title="Add motive"
                   >
                     <Plus className="w-3.5 h-3.5" />
@@ -285,7 +285,7 @@ export default function BudgetMatrixTable({
                         }
                       }}
                       onBlur={() => setRenamingCategory(null)}
-                      className="w-full px-2 py-1 text-sm border border-[var(--accent)] rounded focus:outline-none bg-indigo-50"
+                      className="w-full px-2 py-1 text-sm border border-[#6366f1] rounded focus:outline-none bg-indigo-50"
                     />
                   ) : (
                     <>
@@ -381,13 +381,13 @@ export default function BudgetMatrixTable({
                       }
                     }}
                     onBlur={() => { setAddCategoryValue(''); setIsAddingCategory(false); }}
-                    className="w-full px-2 py-1 text-xs border border-[var(--accent)] rounded focus:outline-none bg-indigo-50"
+                    className="w-full px-2 py-1 text-xs border border-[#6366f1] rounded focus:outline-none bg-indigo-50"
                   />
                 ) : (
                   <button
                     type="button"
                     onClick={() => setIsAddingCategory(true)}
-                    className="flex items-center gap-1 text-xs text-zinc-400 hover:text-[var(--accent)]"
+                    className="flex items-center gap-1 text-xs text-zinc-400 hover:text-[#6366f1]"
                     title="Add category"
                   >
                     <Plus className="w-3.5 h-3.5" />

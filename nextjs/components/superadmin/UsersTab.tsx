@@ -136,7 +136,7 @@ export default function UsersTab({
                 e.stopPropagation();
                 onResetPassword(row);
               }}
-              className="p-2 text-[var(--accent)] hover:bg-indigo-50 rounded-lg transition-colors"
+              className="p-2 text-[#6366f1] hover:bg-indigo-50 rounded-lg transition-colors"
               aria-label={`Reset password for ${row.email}`}
               title="Reset Password"
             >
@@ -173,7 +173,7 @@ export default function UsersTab({
         <p className="text-sm text-slate-500">{users.length} user{users.length !== 1 ? 's' : ''}</p>
         <button
           onClick={onCreateUser}
-          className="flex items-center gap-2 px-4 py-2 bg-[var(--accent)] text-zinc-900 text-sm font-medium rounded-lg hover:bg-[var(--accent-hover)] transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-[#6366f1] text-white text-sm font-medium rounded-lg hover:bg-[#4f46e5] transition-colors"
           aria-label="Create new user"
         >
           <UserPlus className="w-4 h-4" />

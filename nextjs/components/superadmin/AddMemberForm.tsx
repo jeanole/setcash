@@ -77,7 +77,7 @@ export default function AddMemberForm({ positions, onAdd, onCancel }: AddMemberF
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="user@example.com"
-            className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] text-sm"
+            className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#6366f1] focus:border-[#6366f1] text-sm"
             disabled={isLoading}
           />
           <p className="text-xs text-slate-500 mt-1">Must be an existing user</p>
@@ -91,7 +91,7 @@ export default function AddMemberForm({ positions, onAdd, onCancel }: AddMemberF
                 key={r}
                 type="button"
                 onClick={() => setRole(r)}
-                className={`transition-all ${role === r ? 'ring-2 ring-offset-1 ring-[var(--accent)]' : ''}`}
+                className={`transition-all ${role === r ? 'ring-2 ring-offset-1 ring-[#6366f1]' : ''}`}
               >
                 <RoleBadge role={r} />
               </button>
@@ -107,7 +107,7 @@ export default function AddMemberForm({ positions, onAdd, onCancel }: AddMemberF
             id="member-position"
             value={positionId}
             onChange={(e) => setPositionId(e.target.value)}
-            className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] text-sm bg-white"
+            className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#6366f1] focus:border-[#6366f1] text-sm bg-white"
             disabled={isLoading}
           >
             <option value="">— Select Position —</option>
@@ -137,7 +137,7 @@ export default function AddMemberForm({ positions, onAdd, onCancel }: AddMemberF
           <button
             type="submit"
             disabled={isLoading || !email.trim()}
-            className="px-4 py-2 bg-[var(--accent)] text-zinc-900 font-medium rounded-lg transition-colors hover:bg-[var(--accent-hover)] disabled:opacity-50 flex items-center gap-2 text-sm"
+            className="px-4 py-2 bg-[#6366f1] text-white font-medium rounded-lg transition-colors hover:bg-[#4f46e5] disabled:opacity-50 flex items-center gap-2 text-sm"
           >
             {isLoading ? (
               <>

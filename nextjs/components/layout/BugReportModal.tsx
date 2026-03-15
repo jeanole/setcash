@@ -165,7 +165,7 @@ export default function BugReportModal({ isOpen, onClose }: BugReportModalProps)
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Brief summary of the issue"
               maxLength={200}
-              className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)]"
+              className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#6366f1] focus:border-[#6366f1]"
             />
             <p className="mt-1 text-xs text-slate-400">{title.length}/200</p>
           </div>
@@ -180,7 +180,7 @@ export default function BugReportModal({ isOpen, onClose }: BugReportModalProps)
               onChange={(e) => setDescription(e.target.value)}
               placeholder="What happened? What did you expect?"
               rows={4}
-              className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] resize-y"
+              className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#6366f1] focus:border-[#6366f1] resize-y"
             />
           </div>
 
@@ -194,7 +194,7 @@ export default function BugReportModal({ isOpen, onClose }: BugReportModalProps)
               onChange={(e) => setStepsToReproduce(e.target.value)}
               placeholder="1. Go to...&#10;2. Click on...&#10;3. See error"
               rows={4}
-              className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] resize-y"
+              className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#6366f1] focus:border-[#6366f1] resize-y"
             />
           </div>
 
@@ -253,7 +253,7 @@ export default function BugReportModal({ isOpen, onClose }: BugReportModalProps)
             <button
               type="submit"
               disabled={isLoading}
-              className="flex items-center gap-2 px-4 py-2 bg-[var(--accent)] text-zinc-900 rounded-md font-medium hover:bg-[var(--accent-hover)] disabled:opacity-50 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-[#6366f1] text-white rounded-md font-medium hover:bg-[#4f46e5] disabled:opacity-50 transition-colors"
             >
               <Bug className="w-4 h-4" />
               {isLoading ? 'Submitting...' : 'Submit Report'}

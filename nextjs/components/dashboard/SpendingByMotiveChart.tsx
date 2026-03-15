@@ -86,7 +86,7 @@ export default function SpendingByMotiveChart({ items }: SpendingByMotiveChartPr
           {top5.map((_, index) => (
             <Cell
               key={index}
-              fill={index === 0 ? 'var(--accent)' : `rgba(99,102,241,${0.85 - index * 0.12})`}
+              fill={index === 0 ? '#6366f1' : `rgba(99,102,241,${0.85 - index * 0.12})`}
             />
           ))}
         </Bar>

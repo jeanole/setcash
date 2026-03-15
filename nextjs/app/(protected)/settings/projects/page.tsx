@@ -20,7 +20,7 @@ export default function ProjectsSettingsPage() {
         <div className="mb-6 flex justify-end">
           <button
             onClick={() => setIsNewProjectModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-[var(--accent)] text-zinc-900 rounded-md font-medium hover:bg-[var(--accent-hover)] transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-[#6366f1] text-white rounded-md font-medium hover:bg-[#4f46e5] transition-colors"
           >
             <Plus className="w-4 h-4" />
             New Project

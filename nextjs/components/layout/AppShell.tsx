@@ -93,7 +93,7 @@ export default function AppShell({ children, title, currentUser }: AppShellProps
           <div className="max-w-7xl mx-auto px-4 md:px-6 pb-8 pt-6">
             {children}
           </div>
-          <footer className="border-t border-[var(--border)] bg-[var(--bg-surface)] px-4 md:px-6 py-3">
+          <footer className="border-t border-zinc-200 bg-zinc-50/60 px-4 md:px-6 py-3">
             <div className="max-w-7xl mx-auto flex items-center justify-between text-xs text-zinc-400">
               <span>&copy; {new Date().getFullYear()} SetCash</span>
               <button

@@ -241,8 +241,8 @@ export default function TelegramSettings({
                 aria-checked={enabled}
                 disabled={!maskedToken && !tokenInput}
                 onClick={() => setEnabled((v) => !v)}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:ring-offset-2 disabled:opacity-40 disabled:cursor-not-allowed ${
-                  enabled ? 'bg-[var(--accent)]' : 'bg-slate-200'
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#6366f1] focus:ring-offset-2 disabled:opacity-40 disabled:cursor-not-allowed ${
+                  enabled ? 'bg-[#6366f1]' : 'bg-slate-200'
                 }`}
               >
                 <span
@@ -267,7 +267,7 @@ export default function TelegramSettings({
                   onChange={(e) => setTokenInput(e.target.value)}
                   placeholder={maskedToken ?? 'Enter bot token from @BotFather'}
                   autoComplete="new-password"
-                  className="flex-1 px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)]"
+                  className="flex-1 px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#6366f1] focus:border-[#6366f1]"
                 />
                 <button
                   type="button"
@@ -288,7 +288,7 @@ export default function TelegramSettings({
               <button
                 onClick={handleSaveSettings}
                 disabled={savingSettings}
-                className="px-4 py-2 bg-[var(--accent)] text-zinc-900 rounded-md font-medium text-sm hover:bg-[var(--accent-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="px-4 py-2 bg-[#6366f1] text-white rounded-md font-medium text-sm hover:bg-[#4f46e5] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {savingSettings ? 'Saving…' : 'Save Changes'}
               </button>
@@ -353,7 +353,7 @@ export default function TelegramSettings({
               <p className="text-sm text-slate-600">Your account is not linked.</p>
               <button
                 onClick={() => setShowLinkModal(true)}
-                className="px-4 py-2 bg-[var(--accent)] text-zinc-900 rounded-md font-medium text-sm hover:bg-[var(--accent-hover)] transition-colors"
+                className="px-4 py-2 bg-[#6366f1] text-white rounded-md font-medium text-sm hover:bg-[#4f46e5] transition-colors"
               >
                 Link Telegram Account
               </button>
