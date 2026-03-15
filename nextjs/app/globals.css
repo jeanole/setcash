@@ -41,6 +41,38 @@
 }
 
 /* ---------------------------------------------------------------------------
+   Brand Design System — PROJ-21
+   Two-layer tokens: new --accent, --bg-*, --text-*, --border alongside --vb-*
+   --------------------------------------------------------------------------- */
+
+:root {
+  --font-display: var(--font-space-grotesk), 'Space Grotesk', sans-serif;
+  --font-mono: var(--font-jetbrains-mono), 'JetBrains Mono', monospace;
+  --accent: #FACC15;
+  --radius: 0px;
+}
+
+[data-theme="dark"] {
+  --bg-primary: #0F0F10;
+  --bg-surface: #18181B;
+  --text-primary: #FAFAFA;
+  --text-secondary: #A1A1AA;
+  --text-tertiary: #71717A;
+  --text-muted: #52525B;
+  --border: #27272A;
+}
+
+[data-theme="light"] {
+  --bg-primary: #FFFFFF;
+  --bg-surface: #FAFAFA;
+  --text-primary: #0D0D0D;
+  --text-secondary: #7A7A7A;
+  --text-tertiary: #7A7A7A;
+  --text-muted: #B0B0B0;
+  --border: #E8E8E8;
+}
+
+/* ---------------------------------------------------------------------------
    Base body styles — warm cream background with violet + emerald radial gradients
    --------------------------------------------------------------------------- */
 
