@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Bell, BellOff, UserPlus, X } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Bell, BellOff, Mail, UserPlus, X } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 interface AppNotification {
@@ -15,6 +16,7 @@ interface AppNotification {
 }
 
 export default function NotificationBell() {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -89,9 +91,11 @@ export default function NotificationBell() {
   const handleNotificationClick = async (n: AppNotification) => {
     if (!n.isRead) await markAsRead(n.id);
     setOpen(false);
-    if (n.projectId) {
-      window.location.href = '/bills';
+    if (n.type === 'project_invite') {
+      // Added to a project — go to projects settings to switch into it
+      router.push('/settings/projects');
     }
+    // pending_invite: user has been invited but not yet added — no in-app action, email has the link
   };
 
   return (
@@ -161,7 +165,10 @@ export default function NotificationBell() {
                   }`}
                 >
                   <div className="shrink-0 w-8 h-8 rounded-full bg-[var(--vb-accent-light)] border border-[var(--vb-accent)] flex items-center justify-center">
-                    <UserPlus className="w-4 h-4 text-zinc-700" />
+                    {n.type === 'pending_invite'
+                      ? <Mail className="w-4 h-4 text-zinc-700" />
+                      : <UserPlus className="w-4 h-4 text-zinc-700" />
+                    }
                   </div>
                   <div className="flex-1 min-w-0">
                     <p
@@ -171,6 +178,9 @@ export default function NotificationBell() {
                     >
                       {n.message}
                     </p>
+                    {n.type === 'pending_invite' && (
+                      <p className="text-xs text-zinc-400 mt-0.5 italic">Check your email for the invite link</p>
+                    )}
                     <div className="flex items-center gap-1.5 mt-1">
                       {n.projectName && (
                         <>

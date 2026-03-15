@@ -119,6 +119,19 @@ export async function POST(
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
   const inviteUrl = `${appUrl}/accept-invite?token=${rawToken}`;
 
+  // If the invited email belongs to an existing user, create an in-app notification now
+  const existingUser = await prisma.user.findUnique({ where: { email }, select: { email: true } });
+  if (existingUser) {
+    await prisma.notification.create({
+      data: {
+        userEmail: email,
+        type: 'pending_invite',
+        message: `${session.user.email} invited you to join "${project.name}". Check your email for the invite link.`,
+        projectId,
+      },
+    });
+  }
+
   // Send email
   try {
     await sendInvitationEmail(email, inviteUrl, session.user.email, project.name, message);
