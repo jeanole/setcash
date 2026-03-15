@@ -64,6 +64,7 @@ export async function GET(req: NextRequest) {
       from: t.fromUser ?? 'External',
       to: t.toUser,
       createdBy: t.createdBy,
+      confirmedBy: t.confirmedBy ?? null,
     }));
 
     return NextResponse.json(mapped);
@@ -86,7 +87,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No project selected' }, { status: 400 });
     }
 
-    // Verify project membership and admin role
+    // Verify project membership (any member may create a transfer)
     const membership = await prisma.projectMember.findUnique({
       where: {
         projectId_userEmail: {
@@ -96,11 +97,8 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    const isSuperAdmin = session.user.role === 'superadmin';
-    const isAdmin = membership?.role === 'admin' || membership?.role === 'owner';
-
-    if (!isSuperAdmin && !isAdmin) {
-      return NextResponse.json({ error: 'Forbidden: admin access required' }, { status: 403 });
+    if (!membership && session.user.role !== 'superadmin') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     // Parse and validate request body
