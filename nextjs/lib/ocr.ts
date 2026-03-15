@@ -118,7 +118,7 @@ Return ONLY a valid JSON object with exactly these keys (use null for unknown/mi
   "brutto19": number with 19% VAT or null,
   "brutto7": number with 7% VAT or null,
   "brutto0": VAT-exempt amount or null,
-  "amount": total gross amount or null
+  "amount": total gross amount — set ONLY if VAT breakdown is completely absent from the document, otherwise null
 }
 Return nothing except the JSON object.`;
 
@@ -132,9 +132,11 @@ Extract the following fields:
 - brutto19: number, the gross amount subject to 19% VAT
 - brutto7: number, the gross amount subject to 7% VAT
 - brutto0: number, the VAT-exempt gross amount
-- amount: number, the total gross amount on the document
+- amount: number, the total gross amount — use this field ONLY as a last resort when the document contains no VAT breakdown at all (no 19%, 7%, or 0% lines). If any VAT information is visible, populate the brutto fields instead and leave amount as null.
 
 Rules:
+- Prefer brutto19 / brutto7 / brutto0 over amount whenever VAT rates are shown on the document
+- Set amount only when VAT breakdown is completely absent from the document
 - Return null for any field that cannot be found or determined from the image
 - Return ONLY a valid JSON object — no markdown, no code fences, no explanation
 - Output schema: { "date": string|null, "vendor": string|null, "item": string|null, "type": string|null, "brutto19": number|null, "brutto7": number|null, "brutto0": number|null, "amount": number|null }`;
