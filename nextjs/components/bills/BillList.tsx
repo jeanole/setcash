@@ -178,14 +178,15 @@ export default function BillList({ bills, onDelete, isAdmin, currentUserEmail, i
                 return (
                   <tr
                     key={bill.id}
+                    onClick={() => router.push(`/bills/${bill.id}`)}
                     className={cn(
-                      'transition-colors hover:bg-indigo-50/40',
+                      'transition-colors hover:bg-indigo-50/40 cursor-pointer',
                       isSelected && 'bg-indigo-50/40',
                       isDraft && 'bg-rose-50/40'
                     )}
                   >
                     {isAdmin && (
-                      <td className="px-3 py-3">
+                      <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="checkbox"
                           checked={isSelected}
@@ -212,7 +213,7 @@ export default function BillList({ bills, onDelete, isAdmin, currentUserEmail, i
                       )}
                     </td>
                     <td className="px-3 py-3">{bill.status !== 'draft' && <BillStatusBadge status={bill.status} size="sm" />}</td>
-                    <td className="px-3 py-3">
+                    <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center gap-1.5">
                         <button
                           onClick={() => router.push(`/bills/${bill.id}`)}
@@ -254,8 +255,9 @@ export default function BillList({ bills, onDelete, isAdmin, currentUserEmail, i
           return (
             <div
               key={bill.id}
+              onClick={() => router.push(`/bills/${bill.id}`)}
               className={cn(
-                'bg-white rounded-xl border border-[var(--vb-card-border)] shadow-[var(--vb-shadow-sm)] p-4 transition-colors',
+                'bg-white rounded-xl border border-[var(--vb-card-border)] shadow-[var(--vb-shadow-sm)] p-4 transition-colors cursor-pointer',
                 isSelected && 'ring-2 ring-[#6366f1]',
                 isDraft && 'border-rose-200'
               )}
@@ -267,6 +269,7 @@ export default function BillList({ bills, onDelete, isAdmin, currentUserEmail, i
                       type="checkbox"
                       checked={isSelected}
                       onChange={() => toggleSelect(bill.id)}
+                      onClick={(e) => e.stopPropagation()}
                       className="rounded border-zinc-300 text-[#6366f1] focus:ring-[#6366f1]"
                     />
                   )}
@@ -294,7 +297,7 @@ export default function BillList({ bills, onDelete, isAdmin, currentUserEmail, i
                   )}
                 </div>
               )}
-              <div className="mt-3 flex gap-2">
+              <div className="mt-3 flex gap-2" onClick={(e) => e.stopPropagation()}>
                 <button
                   onClick={() => router.push(`/bills/${bill.id}`)}
                   className="flex-1 text-sm px-3 py-2 bg-indigo-50/40 text-[#6366f1] rounded-lg hover:bg-indigo-50 transition-colors"
