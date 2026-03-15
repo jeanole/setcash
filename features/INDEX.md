@@ -1,6 +1,6 @@
 # SetCash — Project Index
 
-**Next Available IDs:** PROJ-21 · BUG-84 · CR-24
+**Next Available IDs:** PROJ-21 · BUG-84 · CR-25
 
 
 | ID | Type | Title | Status | Priority | Feature | Date |
@@ -131,3 +131,4 @@
 | [BUG-81](BUG-81-google-sheet-error-leaks-internal-details.md) | Bug | Google Sheet Sync Error Message Leaks Internal Details to Client | Resolved | Low | PROJ-12 | 2026-03-14 |
 | [BUG-82](BUG-82-categories-motives-get-returns-403-not-404.md) | Bug | Motive/Category GET Endpoints Return 403 Instead of 404 for Non-Members | Resolved | Low | PROJ-9 | 2026-03-14 |
 | [BUG-83](BUG-83-invite-endpoint-no-rate-limiting.md) | Bug | No Rate Limiting on Project Invite Endpoint — Email Spam Risk | Resolved | Low | PROJ-10 | 2026-03-14 |
+| CR-24 | CR | AI Log Viewer in AI Analysis Settings | Deployed | Medium | PROJ-19 | 2026-03-15 |
