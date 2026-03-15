@@ -1265,5 +1265,164 @@ Users upload receipts via Telegram for speed and convenience. Without seeing the
 - **Production Ready:** YES
 - **Recommendation:** All three bugs from Round 1 are resolved. No new bugs found. Ready for deployment.
 
+## QA Test Results — Telegram Invite Deep Link
+
+**Round:** 1
+**Date:** 2026-03-15
+**Method:** Code review (no running server)
+**Commits tested:** c70da11 (frontend), 1c50317 (backend)
+**Files reviewed:** `invite/route.ts`, `links/route.ts`, `settings/route.ts`, `handlers.ts`, `codes.ts`, `TelegramInviteModal.tsx`, `LinkedAccountsTable.tsx`
+
+### Acceptance Criteria Status
+
+#### AC-1: Bot username stored on token save
+- [x] Settings PUT calls Telegram `getMe`, extracts `result.username`, upserts as `telegramBotUsername` in ProjectSettings
+- [x] Invite endpoint reads this value to construct the deep link
+
+#### AC-2: GET /api/admin/telegram/links returns { linked, unlinked }
+- [x] Response shape is `{ linked: TelegramLink[], unlinked: string[] }`
+- [x] Unlinked computed by diffing project members against linked emails using a Set
+
+#### AC-3: Unlinked members appear in admin table
+- [x] LinkedAccountsTable renders "Not Linked" section when `unlinked.length > 0`
+- [x] Each unlinked email shown with an Invite button
+
+#### AC-4: Invite button opens modal with deep link
+- [x] Clicking Invite sets `inviteEmail` state, rendering TelegramInviteModal
+- [x] Modal calls POST `/api/admin/telegram/invite` on mount
+- [x] Deep link format: `https://t.me/${botUsername}?start=${code}`
+- [x] Countdown timer shows expiry with 1s tick interval
+
+#### AC-5: Target user receives in-app notification
+- [x] Notification created with correct `userEmail`, `type: 'telegram_invite'`, `projectId`
+- [x] Message is a hardcoded string (no user-controlled interpolation)
+
+#### AC-6: Already-linked user returns 400
+- [x] Checks `TelegramLink.findFirst({ projectId, userEmail })` before generating code
+- [x] Returns 400 with "This user already has a linked Telegram account"
+
+#### AC-7: Missing botUsername returns 400 with clear message
+- [x] Checks `ProjectSettings` for `telegramBotUsername` key
+- [x] Returns 400 with "Bot username is not set. Please re-save your Telegram bot token in Settings to populate it."
+
+#### AC-8: Copy link button works
+- [x] Copy button calls `navigator.clipboard.writeText(deepLink)`
+- [x] Shows "Copied!" for 2 seconds via setTimeout
+- [ ] BUG: Missing try/catch around clipboard API call (see BUG-89)
+
+### Edge Cases Status
+
+#### EC-1: Non-member email in invite request
+- [x] Returns 400 "User is not a member of this project" after ProjectMember lookup fails
+
+#### EC-2: Invalid email in invite body
+- [x] Zod `z.string().email()` rejects invalid emails with 422 and validation details
+
+#### EC-3: Non-admin calling invite endpoint
+- [x] Server-side role check returns 403 for non-admin/owner/superadmin users
+
+#### EC-4: Unauthenticated call to invite endpoint
+- [x] Session check returns 401 "Unauthorized"
+
+#### EC-5: /start with no payload (plain /start)
+- [x] Falls through to welcome message when no payload token present
+
+#### EC-6: /start with invalid/expired code
+- [x] `validateAndConsumeLinkCode` returns null; `performLink` sends error message to user
+
+#### EC-7: Invite for user with existing pending code
+- [x] `generateLinkCode` deletes existing codes for user+project before creating new one
+
+#### EC-8: GET links as non-admin
+- [x] Returns 403 "Forbidden" with server-side role check
+
+### Security Audit Results
+
+#### S-1: Admin-only on invite endpoint
+- [x] Server-side role check (superadmin/admin/owner) at lines 25-31; non-admin gets 403
+
+#### S-2: Project isolation on invite
+- [x] Uses `session.user.currentProjectId` for all queries (membership, existing link, code generation)
+- [x] Admin cannot inject a different projectId -- it comes from the session
+
+#### S-3: Project isolation on links GET
+- [x] Both `projectMember.findMany` and `telegramLink.findMany` scoped to `session.user.currentProjectId`
+
+#### S-4: Notification isolation
+- [x] Notification created for target `userEmail` from validated request body, not the admin's email
+
+#### S-5: Deep link code entropy
+- [x] 6-char uppercase alphanumeric (36^6 = ~2.18B combinations)
+- [x] 10-minute TTL, single-use (consumed on validation)
+- [x] Uses `crypto.randomBytes` with rejection sampling (unbiased)
+
+#### S-6: botUsername not leaked via settings GET
+- [x] Settings GET only queries for `telegramBotToken` and `telegramEnabled` keys; `telegramBotUsername` excluded
+
+#### S-7: XSS via userEmail in notification message
+- [x] Notification message is a hardcoded string -- does not interpolate `userEmail`
+- [x] React JSX auto-escapes all rendered text (no unsafe HTML insertion)
+
+### Regression Tests
+
+#### REG-1: Settings Telegram token save/clear still works
+- [x] Settings PUT logic for token save, clear (empty string), and masked-value echo-back is unchanged
+
+#### REG-2: Previously linked users still appear in linked array
+- [x] Links GET still queries `telegramLink.findMany` with `orderBy: { linkedAt: 'desc' }`
+
+#### REG-3: Unlink button still works
+- [x] DELETE `/api/admin/telegram/links/[id]` is unchanged
+
+#### REG-4: /link CODE command still works
+- [x] `performLink` helper is shared between /start and /link paths
+- [x] Pre-existing note: /link does NOT call `.toUpperCase()` while /start does -- inconsistency predates this change
+
+#### REG-5: Notification bell still loads
+- [x] No schema changes to Notification model; `telegram_invite` is just a new type string value
+
+### Bugs Found
+
+#### BUG-89: Clipboard API call lacks error handling in TelegramInviteModal [Frontend]
+- **Severity:** Low
+- **Steps to Reproduce:**
+  1. Open the Telegram Invite modal for an unlinked user
+  2. Click "Copy Link" in a non-HTTPS context (e.g., `http://localhost:3000` on some browsers) or in an iframe where clipboard permission is denied
+  3. Expected: User sees a fallback behavior or error toast indicating the copy failed
+  4. Actual: `navigator.clipboard.writeText()` throws; unhandled promise rejection in console; "Copied!" text never appears but no user feedback about the failure
+- **File:** `nextjs/components/settings/TelegramInviteModal.tsx` line 66
+- **Priority:** Fix in next sprint
+
+#### BUG-90: TelegramInviteModal lacks keyboard dismiss and focus trap [Frontend]
+- **Severity:** Low
+- **Steps to Reproduce:**
+  1. Open the Telegram Invite modal
+  2. Press Escape key
+  3. Expected: Modal closes (standard modal UX pattern)
+  4. Actual: Nothing happens -- no `onKeyDown` handler for Escape
+  5. Additionally: no focus trap -- Tab key can move focus behind the modal overlay
+- **File:** `nextjs/components/settings/TelegramInviteModal.tsx`
+- **Priority:** Fix in next sprint
+
+#### BUG-91: /link command does not normalize code to uppercase (pre-existing) [Backend]
+- **Severity:** Medium
+- **Steps to Reproduce:**
+  1. Generate a link code for a user (codes are stored as uppercase, e.g., "A1B2C3")
+  2. In Telegram, type `/link a1b2c3` (lowercase)
+  3. Expected: Code matches successfully (case-insensitive)
+  4. Actual: Code lookup fails because `validateAndConsumeLinkCode` does a case-sensitive match, and /link does not call `.toUpperCase()` on the input (unlike /start which does)
+- **File:** `nextjs/lib/telegram/handlers.ts` line 473 -- missing `.toUpperCase()` on code
+- **Note:** This is a pre-existing issue, not introduced by the invite feature, but the inconsistency was revealed by the new /start handler which correctly calls `.toUpperCase()`
+- **Priority:** Fix before deployment
+
+### Summary
+- **Acceptance Criteria:** 8/8 passed (1 with minor bug on copy fallback)
+- **Edge Cases:** 8/8 passed
+- **Security:** 7/7 passed -- no issues found
+- **Regression:** 5/5 passed
+- **Bugs Found:** 3 total (0 critical, 0 high, 1 medium, 2 low)
+- **Production Ready:** YES (with caveat)
+- **Recommendation:** Fix BUG-91 (/link case normalization) before deployment as it causes link failures for users who type lowercase codes. BUG-89 and BUG-90 are low-severity UX issues that can be fixed in the next sprint.
+
 ## Deployment
 _To be added by /deploy_
