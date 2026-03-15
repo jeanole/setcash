@@ -1,6 +1,6 @@
 # PROJ-21: Brand & Design System
 
-**Status:** Planned
+**Status:** In Progress
 **Created:** 2026-03-15
 **Priority:** Medium
 
@@ -107,6 +107,90 @@ SetCash brand identity and design token system. Defines the logo mark, typograph
   --border: #E8E8E8;
 }
 ```
+
+## Tech Design (Solution Architect)
+
+### Scope
+
+The brand spec introduces tokens and styles that would visually replace the entire existing UI (yellow accent vs indigo, zero radius vs rounded, new fonts). Doing this in one shot is high-risk.
+
+**Recommended two-layer approach:**
+- **PROJ-21:** Implement token system, logo component, favicon, fonts, and theme toggle. New CSS variables coexist with existing `--vb-*` tokens.
+- **Follow-on CR:** Migrate existing UI components to consume the new tokens.
+
+### Component Structure
+
+```
+app/layout.tsx  (modified)
+├── Space Grotesk + JetBrains Mono added via next/font
+├── ThemeProvider wraps <html>, sets data-theme
+└── Favicon <link> tags in <head>
+
+components/layout/ThemeProvider.tsx  (new)
+└── Client component: reads localStorage, sets data-theme on <html>
+
+components/layout/Logo.tsx  (new)
+├── Accent bar  (var(--accent), solid vertical rect)
+├── "SET" text  (var(--text-primary))
+├── "CASH" text (var(--accent))
+└── Optional tagline — variants: primary | compact | favicon-48/32/16
+
+components/layout/ThemeToggle.tsx  (new)
+└── Dark/light toggle button — adds to Header
+
+components/layout/Header.tsx  (modified)
+└── ThemeToggle added
+
+public/
+├── icon.svg   (new — accent bar favicon mark)
+└── favicon.ico  (new — multi-res ICO fallback)
+
+app/globals.css  (modified)
+├── :root — --font-display, --font-mono, --accent, --radius
+├── [data-theme="dark"]  — full dark token set
+├── [data-theme="light"] — full light token set
+└── existing --vb-* variables preserved (no breakage)
+```
+
+### Data Model
+
+No database changes. Theme preference stored client-side only:
+
+| Key | Storage | Values | Default |
+|-----|---------|--------|---------|
+| `"theme"` | localStorage | `"dark"` / `"light"` | `"dark"` |
+
+Applied as `<html data-theme="dark">` or `<html data-theme="light">`.
+
+### Tech Decisions
+
+| Decision | Choice | Why |
+|----------|--------|-----|
+| Theme mechanism | `data-theme` on `<html>` + CSS custom properties | Zero JS at render; no extra library needed |
+| ThemeProvider | Small client component | Prevents Next.js hydration mismatch when reading localStorage |
+| Preserve `--vb-*` tokens | Keep alongside new tokens | 80+ existing components reference them; removal breaks every page — migration is a separate CR |
+| Logo as React component | TSX, not an image | Size variants via props; colors respond to CSS variables automatically |
+| Favicon as SVG + ICO | `icon.svg` + `favicon.ico` | SVG scales perfectly; ICO covers Safari/older browsers |
+| Fonts via `next/font` | Add to existing font calls in layout | Already in use; self-hosted, optimal loading, no GDPR issues |
+| Corner radius migration | Out of scope for PROJ-21 | Applying `radius: 0` to 80+ components belongs in a dedicated migration CR |
+
+### Files to Create/Modify
+
+| File | Change |
+|------|--------|
+| `app/globals.css` | Add `:root`, `[data-theme="dark"]`, `[data-theme="light"]` token blocks |
+| `app/layout.tsx` | Add fonts; ThemeProvider wrapper; favicon links |
+| `components/layout/ThemeProvider.tsx` | New — theme init from localStorage |
+| `components/layout/Logo.tsx` | New — accent bar logotype, all size variants |
+| `components/layout/ThemeToggle.tsx` | New — dark/light toggle |
+| `components/layout/Header.tsx` | Add ThemeToggle |
+| `public/icon.svg` | New — accent bar favicon SVG |
+| `public/favicon.ico` | New — ICO fallback |
+
+### No New npm Packages
+Space Grotesk and JetBrains Mono are available in `next/font/google` — already installed.
+
+---
 
 ## Change Requests
 
