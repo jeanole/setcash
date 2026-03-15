@@ -52,7 +52,16 @@
       "Bash(ls:*)",
       "Skill(deploy)",
       "Bash(gh run:*)",
-      "Skill(commit-commands:commit)"
+      "Skill(commit-commands:commit)",
+      "Bash(git fetch:*)",
+      "Bash(git remote:*)",
+      "Bash(wait:*)",
+      "Bash(git diff:*)",
+      "Bash(./node_modules/.bin/tsc --noEmit 2>&1; echo \"EXIT: $?\")",
+      "Bash(find:*)",
+      "Bash(git revert:*)",
+      "WebFetch(domain:feastables.com)",
+      "Bash(cat:*)"
     ]
   }
 }

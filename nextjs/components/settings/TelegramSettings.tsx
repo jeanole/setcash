@@ -164,39 +164,39 @@ export default function TelegramSettings({
             <SetupGuide title="How to set up the Telegram Bot">
               <ol className="space-y-2 list-none pl-0">
                 <li className="flex gap-2">
-                  <span className="font-medium text-indigo-600 shrink-0">1.</span>
+                  <span className="font-bold text-zinc-800 shrink-0">1.</span>
                   <span className="text-slate-600">
                     Open Telegram and search for{' '}
                     <span className="font-semibold text-slate-800">@BotFather</span>
                   </span>
                 </li>
                 <li className="flex gap-2">
-                  <span className="font-medium text-indigo-600 shrink-0">2.</span>
+                  <span className="font-bold text-zinc-800 shrink-0">2.</span>
                   <span className="text-slate-600">
                     Send <span className="font-semibold text-slate-800">/newbot</span> and follow the
                     prompts to name your bot
                   </span>
                 </li>
                 <li className="flex gap-2">
-                  <span className="font-medium text-indigo-600 shrink-0">3.</span>
+                  <span className="font-bold text-zinc-800 shrink-0">3.</span>
                   <span className="text-slate-600">
                     BotFather will give you a token (format:{' '}
                     <span className="font-semibold text-slate-800">123456789:ABC-DEF...</span>)
                   </span>
                 </li>
                 <li className="flex gap-2">
-                  <span className="font-medium text-indigo-600 shrink-0">4.</span>
+                  <span className="font-bold text-zinc-800 shrink-0">4.</span>
                   <span className="text-slate-600">
                     Paste the token in the{' '}
                     <span className="font-semibold text-slate-800">Bot Token</span> field below
                   </span>
                 </li>
                 <li className="flex gap-2">
-                  <span className="font-medium text-indigo-600 shrink-0">5.</span>
+                  <span className="font-bold text-zinc-800 shrink-0">5.</span>
                   <span className="text-slate-600">Enable the toggle and click "Save Changes"</span>
                 </li>
                 <li className="flex gap-2">
-                  <span className="font-medium text-indigo-600 shrink-0">6.</span>
+                  <span className="font-bold text-zinc-800 shrink-0">6.</span>
                   <span className="text-slate-600">
                     The bot will start polling — status should turn green
                   </span>
@@ -241,8 +241,8 @@ export default function TelegramSettings({
                 aria-checked={enabled}
                 disabled={!maskedToken && !tokenInput}
                 onClick={() => setEnabled((v) => !v)}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#6366f1] focus:ring-offset-2 disabled:opacity-40 disabled:cursor-not-allowed ${
-                  enabled ? 'bg-[#6366f1]' : 'bg-slate-200'
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--vb-accent)] focus:ring-offset-2 disabled:opacity-40 disabled:cursor-not-allowed ${
+                  enabled ? 'bg-[var(--vb-accent)]' : 'bg-slate-200'
                 }`}
               >
                 <span
@@ -267,7 +267,7 @@ export default function TelegramSettings({
                   onChange={(e) => setTokenInput(e.target.value)}
                   placeholder={maskedToken ?? 'Enter bot token from @BotFather'}
                   autoComplete="new-password"
-                  className="flex-1 px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#6366f1] focus:border-[#6366f1]"
+                  className="flex-1 px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[var(--vb-accent)] focus:border-[var(--vb-accent)]"
                 />
                 <button
                   type="button"
@@ -288,7 +288,7 @@ export default function TelegramSettings({
               <button
                 onClick={handleSaveSettings}
                 disabled={savingSettings}
-                className="px-4 py-2 bg-[#6366f1] text-white rounded-md font-medium text-sm hover:bg-[#4f46e5] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="px-4 py-2 bg-[var(--vb-accent)] text-white rounded-md font-medium text-sm hover:bg-[var(--vb-accent-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {savingSettings ? 'Saving…' : 'Save Changes'}
               </button>
@@ -313,7 +313,7 @@ export default function TelegramSettings({
             <SetupGuide title="How to link your Telegram account">
               <ol className="space-y-2 list-none pl-0">
                 <li className="flex gap-2">
-                  <span className="font-medium text-indigo-600 shrink-0">1.</span>
+                  <span className="font-bold text-zinc-800 shrink-0">1.</span>
                   <span className="text-slate-600">
                     Click{' '}
                     <span className="font-semibold text-slate-800">Link Telegram Account</span>{' '}
@@ -321,13 +321,13 @@ export default function TelegramSettings({
                   </span>
                 </li>
                 <li className="flex gap-2">
-                  <span className="font-medium text-indigo-600 shrink-0">2.</span>
+                  <span className="font-bold text-zinc-800 shrink-0">2.</span>
                   <span className="text-slate-600">
                     Open the project&apos;s Telegram bot in the Telegram app
                   </span>
                 </li>
                 <li className="flex gap-2">
-                  <span className="font-medium text-indigo-600 shrink-0">3.</span>
+                  <span className="font-bold text-zinc-800 shrink-0">3.</span>
                   <span className="text-slate-600">
                     Send the message{' '}
                     <span className="font-semibold text-slate-800">/link YOUR_CODE</span> (e.g.,{' '}
@@ -335,13 +335,13 @@ export default function TelegramSettings({
                   </span>
                 </li>
                 <li className="flex gap-2">
-                  <span className="font-medium text-indigo-600 shrink-0">4.</span>
+                  <span className="font-bold text-zinc-800 shrink-0">4.</span>
                   <span className="text-slate-600">
                     You&apos;ll see a confirmation here and in Telegram
                   </span>
                 </li>
                 <li className="flex gap-2">
-                  <span className="font-medium text-indigo-600 shrink-0">5.</span>
+                  <span className="font-bold text-zinc-800 shrink-0">5.</span>
                   <span className="text-slate-600">
                     Once linked, you can send photos to the bot to create bill drafts
                   </span>
@@ -353,7 +353,7 @@ export default function TelegramSettings({
               <p className="text-sm text-slate-600">Your account is not linked.</p>
               <button
                 onClick={() => setShowLinkModal(true)}
-                className="px-4 py-2 bg-[#6366f1] text-white rounded-md font-medium text-sm hover:bg-[#4f46e5] transition-colors"
+                className="px-4 py-2 bg-[var(--vb-accent)] text-white rounded-md font-medium text-sm hover:bg-[var(--vb-accent-hover)] transition-colors"
               >
                 Link Telegram Account
               </button>

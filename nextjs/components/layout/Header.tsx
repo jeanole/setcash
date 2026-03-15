@@ -1,7 +1,6 @@
 'use client';
 
 import SignOutButton from '@/components/auth/SignOutButton';
-import ThemeToggle from '@/components/layout/ThemeToggle';
 import { Menu } from 'lucide-react';
 
 interface HeaderProps {
@@ -39,12 +38,11 @@ export default function Header({ title, user, onMenuToggle, onProfileOpen }: Hea
         <Menu className="w-5 h-5 text-zinc-600" />
       </button>
 
-      <h1 className="text-base font-semibold text-zinc-800">
+      <h1 className="text-base font-semibold text-zinc-800 uppercase tracking-widest" style={{ fontFamily: 'var(--font-display)' }}>
         {title ?? 'SetCash'}
       </h1>
 
       <div className="ml-auto flex items-center gap-3">
-        <ThemeToggle />
         {user ? (
           <>
             <span
@@ -56,7 +54,7 @@ export default function Header({ title, user, onMenuToggle, onProfileOpen }: Hea
             <button
               type="button"
               onClick={onProfileOpen}
-              className="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center text-white text-sm font-semibold shrink-0 cursor-pointer hover:ring-2 hover:ring-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 ring-offset-1 transition-all"
+              className="w-8 h-8 rounded-full bg-[var(--vb-accent)] border border-zinc-900 flex items-center justify-center text-zinc-900 text-sm font-bold shrink-0 cursor-pointer focus:outline-none btn-brutal-sm"
               aria-label={`Edit profile — signed in as ${user.email}`}
             >
               {initials}

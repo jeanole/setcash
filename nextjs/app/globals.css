@@ -7,34 +7,34 @@
 :root {
   /* Sidebar — light, border-based (matches Express app) */
   --vb-sidebar-bg: #ffffff;
-  --vb-sidebar-hover: rgba(99,102,241,0.06);
-  --vb-sidebar-active: rgba(99,102,241,0.10);
+  --vb-sidebar-hover: rgba(250,204,21,0.06);
+  --vb-sidebar-active: rgba(250,204,21,0.10);
   --vb-sidebar-border: #e2e8f0;
   --vb-sidebar-text: #64748b;
   --vb-sidebar-text-active: #1e293b;
-  --vb-sidebar-accent: #6366f1;
+  --vb-sidebar-accent: #FACC15;
 
   /* Content */
   --vb-content-bg: #f8fafc;
   --vb-card-bg: #FFFFFF;
-  --vb-card-border: rgba(15,23,42,0.08);
+  --vb-card-border: rgba(15,23,42,0.18);
 
   /* Text */
   --vb-text-primary: #1e293b;
   --vb-text-secondary: #64748b;
   --vb-text-muted: #94a3b8;
 
-  /* Accent — indigo (matches Express app) */
-  --vb-accent: #6366f1;
-  --vb-accent-hover: #4f46e5;
-  --vb-accent-light: rgba(99,102,241,0.08);
-  --vb-accent-ring: 0 0 0 3px rgba(99,102,241,0.22);
+  /* Accent — yellow */
+  --vb-accent: #FACC15;
+  --vb-accent-hover: #EAB308;
+  --vb-accent-light: rgba(250,204,21,0.08);
+  --vb-accent-ring: 0 0 0 3px rgba(250,204,21,0.30);
 
   /* Header */
   --vb-header-bg: rgba(248,250,252,0.85);
 
   /* Shadows */
-  --vb-ring: 0 0 0 3px rgba(99,102,241,0.22);
+  --vb-ring: 0 0 0 3px rgba(250,204,21,0.30);
   --vb-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06), 0 1px 1px rgba(15, 23, 42, 0.04);
   --vb-shadow-lg: 0 12px 28px rgba(15, 23, 42, 0.12), 0 2px 6px rgba(15, 23, 42, 0.06);
   --vb-shadow-xl: 0 18px 44px rgba(15, 23, 42, 0.16), 0 4px 10px rgba(15, 23, 42, 0.08);
@@ -46,10 +46,10 @@
    --------------------------------------------------------------------------- */
 
 :root {
-  --font-display: var(--font-space-grotesk), 'Space Grotesk', sans-serif;
+  --font-display: var(--font-kanit), 'Kanit', sans-serif;
   --font-mono: var(--font-jetbrains-mono), 'JetBrains Mono', monospace;
   --accent: #FACC15;
-  --radius: 0px;
+  --radius: 4px;
 }
 
 [data-theme="dark"] {
@@ -113,6 +113,48 @@ select:focus-visible,
 textarea:focus-visible {
   outline: none;
   box-shadow: var(--vb-ring);
+}
+
+/* ---------------------------------------------------------------------------
+   Neo-brutalist button — offset box-shadow press effect
+   --------------------------------------------------------------------------- */
+
+.btn-brutal {
+  box-shadow: 4px 4px 0 #0f172a;
+  transition: box-shadow 0.1s ease, transform 0.1s ease;
+}
+.btn-brutal:hover {
+  box-shadow: 2px 2px 0 #0f172a;
+  transform: translate(2px, 2px);
+}
+.btn-brutal:active {
+  box-shadow: 0 0 0 #0f172a;
+  transform: translate(4px, 4px);
+}
+
+/* Smaller variant for icon buttons / avatars */
+.btn-brutal-sm {
+  box-shadow: 2px 2px 0 #0f172a;
+  transition: box-shadow 0.1s ease, transform 0.1s ease;
+}
+.btn-brutal-sm:hover {
+  box-shadow: 1px 1px 0 #0f172a;
+  transform: translate(1px, 1px);
+}
+.btn-brutal-sm:active {
+  box-shadow: 0 0 0 #0f172a;
+  transform: translate(2px, 2px);
+}
+
+/* ---------------------------------------------------------------------------
+   ALL-CAPS label utility
+   --------------------------------------------------------------------------- */
+
+.label-caps {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.7rem;
+  font-weight: 600;
 }
 
 /* ---------------------------------------------------------------------------

@@ -114,7 +114,7 @@ export default function LinkedAccountsTable() {
                 <span className="text-sm text-slate-700">{email}</span>
                 <button
                   onClick={() => setInviteEmail(email)}
-                  className="text-[#6366f1] hover:text-[#4f46e5] text-xs font-medium"
+                  className="text-[var(--vb-accent)] hover:text-[var(--vb-accent-hover)] text-xs font-medium"
                 >
                   Invite
                 </button>

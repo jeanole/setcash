@@ -181,20 +181,20 @@ function NavLinks({
         className={cn(
           'flex items-center gap-3 py-2.5 rounded-lg text-[13.5px] font-medium transition-colors border-l-2 pl-[14px]',
           active
-            ? 'text-indigo-700 bg-indigo-50 border-indigo-500'
+            ? 'text-zinc-900 bg-[var(--vb-accent-light)] border-[var(--vb-accent)]'
             : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100 border-transparent'
         )}
         aria-current={active ? 'page' : undefined}
       >
-        <item.icon className={cn('w-5 h-5 shrink-0', active ? 'text-indigo-600' : 'opacity-60')} />
-        {item.label}
+        <item.icon className={cn('w-5 h-5 shrink-0', active ? 'text-zinc-800' : 'opacity-60')} />
+        <span className="uppercase tracking-widest text-xs font-semibold">{item.label}</span>
       </a>
     );
   });
 
   const settingsSection = (
     <div className="mt-6 pt-6 border-t border-slate-200">
-      <p className="px-[14px] mb-2 text-[10px] font-semibold text-slate-400 uppercase tracking-[0.12em]">
+      <p className="px-[14px] mb-2 text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
         Settings
       </p>
       {isSuperAdmin && (
@@ -210,7 +210,7 @@ function NavLinks({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
               d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
           </svg>
-          System
+          <span className="uppercase tracking-widest text-xs font-semibold">System</span>
         </button>
       )}
     </div>
@@ -291,7 +291,7 @@ export default function Sidebar({ currentUser, isMobileOpen, onClose }: SidebarP
         <div className="px-4 py-3 border-t border-slate-200">
           <button
             onClick={() => setIsInviteModalOpen(true)}
-            className="w-full flex items-center gap-2 px-3 py-2 mb-2 text-xs font-medium text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+            className="w-full flex items-center gap-2 px-3 py-2 mb-2 text-xs font-medium text-slate-500 hover:text-zinc-800 hover:bg-[var(--vb-accent-light)] rounded-lg transition-colors"
           >
             <UserPlus className="w-3.5 h-3.5" />
             {canInviteToProject ? 'Invite to project' : 'Invite to SetCash'}
@@ -338,7 +338,7 @@ export default function Sidebar({ currentUser, isMobileOpen, onClose }: SidebarP
             <div className="px-4 py-3 border-t border-slate-200">
               <button
                 onClick={() => { setIsInviteModalOpen(true); onClose?.(); }}
-                className="w-full flex items-center gap-2 px-3 py-2 mb-2 text-xs font-medium text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                className="w-full flex items-center gap-2 px-3 py-2 mb-2 text-xs font-medium text-slate-500 hover:text-zinc-800 hover:bg-[var(--vb-accent-light)] rounded-lg transition-colors"
               >
                 <UserPlus className="w-3.5 h-3.5" />
                 {canInviteToProject ? 'Invite to project' : 'Invite to SetCash'}

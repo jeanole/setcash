@@ -78,7 +78,7 @@ export default function PositionSelect({
               onClick={() => handleSelect(null)}
               className={cn(
                 'w-full px-3 py-2 text-left text-sm transition-colors hover:bg-slate-50',
-                value === null && 'bg-indigo-50 text-[#6366f1]'
+                value === null && 'bg-indigo-50 text-[var(--vb-accent)]'
               )}
             >
               None
@@ -91,7 +91,7 @@ export default function PositionSelect({
               onClick={() => handleSelect(position.id)}
               className={cn(
                 'w-full px-3 py-2 text-left text-sm transition-colors hover:bg-slate-50',
-                value === position.id && 'bg-indigo-50 text-[#6366f1]'
+                value === position.id && 'bg-indigo-50 text-[var(--vb-accent)]'
               )}
             >
               {position.name}

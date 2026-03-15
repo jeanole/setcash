@@ -116,7 +116,7 @@ export default function AllocationWidget({
               value={row.id}
               onChange={(e) => updateRow(idx, 'id', e.target.value)}
               disabled={readOnly}
-              className="flex-1 max-w-[240px] px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-[#6366f1]/20 focus:border-[#6366f1] outline-none transition-colors bg-white disabled:opacity-50"
+              className="flex-1 max-w-[240px] px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-[var(--vb-accent)]/20 focus:border-[var(--vb-accent)] outline-none transition-colors bg-white disabled:opacity-50"
             >
               <option value="">-- Select {label} --</option>
               {selectableOptions.map((opt) => (
@@ -134,7 +134,7 @@ export default function AllocationWidget({
               value={row.percentage}
               onChange={(e) => updateRow(idx, 'percentage', e.target.value)}
               disabled={readOnly}
-              className="w-20 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-[#6366f1]/20 focus:border-[#6366f1] outline-none transition-colors disabled:opacity-50"
+              className="w-20 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-[var(--vb-accent)]/20 focus:border-[var(--vb-accent)] outline-none transition-colors disabled:opacity-50"
             />
 
             <span className="text-sm text-slate-500">%</span>

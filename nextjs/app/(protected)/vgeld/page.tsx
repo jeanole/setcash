@@ -183,7 +183,7 @@ function AddTransferModal({ isOpen, onClose, onSuccess, projectId }: AddTransfer
               required
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#6366f1] focus:border-transparent"
+              className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[var(--vb-accent)] focus:border-transparent"
               placeholder="0.00"
             />
           </div>
@@ -198,7 +198,7 @@ function AddTransferModal({ isOpen, onClose, onSuccess, projectId }: AddTransfer
               required
               value={to}
               onChange={(e) => setTo(e.target.value)}
-              className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#6366f1] focus:border-transparent bg-white"
+              className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[var(--vb-accent)] focus:border-transparent bg-white"
             >
               {members.length === 0 && (
                 <option value="" disabled>Loading members...</option>
@@ -221,7 +221,7 @@ function AddTransferModal({ isOpen, onClose, onSuccess, projectId }: AddTransfer
               type="text"
               value={from}
               onChange={(e) => setFrom(e.target.value)}
-              className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#6366f1] focus:border-transparent"
+              className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[var(--vb-accent)] focus:border-transparent"
               placeholder="External"
             />
           </div>
@@ -238,7 +238,7 @@ function AddTransferModal({ isOpen, onClose, onSuccess, projectId }: AddTransfer
             <button
               type="submit"
               disabled={isSubmitting}
-              className="flex-1 px-4 py-2 rounded-lg bg-[var(--vb-accent)] text-white text-sm font-medium hover:bg-[var(--vb-accent-hover)] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              className="flex-1 px-4 py-2 rounded-lg bg-[var(--vb-accent)] text-white text-sm font-medium hover:bg-[var(--vb-accent-hover)] transition-colors disabled:opacity-60 disabled:cursor-not-allowed btn-brutal"
             >
               {isSubmitting ? 'Adding...' : 'Add Transfer'}
             </button>
@@ -358,7 +358,7 @@ export default function VGeldPage() {
         <h1 className="text-[22px] font-semibold text-zinc-800">V-Geld</h1>
         <button
           onClick={() => setIsModalOpen(true)}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-[var(--vb-accent)] text-white font-medium rounded-lg hover:bg-[var(--vb-accent-hover)] active:scale-[0.97] transition-all shadow-sm text-sm"
+          className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-[var(--vb-accent)] text-white font-medium rounded-lg hover:bg-[var(--vb-accent-hover)] transition-all text-sm btn-brutal"
           aria-label="Add V-Geld transfer"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

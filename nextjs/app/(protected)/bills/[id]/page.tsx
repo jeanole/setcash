@@ -240,7 +240,7 @@ export default function BillDetailPage({ params }: BillDetailPageProps) {
         <h2 className="text-lg font-medium text-slate-900 mb-2">
           {error || 'Bill not found'}
         </h2>
-        <button onClick={() => router.push('/bills')} className="text-[#6366f1] font-medium">
+        <button onClick={() => router.push('/bills')} className="text-[var(--vb-accent)] font-medium">
           Back to Bills
         </button>
       </div>

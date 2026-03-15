@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Inter, DM_Mono, Bricolage_Grotesque, Space_Grotesk, JetBrains_Mono } from 'next/font/google';
+import { Inter, DM_Mono, Bricolage_Grotesque, Space_Grotesk, JetBrains_Mono, Kanit } from 'next/font/google';
 import './globals.css';
 import ThemeProvider from '@/components/layout/ThemeProvider';
 
@@ -36,6 +36,13 @@ const jetbrainsMono = JetBrains_Mono({
   display: 'swap',
 });
 
+const kanit = Kanit({
+  subsets: ['latin'],
+  variable: '--font-kanit',
+  weight: ['400', '600', '700', '900'],
+  display: 'swap',
+});
+
 export const metadata: Metadata = {
   title: 'SetCash',
   description: 'Multi-tenant expense tracking and budget management',
@@ -53,7 +60,7 @@ export default function RootLayout({
   return (
     <html
       lang="de"
-      className={`${inter.variable} ${dmMono.variable} ${bricolage.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable}`}
+      className={`${inter.variable} ${dmMono.variable} ${bricolage.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} ${kanit.variable}`}
     >
       <body>
         <ThemeProvider>{children}</ThemeProvider>
