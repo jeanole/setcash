@@ -1,6 +1,6 @@
 # SetCash — Project Index
 
-**Next Available IDs:** PROJ-21 · BUG-84 · CR-26
+**Next Available IDs:** PROJ-22 · BUG-84 · CR-27
 
 
 | ID | Type | Title | Status | Priority | Feature | Date |
@@ -133,3 +133,5 @@
 | [BUG-83](BUG-83-invite-endpoint-no-rate-limiting.md) | Bug | No Rate Limiting on Project Invite Endpoint — Email Spam Risk | Resolved | Low | PROJ-10 | 2026-03-14 |
 | CR-24 | CR | AI Log Viewer in AI Analysis Settings | Deployed | Medium | PROJ-19 | 2026-03-15 |
 | CR-25 | CR | Any User Can Create Transfer; Admin Confirms; Show Confirmed By | Pending Review | Medium | PROJ-15 | 2026-03-15 |
+| [PROJ-21](PROJ-21-brand-design-system.md) | Feature | Brand & Design System | Planned | Medium | — | 2026-03-15 |
+| CR-26 | CR | SetCash Brand & Logo Style Specification | Pending Review | Medium | PROJ-21 | 2026-03-15 |
