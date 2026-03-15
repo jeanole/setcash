@@ -48,7 +48,7 @@ export default function BillDetailHeader({
   isAnalysing,
 }: BillDetailHeaderProps) {
   const router = useRouter();
-  const total = calculateTotal(bill.brutto19, bill.brutto7, bill.brutto0);
+  const total = calculateTotal(bill.brutto19, bill.brutto7, bill.brutto0, bill.amount);
   const isDraft = bill.status === 'draft' || !bill.vendor || total === 0;
   const hasImages = bill.images && bill.images.length > 0;
   const canAnalyse = hasOcrEnabled && hasImages && bill.ocrStatus !== 'pending';
