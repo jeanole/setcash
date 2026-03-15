@@ -84,12 +84,13 @@ export async function GET(
     });
     const userRole = member?.position?.name ?? 'Misc';
 
-    // Project settings
-    const settingsRaw = await prisma.projectSettings.findMany({ where: { projectId } });
-    const settings: Record<string, string> = {};
-    settingsRaw.forEach((s) => { if (s.value) settings[s.key] = s.value; });
-    const pTitle = settings['projectTitle'] ?? '';
-    const pSubtitle = settings['projectSubtitle'] ?? '';
+    // Project title/subtitle from the Project model
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { name: true, subtitle: true },
+    });
+    const pTitle = project?.name ?? '';
+    const pSubtitle = project?.subtitle ?? '';
     const pdfPrefix = pTitle ? pTitle + ' - ' : 'SetCash - ';
 
     // Bulk-fetch allocations for all user bills
