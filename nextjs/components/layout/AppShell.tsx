@@ -7,6 +7,7 @@ import Header from './Header';
 import Sidebar from './Sidebar';
 import BugReportModal from './BugReportModal';
 import ProfileModal from './ProfileModal';
+import { ImpressumLink } from '@/components/ImpressumModal';
 
 interface AppShellProps {
   children: ReactNode;
@@ -97,7 +98,7 @@ export default function AppShell({ children, title, currentUser }: AppShellProps
           </div>
           <footer className="border-t border-zinc-200 bg-zinc-50/60 px-4 md:px-6 py-3">
             <div className="max-w-7xl mx-auto flex items-center justify-between text-xs text-zinc-400">
-              <span>&copy; {new Date().getFullYear()} SetCash</span>
+              <span>&copy; {new Date().getFullYear()} SetCash &middot; <ImpressumLink /></span>
               <button
                 onClick={() => setIsBugReportOpen(true)}
                 className="inline-flex items-center gap-1.5 text-zinc-400 hover:text-zinc-600 transition-colors"

@@ -523,7 +523,7 @@ textarea:focus-visible {
 }
 
 /* SC monogram — hide */
-.lp-card .bg-indigo-500 {
+.lp-card .w-12.h-12.bg-indigo-500 {
   display: none !important;
 }
 
