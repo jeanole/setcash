@@ -173,9 +173,7 @@ function NavLinks({
   onOpenSuperAdmin: () => void;
   isDemoAccount: boolean;
 }) {
-  const items = isDemoAccount && !isSuperAdmin
-    ? NAV_ITEMS.filter((i) => i.href !== '/settings')
-    : NAV_ITEMS;
+  const items = NAV_ITEMS;
 
   const mainItems = items.map((item) => {
     const active = isActive(item.href);
