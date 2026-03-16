@@ -1,10 +1,55 @@
 // ============================================================================
-// Admin Project API - DELETE (cascade delete with cleanup)
+// Admin Project API - PATCH (update uploadLimit) + DELETE (cascade delete)
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { db as prisma } from '@/lib/db';
+import { z } from 'zod';
+
+const patchProjectSchema = z.object({
+  uploadLimit: z.number().int().min(1).nullable(),
+});
+
+// PATCH /api/admin/projects/[id] - Update project uploadLimit
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await auth();
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    if (session.user.role !== 'superadmin') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    const { id } = await params;
+
+    const body = await req.json();
+    const parsed = patchProjectSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 });
+    }
+
+    const project = await prisma.project.findUnique({ where: { id } });
+    if (!project) {
+      return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+    }
+
+    const updated = await prisma.project.update({
+      where: { id },
+      data: { uploadLimit: parsed.data.uploadLimit },
+    });
+
+    return NextResponse.json({ ok: true, uploadLimit: updated.uploadLimit });
+  } catch (error) {
+    console.error('Error updating project:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
 
 // DELETE /api/admin/projects/[id] - Delete project with cascade cleanup
 export async function DELETE(

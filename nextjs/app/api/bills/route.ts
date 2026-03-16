@@ -346,6 +346,21 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Check project upload quota
+    const projectForQuota = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { uploadLimit: true },
+    });
+    if (projectForQuota?.uploadLimit != null) {
+      const billCount = await prisma.bill.count({ where: { projectId } });
+      if (billCount >= projectForQuota.uploadLimit) {
+        return NextResponse.json(
+          { error: 'Upload limit reached for this project. Contact your administrator.' },
+          { status: 403 }
+        );
+      }
+    }
+
     // Verify project access
     const membership = await prisma.projectMember.findUnique({
       where: {

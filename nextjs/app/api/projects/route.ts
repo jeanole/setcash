@@ -108,6 +108,21 @@ export async function POST(request: NextRequest) {
         },
       });
 
+      // Apply defaultUploadLimit from SystemConfig if set
+      const defaultLimitConfig = await tx.systemConfig.findUnique({
+        where: { key: 'defaultUploadLimit' },
+      });
+      if (defaultLimitConfig?.value != null) {
+        const defaultLimit = parseInt(defaultLimitConfig.value, 10);
+        if (Number.isFinite(defaultLimit) && defaultLimit > 0) {
+          await tx.project.update({
+            where: { id: newProject.id },
+            data: { uploadLimit: defaultLimit },
+          });
+          newProject.uploadLimit = defaultLimit;
+        }
+      }
+
       return newProject;
     });
 

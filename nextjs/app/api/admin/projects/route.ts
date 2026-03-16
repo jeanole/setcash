@@ -26,9 +26,11 @@ export async function GET() {
         name: true,
         subtitle: true,
         createdAt: true,
+        uploadLimit: true,
         _count: {
           select: {
             members: true,
+            bills: true,
           },
         },
       },
@@ -40,6 +42,8 @@ export async function GET() {
       subtitle: p.subtitle,
       createdAt: p.createdAt.toISOString(),
       memberCount: p._count.members,
+      uploadLimit: p.uploadLimit,
+      billCount: p._count.bills,
     }));
 
     return NextResponse.json(mapped);
