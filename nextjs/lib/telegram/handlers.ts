@@ -7,11 +7,12 @@
 
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import https from 'https';
 import http from 'http';
 import TelegramBot from 'node-telegram-bot-api';
 import { prisma } from '../db';
-import { UPLOADS_DIR } from '../upload';
+import * as storage from '../storage';
 import { validateAndConsumeLinkCode } from './codes';
 
 // Album buffering: bufferKey -> { messages, timer }
@@ -23,11 +24,13 @@ const mediaGroupBuffers = new Map<
 interface DownloadedPhoto {
   savedName: string;
   origName: string;
+  /** Absolute path to the temp file on disk (in os.tmpdir()) */
+  tempPath: string;
 }
 
 /**
- * Download a Telegram file to UPLOADS_DIR.
- * Returns { savedName, origName } for the saved file.
+ * Download a Telegram file to a temp directory.
+ * Returns { savedName, origName, tempPath } for the saved file.
  */
 export async function downloadTelegramFile(
   bot: TelegramBot,
@@ -50,12 +53,7 @@ export async function downloadTelegramFile(
   }
 
   const savedName = `tg_${Date.now()}_${Math.random().toString(36).slice(2)}${ext}`;
-
-  if (!fs.existsSync(UPLOADS_DIR)) {
-    fs.mkdirSync(UPLOADS_DIR, { recursive: true });
-  }
-
-  const destPath = path.join(UPLOADS_DIR, savedName);
+  const destPath = path.join(os.tmpdir(), savedName);
 
   return new Promise((resolve, reject) => {
     const proto = url.startsWith('https') ? https : http;
@@ -65,7 +63,7 @@ export async function downloadTelegramFile(
         res.pipe(file);
         file.on('finish', () => {
           file.close();
-          resolve({ savedName, origName: path.basename(filePath) });
+          resolve({ savedName, origName: path.basename(filePath), tempPath: destPath });
         });
       })
       .on('error', (err) => {
@@ -132,13 +130,21 @@ export async function createDraftBill(
     });
   }
 
-  // Attach images
+  // Attach images — upload from temp path to storage, then clean up temp file
   for (let i = 0; i < photos.length; i++) {
+    const { savedName, origName, tempPath } = photos[i];
+    try {
+      const buffer = fs.readFileSync(tempPath);
+      await storage.uploadFile(savedName, buffer);
+      try { fs.unlinkSync(tempPath); } catch { /* temp cleanup, non-fatal */ }
+    } catch (e) {
+      console.error('[Telegram] Failed to upload image to storage:', (e as Error).message);
+    }
     await prisma.billImage.create({
       data: {
         billId,
-        filename: photos[i].origName,
-        filePath: photos[i].savedName,
+        filename: origName,
+        filePath: savedName,
         sortOrder: i,
       },
     });

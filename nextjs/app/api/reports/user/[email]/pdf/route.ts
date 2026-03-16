@@ -10,8 +10,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/db';
 import { exportLimiter } from '@/lib/ratelimit';
-import { UPLOADS_DIR } from '@/lib/upload';
-import fs from 'fs';
+import * as storage from '@/lib/storage';
 import path from 'path';
 import { PassThrough } from 'stream';
 // @ts-ignore
@@ -360,14 +359,11 @@ export async function GET(
           const img = billImages[imgIdx];
           if (!img.filePath) continue;
 
-          // Sanitize path — no directory traversal
-          const safeName = path.basename(img.filePath);
-          const subDir = path.dirname(img.filePath).replace(/\.\./g, '');
-          const imagePath = path.join(UPLOADS_DIR, subDir, safeName);
+          const ext = path.extname(img.filePath).toLowerCase();
+          const imgBuffer = await storage.getFileBuffer(img.filePath);
 
-          if (fs.existsSync(imagePath)) {
+          if (imgBuffer) {
             try {
-              const ext = path.extname(imagePath).toLowerCase();
               if (['.jpg', '.jpeg', '.png'].includes(ext)) {
                 if (doc.y > 450) {
                   doc.addPage();
@@ -379,7 +375,7 @@ export async function GET(
                     .text(`Bild ${imgIdx + 1} / ${billImages.length}`);
                   doc.fillColor('black');
                 }
-                doc.image(imagePath, { fit: [400, 300], align: 'center' });
+                doc.image(imgBuffer, { fit: [400, 300], align: 'center' });
                 doc.moveDown(0.5);
               } else {
                 doc

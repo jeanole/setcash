@@ -5,15 +5,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { db as prisma } from '@/lib/db';
-import path from 'path';
 import fs from 'fs';
 import {
   parseForm,
   getUploadedFiles,
   ensureUploadDir,
   generateFilename,
-  UPLOADS_DIR,
 } from '@/lib/upload';
+import * as storage from '@/lib/storage';
 
 // Sync legacy bills.filename with first image
 async function syncLegacyImageColumns(billId: string) {
@@ -103,7 +102,6 @@ export async function POST(
 
     for (let i = 0; i < uploadedFiles.length; i++) {
       const f = uploadedFiles[i];
-      const ext = path.extname(f.originalFilename || '') || '.jpg';
       const sortOrder = currentCount + i;
       const savedFilename = generateFilename(
         userFolder,
@@ -113,10 +111,11 @@ export async function POST(
         f.originalFilename || ''
       );
       const relPath = `${userFolder}/${savedFilename}`;
-      const savedFilePath = path.join(UPLOADS_DIR, relPath);
 
-      // Move file to final location
-      fs.renameSync(f.filepath, savedFilePath);
+      // Read temp file, upload via storage adapter, then delete temp file
+      const buffer = fs.readFileSync(f.filepath);
+      await storage.uploadFile(relPath, buffer);
+      try { fs.unlinkSync(f.filepath); } catch { /* temp cleanup, non-fatal */ }
 
       // Create image record
       const img = await prisma.billImage.create({
@@ -131,7 +130,7 @@ export async function POST(
       newImages.push({
         id: img.id,
         filename: f.originalFilename,
-        file: relPath,
+        file: await storage.getFileUrl(relPath),
         sortOrder,
       });
     }

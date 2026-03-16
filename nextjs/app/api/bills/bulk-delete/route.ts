@@ -6,9 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { db as prisma } from '@/lib/db';
 import { z } from 'zod';
-import path from 'path';
-import fs from 'fs';
-import { UPLOADS_DIR } from '@/lib/upload';
+import * as storage from '@/lib/storage';
 
 const bulkDeleteSchema = z.object({
   ids: z.array(z.string()).min(1).max(500),
@@ -65,14 +63,7 @@ export async function POST(req: NextRequest) {
     for (const bill of validBills) {
       for (const img of bill.images) {
         if (img.filePath) {
-          const imgPath = path.join(UPLOADS_DIR, img.filePath);
-          if (fs.existsSync(imgPath)) {
-            try {
-              fs.unlinkSync(imgPath);
-            } catch (e) {
-              console.error('Failed to delete image file:', e);
-            }
-          }
+          await storage.deleteFile(img.filePath);
         }
       }
     }

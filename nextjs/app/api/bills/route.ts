@@ -6,9 +6,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { db as prisma } from '@/lib/db';
 import { z } from 'zod';
-import path from 'path';
 import fs from 'fs';
-import { parseForm, getUploadedFiles, ensureUploadDir, generateFilename, UPLOADS_DIR } from '@/lib/upload';
+import { parseForm, getUploadedFiles, ensureUploadDir, generateFilename } from '@/lib/upload';
+import * as storage from '@/lib/storage';
 import { billCreateLimiter } from '@/lib/ratelimit';
 
 // Validation schemas
@@ -260,7 +260,7 @@ export async function GET(req: NextRequest) {
     const roleMap = new Map(userRoles.map((u) => [u.userEmail.toLowerCase(), u.position?.name || 'Misc']));
 
     // Map response
-    const mapped = bills.map((b) => ({
+    const mapped = await Promise.all(bills.map(async (b) => ({
       id: b.id,
       date: b.date.toISOString(),
       email: b.submittedByEmail,
@@ -280,12 +280,12 @@ export async function GET(req: NextRequest) {
       netto0: Number(b.brutto0),
       nettoAmount: Number(b.nettoAmount),
       filename: b.filename,
-      images: b.images.map((img) => ({
+      images: await Promise.all(b.images.map(async (img) => ({
         id: img.id,
         filename: img.filename,
-        file: img.filePath,
+        file: await storage.getFileUrl(img.filePath),
         sortOrder: img.sortOrder,
-      })),
+      }))),
       motiveAllocations: b.motives.map((m) => ({
         id: m.id,
         motiveId: m.motiveId,
@@ -301,7 +301,7 @@ export async function GET(req: NextRequest) {
       status: b.status,
       ocrStatus: b.ocrStatus,
       ocrFields: b.ocrFields as string[] | null,
-    }));
+    })));
 
     return NextResponse.json({ bills: mapped, total, page, pageSize });
   } catch (error) {
@@ -458,14 +458,14 @@ export async function POST(req: NextRequest) {
 
       for (let i = 0; i < uploadedFiles.length; i++) {
         const f = uploadedFiles[i];
-        const ext = path.extname(f.originalFilename || '') || '.jpg';
         const suffix = uploadedFiles.length > 1 ? `_${i + 1}` : '';
         const savedFilename = generateFilename(userFolder, bill.billNumber ?? bill.id, dateStr, suffix, f.originalFilename || '');
         const relPath = `${userFolder}/${savedFilename}`;
-        const savedFilePath = path.join(UPLOADS_DIR, relPath);
 
-        // Move file to final location
-        fs.renameSync(f.filepath, savedFilePath);
+        // Read temp file, upload via storage adapter, then delete temp file
+        const buffer = fs.readFileSync(f.filepath);
+        await storage.uploadFile(relPath, buffer);
+        try { fs.unlinkSync(f.filepath); } catch { /* temp cleanup, non-fatal */ }
 
         // Create image record
         await prisma.billImage.create({
