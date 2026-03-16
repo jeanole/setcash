@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { useState } from 'react';
+import { useSession } from 'next-auth/react';
 import Header from './Header';
 import Sidebar from './Sidebar';
 import BugReportModal from './BugReportModal';
@@ -24,6 +25,7 @@ export default function AppShell({ children, title, currentUser }: AppShellProps
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isBugReportOpen, setIsBugReportOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const { data: session } = useSession();
 
   // Local copy of profile fields so header re-renders immediately after save
   const [profileFields, setProfileFields] = useState<{
@@ -115,6 +117,7 @@ export default function AppShell({ children, title, currentUser }: AppShellProps
             onClose={() => setIsProfileOpen(false)}
             user={profileUser}
             onProfileUpdated={handleProfileUpdated}
+            isDemoAccount={session?.user?.isDemoAccount ?? false}
           />
         )}
       </div>

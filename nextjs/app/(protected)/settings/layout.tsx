@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import SettingsTabs from '@/components/settings/SettingsTabs';
 
@@ -9,6 +10,10 @@ export default async function SettingsLayout({
 }) {
   const session = await auth();
   const userRole = (session?.user?.role as 'user' | 'admin' | 'owner' | 'superadmin') || 'user';
+
+  if (session?.user?.isDemoAccount && session?.user?.role !== 'superadmin') {
+    redirect('/dashboard');
+  }
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
