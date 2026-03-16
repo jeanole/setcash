@@ -11,11 +11,14 @@ export default function GlobalError({
 }) {
   const isStaleDeployment =
     error.message?.includes('Failed to find Server Action') ||
-    error.digest?.includes('ACTION_NOT_FOUND');
+    error.digest?.includes('ACTION_NOT_FOUND') ||
+    error.digest?.includes('SERVER_ACTION');
 
   useEffect(() => {
-    if (!isStaleDeployment) {
-      console.error('[GlobalError]', error);
+    if (isStaleDeployment) {
+      window.location.reload();
+    } else {
+      console.error('[GlobalError] digest:', error.digest, 'message:', error.message, error);
     }
   }, [error, isStaleDeployment]);
 
@@ -36,15 +39,15 @@ export default function GlobalError({
           <div style={{ textAlign: 'center', padding: '40px', maxWidth: '400px' }}>
             <p style={{ fontSize: '32px', margin: '0 0 16px' }}>🔄</p>
             <h1 style={{ fontSize: '20px', fontWeight: 600, color: '#0f172a', margin: '0 0 8px' }}>
-              New version available
+              Reloading…
             </h1>
             <p style={{ fontSize: '15px', color: '#475569', margin: '0 0 24px', lineHeight: 1.6 }}>
-              SetCash was updated while this tab was open. Please reload to continue.
+              A new version of SetCash is available. Reloading now.
             </p>
             <button
               onClick={() => window.location.reload()}
               style={{
-                backgroundColor: 'var(--vb-accent)',
+                backgroundColor: '#2563eb',
                 color: '#ffffff',
                 border: 'none',
                 borderRadius: '8px',
@@ -54,7 +57,7 @@ export default function GlobalError({
                 cursor: 'pointer',
               }}
             >
-              Reload page
+              Reload now
             </button>
           </div>
         </body>
