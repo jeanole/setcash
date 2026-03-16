@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import SettingsTabs from '@/components/settings/SettingsTabs';
+import DemoReadOnlyOverlay from '@/components/settings/DemoReadOnlyOverlay';
 
 export default async function SettingsLayout({
   children,
@@ -10,9 +11,10 @@ export default async function SettingsLayout({
 }) {
   const session = await auth();
   const userRole = (session?.user?.role as 'user' | 'admin' | 'owner' | 'superadmin') || 'user';
+  const isDemoAccount = session?.user?.isDemoAccount ?? false;
 
-  if (session?.user?.isDemoAccount && session?.user?.role !== 'superadmin') {
-    redirect('/dashboard');
+  if (!session?.user) {
+    redirect('/');
   }
 
   return (
@@ -27,7 +29,9 @@ export default async function SettingsLayout({
       <SettingsTabs userRole={userRole} />
 
       <div className="space-y-6">
-        {children}
+        <DemoReadOnlyOverlay isDemoAccount={isDemoAccount}>
+          {children}
+        </DemoReadOnlyOverlay>
       </div>
     </div>
   );
