@@ -330,6 +330,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No project selected' }, { status: 400 });
     }
 
+    // Block bill uploads on example projects
+    if (session.user.isExampleProject) {
+      return NextResponse.json(
+        { error: 'Uploading bills is not available in the Example Project. Join or create a real project to upload bills.' },
+        { status: 403 }
+      );
+    }
+
+    // Block demo accounts from uploading bills
+    if (session.user.isDemoAccount && session.user.role !== 'superadmin') {
+      return NextResponse.json(
+        { error: 'Demo accounts cannot upload bills. Create a real account to start tracking expenses.' },
+        { status: 403 }
+      );
+    }
+
     // Verify project access
     const membership = await prisma.projectMember.findUnique({
       where: {

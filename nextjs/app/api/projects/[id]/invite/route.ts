@@ -20,6 +20,11 @@ export async function POST(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  // Block demo accounts from sending invitations
+  if (session.user.isDemoAccount && session.user.role !== 'superadmin') {
+    return NextResponse.json({ error: 'Demo accounts cannot send invitations.' }, { status: 403 });
+  }
+
   const { id: projectId } = await params;
 
   // Verify the inviter is a member of this project (or superadmin)

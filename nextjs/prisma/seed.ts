@@ -26,9 +26,9 @@ async function main() {
   let defaultProject;
   if (projectCount === 0) {
     defaultProject = await prisma.project.create({
-      data: { name: 'Default Project' },
+      data: { name: 'Example Project', isExample: true },
     });
-    console.log(`✓ Default project created: ${defaultProject.name}`);
+    console.log(`✓ Example project created: ${defaultProject.name}`);
   } else {
     defaultProject = await prisma.project.findFirst();
     console.log(`✓ Default project already exists: ${defaultProject!.name}`);
@@ -98,6 +98,58 @@ async function main() {
     data: { defaultProjectId: projectId },
   });
   console.log(`✓ Admin user defaultProjectId set to: ${projectId}`);
+
+  // 8. Demo user — credentials from env vars
+  const demoEmail = process.env.DEMO_USER_EMAIL ?? 'testuser@setcash.app';
+  const demoPassword = process.env.DEMO_USER_PASSWORD ?? 'supersafepw';
+  const demoPasswordHash = await bcrypt.hash(demoPassword, 10);
+
+  // Find the example project
+  const exampleProject = await prisma.project.findFirst({
+    where: { isExample: true },
+  });
+
+  if (exampleProject) {
+    // Upsert demo user
+    const demoUser = await prisma.user.upsert({
+      where: { email: demoEmail },
+      update: { passwordHash: demoPasswordHash, isDemoAccount: true, emailVerified: new Date(), isActive: true },
+      create: {
+        email: demoEmail,
+        passwordHash: demoPasswordHash,
+        isDemoAccount: true,
+        emailVerified: new Date(),
+        isActive: true,
+      },
+    });
+
+    // Upsert ProjectMember: demo user -> example project, role=user
+    const demoMember = await prisma.projectMember.upsert({
+      where: {
+        projectId_userEmail: {
+          projectId: exampleProject.id,
+          userEmail: demoEmail,
+        },
+      },
+      update: {},
+      create: {
+        projectId: exampleProject.id,
+        userEmail: demoEmail,
+        role: 'user',
+      },
+    });
+    console.log(`✓ Demo member: ${demoMember.userEmail} (${demoMember.role})`);
+
+    // Set demo user's defaultProjectId to example project
+    await prisma.user.update({
+      where: { email: demoEmail },
+      data: { defaultProjectId: exampleProject.id },
+    });
+
+    console.log(`✓ Demo user: ${demoUser.email} (isDemoAccount=true)`);
+  } else {
+    console.warn('No example project found — skipping demo user setup.');
+  }
 
   console.log('Seed complete.');
 }

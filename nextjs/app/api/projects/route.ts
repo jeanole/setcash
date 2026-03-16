@@ -52,6 +52,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  // Block demo accounts from creating projects
+  if (session.user.isDemoAccount && session.user.role !== 'superadmin') {
+    return NextResponse.json({ error: 'Demo accounts cannot create projects.' }, { status: 403 });
+  }
+
   try {
     const body = await request.json();
     const validated = createProjectSchema.parse(body);

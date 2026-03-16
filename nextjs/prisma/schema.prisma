@@ -45,6 +45,7 @@ model User {
   emailVerified DateTime?
   isSuperAdmin  Boolean   @default(false)
   isActive      Boolean   @default(true)
+  isDemoAccount Boolean   @default(false)
   createdAt     DateTime  @default(now())
 
   username      String?   @unique
@@ -66,6 +67,7 @@ model Project {
   legacyId  Int? @unique
   name      String
   subtitle  String?
+  isExample Boolean  @default(false)
   createdAt DateTime @default(now())
 
   members       ProjectMember[]

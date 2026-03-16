@@ -15,6 +15,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  // Block demo accounts from switching projects
+  if (session.user.isDemoAccount && session.user.role !== 'superadmin') {
+    return NextResponse.json({ error: 'Demo accounts are locked to the Example Project.' }, { status: 403 });
+  }
+
   try {
     const body = await request.json();
     const { projectId } = switchSchema.parse(body);
