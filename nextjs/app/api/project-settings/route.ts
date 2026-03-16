@@ -112,6 +112,11 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: 'No project selected' }, { status: 400 });
     }
 
+    // Block demo accounts from modifying project settings
+    if (session.user.isDemoAccount && session.user.role !== 'superadmin') {
+      return NextResponse.json({ error: 'Demo accounts cannot modify project settings.' }, { status: 403 });
+    }
+
     // Only admin, owner, or superadmin may write project settings
     const role = session.user.role;
     if (role !== 'admin' && role !== 'superadmin') {

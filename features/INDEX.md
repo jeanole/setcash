@@ -1,6 +1,6 @@
 # SetCash — Project Index
 
-**Next Available IDs:** PROJ-21 · BUG-84 · CR-25
+**Next Available IDs:** PROJ-25 · BUG-84 · CR-30
 
 
 | ID | Type | Title | Status | Priority | Feature | Date |
@@ -39,7 +39,7 @@
 | [BUG-10](BUG-10-hardcoded-isadmin-exposes-admin-ui.md) | Bug | Hardcoded isAdmin Flag Exposes Admin UI to All Users | Resolved | Critical | PROJ-7 | 2026-03-04 |
 | [BUG-11](BUG-11-missing-rate-limiting.md) | Bug | Missing Rate Limiting on Bill Creation and Re-analysis | Resolved | Medium | PROJ-7 | 2026-03-04 |
 | [PROJ-14](PROJ-14-spending-overview.md) | Feature | Spending Overview | In Progress | — | PROJ-7, PROJ-9 | 2026-03-04 |
-| [PROJ-15](PROJ-15-vgeld-advance-money.md) | Feature | V-Geld (Advance Money) | In Review | — | PROJ-7 | 2026-03-04 |
+| [PROJ-15](PROJ-15-vgeld-advance-money.md) | Feature | V-Geld (Advance Money) | Change Requested | — | PROJ-7 | 2026-03-04 |
 | [PROJ-16](PROJ-16-notifications-system.md) | Feature | Notifications System | In Progress | — | PROJ-5, PROJ-10 | 2026-03-04 |
 | [PROJ-17](PROJ-17-super-admin.md) | Feature | Super-Admin | Change Requested | — | PROJ-5, PROJ-10 | 2026-03-04 |
 | [CR-8](CR-8-create-user-button-super-admin.md) | CR | Add Create User Button to Super Admin Users Tab | Deployed | Medium | PROJ-17 | 2026-03-04 |
@@ -132,3 +132,12 @@
 | [BUG-82](BUG-82-categories-motives-get-returns-403-not-404.md) | Bug | Motive/Category GET Endpoints Return 403 Instead of 404 for Non-Members | Resolved | Low | PROJ-9 | 2026-03-14 |
 | [BUG-83](BUG-83-invite-endpoint-no-rate-limiting.md) | Bug | No Rate Limiting on Project Invite Endpoint — Email Spam Risk | Resolved | Low | PROJ-10 | 2026-03-14 |
 | CR-24 | CR | AI Log Viewer in AI Analysis Settings | Deployed | Medium | PROJ-19 | 2026-03-15 |
+| CR-25 | CR | Any User Can Create Transfer; Admin Confirms; Show Confirmed By | Pending Review | Medium | PROJ-15 | 2026-03-15 |
+| [PROJ-21](PROJ-21-brand-design-system.md) | Feature | Brand & Design System | In Progress | Medium | — | 2026-03-15 |
+| CR-26 | CR | SetCash Brand & Logo Style Specification | Pending Review | Medium | PROJ-21 | 2026-03-15 |
+| [PROJ-22](PROJ-22-demo-test-account.md) | Feature | Demo / Test Account | In Progress | Medium | PROJ-5, PROJ-10 | 2026-03-16 |
+| CR-27 | CR | Demo / Test Account with Restricted Access | Pending Review | Medium | PROJ-22 | 2026-03-16 |
+| [PROJ-23](PROJ-23-visit-analytics-demo-tracking.md) | Feature | Visit Analytics & Demo Usage Tracking | Planned | Medium | PROJ-22, PROJ-5 | 2026-03-16 |
+| CR-28 | CR | Insights into Site Visits and Demo Usage | Pending Review | Medium | PROJ-23 | 2026-03-16 |
+| [PROJ-24](PROJ-24-upload-limits-project-quotas.md) | Feature | Upload Limits & Project Quotas | In Progress | Medium | PROJ-7, PROJ-17 | 2026-03-16 |
+| CR-29 | CR | Upload Limits per Project for Paid Tier Foundation | Pending Review | Medium | PROJ-24 | 2026-03-16 |

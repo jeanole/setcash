@@ -20,19 +20,19 @@ export default function SetupGuide({ title, children, defaultOpen = false }: Set
   });
 
   return (
-    <div className="bg-indigo-50/60 border border-indigo-100 rounded-lg px-4 py-3">
+    <div className="bg-[var(--vb-accent-light)] border border-[var(--vb-accent)] rounded-lg px-4 py-3">
       <button
         type="button"
         id={ids.button}
         aria-expanded={open}
         aria-controls={ids.region}
         onClick={() => setOpen((v) => !v)}
-        className="text-sm font-medium text-indigo-700 flex items-center gap-2 w-full text-left"
+        className="text-sm font-semibold text-zinc-800 flex items-center gap-2 w-full text-left uppercase tracking-wider"
       >
         {open ? (
-          <ChevronDown className="w-4 h-4 text-indigo-500 transition-transform duration-200 shrink-0" />
+          <ChevronDown className="w-4 h-4 text-zinc-600 transition-transform duration-200 shrink-0" />
         ) : (
-          <ChevronRight className="w-4 h-4 text-indigo-500 transition-transform duration-200 shrink-0" />
+          <ChevronRight className="w-4 h-4 text-zinc-600 transition-transform duration-200 shrink-0" />
         )}
         {title}
       </button>

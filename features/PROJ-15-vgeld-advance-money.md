@@ -1,6 +1,6 @@
 # PROJ-15: V-Geld (Advance Money)
 
-## Status: Planned
+## Status: Change Requested
 **Created:** 2026-03-04
 **Last Updated:** 2026-03-04
 
@@ -861,3 +861,99 @@ None.
 
 ## Deployment
 _To be added by /deploy_
+
+## Tech Design Revision (CR-25) — Transfer Roles + Confirm Workflow
+
+### What Changes vs. Original Design
+
+The original design had a single-step model: admin creates a transfer, it is immediately final. CR-25 introduces a two-step workflow — any project member creates, an admin confirms — plus an audit trail field (`confirmedBy`).
+
+### Component Structure (Revised Sections)
+
+```
+V-Geld Page
+├── Page Header
+│   ├── Title "V-Geld"
+│   └── "Add V-Geld Transfer" Button ← NOW all users (was admin-only)
+│
+├── Transfers Table
+│   ├── Date | Amount | From | [To - admin only] | Created By
+│   └── NEW: "Confirmed By" column
+│       ├── Unconfirmed → "—" + "Confirm" button (admin only)
+│       └── Confirmed   → confirming admin's email; no button
+│
+└── Admin Summary Table (unchanged)
+
+Add Transfer Modal
+├── Was: admin-only
+└── Now: all project members (fields unchanged)
+```
+
+### Data Model (Revised)
+
+**`Vgeld` record — one new field:**
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `confirmedBy` | nullable string | `null` = not yet confirmed; email = admin who confirmed |
+
+- Requires a **Prisma migration** (existing rows default to `null` — no data loss)
+- GET `/api/vgeld` response gains `confirmedBy: string | null` on every item
+
+### API Changes
+
+| Endpoint | Before | After |
+|----------|--------|-------|
+| `POST /api/vgeld` | Admin-only | Any project member |
+| `GET /api/vgeld` | Returns `{id, date, amount, from, to, createdBy}` | Adds `confirmedBy` field |
+| `PATCH /api/vgeld/[id]/confirm` | Doesn't exist | **New.** Admin-only. Sets `confirmedBy = admin's email`. |
+
+### Files to Modify
+
+| File | Change |
+|------|--------|
+| `nextjs/prisma/schema.prisma` | Add `confirmedBy String?` to `Vgeld` model |
+| `nextjs/prisma/migrations/` | New migration (auto-generated) |
+| `nextjs/app/api/vgeld/route.ts` | Remove admin guard on POST; add `confirmedBy` to GET response |
+| `nextjs/app/api/vgeld/[id]/route.ts` | Add PATCH handler for confirm action |
+| `nextjs/app/(protected)/vgeld/page.tsx` | All-user modal button; "Confirmed By" column; admin Confirm button per row |
+
+### Tech Decisions
+
+| Decision | Choice | Why |
+|----------|--------|-----|
+| PATCH vs POST for confirm | `PATCH /[id]/confirm` | Semantically correct partial update; shares file with existing DELETE |
+| `confirmedBy` stores email, not user ID | Email string | Consistent with existing `createdBy` pattern; no join needed to display |
+| No separate status field | Use `confirmedBy IS NULL` as unconfirmed signal | Balance calc unchanged regardless; separate status would add complexity for no benefit |
+
+---
+
+## Change Requests
+
+### CR-25: Any User Can Create Transfer; Admin Confirms; Show Confirmed By
+**Requested:** 2026-03-15 | **Priority:** Medium | **Status:** Pending Review
+
+**Current Behavior:**
+- Only admins can create V-Geld transfers (POST /api/vgeld is admin-only)
+- There is no confirmation step — transfers are immediately final
+- No "confirmed by" field is stored or displayed
+
+**Desired Behavior:**
+- Any project member (user or admin) can create a transfer
+- Admins can confirm a transfer via a "Confirm" button on each row in the admin table
+- The `confirmedBy` field records the email of the admin who confirmed it
+- "Confirmed By" is displayed on the transfer row (both user view and admin view)
+
+**Rationale:**
+Users need to be able to initiate their own advance money requests; admins then review and confirm. This adds a lightweight approval step without changing the balance calculation semantics.
+
+**Proposed Acceptance Criteria:**
+- [ ] POST /api/vgeld is accessible to all authenticated project members (not admin-only)
+- [ ] New PATCH /api/vgeld/[id]/confirm endpoint: admin-only, sets `confirmedBy = currentUser.email`
+- [ ] `Vgeld` schema gains a `confirmedBy String?` field (nullable — null = not yet confirmed)
+- [ ] Admin table shows a "Confirm" button on rows where `confirmedBy` is null
+- [ ] After confirmation, "Confirm" button is replaced by the confirming admin's email (or name)
+- [ ] User transfer history table shows a "Confirmed By" column (dash if not yet confirmed)
+- [ ] Balance calculation is unchanged (all transfers count regardless of confirmed status)
+
+**Resolution:** Pending

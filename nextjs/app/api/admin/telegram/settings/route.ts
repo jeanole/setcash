@@ -117,6 +117,7 @@ export async function PUT(req: NextRequest) {
         );
       }
       // Validate against Telegram API before storing
+      let botUsername: string | undefined;
       try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000);
@@ -135,6 +136,7 @@ export async function PUT(req: NextRequest) {
             { status: 400 }
           );
         }
+        botUsername = tgData.result?.username as string | undefined;
       } catch (err: any) {
         if (err?.name === 'AbortError') {
           return NextResponse.json(
@@ -156,6 +158,16 @@ export async function PUT(req: NextRequest) {
           update: { value: encrypted },
         })
       );
+      // Store bot username for deep link generation
+      if (botUsername) {
+        upserts.push(
+          prisma.projectSettings.upsert({
+            where: { projectId_key: { projectId, key: 'telegramBotUsername' } },
+            create: { projectId, key: 'telegramBotUsername', value: botUsername },
+            update: { value: botUsername },
+          })
+        );
+      }
     }
     // If starts with '...', it's the masked value echoed back — don't overwrite
   }

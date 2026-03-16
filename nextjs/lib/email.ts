@@ -81,7 +81,7 @@ export async function sendPasswordResetEmail(email: string, resetUrl: string): P
                     <div style="text-align:center;margin:32px 0;">
                       <a
                         href="${resetUrl}"
-                        style="display:inline-block;background-color:#6366f1;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;padding:12px 32px;border-radius:8px;"
+                        style="display:inline-block;background-color:#FACC15;color:#0f172a;font-size:15px;font-weight:700;text-decoration:none;padding:12px 32px;border-radius:8px;"
                       >
                         Reset Password
                       </a>
@@ -91,7 +91,7 @@ export async function sendPasswordResetEmail(email: string, resetUrl: string): P
                     </p>
                     <p style="color:#94a3b8;font-size:12px;margin:16px 0 0 0;word-break:break-all;">
                       Or copy this link into your browser:<br />
-                      <a href="${resetUrl}" style="color:#6366f1;">${resetUrl}</a>
+                      <a href="${resetUrl}" style="color:#b45309;">${resetUrl}</a>
                     </p>
                   </td>
                 </tr>
@@ -179,7 +179,7 @@ export async function sendVerificationEmail(email: string, verifyUrl: string): P
                     <div style="text-align:center;margin:32px 0;">
                       <a
                         href="${verifyUrl}"
-                        style="display:inline-block;background-color:#6366f1;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;padding:12px 32px;border-radius:8px;"
+                        style="display:inline-block;background-color:#FACC15;color:#0f172a;font-size:15px;font-weight:700;text-decoration:none;padding:12px 32px;border-radius:8px;"
                       >
                         Verify Email
                       </a>
@@ -189,7 +189,7 @@ export async function sendVerificationEmail(email: string, verifyUrl: string): P
                     </p>
                     <p style="color:#94a3b8;font-size:12px;margin:16px 0 0 0;word-break:break-all;">
                       Or copy this link into your browser:<br />
-                      <a href="${verifyUrl}" style="color:#6366f1;">${verifyUrl}</a>
+                      <a href="${verifyUrl}" style="color:#b45309;">${verifyUrl}</a>
                     </p>
                   </td>
                 </tr>
@@ -291,7 +291,7 @@ export async function sendInvitationEmail(
                     <div style="text-align:center;margin:32px 0;">
                       <a
                         href="${inviteUrl}"
-                        style="display:inline-block;background-color:#6366f1;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;padding:12px 32px;border-radius:8px;"
+                        style="display:inline-block;background-color:#FACC15;color:#0f172a;font-size:15px;font-weight:700;text-decoration:none;padding:12px 32px;border-radius:8px;"
                       >
                         Accept Invitation
                       </a>
@@ -301,7 +301,7 @@ export async function sendInvitationEmail(
                     </p>
                     <p style="color:#94a3b8;font-size:12px;margin:16px 0 0 0;word-break:break-all;">
                       Or copy this link into your browser:<br />
-                      <a href="${inviteUrl}" style="color:#6366f1;">${inviteUrl}</a>
+                      <a href="${inviteUrl}" style="color:#b45309;">${inviteUrl}</a>
                     </p>
                   </td>
                 </tr>
@@ -402,7 +402,7 @@ export async function sendPlatformInviteEmail(
                     <div style="text-align:center;margin:32px 0;">
                       <a
                         href="${signupUrl}"
-                        style="display:inline-block;background-color:#6366f1;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;padding:12px 32px;border-radius:8px;"
+                        style="display:inline-block;background-color:#FACC15;color:#0f172a;font-size:15px;font-weight:700;text-decoration:none;padding:12px 32px;border-radius:8px;"
                       >
                         Create Account
                       </a>
@@ -412,7 +412,7 @@ export async function sendPlatformInviteEmail(
                     </p>
                     <p style="color:#94a3b8;font-size:12px;margin:16px 0 0 0;word-break:break-all;">
                       Or copy this link into your browser:<br />
-                      <a href="${signupUrl}" style="color:#6366f1;">${signupUrl}</a>
+                      <a href="${signupUrl}" style="color:#b45309;">${signupUrl}</a>
                     </p>
                   </td>
                 </tr>

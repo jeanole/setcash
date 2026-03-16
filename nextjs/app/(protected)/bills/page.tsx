@@ -8,6 +8,7 @@ import AppShell from '@/components/layout/AppShell';
 import BillList from '@/components/bills/BillList';
 import BillFilters from '@/components/bills/BillFilters';
 import Pagination from '@/components/ui/Pagination';
+import QuotaBanner from '@/components/bills/QuotaBanner';
 import { useBills, useFilteredBills } from '@/lib/hooks/useBills';
 import { FilterState, SortState, Bill } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -71,6 +72,7 @@ export default function BillsPage() {
 
   const { data: session } = useSession();
   const isAdmin = session?.user?.role === 'admin' || session?.user?.role === 'owner' || session?.user?.role === 'superadmin';
+  const isExampleProject = session?.user?.isExampleProject ?? false;
   const currentUserEmail = session?.user?.email ?? undefined;
 
   const handleDelete = async (id: string) => {
@@ -104,18 +106,34 @@ export default function BillsPage() {
             </span>
           )}
         </div>
-        <CinematicButton>
-          <button
-            onClick={() => router.push('/bills/new')}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-[var(--vb-accent)] text-white font-medium rounded-lg hover:bg-[var(--vb-accent-hover)] active:scale-[0.97] transition-all shadow-sm"
-          >
+        {isExampleProject ? (
+          <span className="inline-flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-400 font-medium rounded-lg cursor-not-allowed" title="Not available in Example Project">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
             Upload New Bill
-          </button>
-        </CinematicButton>
+          </span>
+        ) : (
+          <CinematicButton>
+            <button
+              onClick={() => router.push('/bills/new')}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-[var(--vb-accent)] text-white font-medium rounded-lg hover:bg-[var(--vb-accent-hover)] transition-all btn-brutal"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Upload New Bill
+            </button>
+          </CinematicButton>
+        )}
       </div>
+
+      {/* Example project banner */}
+      {isExampleProject && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-700">
+          You are viewing the Example Project. Uploading bills is not available here &mdash; join or create a real project to start tracking expenses.
+        </div>
+      )}
 
       {/* Result message */}
       {resultMessage && (
@@ -175,6 +193,9 @@ export default function BillsPage() {
         pageSize={BILLS_PER_PAGE}
         onPageChange={setPage}
       />
+
+      {/* Quota banner — only for non-example projects */}
+      {!isExampleProject && <QuotaBanner />}
     </div>
   );
 }

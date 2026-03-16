@@ -228,7 +228,7 @@ export default function BillImageUpload({
         className={cn(
           'relative border-2 border-dashed rounded-xl p-8 text-center transition-colors',
           isDragging
-            ? 'border-[#6366f1] bg-indigo-50'
+            ? 'border-[var(--vb-accent)] bg-indigo-50'
             : 'border-slate-200 hover:border-slate-300 bg-slate-50'
         )}
       >
@@ -244,7 +244,7 @@ export default function BillImageUpload({
         <svg
           className={cn(
             'w-12 h-12 mx-auto mb-3 transition-colors',
-            isDragging ? 'text-[#6366f1]' : 'text-slate-300'
+            isDragging ? 'text-[var(--vb-accent)]' : 'text-slate-300'
           )}
           fill="none"
           stroke="currentColor"

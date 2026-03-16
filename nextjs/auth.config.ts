@@ -38,6 +38,8 @@ export const authConfig = {
         session.user.currentProjectId = token.currentProjectId as string | null;
         session.user.currentProjectRole = token.currentProjectRole as 'user' | 'admin' | 'owner' | null;
         session.user.currentProjectName = token.currentProjectName as string | null;
+        session.user.isExampleProject = (token.isExampleProject as boolean) ?? false;
+        session.user.isDemoAccount = (token.isDemoAccount as boolean) ?? false;
       }
       return session;
     },

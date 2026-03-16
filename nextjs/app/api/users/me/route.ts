@@ -56,6 +56,11 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Block demo accounts from modifying profile settings
+    if (sessionUser.isDemoAccount && sessionUser.role !== 'superadmin') {
+      return NextResponse.json({ error: 'Demo accounts cannot modify profile settings.' }, { status: 403 });
+    }
+
     const body = await req.json();
 
     const validation = UpdateProfileSchema.safeParse(body);

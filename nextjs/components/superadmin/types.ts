@@ -8,6 +8,8 @@ export interface Project {
   subtitle: string | null;
   createdAt: string;
   memberCount: number;
+  uploadLimit: number | null;
+  billCount: number;
 }
 
 export interface User {
@@ -35,4 +37,4 @@ export interface PositionWithCount extends Position {
   memberCount: number;
 }
 
-export type TabType = 'projects' | 'users';
+export type TabType = 'projects' | 'users' | 'config';

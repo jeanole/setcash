@@ -87,7 +87,7 @@ export default function ConfirmationDialog({
               'px-4 py-2 font-medium rounded-lg transition-colors',
               isDestructive
                 ? 'bg-rose-600 text-white hover:bg-rose-700'
-                : 'bg-[#6366f1] text-white hover:bg-[#4f46e5]'
+                : 'bg-[var(--vb-accent)] text-white hover:bg-[var(--vb-accent-hover)]'
             )}
           >
             {confirmText}

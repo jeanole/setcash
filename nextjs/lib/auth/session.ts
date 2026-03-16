@@ -9,6 +9,7 @@ export type SessionUser = {
   email: string;
   role: 'user' | 'admin' | 'owner' | 'superadmin';
   currentProjectId: string | null;
+  isDemoAccount: boolean;
 };
 
 // ---------------------------------------------------------------------------
@@ -28,5 +29,6 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
     email: session.user.email,
     role: session.user.role ?? 'user',
     currentProjectId: session.user.currentProjectId ?? null,
+    isDemoAccount: session.user.isDemoAccount ?? false,
   };
 }

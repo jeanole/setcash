@@ -11,6 +11,10 @@ WORKDIR /app
 
 COPY . .
 
+# Build arg for public env vars that must be baked in at build time
+ARG NEXT_PUBLIC_TURNSTILE_SITE_KEY
+ENV NEXT_PUBLIC_TURNSTILE_SITE_KEY=$NEXT_PUBLIC_TURNSTILE_SITE_KEY
+
 # Set build-time env vars (values don't matter for build, only for runtime)
 ENV DATABASE_URL=postgresql://dummy:dummy@localhost:5432/dummy
 ENV NEXTAUTH_SECRET=dummy-build-secret-not-for-production-use-only

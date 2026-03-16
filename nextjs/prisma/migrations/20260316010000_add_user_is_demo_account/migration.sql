@@ -1,0 +1,1 @@
+ALTER TABLE "User" ADD COLUMN "isDemoAccount" BOOLEAN NOT NULL DEFAULT false;

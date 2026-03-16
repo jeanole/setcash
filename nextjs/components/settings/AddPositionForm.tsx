@@ -34,7 +34,7 @@ export default function AddPositionForm({ onAdd }: AddPositionFormProps) {
     return (
       <button
         onClick={() => setIsExpanded(true)}
-        className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#6366f1] hover:text-[#6366f1] hover:bg-indigo-50 rounded-lg transition-colors"
+        className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-[var(--vb-accent)] hover:text-[var(--vb-accent)] hover:bg-[var(--vb-accent-light)] rounded-lg transition-colors"
       >
         <Plus className="w-4 h-4" />
         Add Position
@@ -51,7 +51,7 @@ export default function AddPositionForm({ onAdd }: AddPositionFormProps) {
         placeholder="Position name"
         maxLength={50}
         autoFocus
-        className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-[#6366f1]/20 focus:border-[#6366f1] outline-none"
+        className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-[var(--vb-accent)]/20 focus:border-[var(--vb-accent)] outline-none"
       />
       <button
         type="submit"
@@ -60,7 +60,7 @@ export default function AddPositionForm({ onAdd }: AddPositionFormProps) {
           'inline-flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
           !name.trim() || isSubmitting
             ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-            : 'bg-[#6366f1] text-white hover:bg-[#4f46e5]'
+            : 'bg-[var(--vb-accent)] text-white hover:bg-[var(--vb-accent-hover)]'
         )}
       >
         {isSubmitting && <Loader2 className="w-3 h-3 animate-spin" />}

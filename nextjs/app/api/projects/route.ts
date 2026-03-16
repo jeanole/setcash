@@ -52,6 +52,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  // Block demo accounts from creating projects
+  if (session.user.isDemoAccount && session.user.role !== 'superadmin') {
+    return NextResponse.json({ error: 'Demo accounts cannot create projects.' }, { status: 403 });
+  }
+
   try {
     const body = await request.json();
     const validated = createProjectSchema.parse(body);
@@ -102,6 +107,21 @@ export async function POST(request: NextRequest) {
           budget: 0,
         },
       });
+
+      // Apply defaultUploadLimit from SystemConfig if set
+      const defaultLimitConfig = await tx.systemConfig.findUnique({
+        where: { key: 'defaultUploadLimit' },
+      });
+      if (defaultLimitConfig?.value != null) {
+        const defaultLimit = parseInt(defaultLimitConfig.value, 10);
+        if (Number.isFinite(defaultLimit) && defaultLimit > 0) {
+          await tx.project.update({
+            where: { id: newProject.id },
+            data: { uploadLimit: defaultLimit },
+          });
+          newProject.uploadLimit = defaultLimit;
+        }
+      }
 
       return newProject;
     });

@@ -30,6 +30,11 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Block demo accounts from changing passwords
+    if (sessionUser.isDemoAccount && sessionUser.role !== 'superadmin') {
+      return NextResponse.json({ error: 'Demo accounts cannot change passwords.' }, { status: 403 });
+    }
+
     // Rate limit by user email
     const { success } = await passwordChangeLimiter.limit(sessionUser.email);
     if (!success) {

@@ -18,6 +18,7 @@ interface ProfileModalProps {
     firstName: string | null;
     lastName: string | null;
   }) => void;
+  isDemoAccount?: boolean;
 }
 
 export default function ProfileModal({
@@ -25,6 +26,7 @@ export default function ProfileModal({
   onClose,
   user,
   onProfileUpdated,
+  isDemoAccount = false,
 }: ProfileModalProps) {
   // Profile section state
   const [username, setUsername] = useState(user.username ?? '');
@@ -200,11 +202,11 @@ export default function ProfileModal({
   if (!isOpen) return null;
 
   const inputClass =
-    'w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#6366f1] focus:border-[#6366f1]';
+    'w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--vb-accent)] focus:border-[var(--vb-accent)]';
   const readOnlyInputClass =
     'w-full px-3 py-2 border border-slate-300 rounded-md bg-slate-50 text-slate-400 cursor-not-allowed';
   const primaryBtnClass =
-    'px-4 py-2 bg-[#6366f1] text-white rounded-md font-medium hover:bg-[#4f46e5] disabled:opacity-50 transition-colors';
+    'px-4 py-2 bg-[var(--vb-accent)] text-white rounded-md font-medium hover:bg-[var(--vb-accent-hover)] disabled:opacity-50 transition-colors';
   const labelClass = 'block text-sm font-medium text-slate-700 mb-1';
   const errorBannerClass =
     'p-3 bg-rose-50 border border-rose-200 rounded-md text-sm text-rose-600';
@@ -224,7 +226,7 @@ export default function ProfileModal({
           <div className="flex items-center gap-2">
             <User className="w-5 h-5 text-indigo-500" />
             <h2 id="profile-modal-title" className="text-lg font-semibold text-slate-900">
-              Edit Profile
+              {isDemoAccount ? 'Profile' : 'Edit Profile'}
             </h2>
           </div>
           <button
@@ -238,6 +240,37 @@ export default function ProfileModal({
         </div>
 
         {/* Scrollable body */}
+        {isDemoAccount ? (
+          <div className="p-6">
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-md text-sm text-amber-700 mb-4">
+              This is a demo account. Profile editing is disabled.
+            </div>
+            <div className="space-y-3">
+              <div>
+                <p className="text-sm font-medium text-slate-700">Email</p>
+                <p className="text-sm text-slate-500">{user.email}</p>
+              </div>
+              {user.username && (
+                <div>
+                  <p className="text-sm font-medium text-slate-700">Username</p>
+                  <p className="text-sm text-slate-500">{user.username}</p>
+                </div>
+              )}
+              {(user.firstName || user.lastName) && (
+                <div>
+                  <p className="text-sm font-medium text-slate-700">Name</p>
+                  <p className="text-sm text-slate-500">{[user.firstName, user.lastName].filter(Boolean).join(' ')}</p>
+                </div>
+              )}
+              {user.mobile && (
+                <div>
+                  <p className="text-sm font-medium text-slate-700">Mobile</p>
+                  <p className="text-sm text-slate-500">{user.mobile}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
         <div className="p-6 overflow-y-auto flex-1">
           {/* ── Section 1: Profile Info ── */}
           <form onSubmit={handleProfileSave} noValidate>
@@ -428,6 +461,7 @@ export default function ProfileModal({
             </form>
           </div>
         </div>
+        )}
       </div>
     </div>
   );

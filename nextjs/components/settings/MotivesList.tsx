@@ -155,7 +155,7 @@ export default function MotivesList({
                   onKeyDown={handleKeyDown}
                   autoFocus
                   maxLength={100}
-                  className="flex-1 px-2 py-1 text-sm border border-slate-300 rounded focus:outline-none focus:ring-2 focus:ring-[#6366f1]"
+                  className="flex-1 px-2 py-1 text-sm border border-slate-300 rounded focus:outline-none focus:ring-2 focus:ring-[var(--vb-accent)]"
                   placeholder="Motive name"
                 />
                 <input
@@ -165,7 +165,7 @@ export default function MotivesList({
                   onKeyDown={handleBudgetKeyDown}
                   min={0}
                   step={0.01}
-                  className="w-28 px-2 py-1 text-sm border border-slate-300 rounded focus:outline-none focus:ring-2 focus:ring-[#6366f1]"
+                  className="w-28 px-2 py-1 text-sm border border-slate-300 rounded focus:outline-none focus:ring-2 focus:ring-[var(--vb-accent)]"
                   placeholder="Budget"
                 />
                 <button
@@ -190,7 +190,7 @@ export default function MotivesList({
                       className={`text-left ${
                         isProtected(motive.name)
                           ? 'cursor-default font-medium text-slate-600'
-                          : 'cursor-pointer hover:text-[#6366f1] font-medium text-slate-700'
+                          : 'cursor-pointer hover:text-[var(--vb-accent)] font-medium text-slate-700'
                       }`}
                       disabled={isProtected(motive.name)}
                     >
@@ -209,7 +209,7 @@ export default function MotivesList({
                     className={`text-sm ${
                       isProtected(motive.name)
                         ? 'text-slate-400 cursor-default'
-                        : 'text-slate-600 hover:text-[#6366f1] cursor-pointer'
+                        : 'text-slate-600 hover:text-[var(--vb-accent)] cursor-pointer'
                     }`}
                   >
                     {formatCurrency(motive.budget)}
@@ -239,7 +239,7 @@ export default function MotivesList({
               placeholder="Motive name"
               maxLength={100}
               autoFocus
-              className="flex-1 px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#6366f1]"
+              className="flex-1 px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--vb-accent)]"
             />
             <input
               type="number"
@@ -248,7 +248,7 @@ export default function MotivesList({
               placeholder="Budget (€)"
               min={0}
               step={0.01}
-              className="w-28 px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#6366f1]"
+              className="w-28 px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--vb-accent)]"
             />
             <button
               type="submit"
@@ -271,7 +271,7 @@ export default function MotivesList({
         ) : (
           <button
             onClick={() => setIsAdding(true)}
-            className="flex items-center gap-2 w-full px-4 py-3 text-sm font-medium text-[#6366f1] bg-indigo-50 rounded-lg border border-dashed border-indigo-200 hover:bg-indigo-100 transition-colors"
+            className="flex items-center gap-2 w-full px-4 py-3 text-sm font-medium text-[var(--vb-accent)] bg-[var(--vb-accent-light)] rounded-lg border border-dashed border-[var(--vb-accent)] hover:bg-[rgba(250,204,21,0.14)] transition-colors"
           >
             <Plus className="w-4 h-4" />
             Add Motive

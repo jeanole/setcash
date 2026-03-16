@@ -38,8 +38,8 @@ export async function POST(req: Request) {
   try {
     const user = await prisma.user.findUnique({ where: { email } });
 
-    // Only proceed if user exists and has a password (not Google-only)
-    if (user && user.passwordHash) {
+    // Only proceed if user exists, has a password, and is not a demo account
+    if (user && user.passwordHash && !user.isDemoAccount) {
       // Delete any existing tokens for this email
       await prisma.passwordResetToken.deleteMany({ where: { email } });
 

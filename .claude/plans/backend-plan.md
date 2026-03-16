@@ -1,149 +1,108 @@
-# Backend Implementation Plan — CR-23
+# Backend Implementation Plan — CR-25
 
 ## Feature
-CR-23: Enrich Telegram Upload Response with OCR Fields, Errors, and Bill Link
-Spec: `features/PROJ-12-integrations.md` → Change Requests → CR-23
+CR-25: Any User Can Create Transfer; Admin Confirms; Show Confirmed By
+Feature spec: `features/PROJ-15-vgeld-advance-money.md`
+Tech design revision: "## Tech Design Revision (CR-25)" in same file
 
 ## Context Summary
-- Telegram handlers live in `nextjs/lib/telegram/handlers.ts`
-- `processSinglePhoto()` and `processMediaGroup()` both: download → create bill → fire-and-forget OCR → send static ACK
-- `maybeRunOcr()` calls `runOcrJob()` fire-and-forget, no way to send results back
-- `runOcrJob()` in `lib/ocr.ts` updates bill with `ocrStatus`, `ocrFields`, and writes extracted values to bill fields
-- Bot messages are currently in German; OCR follow-up should be in English
-- `NEXTAUTH_URL` env var holds the app base URL
+- V-Geld feature (PROJ-15) is fully implemented and passed QA Round 4
+- Current model: admin-only creates transfers, no confirmation step
+- Existing files:
+  - `nextjs/app/api/vgeld/route.ts` — GET (list) + POST (create, admin-only)
+  - `nextjs/app/api/vgeld/[id]/route.ts` — DELETE (admin-only)
+  - `nextjs/app/api/vgeld/analysis/route.ts` — GET summary (no change needed)
+  - `nextjs/app/api/vgeld/balance/route.ts` — GET balance (no change needed)
+  - `nextjs/prisma/schema.prisma` — `Vgeld` model (lines 257-271)
 
 ## User Decisions
-- **Language:** OCR follow-up messages in English (existing German messages unchanged)
-- **Bill link:** Always include when `NEXTAUTH_URL` is set
+- Balance calculation is unchanged (all transfers count regardless of confirmed status)
+- No separate status field — `confirmedBy IS NULL` = unconfirmed
+- `confirmedBy` stores admin email (consistent with `createdBy` pattern)
+- PATCH method for confirm endpoint
+- Priority: Medium
 
 ## Open Bug Reports to Address
-None for PROJ-12
+None.
 
-## Files to Modify
+## Step 1: Schema Change
 
-### 1. `nextjs/lib/telegram/handlers.ts` — Main changes
+Add one field to the existing `Vgeld` model in `nextjs/prisma/schema.prisma`:
 
-**Modify `maybeRunOcr()`** to accept `bot` and `chatId`, and send follow-up after OCR:
+```prisma
+confirmedBy String?   // Email of admin who confirmed; null = unconfirmed
+```
 
-```typescript
-async function maybeRunOcr(
-  billId: string,
-  projectId: string,
-  bot: TelegramBot,
-  chatId: number
-): Promise<void> {
-  const settings = await getProjectSettings(projectId);
-  if (!settings.ocrEnabled) return;
+Place it after the `createdBy` field (line 265). Then generate a migration:
+```bash
+cd nextjs && npx prisma migrate dev --name add-vgeld-confirmed-by
+```
 
-  try {
-    const { runOcrJob } = await import('../ocr');
-    // Await OCR, then send follow-up — entire block is fire-and-forget from caller
-    runOcrJob(billId, projectId)
-      .then(() => sendOcrFollowUp(bot, chatId, billId))
-      .catch((e: Error) => {
-        console.error(`[OCR] Unhandled error for bill #${billId}:`, e.message);
-        sendOcrFailureMessage(bot, chatId, billId, e.message);
-      });
-  } catch (e) {
-    console.error('[Telegram] Failed to import OCR module:', (e as Error).message);
-  }
+## Step 2: Modify GET /api/vgeld
+
+**File:** `nextjs/app/api/vgeld/route.ts`
+
+In the `mapped` array (lines 60-67), add `confirmedBy` to the response object:
+```
+confirmedBy: t.confirmedBy ?? null,
+```
+
+No auth changes needed — GET already allows all project members.
+
+## Step 3: Modify POST /api/vgeld
+
+**File:** `nextjs/app/api/vgeld/route.ts`
+
+Change the authorization check (lines 89-104) from admin-only to any project member:
+
+**Current logic (remove):**
+```
+const isSuperAdmin = session.user.role === 'superadmin';
+const isAdmin = membership?.role === 'admin' || membership?.role === 'owner';
+if (!isSuperAdmin && !isAdmin) {
+  return 403 'Forbidden: admin access required';
 }
 ```
 
-**Add `sendOcrFollowUp()` function:**
-- Read bill from DB: `ocrStatus`, `ocrFields`, `vendor`, `date`, `item`, `type`, `brutto19`, `brutto7`, `brutto0`, `grossAmount`
-- If `ocrStatus === 'done'` and fields were written:
-  - Format each non-null extracted field as a line: `Vendor: REWE`, `Date: 14.03.2026`, `Amount: 24,50 €`, etc.
-  - Format amounts with 2 decimal places and `€` suffix
-  - Format date in `DD.MM.YYYY` locale format
-  - Skip null/empty fields
-- If `ocrStatus === 'failed'`:
-  - Read latest `OcrLog` for the bill to get `errorDetail`
-  - Send failure message with reason
-- If `ocrStatus === 'done'` but no fields written:
-  - Send "Analysis complete — no fields could be extracted"
-- Append bill link if `NEXTAUTH_URL` is set
-
-**Add `sendOcrFailureMessage()` function:**
-- Sends: `"⚠️ Analysis failed: {reason}"`
-- Appends bill link
-
-**Add `formatBillLink()` helper:**
-- Returns `{NEXTAUTH_URL}/bills/{billId}` if env var set, else `null`
-
-**Update initial ACK messages** in `processSinglePhoto()` and `processMediaGroup()`:
-- Include bill link in the ACK message (not just the follow-up)
-- Change OCR note from `"Beleganalyse läuft im Hintergrund."` to `"Analysing bill…"` (English, per user decision)
-- If OCR disabled: ACK still includes bill link, no follow-up
-
-**Update `maybeRunOcr()` call sites:**
-- `processSinglePhoto()`: pass `bot` and `msg.chat.id`
-- `processMediaGroup()`: pass `bot` and `chatId`
-
-### Message Format
-
-**Success (fields extracted):**
+**New logic (replace with):**
 ```
-✅ Analysis complete:
-Vendor: REWE
-Date: 14.03.2026
-Amount: 24,50 €
-Type: Kassenbon
-
-🔗 View bill: https://app.setcash.com/bills/abc123
+if (!membership && session.user.role !== 'superadmin') {
+  return 403 'Forbidden';
+}
 ```
 
-**Success (no fields):**
-```
-✅ Analysis complete — no fields could be extracted. Please fill in manually.
+This is the same pattern used in GET — any project member can create.
 
-🔗 View bill: https://app.setcash.com/bills/abc123
-```
+Do NOT set `confirmedBy` on creation — it stays null until admin confirms.
 
-**Failure:**
-```
-⚠️ Analysis failed: Invalid API key
+## Step 4: Add PATCH handler for confirm
 
-🔗 View bill: https://app.setcash.com/bills/abc123
-```
+**File:** `nextjs/app/api/vgeld/[id]/route.ts` — add alongside existing DELETE
 
-**Initial ACK (single photo, OCR enabled):**
-```
-✓ Foto empfangen – Beleg als Entwurf gespeichert.
-Analysing bill…
+**Auth:** Admin/owner/superadmin only (same pattern as DELETE)
+**Logic:**
+1. Verify session → 401
+2. Verify projectId → 400
+3. Verify membership with admin/owner role or superadmin → 403
+4. Find transfer by `id` WHERE `projectId` matches → 404 if not found
+5. If `transfer.confirmedBy` is already set → 400 "Transfer already confirmed"
+6. `prisma.vgeld.update({ where: { id }, data: { confirmedBy: session.user.email } })`
+7. Return `{ ok: true, confirmedBy: session.user.email }`
 
-🔗 View bill: https://app.setcash.com/bills/abc123
-```
+No request body needed — the only input is the URL param `id`.
 
-**Initial ACK (OCR disabled):**
-```
-✓ Foto empfangen – Beleg als Entwurf gespeichert.
-Bitte in SetCash vervollständigen.
-
-🔗 View bill: https://app.setcash.com/bills/abc123
-```
-
-## No New Files
-All changes in `handlers.ts`.
-
-## No Database Changes
-Reads existing bill fields and OcrLog — no schema modifications.
-
-## No New API Endpoints
-All logic is internal to the Telegram handler.
+## Files NOT Modified
+- `nextjs/app/api/vgeld/analysis/route.ts` — balance calculation unchanged
+- `nextjs/app/api/vgeld/balance/route.ts` — balance calculation unchanged
+- `nextjs/app/(protected)/vgeld/page.tsx` — frontend changes handled by /frontend
 
 ## Checklist
-- [ ] `maybeRunOcr()` accepts `bot` and `chatId`
-- [ ] `sendOcrFollowUp()` reads bill + formats extracted fields
-- [ ] `sendOcrFailureMessage()` reads OcrLog + sends error reason
-- [ ] `formatBillLink()` uses `NEXTAUTH_URL` env var
-- [ ] Bill link included in initial ACK message
-- [ ] Bill link included in follow-up message
-- [ ] Follow-up is async (fire-and-forget from handler perspective)
-- [ ] Skip null/empty fields in follow-up
-- [ ] Amounts formatted with 2 decimal places + €
-- [ ] Date formatted as DD.MM.YYYY
-- [ ] OCR-disabled path still includes bill link in ACK
-- [ ] Media group (album) path also sends follow-up
-- [ ] No changes to existing German ACK text (except OCR note → English)
-- [ ] TypeScript compiles: `npx tsc --noEmit`
+- [ ] Add `confirmedBy String?` to Vgeld model in schema.prisma
+- [ ] Run `npx prisma migrate dev --name add-vgeld-confirmed-by`
+- [ ] Modify GET /api/vgeld to include `confirmedBy` in response
+- [ ] Modify POST /api/vgeld to allow any project member (not admin-only)
+- [ ] Add PATCH handler in /api/vgeld/[id]/route.ts for confirm action
+- [ ] PATCH checks admin/owner/superadmin role
+- [ ] PATCH returns 400 if already confirmed
+- [ ] PATCH returns 404 if transfer not found in project
+- [ ] Verify TypeScript compiles (`npx tsc --noEmit`)

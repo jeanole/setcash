@@ -19,6 +19,8 @@ declare module 'next-auth' {
       currentProjectId: string | null;
       currentProjectRole: 'user' | 'admin' | 'owner' | null;
       currentProjectName: string | null;
+      isExampleProject: boolean;
+      isDemoAccount: boolean;
     };
   }
 }
@@ -31,6 +33,8 @@ declare module '@auth/core/jwt' {
     currentProjectId: string | null;
     currentProjectRole: 'user' | 'admin' | 'owner' | null;
     currentProjectName: string | null;
+    isExampleProject: boolean;
+    isDemoAccount: boolean;
   }
 }
 
@@ -45,12 +49,14 @@ async function getCurrentProjectDetails(
   currentProjectId: string | null;
   currentProjectRole: 'user' | 'admin' | 'owner' | null;
   currentProjectName: string | null;
+  isExampleProject: boolean;
 }> {
   if (!defaultProjectId) {
     return {
       currentProjectId: null,
       currentProjectRole: null,
       currentProjectName: null,
+      isExampleProject: false,
     };
   }
 
@@ -71,6 +77,7 @@ async function getCurrentProjectDetails(
       currentProjectId: null,
       currentProjectRole: null,
       currentProjectName: null,
+      isExampleProject: false,
     };
   }
 
@@ -78,6 +85,7 @@ async function getCurrentProjectDetails(
     currentProjectId: defaultProjectId,
     currentProjectRole: membership.role as 'user' | 'admin' | 'owner',
     currentProjectName: membership.project.name,
+    isExampleProject: membership.project.isExample,
   };
 }
 
@@ -85,17 +93,18 @@ async function getCurrentProjectDetails(
 async function getSuperAdminProjectDetails(projectId: string | null): Promise<{
   currentProjectId: string | null;
   currentProjectName: string | null;
+  isExampleProject: boolean;
 }> {
-  if (!projectId) return { currentProjectId: null, currentProjectName: null };
+  if (!projectId) return { currentProjectId: null, currentProjectName: null, isExampleProject: false };
 
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    select: { id: true, name: true },
+    select: { id: true, name: true, isExample: true },
   });
 
-  if (!project) return { currentProjectId: null, currentProjectName: null };
+  if (!project) return { currentProjectId: null, currentProjectName: null, isExampleProject: false };
 
-  return { currentProjectId: project.id, currentProjectName: project.name };
+  return { currentProjectId: project.id, currentProjectName: project.name, isExampleProject: project.isExample };
 }
 
 // ---------------------------------------------------------------------------
@@ -181,6 +190,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           email: user.email,
           name: user.email,
           isSuperAdmin: user.isSuperAdmin,
+          isDemoAccount: user.isDemoAccount,
           defaultProjectId: user.defaultProjectId,
           memberships: user.memberships,
         };
@@ -210,12 +220,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           id: string;
           email: string;
           isSuperAdmin?: boolean;
+          isDemoAccount?: boolean;
           defaultProjectId?: string | null;
           memberships?: Array<{ projectId: string; role: string }>;
         };
 
         token.id = u.id;
         token.email = u.email;
+        token.isDemoAccount = u.isDemoAccount ?? false;
 
         // Derive role
         if (u.isSuperAdmin) {
@@ -226,10 +238,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             token.currentProjectId = projectDetails.currentProjectId;
             token.currentProjectRole = 'admin'; // superadmin acts as admin in any project
             token.currentProjectName = projectDetails.currentProjectName;
+            token.isExampleProject = projectDetails.isExampleProject;
           } else {
             token.currentProjectId = null;
             token.currentProjectRole = null;
             token.currentProjectName = null;
+            token.isExampleProject = false;
           }
         } else {
           // Determine currentProjectId: prefer defaultProjectId,
@@ -258,8 +272,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             token.currentProjectId = projectDetails.currentProjectId;
             token.currentProjectRole = projectDetails.currentProjectRole;
             token.currentProjectName = projectDetails.currentProjectName;
+            token.isExampleProject = projectDetails.isExampleProject;
           } else {
             token.currentProjectName = null;
+            token.isExampleProject = false;
           }
         }
       }
@@ -286,6 +302,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               select: { isSuperAdmin: true },
             });
 
+            // Look up project to get isExample flag
+            const project = await prisma.project.findUnique({
+              where: { id: token.currentProjectId },
+              select: { isExample: true },
+            });
+            token.isExampleProject = project?.isExample ?? false;
+
             if (dbUser?.isSuperAdmin) {
               // Superadmins always act as admin in any project they switch into.
               token.currentProjectRole = 'admin';
@@ -308,6 +331,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                 token.currentProjectId = null;
                 token.currentProjectRole = null;
                 token.currentProjectName = null;
+                token.isExampleProject = false;
               }
             }
           } catch (error) {
@@ -324,13 +348,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         try {
           const dbUser = await prisma.user.findUnique({
             where: { email: userEmail },
-            select: { defaultProjectId: true, isSuperAdmin: true },
+            select: { defaultProjectId: true, isSuperAdmin: true, isDemoAccount: true },
           });
 
           // Always sync superadmin role from DB — role may change while user is logged in
           if (dbUser?.isSuperAdmin && token.role !== 'superadmin') {
             token.role = 'superadmin';
           }
+
+          // Sync isDemoAccount from DB
+          token.isDemoAccount = dbUser?.isDemoAccount ?? false;
 
           if (dbUser?.defaultProjectId) {
             // Only re-fetch project details if project changed
@@ -341,11 +368,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                 token.currentProjectId = projectDetails.currentProjectId;
                 token.currentProjectRole = 'admin';
                 token.currentProjectName = projectDetails.currentProjectName;
+                token.isExampleProject = projectDetails.isExampleProject;
               } else {
                 const projectDetails = await getCurrentProjectDetails(userEmail, dbUser.defaultProjectId);
                 token.currentProjectId = projectDetails.currentProjectId;
                 token.currentProjectRole = projectDetails.currentProjectRole;
                 token.currentProjectName = projectDetails.currentProjectName;
+                token.isExampleProject = projectDetails.isExampleProject;
                 if (projectDetails.currentProjectRole) {
                   token.role = projectDetails.currentProjectRole;
                 }
@@ -356,6 +385,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             token.currentProjectId = null;
             token.currentProjectRole = null;
             token.currentProjectName = null;
+            token.isExampleProject = false;
           }
           // If dbUser is null (user not in DB yet), keep existing token values
         } catch (error) {
@@ -378,6 +408,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.currentProjectId = token.currentProjectId as string | null;
         session.user.currentProjectRole = token.currentProjectRole as 'user' | 'admin' | 'owner' | null;
         session.user.currentProjectName = token.currentProjectName as string | null;
+        session.user.isExampleProject = (token.isExampleProject as boolean) ?? false;
+        session.user.isDemoAccount = (token.isDemoAccount as boolean) ?? false;
       }
       return session;
     },

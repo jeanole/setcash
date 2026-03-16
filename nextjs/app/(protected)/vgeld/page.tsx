@@ -15,6 +15,7 @@ interface VGeldTransfer {
   from: string;
   to: string;
   createdBy: string;
+  confirmedBy: string | null;
 }
 
 interface VGeldAnalysisEntry {
@@ -182,7 +183,7 @@ function AddTransferModal({ isOpen, onClose, onSuccess, projectId }: AddTransfer
               required
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#6366f1] focus:border-transparent"
+              className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[var(--vb-accent)] focus:border-transparent"
               placeholder="0.00"
             />
           </div>
@@ -197,7 +198,7 @@ function AddTransferModal({ isOpen, onClose, onSuccess, projectId }: AddTransfer
               required
               value={to}
               onChange={(e) => setTo(e.target.value)}
-              className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#6366f1] focus:border-transparent bg-white"
+              className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[var(--vb-accent)] focus:border-transparent bg-white"
             >
               {members.length === 0 && (
                 <option value="" disabled>Loading members...</option>
@@ -220,7 +221,7 @@ function AddTransferModal({ isOpen, onClose, onSuccess, projectId }: AddTransfer
               type="text"
               value={from}
               onChange={(e) => setFrom(e.target.value)}
-              className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#6366f1] focus:border-transparent"
+              className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[var(--vb-accent)] focus:border-transparent"
               placeholder="External"
             />
           </div>
@@ -237,7 +238,7 @@ function AddTransferModal({ isOpen, onClose, onSuccess, projectId }: AddTransfer
             <button
               type="submit"
               disabled={isSubmitting}
-              className="flex-1 px-4 py-2 rounded-lg bg-[var(--vb-accent)] text-white text-sm font-medium hover:bg-[var(--vb-accent-hover)] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              className="flex-1 px-4 py-2 rounded-lg bg-[var(--vb-accent)] text-white text-sm font-medium hover:bg-[var(--vb-accent-hover)] transition-colors disabled:opacity-60 disabled:cursor-not-allowed btn-brutal"
             >
               {isSubmitting ? 'Adding...' : 'Add Transfer'}
             </button>
@@ -313,6 +314,21 @@ export default function VGeldPage() {
     fetchAnalysis();
   };
 
+  const handleConfirm = async (id: string) => {
+    try {
+      const res = await fetch(`/api/vgeld/${id}/confirm`, { method: 'PATCH' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error ?? 'Failed to confirm transfer');
+        return;
+      }
+      fetchTransfers();
+      fetchAnalysis();
+    } catch {
+      alert('Failed to confirm transfer');
+    }
+  };
+
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this V-Geld transfer?')) return;
     try {
@@ -340,18 +356,16 @@ export default function VGeldPage() {
       {/* Page header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <h1 className="text-[22px] font-semibold text-zinc-800">V-Geld</h1>
-        {isAdmin && (
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-[var(--vb-accent)] text-white font-medium rounded-lg hover:bg-[var(--vb-accent-hover)] active:scale-[0.97] transition-all shadow-sm text-sm"
-            aria-label="Add V-Geld transfer"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Add V-Geld Transfer
-          </button>
-        )}
+        <button
+          onClick={() => setIsModalOpen(true)}
+          className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-[var(--vb-accent)] text-white font-medium rounded-lg hover:bg-[var(--vb-accent-hover)] transition-all text-sm btn-brutal"
+          aria-label="Add V-Geld transfer"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          Add V-Geld Transfer
+        </button>
       </div>
 
       {/* Error state */}
@@ -384,6 +398,7 @@ export default function VGeldPage() {
                     <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wider">To</th>
                   )}
                   <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wider">Created By</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wider">Confirmed By</th>
                   {isAdmin && (
                     <th className="px-4 py-3 text-right text-xs font-semibold text-zinc-500 uppercase tracking-wider">Actions</th>
                   )}
@@ -392,12 +407,12 @@ export default function VGeldPage() {
               <tbody className="divide-y divide-zinc-100">
                 {isLoadingTransfers ? (
                   Array.from({ length: 4 }).map((_, i) => (
-                    <SkeletonRow key={i} cols={isAdmin ? 6 : 4} />
+                    <SkeletonRow key={i} cols={isAdmin ? 7 : 5} />
                   ))
                 ) : displayedTransfers.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={isAdmin ? 6 : 4}
+                      colSpan={isAdmin ? 7 : 5}
                       className="px-4 py-12 text-center text-zinc-400"
                     >
                       <div className="flex flex-col items-center gap-2">
@@ -423,6 +438,24 @@ export default function VGeldPage() {
                         <td className="px-4 py-3 text-zinc-600">{transfer.to}</td>
                       )}
                       <td className="px-4 py-3 text-zinc-500 text-xs">{transfer.createdBy}</td>
+                      <td className="px-4 py-3 text-xs">
+                        {transfer.confirmedBy ? (
+                          <span className="text-zinc-500">{transfer.confirmedBy}</span>
+                        ) : isAdmin ? (
+                          <button
+                            onClick={() => handleConfirm(transfer.id)}
+                            className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 border border-transparent hover:border-emerald-200 rounded px-2.5 py-1 transition-colors"
+                            aria-label={`Confirm transfer from ${transfer.from} on ${formatDate(transfer.date)}`}
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                            Confirm
+                          </button>
+                        ) : (
+                          <span className="text-zinc-400">—</span>
+                        )}
+                      </td>
                       {isAdmin && (
                         <td className="px-4 py-3 text-right">
                           <button
@@ -513,14 +546,12 @@ export default function VGeldPage() {
       )}
 
       {/* Add Transfer Modal */}
-      {isAdmin && (
-        <AddTransferModal
-          isOpen={isModalOpen}
-          onClose={() => setIsModalOpen(false)}
-          onSuccess={handleModalSuccess}
-          projectId={projectId}
-        />
-      )}
+      <AddTransferModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSuccess={handleModalSuccess}
+        projectId={projectId}
+      />
     </div>
   );
 }

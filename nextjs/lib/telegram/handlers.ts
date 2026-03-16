@@ -398,6 +398,45 @@ async function processSinglePhoto(
 }
 
 /**
+ * Shared helper: validate a link code and upsert the TelegramLink record.
+ * Used by both /start <payload> and /link <code> handlers.
+ */
+async function performLink(
+  bot: TelegramBot,
+  msg: TelegramBot.Message,
+  projectId: string,
+  code: string
+): Promise<void> {
+  const result = await validateAndConsumeLinkCode(code, projectId);
+  if (!result) {
+    bot.sendMessage(msg.chat.id, 'Ungültiger oder abgelaufener Code.').catch(() => {});
+    return;
+  }
+
+  const telegramUserId = String(msg.from!.id);
+  try {
+    await prisma.telegramLink.upsert({
+      where: {
+        projectId_telegramUserId: { projectId, telegramUserId },
+      },
+      update: { userEmail: result.userEmail },
+      create: { projectId, telegramUserId, userEmail: result.userEmail },
+    });
+    bot
+      .sendMessage(
+        msg.chat.id,
+        `✓ Verknüpft mit ${result.userEmail}!\nSende jetzt einfach Fotos deiner Belege – sie werden automatisch als Entwurf gespeichert.`
+      )
+      .catch(() => {});
+  } catch (e) {
+    console.error(`[TG ${projectId}] Link error:`, (e as Error).message);
+    bot
+      .sendMessage(msg.chat.id, 'Fehler beim Verknüpfen. Bitte erneut versuchen.')
+      .catch(() => {});
+  }
+}
+
+/**
  * Main message handler — routes incoming Telegram messages.
  */
 export async function handleMessage(
@@ -405,14 +444,21 @@ export async function handleMessage(
   msg: TelegramBot.Message,
   projectId: string
 ): Promise<void> {
-  // Handle /start
+  // Handle /start [payload]
   if (msg.text && msg.text.startsWith('/start')) {
-    bot
-      .sendMessage(
-        msg.chat.id,
-        'Willkommen bei SetCash!\nSende /link <Code> um deinen Account zu verknüpfen.\nDen Code findest du in SetCash unter "Telegram verknüpfen".'
-      )
-      .catch(() => {});
+    const payload = msg.text.trim().split(/\s+/)[1];
+    if (payload) {
+      // Deep link invite: /start CODE — same upsert logic as /link
+      await performLink(bot, msg, projectId, payload.toUpperCase());
+    } else {
+      // Plain /start — show welcome message
+      bot
+        .sendMessage(
+          msg.chat.id,
+          'Willkommen bei SetCash!\nSende /link <Code> um deinen Account zu verknüpfen.\nDen Code findest du in SetCash unter "Telegram verknüpfen".'
+        )
+        .catch(() => {});
+    }
     return;
   }
 
@@ -424,33 +470,7 @@ export async function handleMessage(
       return;
     }
 
-    const result = await validateAndConsumeLinkCode(code, projectId);
-    if (!result) {
-      bot.sendMessage(msg.chat.id, 'Ungültiger oder abgelaufener Code.').catch(() => {});
-      return;
-    }
-
-    const telegramUserId = String(msg.from!.id);
-    try {
-      await prisma.telegramLink.upsert({
-        where: {
-          projectId_telegramUserId: { projectId, telegramUserId },
-        },
-        update: { userEmail: result.userEmail },
-        create: { projectId, telegramUserId, userEmail: result.userEmail },
-      });
-      bot
-        .sendMessage(
-          msg.chat.id,
-          `✓ Verknüpft mit ${result.userEmail}!\nSende jetzt einfach Fotos deiner Belege – sie werden automatisch als Entwurf gespeichert.`
-        )
-        .catch(() => {});
-    } catch (e) {
-      console.error(`[TG ${projectId}] Link error:`, (e as Error).message);
-      bot
-        .sendMessage(msg.chat.id, 'Fehler beim Verknüpfen. Bitte erneut versuchen.')
-        .catch(() => {});
-    }
+    await performLink(bot, msg, projectId, code);
     return;
   }
 

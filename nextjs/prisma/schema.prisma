@@ -45,6 +45,7 @@ model User {
   emailVerified DateTime?
   isSuperAdmin  Boolean   @default(false)
   isActive      Boolean   @default(true)
+  isDemoAccount Boolean   @default(false)
   createdAt     DateTime  @default(now())
 
   username      String?   @unique
@@ -62,11 +63,13 @@ model User {
 }
 
 model Project {
-  id        String   @id @default(uuid())
-  legacyId  Int? @unique
-  name      String
-  subtitle  String?
-  createdAt DateTime @default(now())
+  id          String   @id @default(uuid())
+  legacyId    Int?     @unique
+  name        String
+  subtitle    String?
+  isExample   Boolean  @default(false)
+  uploadLimit Int?
+  createdAt   DateTime @default(now())
 
   members       ProjectMember[]
   positions     ProjectPosition[]
@@ -262,8 +265,9 @@ model Vgeld {
   amount    Decimal
   fromUser  String?
   toUser    String
-  createdBy String?
-  createdAt DateTime @default(now())
+  createdBy   String?
+  confirmedBy String?   // Email of admin who confirmed; null = unconfirmed
+  createdAt   DateTime @default(now())
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
@@ -389,4 +393,9 @@ model InvitationToken {
 
   @@index([email])
   @@index([projectId])
+}
+
+model SystemConfig {
+  key   String  @id
+  value String?
 }

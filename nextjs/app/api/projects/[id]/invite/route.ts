@@ -20,6 +20,11 @@ export async function POST(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  // Block demo accounts from sending invitations
+  if (session.user.isDemoAccount && session.user.role !== 'superadmin') {
+    return NextResponse.json({ error: 'Demo accounts cannot send invitations.' }, { status: 403 });
+  }
+
   const { id: projectId } = await params;
 
   // Verify the inviter is a member of this project (or superadmin)
@@ -118,6 +123,19 @@ export async function POST(
   // Build invite URL
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
   const inviteUrl = `${appUrl}/accept-invite?token=${rawToken}`;
+
+  // If the invited email belongs to an existing user, create an in-app notification now
+  const existingUser = await prisma.user.findUnique({ where: { email }, select: { email: true } });
+  if (existingUser) {
+    await prisma.notification.create({
+      data: {
+        userEmail: email,
+        type: 'pending_invite',
+        message: `${session.user.email} invited you to join "${project.name}". Check your email for the invite link.`,
+        projectId,
+      },
+    });
+  }
 
   // Send email
   try {
