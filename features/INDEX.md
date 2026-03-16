@@ -135,5 +135,5 @@
 | CR-25 | CR | Any User Can Create Transfer; Admin Confirms; Show Confirmed By | Pending Review | Medium | PROJ-15 | 2026-03-15 |
 | [PROJ-21](PROJ-21-brand-design-system.md) | Feature | Brand & Design System | In Progress | Medium | — | 2026-03-15 |
 | CR-26 | CR | SetCash Brand & Logo Style Specification | Pending Review | Medium | PROJ-21 | 2026-03-15 |
-| [PROJ-22](PROJ-22-demo-test-account.md) | Feature | Demo / Test Account | Planned | Medium | PROJ-5, PROJ-10 | 2026-03-16 |
+| [PROJ-22](PROJ-22-demo-test-account.md) | Feature | Demo / Test Account | In Progress | Medium | PROJ-5, PROJ-10 | 2026-03-16 |
 | CR-27 | CR | Demo / Test Account with Restricted Access | Pending Review | Medium | PROJ-22 | 2026-03-16 |

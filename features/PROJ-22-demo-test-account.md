@@ -45,6 +45,86 @@ A restricted demo/exploration account (`testuser`) that is permanently locked to
 
 ---
 
+---
+
+## Tech Design (Solution Architect)
+
+### Component Structure
+
+```
+Session JWT
++-- isDemoAccount: boolean         (new — persists across all requests)
++-- isExampleProject: boolean      (already exists)
+
+Seed Script
++-- Demo user creation             (new — testuser, env-sourced credentials)
++-- Auto-assign to Example Project (member with role 'user')
+
+API Guard Layer (server-side enforcement)
++-- POST /api/bills                (already blocks example project; also block isDemoAccount)
++-- POST /api/auth/invite          (block isDemoAccount)
++-- POST /api/projects/[id]/invite (block isDemoAccount)
++-- POST /api/projects             (block isDemoAccount — can't create projects)
++-- POST /api/projects/switch      (block isDemoAccount — can't switch projects)
++-- ALL /api/project-settings/*    (block isDemoAccount)
++-- PUT/DELETE on settings-related routes (block isDemoAccount)
+
+Frontend — Layout / Shell
++-- AppShell / Sidebar
+|   +-- ProjectSwitcher            (hidden for demo account)
+|   +-- Settings nav item          (hidden for demo account)
+|   +-- Invite button              (hidden for demo account)
+
+Frontend — Bills Page
++-- "Upload New Bill" button       (already hidden for example project — no change needed)
++-- Example Project banner         (already shown — no change needed)
+
+Frontend — Settings Pages
++-- All settings sub-pages         (redirect away or show locked banner for demo account)
+|   +-- /settings/members
+|   +-- /settings/projects
+|   +-- /settings/positions
+|   +-- /settings/categories
+|   +-- /settings/motives
+|   +-- /settings/ai-analysis
+|   +-- /settings/telegram
+
+Frontend — InviteMemberModal
++-- Invite button                  (hidden/disabled for demo account)
+```
+
+### Data Model Changes
+
+**User table — 1 new field:**
+
+| Field | Type | Default | Purpose |
+|---|---|---|---|
+| `isDemoAccount` | Boolean | `false` | Flags the account as a read-only demo user |
+
+No new tables required. The demo user is a regular User record with a flag.
+
+**Seed — new demo user record:**
+- Email: from `DEMO_USER_EMAIL` env var (default: `testuser@setcash.app`)
+- Password: from `DEMO_USER_PASSWORD` env var (default: `supersafepw`)
+- `isDemoAccount: true`, `emailVerified`, `isActive: true`
+- Auto-assigned as `user` member of the Example Project
+
+**Session JWT — 1 new field:** `isDemoAccount: boolean` — refreshed from DB on every JWT cycle.
+
+### Tech Decisions
+
+- **DB flag over email check:** Extensible (multiple demo accounts), travels with identity, not fragile to email changes.
+- **Server-side enforcement:** UI suppression alone is not security — every restricted action returns 403 at the API layer.
+- **Superadmin bypass:** Consistent with existing permission model; superadmins bypass all membership and project restrictions.
+- **Session JWT field:** Frontend suppression (invite button, settings nav, project switcher) needs no extra API calls.
+- **Env-sourced credentials:** Hardcoded credentials in seed scripts end up in git history; env vars allow per-environment overrides.
+
+### Dependencies
+
+No new packages required. Uses existing Prisma, NextAuth, and API guard patterns.
+
+---
+
 ## Change Requests
 
 ### CR-27: Demo / Test Account with Restricted Access
