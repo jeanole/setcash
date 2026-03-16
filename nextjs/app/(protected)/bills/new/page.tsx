@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import BillForm, { BillFormData } from '@/components/bills/BillForm';
@@ -9,6 +9,11 @@ import { useBillOptions } from '@/lib/hooks/useBills';
 import * as api from '@/lib/api/bills';
 import { cn } from '@/lib/utils';
 
+interface QuotaData {
+  uploadLimit: number | null;
+  billCount: number;
+}
+
 export default function NewBillPage() {
   const router = useRouter();
   const { data: session } = useSession();
@@ -16,6 +21,25 @@ export default function NewBillPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [result, setResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [quota, setQuota] = useState<QuotaData | null>(null);
+
+  const projectId = session?.user?.currentProjectId;
+
+  useEffect(() => {
+    if (!projectId || session?.user?.isExampleProject) return;
+
+    fetch(`/api/projects/${projectId}/quota`)
+      .then((res) => {
+        if (!res.ok) return null;
+        return res.json() as Promise<QuotaData>;
+      })
+      .then((data) => {
+        if (data) setQuota(data);
+      })
+      .catch(() => {
+        // silently ignore — form will still be shown
+      });
+  }, [projectId, session?.user?.isExampleProject]);
 
   const handleSubmit = async (formData: BillFormData) => {
     setIsSubmitting(true);
@@ -88,6 +112,41 @@ export default function NewBillPage() {
             className="mt-4 px-4 py-2 bg-[var(--vb-accent)] text-white rounded-md font-medium hover:bg-[var(--vb-accent-hover)] transition-colors"
           >
             Manage Projects
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Quota blocked state
+  if (quota && quota.uploadLimit !== null && quota.billCount >= quota.uploadLimit) {
+    return (
+      <div className="max-w-4xl mx-auto animate-[vb-rise_0.4s_ease-out]">
+        <div className="mb-6">
+          <button
+            onClick={() => router.push('/bills')}
+            className="inline-flex items-center text-sm text-slate-600 hover:text-slate-900 transition-colors mb-2"
+          >
+            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            Back to Bills
+          </button>
+          <h1 className="text-2xl font-bold text-slate-900">Upload New Bill</h1>
+        </div>
+        <div className="bg-rose-50 border border-rose-200 rounded-xl p-6 text-center">
+          <div className="text-3xl mb-3">&#128683;</div>
+          <h2 className="text-lg font-semibold text-rose-800 mb-2">
+            Upload limit reached
+          </h2>
+          <p className="text-rose-700 text-sm max-w-md mx-auto">
+            This project has reached its bill upload limit ({quota.billCount}/{quota.uploadLimit}). Contact your admin to increase it.
+          </p>
+          <button
+            onClick={() => router.push('/bills')}
+            className="mt-4 px-4 py-2 bg-[var(--vb-accent)] text-white rounded-md font-medium hover:bg-[var(--vb-accent-hover)] transition-colors"
+          >
+            Back to Bills
           </button>
         </div>
       </div>

@@ -8,6 +8,7 @@ import AppShell from '@/components/layout/AppShell';
 import BillList from '@/components/bills/BillList';
 import BillFilters from '@/components/bills/BillFilters';
 import Pagination from '@/components/ui/Pagination';
+import QuotaBanner from '@/components/bills/QuotaBanner';
 import { useBills, useFilteredBills } from '@/lib/hooks/useBills';
 import { FilterState, SortState, Bill } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -192,6 +193,9 @@ export default function BillsPage() {
         pageSize={BILLS_PER_PAGE}
         onPageChange={setPage}
       />
+
+      {/* Quota banner — only for non-example projects */}
+      {!isExampleProject && <QuotaBanner />}
     </div>
   );
 }

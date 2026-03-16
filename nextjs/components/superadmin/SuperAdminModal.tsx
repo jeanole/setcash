@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { X, Shield, FolderKanban, Users } from 'lucide-react';
+import { X, Shield, FolderKanban, Users, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import ProjectsTab from './ProjectsTab';
 import UsersTab from './UsersTab';
+import ConfigTab from './ConfigTab';
 import MembersSubModal from './MembersSubModal';
 import PasswordResetModal from './PasswordResetModal';
 import CreateUserModal from './CreateUserModal';
@@ -238,6 +239,20 @@ export default function SuperAdminModal({ isOpen, onClose, currentUserEmail }: S
                   {users.length}
                 </span>
               </button>
+              <button
+                onClick={() => setActiveTab('config')}
+                className={cn(
+                  'flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2',
+                  activeTab === 'config'
+                    ? 'border-[var(--vb-accent)] text-[var(--vb-accent)]'
+                    : 'border-transparent text-slate-600 hover:text-slate-800 hover:bg-slate-100'
+                )}
+                aria-selected={activeTab === 'config'}
+                role="tab"
+              >
+                <Settings className="w-4 h-4" />
+                Config
+              </button>
             </div>
           </div>
 
@@ -249,8 +264,9 @@ export default function SuperAdminModal({ isOpen, onClose, currentUserEmail }: S
                 isLoading={isLoadingProjects}
                 onDeleteProject={handleDeleteProject}
                 onOpenMembers={handleOpenMembers}
+                onQuotaUpdated={fetchProjects}
               />
-            ) : (
+            ) : activeTab === 'users' ? (
               <UsersTab
                 users={users}
                 isLoading={isLoadingUsers}
@@ -260,6 +276,8 @@ export default function SuperAdminModal({ isOpen, onClose, currentUserEmail }: S
                 onResetPassword={handleResetPassword}
                 onCreateUser={handleOpenCreateUser}
               />
+            ) : (
+              <ConfigTab />
             )}
           </div>
         </div>
