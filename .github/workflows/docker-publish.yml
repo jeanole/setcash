@@ -35,5 +35,7 @@ jobs:
           tags: |
             ghcr.io/jeanole/setcash:latest
             ghcr.io/jeanole/setcash:${{ github.sha }}
+          build-args: |
+            NEXT_PUBLIC_TURNSTILE_SITE_KEY=${{ secrets.NEXT_PUBLIC_TURNSTILE_SITE_KEY }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
