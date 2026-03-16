@@ -1,61 +1,65 @@
-# SetCash - Bills manager (minimal scaffold)
+# SetCash
 
-This project is a small app to manage bills. Users sign in with Google (when invited by an admin), upload a photo of a bill, and store bill metadata in a Google Sheet. Images are uploaded to Google Drive and the link is stored in the sheet.
+Your receipts deserve better than a shoebox.
 
-Prerequisites
-- Node.js (16+ recommended)
-- A Google Cloud project with:
-  - OAuth 2.0 Client ID (for user sign-in)
-  - Service Account with access to Google Sheets and Drive APIs
+Expense tracker and budget planner for small film productions. Snap a receipt, upload it, track the budget — without the spreadsheet chaos.
 
-Setup
-1. Install dependencies:
+## Features
+
+- **Bill uploads** — Snap a photo, upload via web or Telegram. Done.
+- **Budget matrix** — See who spent what, broken down by department and category.
+- **AI bill analysis** — Automatic extraction of bill data from uploaded images.
+- **Exports** — PDF, Excel, and Google Sheets sync for your accountant.
+- **Telegram bot** — Send a receipt photo to the bot. Click and forget.
+- **Multi-tenant** — Isolated projects with role-based access (user, admin, superadmin).
+- **Admin approval** — Bills go through an approval workflow before they hit the books.
+
+## Tech Stack
+
+- **Framework:** Next.js 14 (App Router)
+- **Database:** PostgreSQL via Prisma ORM
+- **Auth:** NextAuth.js (email/password)
+- **Frontend:** React + Tailwind CSS
+- **Integrations:** Google Sheets API, Google Drive API, Telegram Bot API
+- **AI:** OCR and bill analysis
+- **Exports:** PDFKit (PDF), ExcelJS (Excel)
+
+## Getting Started
 
 ```bash
+cd nextjs
 npm install
+npm run dev
 ```
 
-2. Create or identify the Google Sheet to store data. Create three sheets inside it: `Bills`, `Invited`, and `Motives`.
+The app runs on `http://localhost:3000`.
 
-   - `Invited` sheet: add invited emails in column A
-   - `Motives` sheet: add allowed motives in column A
-   - `Bills` sheet: columns will be appended as Date, Email, Vendor, Item, GST, Comment, Motive, DriveLink
+### Environment Variables
 
-3. Create a Google Service Account, give it Editor access to the Sheet and to the Drive folder you want to use. Download the JSON key and either:
-   - Save it as `service-account.json` in the project root (not committed), or
-   - Set the environment variable `GOOGLE_SERVICE_ACCOUNT_CREDENTIALS` to the JSON content, or
-   - Set `GOOGLE_SERVICE_ACCOUNT_KEY_FILE` to the path of the JSON file.
+Copy `nextjs/.env.local.example` to `nextjs/.env.local` and fill in:
 
-4. Share the target Google Drive folder and the Google Sheet with the service account email.
+| Variable | Description |
+|---|---|
+| `DATABASE_URL` | PostgreSQL connection string |
+| `NEXTAUTH_SECRET` | Secret for session signing |
+| `NEXTAUTH_URL` | App URL (e.g. `http://localhost:3000`) |
+| `TELEGRAM_BOT_TOKEN` | Telegram bot token (optional) |
+| `OCR_ENCRYPTION_SECRET` | Secret for encrypting OCR API keys |
+| `TARGET_SHEET_ID` | Google Sheets spreadsheet ID (optional) |
+| `GOOGLE_DRIVE_FOLDER_ID` | Google Drive folder ID (optional) |
 
-5. Create OAuth credentials (OAuth 2.0 Client ID) and set the Authorized redirect URI to `http://localhost:3000/auth/google/callback` (adjust port if needed).
-
-6. Set environment variables (example `.env` or export in shell):
-
-```
-GOOGLE_OAUTH_CLIENT_ID=...
-GOOGLE_OAUTH_CLIENT_SECRET=...
-TARGET_SHEET_ID=your_sheet_id_here
-DRIVE_FOLDER_ID=your_drive_folder_id_here
-ADMIN_EMAIL=admin@example.com
-SESSION_SECRET=a-secret
-# Either GOOGLE_SERVICE_ACCOUNT_KEY_FILE=./service-account.json or GOOGLE_SERVICE_ACCOUNT_CREDENTIALS
-```
-
-7. Run:
+### Docker
 
 ```bash
-npm start
+cd nextjs
+docker build -t setcash .
+docker run -p 3000:3000 setcash
 ```
 
-Usage
-- Visit `http://localhost:3000` and sign in with Google. The user must be present in the `Invited` sheet or have the `ADMIN_EMAIL`.
-- Admins can open `http://localhost:3000/admin` to invite users and add motives.
+## Project Structure
 
-Notes
-- This is a minimal working scaffold. In production you should:
-  - Use HTTPS
-  - Harden sessions
-  - Validate and sanitize inputs
-  - Add rate limiting and quotas
-  - Consider storing images in a dedicated bucket
+All application code lives in `nextjs/`. See [CLAUDE.md](CLAUDE.md) for the full architecture guide.
+
+## License
+
+Not open source. Personal project by [Jens Möller](https://github.com/jeanole).
