@@ -1,6 +1,7 @@
 # PROJ-24: Upload Limits & Project Quotas
 
-**Status:** In Progress
+**Status:** Deployed
+**Deployed:** 2026-03-16
 **Priority:** Medium
 **Created:** 2026-03-16
 **Dependencies:** PROJ-7 (Bills), PROJ-17 (Super-Admin)
