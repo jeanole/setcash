@@ -106,12 +106,13 @@ export async function GET() {
       categorySpending[r.categoryId] = Number(r.spent) || 0;
     }
 
-    // Project settings
-    const settingsRaw = await prisma.projectSettings.findMany({ where: { projectId } });
-    const settings: Record<string, string> = {};
-    settingsRaw.forEach((s) => { if (s.value) settings[s.key] = s.value; });
-    const bmTitle = settings['projectTitle'] ?? '';
-    const bmSubtitle = settings['projectSubtitle'] ?? '';
+    // Project title/subtitle from the Project model
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { name: true, subtitle: true },
+    });
+    const bmTitle = project?.name ?? '';
+    const bmSubtitle = project?.subtitle ?? '';
     const bmPrefix = bmTitle ? bmTitle + ' - ' : 'SetCash - ';
 
     const eur = (v: number) => (v || 0).toFixed(2).replace('.', ',') + ' €';
