@@ -141,5 +141,5 @@
 | CR-28 | CR | Insights into Site Visits and Demo Usage | Pending Review | Medium | PROJ-23 | 2026-03-16 |
 | [PROJ-24](PROJ-24-upload-limits-project-quotas.md) | Feature | Upload Limits & Project Quotas | Deployed | Medium | PROJ-7, PROJ-17 | 2026-03-16 |
 | CR-29 | CR | Upload Limits per Project for Paid Tier Foundation | Pending Review | Medium | PROJ-24 | 2026-03-16 |
-| [PROJ-25](PROJ-25-s3-file-storage.md) | Feature | S3-Compatible File Storage for Bill Images | Planned | Medium | PROJ-7 | 2026-03-16 |
+| [PROJ-25](PROJ-25-s3-file-storage.md) | Feature | S3-Compatible File Storage for Bill Images | In Progress | Medium | PROJ-7 | 2026-03-16 |
 | CR-30 | CR | Migrate Bill Image Storage to S3-Compatible Object Storage | Pending Review | Medium | PROJ-25 | 2026-03-16 |
