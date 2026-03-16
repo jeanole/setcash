@@ -2,152 +2,70 @@ import { Suspense } from 'react';
 import { auth } from '@/auth';
 import { redirect } from 'next/navigation';
 import LoginForm from '@/components/auth/LoginForm';
-import SparkleEffect from '@/components/auth/SparkleEffect';
 
 export const metadata = {
-  title: 'SetCash — Your receipts deserve better than a shoebox',
+  title: 'SetCash — Not a startup. Just a curious dude with WiFi.',
 };
 
 // ---------------------------------------------------------------------------
-// Root page — combined landing + login, dark neon chaos theme
+// Root page — yellow editorial landing + login
 // ---------------------------------------------------------------------------
 export default async function HomePage() {
   const session = await auth();
   if (session?.user) redirect('/dashboard');
 
   return (
-    <main className="landing-page">
-      {/* ── Turbo blobs ── */}
-      <div aria-hidden="true">
-        <div className="landing-blob landing-blob-1" />
-        <div className="landing-blob landing-blob-2" />
-        <div className="landing-blob landing-blob-3" />
-        <div className="landing-blob landing-blob-4" />
-        <div className="landing-blob landing-blob-5" />
-        <div className="landing-blob landing-blob-6" />
-        <div className="landing-blob landing-blob-7" />
-        <div className="landing-blob landing-blob-8" />
-      </div>
+    <main className="lp">
+      <div className="lp-inner">
 
-      {/* ── Outer orbit ring (15s) ── */}
-      <div className="landing-orbit" aria-hidden="true">
-        <div className="landing-orbit-dot" />
-        <div className="landing-orbit-dot" />
-        <div className="landing-orbit-dot" />
-        <div className="landing-orbit-dot" />
-        <div className="landing-orbit-dot" />
-        <div className="landing-orbit-dot" />
-        <div className="landing-orbit-dot" />
-        <div className="landing-orbit-dot" />
-      </div>
+        {/* ── Top-left wordmark ── */}
+        <header className="lp-header">
+          <div className="lp-wordmark">
+            <span className="lp-wordmark-name">SetCash</span>
+            <span className="lp-wordmark-sub">Expense Tracker</span>
+          </div>
+        </header>
 
-      {/* ── Inner orbit ring counter-rotating (8s) ── */}
-      <div className="landing-orbit-inner" aria-hidden="true">
-        <div className="landing-orbit-dot" />
-        <div className="landing-orbit-dot" />
-        <div className="landing-orbit-dot" />
-        <div className="landing-orbit-dot" />
-        <div className="landing-orbit-dot" />
-        <div className="landing-orbit-dot" />
-      </div>
+        {/* ── Content split ── */}
+        <div className="lp-content">
 
-      {/* ── Sparkle particles (client-side) ── */}
-      <SparkleEffect />
+          {/* Left: hero copy */}
+          <div className="lp-hero">
+            <h1 className="lp-headline">
+              Not a startup.<br />
+              Just a curious<br />
+              dude with wifi.
+            </h1>
 
-      <div className="landing-container">
-        {/* ---- LEFT: Hero content ---- */}
-        <div className="landing-hero">
-          {/* Wordmark */}
-          <div className="landing-wordmark" style={{ animation: 'landing-rise 600ms ease-out both' }}>
-            <div className="landing-logo-circle" aria-hidden="true">SC</div>
-            <span className="landing-logo-text">SetCash</span>
+            <ul className="lp-bullets">
+              <li>Not VC-backed. Just vibes and AI agents.</li>
+              <li>Built for fun. Used by real people somehow.</li>
+              <li>Zero roadmap. Maximum curiosity.</li>
+            </ul>
           </div>
 
-          {/* Headline */}
-          <h1
-            className="landing-headline"
-            style={{ animation: 'landing-rise 600ms ease-out both', animationDelay: '100ms' }}
-          >
-            Track expenses. Manage budgets.
-            <br />
-            Simplify reimbursements.
-          </h1>
-
-          {/* Tagline */}
-          <p
-            className="landing-tagline"
-            style={{ animation: 'landing-rise 600ms ease-out both', animationDelay: '200ms' }}
-          >
-            Stop pretending that crumpled paper in your pocket counts as bookkeeping.
-            Your receipts deserve better than a shoebox.
-          </p>
-
-          {/* Feature pills */}
-          <div
-            className="landing-features"
-            style={{ animation: 'landing-rise 600ms ease-out both', animationDelay: '350ms' }}
-          >
-            <div className="landing-feature">
-              <span className="landing-feature-icon">&#128247;</span>
-              <div>
-                <p className="landing-feature-title">AI receipt scanning</p>
-                <p className="landing-feature-desc">
-                  Photograph it, forget it. Our AI reads receipts
-                  better than you ever did.
-                </p>
-              </div>
-            </div>
-
-            <div className="landing-feature">
-              <span className="landing-feature-icon">&#128200;</span>
-              <div>
-                <p className="landing-feature-title">Multi-project budgets</p>
-                <p className="landing-feature-desc">
-                  Because &ldquo;I&rsquo;ll track it in my head&rdquo;
-                  has never worked for anyone, ever.
-                </p>
-              </div>
-            </div>
-
-            <div className="landing-feature">
-              <span className="landing-feature-icon">&#129309;</span>
-              <div>
-                <p className="landing-feature-title">Team expenses</p>
-                <p className="landing-feature-desc">
-                  Submit, review, approve. No more chasing
-                  colleagues through hallways with forms.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Footer note */}
-          <p
-            className="landing-footer-note"
-            style={{ animation: 'landing-rise 600ms ease-out both', animationDelay: '500ms' }}
-          >
-            Free for small teams &middot; No credit card required &middot; Yes, it&rsquo;s really that easy
-          </p>
-        </div>
-
-        {/* ---- RIGHT: Login card ---- */}
-        <div
-          className="landing-login-wrapper"
-          style={{ animation: 'landing-rise 600ms ease-out both', animationDelay: '250ms' }}
-        >
-          {/* Rainbow gradient animated border wrapper */}
-          <div className="landing-card-border">
-            <div className="landing-login-card">
+          {/* Right: login card */}
+          <div className="lp-card-wrapper">
+            <div className="lp-card">
+              <h2 className="lp-card-title">Sign in — come close</h2>
               <Suspense>
                 <LoginForm allowSignup={process.env.EXTERNAL_REGISTRATION !== 'false'} />
               </Suspense>
             </div>
           </div>
-          <p className="landing-login-aside">
-            &ldquo;I wish I&rsquo;d started tracking expenses sooner&rdquo;
-            &nbsp;&mdash; Literally everyone, eventually
-          </p>
+
         </div>
+
+        {/* ── Footer ── */}
+        <footer className="lp-footer">
+          <p className="lp-footer-left">
+            SetCash is what happens when a tech-offline dude looking for direction figures out what
+            building with age-is could be like. For pleasure, out of curiosity, to dissect from real
+            life. It evolves though. Turns out accidental utility is still utility.
+          </p>
+          <p className="lp-footer-right">Free for 90,001 &middot; No commits required</p>
+        </footer>
+
       </div>
     </main>
   );
