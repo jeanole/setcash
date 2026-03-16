@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import LoginForm from "@/components/auth/LoginForm";
+import DemoLoginButton from "@/components/auth/DemoLoginButton";
 import { ImpressumLink } from "@/components/ImpressumModal";
 
 export const metadata = {
@@ -48,6 +49,10 @@ export default async function HomePage() {
               <li>Export to PDF, Excel, or Google Sheets.</li>
               <li>AI reads your bills so you don&rsquo;t have to.</li>
             </ul>
+
+            <Suspense>
+              <DemoLoginButton />
+            </Suspense>
           </div>
 
           {/* Right: login card */}

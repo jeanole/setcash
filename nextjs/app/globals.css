@@ -376,6 +376,25 @@ textarea:focus-visible {
   flex-shrink: 0;
 }
 
+/* ── Demo login button ── */
+.lp-demo-btn {
+  display: inline-block;
+  background: #000;
+  color: #ffe500;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.875rem;
+  padding: 0.75rem 2rem;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.lp-demo-btn:hover {
+  background: #222;
+}
+
 /* ── Login card ── */
 .lp-card-wrapper {
   width: 100%;

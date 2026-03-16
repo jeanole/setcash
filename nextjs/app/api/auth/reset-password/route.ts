@@ -53,6 +53,14 @@ export async function POST(req: Request) {
     );
   }
 
+  // Block demo accounts from resetting password
+  if (user.isDemoAccount) {
+    return NextResponse.json(
+      { error: 'Password reset is not available for demo accounts.' },
+      { status: 403 }
+    );
+  }
+
   // Hash new password and update user
   const passwordHash = await bcrypt.hash(password, 12);
 
