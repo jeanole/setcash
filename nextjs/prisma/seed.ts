@@ -21,17 +21,30 @@ async function main() {
   });
   console.log(`✓ Admin user: ${adminUser.email}`);
 
-  // 2. Create default project if none exists
-  const projectCount = await prisma.project.count();
-  let defaultProject;
-  if (projectCount === 0) {
+  // 2. Ensure an example project exists
+  let defaultProject = await prisma.project.findFirst({ where: { isExample: true } });
+  if (!defaultProject) {
     defaultProject = await prisma.project.create({
       data: { name: 'Example Project', isExample: true },
     });
     console.log(`✓ Example project created: ${defaultProject.name}`);
   } else {
-    defaultProject = await prisma.project.findFirst();
-    console.log(`✓ Default project already exists: ${defaultProject!.name}`);
+    console.log(`✓ Example project exists: ${defaultProject.name}`);
+  }
+
+  // Remove legacy "Default Project" if it exists and isn't the example project
+  const legacyProject = await prisma.project.findFirst({
+    where: { name: 'Default Project', isExample: false },
+  });
+  if (legacyProject) {
+    // Move users pointing at the legacy project to the example project
+    await prisma.user.updateMany({
+      where: { defaultProjectId: legacyProject.id },
+      data: { defaultProjectId: defaultProject!.id },
+    });
+    await prisma.projectMember.deleteMany({ where: { projectId: legacyProject.id } });
+    await prisma.project.delete({ where: { id: legacyProject.id } });
+    console.log(`✓ Deleted legacy "Default Project": ${legacyProject.id}`);
   }
 
   const projectId = defaultProject!.id;
