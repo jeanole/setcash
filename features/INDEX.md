@@ -139,5 +139,5 @@
 | CR-27 | CR | Demo / Test Account with Restricted Access | Pending Review | Medium | PROJ-22 | 2026-03-16 |
 | [PROJ-23](PROJ-23-visit-analytics-demo-tracking.md) | Feature | Visit Analytics & Demo Usage Tracking | Planned | Medium | PROJ-22, PROJ-5 | 2026-03-16 |
 | CR-28 | CR | Insights into Site Visits and Demo Usage | Pending Review | Medium | PROJ-23 | 2026-03-16 |
-| [PROJ-24](PROJ-24-upload-limits-project-quotas.md) | Feature | Upload Limits & Project Quotas | Planned | Medium | PROJ-7, PROJ-17 | 2026-03-16 |
+| [PROJ-24](PROJ-24-upload-limits-project-quotas.md) | Feature | Upload Limits & Project Quotas | In Progress | Medium | PROJ-7, PROJ-17 | 2026-03-16 |
 | CR-29 | CR | Upload Limits per Project for Paid Tier Foundation | Pending Review | Medium | PROJ-24 | 2026-03-16 |
