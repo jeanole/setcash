@@ -1,6 +1,6 @@
 # PROJ-23: Visit Analytics & Demo Usage Tracking
 
-**Status:** Planned
+**Status:** Deployed
 **Priority:** Medium
 **Created:** 2026-03-16
 **Dependencies:** PROJ-22 (Demo / Test Account), PROJ-5 (Auth)
@@ -59,7 +59,7 @@ Provide the super-admin with visibility into landing page visits and demo login 
 - [ ] No external analytics service — fully self-hosted in DB
 - [ ] GDPR compliant — no full IP, no cookies, no fingerprinting
 
-**Resolution:** Pending
+**Resolution:** Deployed 2026-03-17
 
 ---
 
