@@ -9,7 +9,8 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/db';
 import { exportLimiter } from '@/lib/ratelimit';
-import * as storage from '@/lib/storage';
+import { UPLOADS_DIR } from '@/lib/upload';
+import fs from 'fs';
 import path from 'path';
 import { PassThrough } from 'stream';
 // @ts-ignore
@@ -98,8 +99,12 @@ export async function GET() {
     for (const img of images) {
       if (!img.filePath) continue;
 
-      const imgBuffer = await storage.getFileBuffer(img.filePath);
-      if (!imgBuffer) continue;
+      // Sanitize path — no directory traversal
+      const safeName = path.basename(img.filePath);
+      const subDir = path.dirname(img.filePath).replace(/\.\./g, '');
+      const filePath = path.join(UPLOADS_DIR, subDir, safeName);
+
+      if (!fs.existsSync(filePath)) continue;
 
       const username = (img.bill.submittedByEmail || 'unknown')
         .split('@')[0]
@@ -126,7 +131,7 @@ export async function GET() {
       }
       fileName += ext;
 
-      archive.append(imgBuffer, { name: `${username}/${fileName}` });
+      archive.file(filePath, { name: `${username}/${fileName}` });
     }
 
     archive.finalize();

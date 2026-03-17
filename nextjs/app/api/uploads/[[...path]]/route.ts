@@ -7,8 +7,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { db as prisma } from '@/lib/db';
+import fs from 'fs';
 import path from 'path';
-import * as storage from '@/lib/storage';
+import { UPLOADS_DIR } from '@/lib/upload';
 
 // GET /uploads/[...path] - Serve uploaded file
 export async function GET(
@@ -63,14 +64,15 @@ export async function GET(
       return new NextResponse('Forbidden', { status: 403 });
     }
 
-    // Serve the file via storage adapter
-    const fileBuffer = await storage.getFileBuffer(relPath);
+    // Serve the file
+    const filePath = path.join(UPLOADS_DIR, relPath);
 
-    if (!fileBuffer) {
+    if (!fs.existsSync(filePath)) {
       return new NextResponse('Not found', { status: 404 });
     }
 
-    const ext = path.extname(relPath).toLowerCase();
+    const fileBuffer = fs.readFileSync(filePath);
+    const ext = path.extname(filePath).toLowerCase();
 
     // Determine content type
     const contentType =
@@ -84,7 +86,7 @@ export async function GET(
               ? 'application/pdf'
               : 'image/jpeg';
 
-    return new NextResponse(new Uint8Array(fileBuffer), {
+    return new NextResponse(fileBuffer, {
       headers: {
         'Content-Type': contentType,
         'Cache-Control': 'no-cache, must-revalidate',

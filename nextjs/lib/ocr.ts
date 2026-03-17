@@ -6,9 +6,10 @@
 
 import crypto from 'crypto';
 import path from 'path';
+import fs from 'fs';
 import { Prisma } from '@prisma/client';
 import { db as prisma } from './db';
-import * as storage from './storage';
+import { UPLOADS_DIR, readFileForOCR } from './upload';
 
 // ── Encryption helpers for API key at rest ──────────────────────────────────
 // Uses AES-256-GCM. Key is derived from SESSION_SECRET via SHA-256.
@@ -523,7 +524,7 @@ export async function runOcrJob(billId: string, projectId: string): Promise<void
       return fail('No image attached to this bill', 'InputError');
     }
 
-    const imgBuffer = await storage.getFileBuffer(img.filePath);
+    const imgBuffer = readFileForOCR(img.filePath);
     if (!imgBuffer) {
       return fail('Image file not found on disk', 'InputError');
     }

@@ -8,7 +8,6 @@ import { IncomingForm, Fields, Files, File } from 'formidable';
 import { IncomingMessage } from 'http';
 import fs from 'fs';
 import path from 'path';
-import os from 'os';
 
 export const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(process.cwd(), '..', 'data', 'uploads');
 
@@ -49,7 +48,7 @@ export async function parseForm(req: Request): Promise<ParsedForm> {
 
   return new Promise((resolve, reject) => {
     const form = new IncomingForm({
-      uploadDir: os.tmpdir(),
+      uploadDir: UPLOADS_DIR,
       keepExtensions: true,
       maxFileSize: MAX_FILE_SIZE,
       maxFiles: 10,
@@ -182,3 +181,34 @@ export function generateFilename(
   return `${userFolder}_${billNumber}_${dateStr}${suffix}${ext}`;
 }
 
+/**
+ * Delete a file from the uploads directory
+ */
+export function deleteFile(filePath: string): void {
+  if (!filePath) return;
+  
+  const fullPath = path.join(UPLOADS_DIR, filePath);
+  
+  if (fs.existsSync(fullPath)) {
+    try {
+      fs.unlinkSync(fullPath);
+    } catch (e) {
+      console.error('Failed to delete file:', e);
+    }
+  }
+}
+
+/**
+ * Read file for OCR processing
+ */
+export function readFileForOCR(filePath: string): Buffer | null {
+  if (!filePath) return null;
+  
+  const fullPath = path.join(UPLOADS_DIR, filePath);
+  
+  if (!fs.existsSync(fullPath)) {
+    return null;
+  }
+  
+  return fs.readFileSync(fullPath);
+}

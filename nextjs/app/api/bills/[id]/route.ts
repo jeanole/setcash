@@ -6,7 +6,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { db as prisma } from '@/lib/db';
 import { z } from 'zod';
-import * as storage from '@/lib/storage';
+import path from 'path';
+import fs from 'fs';
+import { UPLOADS_DIR } from '@/lib/upload';
 
 // Validation schemas
 const updateBillSchema = z.object({
@@ -232,12 +234,12 @@ export async function GET(
       netto0: Number(bill.brutto0),
       nettoAmount: Number(bill.nettoAmount),
       filename: bill.filename,
-      images: await Promise.all(bill.images.map(async (img) => ({
+      images: bill.images.map((img) => ({
         id: img.id,
         filename: img.filename,
-        file: await storage.getFileUrl(img.filePath),
+        file: img.filePath,
         sortOrder: img.sortOrder,
-      }))),
+      })),
       motiveAllocations: bill.motives.map((m) => ({
         id: m.id,
         motiveId: m.motiveId,
@@ -479,7 +481,14 @@ export async function DELETE(
     // Clean up image files
     for (const img of bill.images) {
       if (img.filePath) {
-        await storage.deleteFile(img.filePath);
+        const imgPath = path.join(UPLOADS_DIR, img.filePath);
+        if (fs.existsSync(imgPath)) {
+          try {
+            fs.unlinkSync(imgPath);
+          } catch (e) {
+            console.error('Failed to delete image file:', e);
+          }
+        }
       }
     }
 
