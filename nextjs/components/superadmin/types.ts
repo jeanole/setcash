@@ -37,4 +37,4 @@ export interface PositionWithCount extends Position {
   memberCount: number;
 }
 
-export type TabType = 'projects' | 'users' | 'config';
+export type TabType = 'projects' | 'users' | 'config' | 'analytics';

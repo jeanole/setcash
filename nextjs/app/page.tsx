@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import LoginForm from "@/components/auth/LoginForm";
 import DemoLoginButton from "@/components/auth/DemoLoginButton";
 import { ImpressumLink } from "@/components/ImpressumModal";
+import VisitTracker from "@/components/analytics/VisitTracker";
 
 export const metadata = {
   title: "SetCash — Your receipts deserve better than a shoebox.",
@@ -18,6 +19,7 @@ export default async function HomePage() {
 
   return (
     <main className="lp">
+      <VisitTracker />
       <div className="lp-inner">
         {/* ── Top-left wordmark ── */}
         <header className="lp-header">
