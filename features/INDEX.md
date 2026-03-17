@@ -85,7 +85,7 @@
 | CR-14 | CR | Add User Profile Edit Panel | Pending Review | Medium | PROJ-20 | 2026-03-13 |
 | CR-15 | CR | Saved Filter Presets on Bills List | Discussion Needed | Medium | PROJ-7 | 2026-03-14 |
 | CR-16 | CR | User Onboarding Flow | Discussion Needed | Medium | PROJ-5 | 2026-03-14 |
-| CR-17 | CR | Bill-Level Comments / Discussion Thread | Pending Review | Medium | PROJ-7 | 2026-03-14 |
+| CR-17 | CR | Bill-Level Comments / Discussion Thread | Deployed | Medium | PROJ-7 | 2026-03-14 |
 | CR-18 | CR | Bulk Bill Status Actions | Discussion Needed | Medium | PROJ-7 | 2026-03-14 |
 | CR-19 | CR | Expanded Notification Triggers | Discussion Needed | High | PROJ-16 | 2026-03-14 |
 | CR-20 | CR | Dashboard Content & Widgets | Deployed | High | PROJ-4 | 2026-03-14 |

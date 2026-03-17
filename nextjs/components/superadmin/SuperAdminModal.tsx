@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { X, Shield, FolderKanban, Users, Settings } from 'lucide-react';
+import { X, Shield, FolderKanban, Users, Settings, BarChart3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import ProjectsTab from './ProjectsTab';
 import UsersTab from './UsersTab';
 import ConfigTab from './ConfigTab';
+import AnalyticsTab from './AnalyticsTab';
 import MembersSubModal from './MembersSubModal';
 import PasswordResetModal from './PasswordResetModal';
 import CreateUserModal from './CreateUserModal';
@@ -253,6 +254,20 @@ export default function SuperAdminModal({ isOpen, onClose, currentUserEmail }: S
                 <Settings className="w-4 h-4" />
                 Config
               </button>
+              <button
+                onClick={() => setActiveTab('analytics')}
+                className={cn(
+                  'flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2',
+                  activeTab === 'analytics'
+                    ? 'border-[var(--vb-accent)] text-[var(--vb-accent)]'
+                    : 'border-transparent text-slate-600 hover:text-slate-800 hover:bg-slate-100'
+                )}
+                aria-selected={activeTab === 'analytics'}
+                role="tab"
+              >
+                <BarChart3 className="w-4 h-4" />
+                Analytics
+              </button>
             </div>
           </div>
 
@@ -276,8 +291,10 @@ export default function SuperAdminModal({ isOpen, onClose, currentUserEmail }: S
                 onResetPassword={handleResetPassword}
                 onCreateUser={handleOpenCreateUser}
               />
-            ) : (
+            ) : activeTab === 'config' ? (
               <ConfigTab />
+            ) : (
+              <AnalyticsTab />
             )}
           </div>
         </div>

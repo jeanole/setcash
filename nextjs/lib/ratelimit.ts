@@ -28,6 +28,8 @@ export const rateLimits = {
   inviteEmail: { max: 20, window: '1 h', name: 'invite_email' },
   // Comment creation: 20 requests per minute per user
   commentCreate: { max: 20, window: '1 m', name: 'comment_create' },
+  // Visit log: 30 requests per minute per IP (public endpoint, prevents abuse)
+  visitLog: { max: 30, window: '1 m', name: 'visit_log' },
 } as const;
 
 function parseWindow(window: string): number {
@@ -90,3 +92,4 @@ export const passwordChangeLimiter = createRateLimiter(rateLimits.passwordChange
 export const exportLimiter = createRateLimiter(rateLimits.exportReport);
 export const inviteLimiter = createRateLimiter(rateLimits.inviteEmail);
 export const commentCreateLimiter = createRateLimiter(rateLimits.commentCreate);
+export const visitLogLimiter = createRateLimiter(rateLimits.visitLog);
