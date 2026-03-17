@@ -399,3 +399,23 @@ model SystemConfig {
   key   String  @id
   value String?
 }
+
+model VisitLog {
+  id          String   @id @default(uuid())
+  timestamp   DateTime @default(now())
+  countryCode String?
+  deviceType  String
+  path        String
+
+  @@index([timestamp])
+}
+
+model DemoLoginAttempt {
+  id               String   @id @default(uuid())
+  timestamp        DateTime @default(now())
+  countryCode      String?
+  turnstileSuccess Boolean
+  loginSuccess     Boolean
+
+  @@index([timestamp])
+}
