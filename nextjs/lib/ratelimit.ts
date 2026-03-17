@@ -26,6 +26,8 @@ export const rateLimits = {
   exportReport: { max: 10, window: '1 m', name: 'export_report' },
   // Project invite: 20 requests per hour per project
   inviteEmail: { max: 20, window: '1 h', name: 'invite_email' },
+  // Comment creation: 20 requests per minute per user
+  commentCreate: { max: 20, window: '1 m', name: 'comment_create' },
 } as const;
 
 function parseWindow(window: string): number {
@@ -87,3 +89,4 @@ export const telegramLinkCodeLimiter = createRateLimiter(rateLimits.telegramLink
 export const passwordChangeLimiter = createRateLimiter(rateLimits.passwordChange);
 export const exportLimiter = createRateLimiter(rateLimits.exportReport);
 export const inviteLimiter = createRateLimiter(rateLimits.inviteEmail);
+export const commentCreateLimiter = createRateLimiter(rateLimits.commentCreate);
