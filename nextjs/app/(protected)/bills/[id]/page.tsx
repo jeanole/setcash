@@ -195,7 +195,7 @@ export default function BillDetailPage({ params }: BillDetailPageProps) {
   };
 
   const { data: session } = useSession();
-  const isAdmin = session?.user?.role === 'admin' || session?.user?.role === 'owner' || session?.user?.role === 'superadmin';
+  const isAdmin = session?.user?.currentProjectRole === 'admin' || session?.user?.currentProjectRole === 'owner' || session?.user?.role === 'superadmin';
   const isAuthor = session?.user?.email === bill?.email;
   const canDelete = isAdmin || isAuthor;
   const canSelfApprove = isAuthor && !isAdmin && bill?.status === 'confirmed';

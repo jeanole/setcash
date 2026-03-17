@@ -15,7 +15,7 @@ const updateCommentSchema = z.object({
 // PATCH /api/bills/[id]/comments/[commentId] - Edit own comment
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string; commentId: string } }
+  { params }: { params: Promise<{ id: string; commentId: string }> }
 ) {
   try {
     const session = await auth();
@@ -53,7 +53,7 @@ export async function PATCH(
     }
 
     const { text: newText } = validation.data;
-    const { id: billId, commentId } = params;
+    const { id: billId, commentId } = await params;
 
     // Fetch the comment, scoped to project and bill
     const log = await prisma.editLog.findFirst({
@@ -163,7 +163,7 @@ export async function PATCH(
 // DELETE /api/bills/[id]/comments/[commentId] - Delete comment (author or admin)
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string; commentId: string } }
+  { params }: { params: Promise<{ id: string; commentId: string }> }
 ) {
   try {
     const session = await auth();
@@ -192,7 +192,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const { id: billId, commentId } = params;
+    const { id: billId, commentId } = await params;
 
     // Fetch the comment, scoped to project and bill
     const log = await prisma.editLog.findFirst({

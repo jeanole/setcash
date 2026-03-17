@@ -16,7 +16,7 @@ const createCommentSchema = z.object({
 // POST /api/bills/[id]/comments - Create a comment on a bill
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth();
@@ -64,7 +64,7 @@ export async function POST(
     }
 
     const { text } = validation.data;
-    const { id: billId } = params;
+    const { id: billId } = await params;
 
     // Verify bill exists in this project
     const bill = await prisma.bill.findFirst({
@@ -136,9 +136,14 @@ export async function POST(
         });
       }
 
-      // Notify @mentioned members (excluding the commenter)
+      // Notify @mentioned members (excluding the commenter and anyone already notified via bill_comment)
       for (const mentionedEmail of mentions) {
         if (mentionedEmail.toLowerCase() === session.user.email.toLowerCase()) {
+          continue;
+        }
+        // Skip if this person already received a bill_comment notification above
+        if (mentionedEmail.toLowerCase() === bill.submittedByEmail.toLowerCase() &&
+            bill.submittedByEmail.toLowerCase() !== session.user.email.toLowerCase()) {
           continue;
         }
         await tx.notification.create({
