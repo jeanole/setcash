@@ -134,15 +134,17 @@ function AnalyticsSkeleton() {
 
 export default function AnalyticsTab() {
   const [data, setData] = useState<AnalyticsData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [isPaging, setIsPaging] = useState(false);
   const [isPruning, setIsPruning] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
 
   const { toasts, showToast, removeToast, handleApiError } = useSuperAdminApi();
 
   const fetchAnalytics = useCallback(
-    async (page: number = 1) => {
-      setIsLoading(true);
+    async (page: number = 1, initial = false) => {
+      if (initial) setIsInitialLoad(true);
+      else setIsPaging(true);
       try {
         const result = await apiFetch<AnalyticsData>(
           `/api/admin/analytics?page=${page}&pageSize=25`
@@ -152,14 +154,15 @@ export default function AnalyticsTab() {
       } catch (error) {
         handleApiError(error, 'Failed to load analytics');
       } finally {
-        setIsLoading(false);
+        setIsInitialLoad(false);
+        setIsPaging(false);
       }
     },
     [handleApiError]
   );
 
   useEffect(() => {
-    fetchAnalytics(1);
+    fetchAnalytics(1, true);
   }, [fetchAnalytics]);
 
   const handlePrune = useCallback(async () => {
@@ -177,7 +180,7 @@ export default function AnalyticsTab() {
       showToast(
         `Deleted ${result.visits} visit(s) and ${result.demoLogins} demo login(s)`
       );
-      await fetchAnalytics(1);
+      await fetchAnalytics(1, true);
     } catch (error) {
       handleApiError(error, 'Failed to prune analytics records');
     } finally {
@@ -185,7 +188,7 @@ export default function AnalyticsTab() {
     }
   }, [fetchAnalytics, showToast, handleApiError]);
 
-  if (isLoading) {
+  if (isInitialLoad) {
     return (
       <>
         <AnalyticsSkeleton />
@@ -233,7 +236,7 @@ export default function AnalyticsTab() {
           />
           <KpiCard
             icon={<CheckCircle className="w-4 h-4" aria-hidden="true" />}
-            value={`${kpi.demoSuccessRate.toFixed(1)}%`}
+            value={`${kpi.demoSuccessRate}%`}
             label="Success Rate"
           />
         </div>
@@ -369,7 +372,7 @@ export default function AnalyticsTab() {
                 <div className="flex gap-2">
                   <button
                     onClick={() => fetchAnalytics(currentPage - 1)}
-                    disabled={currentPage <= 1 || isLoading}
+                    disabled={currentPage <= 1 || isPaging}
                     className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                     aria-label="Previous page"
                   >
@@ -377,7 +380,7 @@ export default function AnalyticsTab() {
                   </button>
                   <button
                     onClick={() => fetchAnalytics(currentPage + 1)}
-                    disabled={currentPage >= totalPages || isLoading}
+                    disabled={currentPage >= totalPages || isPaging}
                     className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                     aria-label="Next page"
                   >

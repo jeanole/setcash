@@ -40,13 +40,24 @@ export function getCountryCode(req: NextRequest): string | null {
 
 /**
  * Extract the client IP address for rate limiting purposes.
- * Prefers x-forwarded-for, falls back to x-real-ip.
+ * In production behind Cloudflare, cf-connecting-ip is authoritative and
+ * cannot be spoofed. Falls back to x-real-ip (set by reverse proxies) and
+ * finally x-forwarded-for (least trustworthy — can be spoofed by clients).
  */
 export function getClientIp(req: NextRequest): string {
+  // Cloudflare sets this to the true client IP — most trustworthy
+  const cfIp = req.headers.get('cf-connecting-ip');
+  if (cfIp) return cfIp.trim();
+
+  // Set by reverse proxies (nginx, etc.) — moderately trustworthy
+  const realIp = req.headers.get('x-real-ip');
+  if (realIp) return realIp.trim();
+
+  // Least trustworthy — client can prepend arbitrary values
   const forwarded = req.headers.get('x-forwarded-for');
   if (forwarded) {
-    // x-forwarded-for may contain a comma-separated list; take the first
     return forwarded.split(',')[0].trim();
   }
-  return req.headers.get('x-real-ip') ?? 'unknown';
+
+  return 'unknown';
 }
