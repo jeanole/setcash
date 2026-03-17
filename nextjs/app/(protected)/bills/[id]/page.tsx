@@ -8,6 +8,7 @@ import ImageGallery from '@/components/bills/ImageGallery';
 import AllocationWidget from '@/components/bills/AllocationWidget';
 import OcrFieldVerification from '@/components/bills/OcrFieldVerification';
 import BillHistoryTimeline from '@/components/bills/BillHistoryTimeline';
+import BillCommentInput from '@/components/bills/BillCommentInput';
 import BillImageUpload from '@/components/bills/BillImageUpload';
 import { useBill, useBillOptions } from '@/lib/hooks/useBills';
 import { BillImage } from '@/lib/types';
@@ -546,7 +547,21 @@ export default function BillDetailPage({ params }: BillDetailPageProps) {
           </button>
 
           {/* Audit trail */}
-          <BillHistoryTimeline logs={logs} />
+          <BillHistoryTimeline
+            logs={logs}
+            currentUserEmail={session?.user?.email ?? undefined}
+            isAdmin={isAdmin}
+            billId={bill.id}
+            onLogsChanged={refetch}
+          >
+            {session?.user?.currentProjectId && (
+              <BillCommentInput
+                billId={bill.id}
+                projectId={session.user.currentProjectId}
+                onCommentAdded={refetch}
+              />
+            )}
+          </BillHistoryTimeline>
         </div>
       </div>
     </div>
