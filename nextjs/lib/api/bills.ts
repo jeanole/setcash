@@ -168,3 +168,35 @@ export async function updateBillStatus(
     body: JSON.stringify({ status }),
   });
 }
+
+// Create a comment on a bill
+export async function createComment(billId: string, text: string): Promise<EditLog> {
+  return fetchWithError<EditLog>(`${API_BASE}/bills/${billId}/comments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  });
+}
+
+// Edit an existing comment
+export async function editComment(
+  billId: string,
+  commentId: string,
+  text: string
+): Promise<EditLog> {
+  return fetchWithError<EditLog>(`${API_BASE}/bills/${billId}/comments/${commentId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  });
+}
+
+// Delete a comment
+export async function deleteComment(
+  billId: string,
+  commentId: string
+): Promise<{ ok: true }> {
+  return fetchWithError<{ ok: true }>(`${API_BASE}/bills/${billId}/comments/${commentId}`, {
+    method: 'DELETE',
+  });
+}

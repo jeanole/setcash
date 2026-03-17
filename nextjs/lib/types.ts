@@ -58,7 +58,7 @@ export interface EditLog {
   user: string;
   billId: string | null;
   changes: Record<string, unknown> & { _event?: string };
-  source: 'user' | 'ai';
+  source: 'user' | 'ai' | 'comment';
 }
 
 export interface Motive {
