@@ -102,7 +102,7 @@
 | [BUG-54](BUG-54-user-deletion-missing-transaction.md) | Bug | User Deletion Not Wrapped in Transaction | Resolved | Medium | PROJ-17 | 2026-03-14 |
 | [BUG-55](BUG-55-admin-user-update-bypasses-zod.md) | Bug | Admin User Update Bypasses Zod Validation on resetPassword Path | Resolved | Medium | PROJ-17 | 2026-03-14 |
 | [BUG-56](BUG-56-password-change-no-rate-limiting.md) | Bug | No Rate Limiting on Password Change Endpoint | Resolved | Medium | PROJ-20 | 2026-03-14 |
-| [BUG-57](BUG-57-rate-limiter-noop-without-upstash.md) | Bug | Rate Limiter Is a Silent No-Op When Upstash Redis Is Not Configured | Open | Medium | PROJ-19 | 2026-03-14 |
+| [BUG-57](BUG-57-rate-limiter-noop-without-upstash.md) | Bug | Rate Limiter Is a Silent No-Op When Upstash Redis Is Not Configured | Resolved | Medium | PROJ-19 | 2026-03-14 |
 | CR-22 | CR | Add Qwen2.5-VL / Qwen3-VL / DeepSeek Providers + Structured System Prompt | Deployed | Medium | PROJ-19 | 2026-03-14 |
 | CR-23 | CR | Enrich Telegram Upload Response with OCR Fields, Errors, and Bill Link | Deployed | Medium | PROJ-12 | 2026-03-14 |
 | [BUG-58](BUG-58-ssrf-dns-rebinding-bypass.md) | Bug | SSRF Check Does Not Resolve DNS — DNS Rebinding Bypass Possible | Resolved | Medium | PROJ-19 | 2026-03-14 |

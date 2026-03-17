@@ -1,0 +1,18 @@
+# Test image — installs all dependencies (including devDeps) and runs Jest.
+# Used by the test-runner service in docker-compose.test.yml.
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install openssl (required by Prisma)
+RUN apk add --no-cache openssl
+
+COPY package.json package-lock.json* ./
+RUN npm ci
+
+COPY . .
+
+# Generate Prisma client
+RUN npx prisma generate
+
+CMD ["npm", "test"]
