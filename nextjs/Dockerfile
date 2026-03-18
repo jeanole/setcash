@@ -26,7 +26,7 @@ ENV OCR_ENCRYPTION_SECRET=dummy-build-secret-not-for-production-use-only
 # Generate Prisma client before build
 RUN npx prisma generate
 
-RUN npm run build
+RUN NODE_OPTIONS=--max-old-space-size=4096 npm run build
 
 # Compile seed script for production
 RUN npx tsc prisma/seed.ts --outDir dist --module commonjs --target es2020 --esModuleInterop --skipLibCheck

@@ -1,112 +1,96 @@
-# QA Test Plan — Telegram Invite (Admin Deep Link)
+# QA Test Plan — CR-28: Visit Analytics & Demo Tracking
 
 ## Feature
-Admin Telegram invite deep link bypass — PROJ-12 (Integrations)
-Commits: c70da11 (frontend), 1c50317 (backend)
+CR-28: Insights into Site Visits and Demo Usage
+Spec: `features/PROJ-23-visit-analytics-demo-tracking.md`
 
 ## Context Summary
-- 6 files changed: settings/route.ts, invite/route.ts, links/route.ts, handlers.ts, TelegramInviteModal.tsx, LinkedAccountsTable.tsx
-- Backend: stores botUsername on token save, invite endpoint, /start payload handling, unlinked members in GET links
-- Frontend: TelegramInviteModal, updated LinkedAccountsTable with unlinked section
-- Notification: creates telegram_invite notification for target user on invite
+- Backend committed: `3526f5b` — Prisma models, 3 API routes, lib/analytics.ts, rate limiter, demo-login extension
+- Frontend committed: `780dce4` — AnalyticsTab, SuperAdminModal update, VisitTracker, types/barrel
+- Dependencies: PROJ-22 (Demo account), PROJ-5 (Auth)
 
 ## User Guidance
-- Full QA scope
-- Live Telegram bot not accessible — test bot handler via code review only
-- App at http://localhost:3000, default admin account
+- Full scope: test all acceptance criteria, edge cases, security, and regression
+- Credentials: localhost:3000 / default admin
 
 ## Acceptance Criteria to Test
 
-### AC-1: Bot username stored on token save
-- Expected: After saving a valid bot token, ProjectSettings has telegramBotUsername row
-- How: Verify invite endpoint returns a deep link (proves username was stored); or check DB
+### AC-1: Landing page visits logged
+- Visit `POST /api/analytics/visit` with `{ path: "/" }` → 204
+- Verify VisitLog row created with timestamp, path, deviceType, countryCode
+- Test: `VisitTracker` component fires on landing page mount
 
-### AC-2: GET /api/admin/telegram/links returns { linked, unlinked }
-- Expected: Response shape is { linked: TelegramLink[], unlinked: string[] }
-- How: Fetch endpoint as admin, inspect JSON shape
+### AC-2: Demo login attempts logged
+- Attempt demo login → `DemoLoginAttempt` row created
+- Both Turnstile success/fail and login success/fail recorded
 
-### AC-3: Unlinked members appear in admin table
-- Expected: Settings Telegram shows Not Linked section with unlinked project members
-- How: Visit settings page as admin, verify section appears with correct emails
+### AC-3: Analytics tab in SuperAdmin modal
+- SuperAdmin modal shows 4 tabs: Projects, Users, Config, Analytics
+- Clicking Analytics tab renders AnalyticsTab component
 
-### AC-4: Invite button opens modal with deep link
-- Expected: Clicking Invite generates a https://t.me/...?start=CODE link in modal
-- How: Click Invite on an unlinked user, verify modal appears with valid deep link
+### AC-4: KPI cards display
+- 4 KPI cards: Total Visits, Visits (7d), Demo Logins (7d), Success Rate
+- Values match actual DB counts
 
-### AC-5: Target user receives in-app notification
-- Expected: After admin invites a user, that user has a telegram_invite notification
-- How: Check DB for Notification row with correct userEmail, type, projectId
+### AC-5: Daily visit chart
+- Bar chart shows last 30 days of visit data
+- Empty state shown when no data
+- Recharts BarChart renders correctly
 
-### AC-6: Already-linked user returns 400
-- Expected: POST /api/admin/telegram/invite for already-linked user returns 400
-- How: Call invite API for a linked user, verify 400 with error message
+### AC-6: Demo login log table
+- Table shows timestamp, country, turnstile result, login result
+- Paginated at 25 per page
+- Pagination controls work (Previous/Next)
+- Empty state shown when no data
 
-### AC-7: Missing botUsername returns 400 with clear message
-- Expected: If telegramBotUsername not in ProjectSettings, invite returns 400 with helpful message
-- How: Code review check on the guard in invite/route.ts
+### AC-7: Manual prune button
+- Prune button deletes records >90 days
+- Confirmation dialog shown before deletion
+- Toast shows count of deleted records
+- Data refreshes after prune
 
-### AC-8: Copy link button works
-- Expected: Copy Link copies deepLink to clipboard, shows Copied! for 2s
-- How: Code review of clipboard logic in TelegramInviteModal.tsx
+### AC-8: No external analytics service
+- All data stored in PostgreSQL via Prisma
+- No third-party analytics scripts loaded
+
+### AC-9: GDPR compliant
+- No full IP stored in VisitLog or DemoLoginAttempt
+- No cookies set for tracking
+- No fingerprinting
+- Country code derived from CF-IPCountry header only
 
 ## Edge Cases to Test
-
-### EC-1: Non-member email in invite request
-- POST /api/admin/telegram/invite with userEmail not in project -> expect 400
-
-### EC-2: Invalid email in invite body
-- POST with userEmail not an email -> expect 422 (Zod validation)
-
-### EC-3: Non-admin calling invite endpoint
-- POST as regular user -> expect 403
-
-### EC-4: Unauthenticated call to invite endpoint
-- POST without session -> expect 401
-
-### EC-5: /start with no payload (plain /start)
-- Code review: handlers.ts falls through to welcome message when no payload
-
-### EC-6: /start with invalid/expired code
-- Code review: validateAndConsumeLinkCode returns null -> bot replies with error message
-
-### EC-7: Invite for user with existing pending code
-- generateLinkCode deletes previous codes first (codes.ts) -> verify preserved
-
-### EC-8: GET links as non-admin
-- GET /api/admin/telegram/links as regular user -> expect 403
+- Visit endpoint with missing/empty body → should still work (204)
+- Visit endpoint with invalid JSON → 400
+- Visit endpoint with very long path string → truncated or rejected
+- Analytics GET with invalid page/pageSize params → 400
+- Analytics GET with page beyond range → empty items array
+- Prune when no old records exist → returns { visits: 0, demoLogins: 0 }
+- Chart with only 1 day of data → single bar renders
+- Demo log with exactly 25 items → no Next button or Next disabled
+- AnalyticsTab loaded with zero data in all tables → all empty states shown
+- Rate limiting: >30 visits/min from same IP → 429
 
 ## Security Audit Scope
-
-### S-1: Admin-only on invite endpoint
-- Non-admin (role=user) gets 403, not just a frontend guard
-
-### S-2: Project isolation on invite
-- Admin of Project A cannot invite a member of Project B (membership check uses admin's projectId)
-
-### S-3: Project isolation on links GET
-- Unlinked list only contains members of requesting admin's project
-
-### S-4: Notification isolation
-- Notification created for target userEmail only
-
-### S-5: Deep link code entropy
-- Code is 6-char uppercase alphanumeric (36^6 approx 2.1B combinations, 10min TTL)
-
-### S-6: botUsername not leaked via settings GET
-- GET /api/admin/telegram/settings should not expose botUsername
-
-### S-7: XSS via userEmail in notification message
-- Email stored in notification message string - verify not rendered as raw HTML
+- **Auth bypass:** GET /api/admin/analytics without auth → 401
+- **Auth bypass:** GET /api/admin/analytics as non-superadmin → 403
+- **Auth bypass:** DELETE /api/admin/analytics/prune without auth → 401
+- **Auth bypass:** DELETE /api/admin/analytics/prune as non-superadmin → 403
+- **Public endpoint abuse:** POST /api/analytics/visit rate limiting works (30/min)
+- **Injection:** POST /api/analytics/visit with XSS in path field → sanitized/safe
+- **SQL injection:** POST /api/analytics/visit with SQL in body → parameterized query safe
+- **Data exposure:** GET /api/admin/analytics does not leak IP addresses
+- **No PII:** VisitLog and DemoLoginAttempt schemas contain no email/IP fields
 
 ## Regression Test Scope
-- Settings Telegram: existing bot token save/clear still works (settings/route.ts changes)
-- Previously linked users still appear in linked array (links/route.ts changes)
-- Unlink button still works (DELETE /api/admin/telegram/links/[id] unchanged)
-- /link CODE command still works (performLink helper reused by both paths)
-- Notification bell still loads (no schema changes)
+- SuperAdmin modal still opens and all existing tabs (Projects, Users, Config) work
+- Demo login flow still works end-to-end
+- Landing page still renders correctly with VisitTracker added
 
-## Bot Handler — Code Review Only
-- /start payload branch: msg.text.trim().split(/\s+/)[1] extracts code correctly
-- toUpperCase() applied defensively
-- performLink() called from both /start CODE and /link CODE paths
-- Plain /start (no payload) still sends welcome message
+## Responsive / Cross-Browser Scope
+- KPI grid: 2 cols on mobile (375px), 4 cols on desktop (1440px)
+- Demo log table: horizontal scroll on mobile
+- Prune section: stacks vertically on mobile
+
+## Bug Report Template
+Reference: .claude/skills/qa/test-template.md
