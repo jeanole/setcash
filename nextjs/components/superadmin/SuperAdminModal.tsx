@@ -204,8 +204,8 @@ export default function SuperAdminModal({ isOpen, onClose, currentUserEmail }: S
           </div>
 
           {/* Tab Navigation */}
-          <div className="px-6 border-b border-slate-100 bg-slate-50/50">
-            <div className="flex gap-1">
+          <div className="overflow-x-auto border-b border-slate-100 bg-slate-50/50">
+            <div className="flex gap-1 px-6 min-w-max">
               <button
                 onClick={() => setActiveTab('projects')}
                 className={cn(
@@ -272,7 +272,7 @@ export default function SuperAdminModal({ isOpen, onClose, currentUserEmail }: S
           </div>
 
           {/* Tab Content */}
-          <div className="flex-1 overflow-hidden p-6 bg-slate-50/30">
+          <div className="flex-1 overflow-y-auto p-6 bg-slate-50/30">
             {activeTab === 'projects' ? (
               <ProjectsTab
                 projects={projects}

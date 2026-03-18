@@ -388,7 +388,7 @@ export default function VGeldPage() {
         </h2>
         <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm" aria-label="V-Geld transfers">
+            <table className="w-full min-w-[640px] text-sm" aria-label="V-Geld transfers">
               <thead>
                 <tr className="border-b border-zinc-200 bg-zinc-50">
                   <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wider">Date</th>
@@ -488,7 +488,7 @@ export default function VGeldPage() {
           </h2>
           <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm" aria-label="V-Geld user summary">
+              <table className="w-full min-w-[480px] text-sm" aria-label="V-Geld user summary">
                 <thead>
                   <tr className="border-b border-zinc-200 bg-zinc-50">
                     <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wider">User</th>
