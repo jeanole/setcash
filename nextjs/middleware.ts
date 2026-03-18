@@ -26,6 +26,7 @@ export default auth(function middleware(req) {
     nextUrl.pathname === '/verify-email' ||
     nextUrl.pathname === '/accept-invite' ||
     nextUrl.pathname === '/api/health' ||
+    nextUrl.pathname === '/api/analytics/visit' ||
     nextUrl.pathname.startsWith('/api/auth/') ||
     nextUrl.pathname.startsWith('/_next/') ||
     nextUrl.pathname === '/favicon.ico';
