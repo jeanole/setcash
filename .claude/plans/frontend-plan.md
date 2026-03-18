@@ -1,171 +1,199 @@
-# Frontend Implementation Plan — PROJ-21: Full Brand Overhaul
+# Frontend Implementation Plan — CR-28: Visit Analytics & Demo Tracking
 
 ## Feature
-PROJ-21 CR-26: Replace indigo → yellow accent, apply dark theme tokens, zero border-radius
-Spec: `features/PROJ-21-brand-design-system.md`
-
-## Strategy
-Three-layer approach (most cascade, least file touching):
-1. **globals.css** — update `--vb-*` tokens to yellow + dark values; Tailwind radius override; body styles
-2. **Sed bulk replace** — replace hardcoded hex `#6366f1`/`#4f46e5` with CSS variable references
-3. **Manual fixes** — Tailwind `indigo-*` classes in layout components (Sidebar, Header, nav items)
+CR-28: Insights into Site Visits and Demo Usage
+Spec: `features/PROJ-23-visit-analytics-demo-tracking.md` → `### CR-28` section
+Backend plan: `.claude/plans/backend-plan.md` (already implemented)
 
 ## Context Summary
-- 127 instances of `#6366f1` across 45+ files
-- 23 instances of `#4f46e5` (hover) across 23+ files
-- 416 `rounded-*` instances across many files
-- Tailwind 4.0 CSS-first — use `@theme` block to override border-radius to 0
-- `--vb-accent` is the main CSS variable used by components — updating it cascades widely
+- SuperAdmin modal: `nextjs/components/superadmin/SuperAdminModal.tsx` — 3 tabs: Projects, Users, Config
+- TabType: `'projects' | 'users' | 'config'` in `nextjs/components/superadmin/types.ts`
+- Existing tab components: `ProjectsTab.tsx`, `UsersTab.tsx`, `ConfigTab.tsx` — follow same pattern
+- API utility: `useSuperAdminApi` hook + `apiFetch<T>()` for data fetching with toast error handling
+- Chart library: `recharts` ^3.8.0 already installed (used in `SpendingByCategoryChart.tsx` with PieChart)
+- Dashboard `KpiCard` component exists but is tied to dashboard-specific props (href, percentBar) — will build simpler inline KPI cards matching the superadmin card style
+- Design system: white cards, `rounded-xl`, `border-slate-200`, `shadow-sm`, `var(--vb-accent)` indigo accent
 
-## Step 1: Update globals.css
+### Backend API endpoints (already built)
+- `GET /api/admin/analytics` — returns `{ kpi, dailyVisits, demoLog }` (superadmin only)
+- `DELETE /api/admin/analytics/prune` — deletes records >90 days, returns `{ visits: N, demoLogins: M }`
 
-### 1a. Update `--vb-*` accent tokens (in `:root` block)
-Change:
-```css
---vb-sidebar-hover: rgba(99,102,241,0.06);
---vb-sidebar-active: rgba(99,102,241,0.10);
---vb-sidebar-accent: #6366f1;
---vb-accent: #6366f1;
---vb-accent-hover: #4f46e5;
---vb-accent-light: rgba(99,102,241,0.08);
---vb-accent-ring: 0 0 0 3px rgba(99,102,241,0.22);
---vb-ring: 0 0 0 3px rgba(99,102,241,0.22);
-```
-To:
-```css
---vb-sidebar-hover: rgba(250,204,21,0.08);
---vb-sidebar-active: rgba(250,204,21,0.12);
---vb-sidebar-accent: #FACC15;
---vb-accent: #FACC15;
---vb-accent-hover: #d4a800;
---vb-accent-light: rgba(250,204,21,0.08);
---vb-accent-ring: 0 0 0 3px rgba(250,204,21,0.30);
---vb-ring: 0 0 0 3px rgba(250,204,21,0.30);
-```
-
-Also add these to `:root` alongside `--accent`:
-```css
---accent-hover: #d4a800;
-```
-
-### 1b. Update sidebar background/text tokens (in `:root` block)
-Change to dark theme colors:
-```css
---vb-sidebar-bg: #18181B;
---vb-sidebar-border: #27272A;
---vb-sidebar-text: #A1A1AA;
---vb-sidebar-text-active: #FAFAFA;
---vb-content-bg: #0F0F10;
---vb-card-bg: #18181B;
---vb-card-border: rgba(255,255,255,0.06);
---vb-header-bg: rgba(15,15,16,0.85);
---vb-text-primary: #FAFAFA;
---vb-text-secondary: #A1A1AA;
---vb-text-muted: #52525B;
-```
-
-### 1c. Update body styles
-Remove the indigo/emerald radial gradient. Replace with:
-```css
-body {
-  font-family: var(--font-inter), sans-serif;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
+### API Response Shape (from `GET /api/admin/analytics`)
+```ts
+{
+  kpi: {
+    totalVisits: number;
+    visitsLast7Days: number;
+    demoLoginsLast7Days: number;
+    demoSuccessRate: number; // 0-100
+  };
+  dailyVisits: Array<{ date: string; count: number }>; // last 30 days
+  demoLog: {
+    items: Array<{
+      id: string;
+      timestamp: string;
+      countryCode: string | null;
+      turnstileSuccess: boolean;
+      loginSuccess: boolean;
+    }>;
+    total: number;
+    page: number;
+    pageSize: number;
+  };
 }
 ```
 
-### 1d. Add Tailwind 4 border-radius override (after `@import "tailwindcss"`)
-```css
-@theme {
-  --radius-none: 0px;
-  --radius-sm: 0px;
-  --radius: 0px;
-  --radius-md: 0px;
-  --radius-lg: 0px;
-  --radius-xl: 0px;
-  --radius-2xl: 0px;
-  --radius-3xl: 0px;
-  --radius-full: 9999px; /* keep full/circle for avatars */
+## User Decisions (from architecture/backend phase)
+- Display: KPI numbers + daily bar chart + raw demo log table
+- No new pages — Analytics is a 4th tab in the existing SuperAdmin modal
+- Manual prune button (90-day retention) with count feedback
+- Style matches existing superadmin UI
+
+## Open Bug Reports to Address
+None for PROJ-23.
+
+## Existing Components to Reuse
+- `SuperAdminModal.tsx` — add 4th tab button
+- `types.ts` — extend `TabType` union
+- `useSuperAdminApi` hook + `apiFetch<T>()` — data fetching with error toasts
+- `cn()` from `@/lib/utils` — class merging
+- `recharts` — `BarChart`, `Bar`, `XAxis`, `YAxis`, `Tooltip`, `ResponsiveContainer`
+
+## New Components to Build
+
+### 1. `nextjs/components/superadmin/AnalyticsTab.tsx`
+
+**Self-contained tab** component (follows `ConfigTab` pattern — manages its own data fetching and state).
+
+**State:**
+```ts
+interface AnalyticsData {
+  kpi: { totalVisits: number; visitsLast7Days: number; demoLoginsLast7Days: number; demoSuccessRate: number };
+  dailyVisits: Array<{ date: string; count: number }>;
+  demoLog: { items: DemoLogItem[]; total: number; page: number; pageSize: number };
 }
 ```
-Note: Keep `--radius-full` at 9999px — avatar circles should stay round.
 
-### 1e. Update body gradient references
-Remove `rgba(99, 102, 241, 0.08)` indigo gradient from body.
+**Sections:**
 
-## Step 2: Sed bulk replace — hardcoded hex colors
+#### A) KPI Cards Row
+4 cards in a responsive grid (`grid-cols-2 lg:grid-cols-4`):
+1. **Total Visits** (all time) — icon: `Eye`
+2. **Visits (7d)** — icon: `TrendingUp`
+3. **Demo Logins (7d)** — icon: `LogIn`
+4. **Success Rate** — icon: `CheckCircle`, shows `N%`
 
-Run these replacements across all .tsx/.ts files in components/ and app/:
+Style: white card, `rounded-xl border border-slate-200 p-4`, value in `text-2xl font-bold font-mono`, label in `text-xs uppercase tracking-wider text-slate-400`
 
-```bash
-# Replace hardcoded indigo hex with CSS variable references
-find nextjs/components nextjs/app nextjs/lib -name "*.tsx" -o -name "*.ts" | \
-  xargs sed -i \
-    -e 's/\[#6366f1\]/[var(--accent)]/g' \
-    -e 's/#6366f1/var(--accent)/g' \
-    -e 's/\[#4f46e5\]/[var(--accent-hover)]/g' \
-    -e 's/#4f46e5/var(--accent-hover)/g'
-```
+#### B) Daily Visits Bar Chart
+- `recharts` `BarChart` with `ResponsiveContainer` (height: 250px)
+- Bar fill: `var(--vb-accent)` with `radius={[4, 4, 0, 0]}`
+- XAxis: date labels (format: `MM/DD`), tick every ~5 days
+- YAxis: count
+- Tooltip: date + count
+- Empty state: "No visit data yet" centered text
+- Wrapped in white card with title "Daily Visits (Last 30 Days)"
 
-IMPORTANT exceptions — do NOT replace in:
-- `app/globals.css` (already handled in Step 1)
-- Any file where `#6366f1` appears in a comment
+#### C) Demo Login Log Table
+- Columns: Timestamp | Country | Turnstile | Login Result
+- Timestamp: formatted as `YYYY-MM-DD HH:mm`
+- Country: 2-letter code or "—"
+- Turnstile: green check or red X icon
+- Login: green check or red X icon
+- Pagination: Previous/Next buttons + "Page X of Y" (25 per page)
+- Empty state: "No demo login attempts yet"
+- Wrapped in white card with title "Demo Login Log"
 
-After sed, manually check `lib/email.ts` — email templates use inline styles. These should stay as hex (email clients don't support CSS vars). Revert any changes to email.ts.
+#### D) Prune Section
+- White card with warning styling
+- Text: "Delete all analytics records older than 90 days"
+- Button: `text-red-600 border-red-200 hover:bg-red-50` — "Prune Old Records"
+- Confirm via `window.confirm()` before calling DELETE
+- After success: show toast "Deleted N visit(s) and M demo login(s)" + refetch data
+- Loading state: button disabled + "Pruning…" text
 
-## Step 3: Fix Tailwind indigo classes in layout components
+**States:** loading (skeleton), error (toast), empty (individual section messages), populated
 
-### Sidebar.tsx
-Find and replace Tailwind indigo nav classes:
-- Active state: `text-indigo-700 bg-indigo-50 border-indigo-500` → `text-[var(--accent)] bg-[rgba(250,204,21,0.08)] border-[var(--accent)]`
-- Inactive text: keep as-is (zinc/slate text is fine)
-- Background: `bg-white border-r border-slate-200` → `bg-[var(--vb-sidebar-bg)] border-r border-[var(--vb-sidebar-border)]`
-- Mobile sidebar same background changes
-- VGeld balance widget: `bg-slate-50 border border-slate-200` → `bg-[var(--bg-surface)] border border-[var(--border)]`
+**Responsive:**
+- Mobile (375px): KPI grid 2 cols, chart full width, table horizontal scroll
+- Tablet (768px): KPI grid 2 cols, same
+- Desktop (1440px): KPI grid 4 cols
 
-### Header.tsx
-- Avatar: `bg-indigo-500` → `bg-[var(--accent)]`, `text-white` → `text-zinc-900` (yellow bg needs dark text)
-- `hover:ring-indigo-400` and `focus:ring-indigo-400` → `hover:ring-[var(--accent)] focus:ring-[var(--accent)]`
+## Files to Modify
 
-### AppShell.tsx
-- Footer: `border-t border-zinc-200 bg-zinc-50/60` → `border-t border-[var(--border)] bg-[var(--bg-surface)]`
+### `nextjs/components/superadmin/types.ts`
+- Change `TabType = 'projects' | 'users' | 'config'` to `'projects' | 'users' | 'config' | 'analytics'`
 
-## Step 4: Fix focus rings throughout
-After sed replace, `focus:ring-[#6366f1]` → `focus:ring-[var(--accent)]` should be handled. Verify key forms still have visible focus states (yellow ring on dark bg is fine).
+### `nextjs/components/superadmin/SuperAdminModal.tsx`
+- Import `AnalyticsTab` and `BarChart3` icon from `lucide-react`
+- Add 4th tab button in the tab navigation bar
+- Add `activeTab === 'analytics'` branch in the tab content area rendering `<AnalyticsTab />`
 
-## Step 5: Fix text contrast for yellow accent
-Yellow (`#FACC15`) on dark background is fine for accent text. But:
-- Buttons with `bg-[var(--accent)] text-white` → change to `bg-[var(--accent)] text-zinc-900` (dark text on yellow button)
-- This affects primary CTA buttons throughout. Search for patterns where text-white is paired with the accent background.
+### `nextjs/components/superadmin/index.ts`
+- Export `AnalyticsTab` if other components are exported from barrel file
 
-Pattern to fix:
-- `bg-[var(--accent)] text-white` → `bg-[var(--accent)] text-zinc-900`
-- `bg-[#6366f1] text-white` → already handled by sed, but check the text color
-- After sed: `bg-[var(--accent)] text-white` patterns — run a second pass to fix text color
+## Landing Page Visit Tracking (Client-side)
+The landing page needs to fire `POST /api/analytics/visit` on mount. This is a tiny addition:
 
-## Files to Change
-- `nextjs/app/globals.css` — Step 1 (all token/body changes)
-- All `.tsx` in `components/` and `app/` — Step 2 (sed)
-- `nextjs/lib/email.ts` — REVERT after sed (email templates keep hex)
-- `nextjs/components/layout/Sidebar.tsx` — Step 3
-- `nextjs/components/layout/Header.tsx` — Step 3
-- `nextjs/components/layout/AppShell.tsx` — Step 3
+### `nextjs/app/page.tsx` (or the landing page component)
+- Add a `useEffect` that fires once on mount:
+  ```ts
+  useEffect(() => {
+    fetch('/api/analytics/visit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: window.location.pathname }),
+    }).catch(() => {}); // fire-and-forget
+  }, []);
+  ```
+- No loading state, no error handling — completely silent
+
+## Design Specifications
+
+### KPI Cards
+- Container: `bg-white rounded-xl border border-slate-200 p-4`
+- Icon: `w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-slate-400`
+- Value: `text-2xl font-bold text-slate-800 font-mono`
+- Label: `text-xs font-semibold text-slate-400 uppercase tracking-[0.1em]`
+
+### Bar Chart
+- Container: `bg-white rounded-xl border border-slate-200 p-5`
+- Title: `text-base font-semibold text-slate-800 mb-4`
+- Bar: fill `var(--vb-accent)`, hover fill slightly lighter
+- Axis: `text-xs text-slate-400`
+
+### Demo Log Table
+- Container: `bg-white rounded-xl border border-slate-200`
+- Header row: `bg-slate-50 text-xs font-semibold text-slate-500 uppercase`
+- Body rows: `text-sm text-slate-700`, alternating hover `hover:bg-slate-50`
+- Boolean cells: green `CheckCircle` / red `XCircle` icons (w-4 h-4)
+- Pagination: `text-sm text-slate-600`, buttons `px-3 py-1.5 border rounded-lg`
+
+### Prune Section
+- Container: `bg-white rounded-xl border border-slate-200 p-5`
+- Button: `px-4 py-2 text-sm font-medium border border-red-200 text-red-600 rounded-lg hover:bg-red-50`
+
+## Implementation Order
+1. Update `types.ts` — add `'analytics'` to `TabType`
+2. Create `AnalyticsTab.tsx` — full component with KPI, chart, table, prune
+3. Update `SuperAdminModal.tsx` — add tab button + render `AnalyticsTab`
+4. Update landing page — add visit tracking `useEffect`
+5. Update `index.ts` barrel export if needed
 
 ## Checklist
-- [ ] `--vb-accent` updated to `#FACC15` in globals.css
-- [ ] `--vb-accent-hover` updated to `#d4a800`
-- [ ] All sidebar/content/card background tokens updated to dark values
-- [ ] Body background uses `var(--bg-primary)`, no indigo gradient
-- [ ] `@theme` border-radius override added (all → 0, except full)
-- [ ] Sed replace run for `#6366f1` → `var(--accent)`
-- [ ] Sed replace run for `#4f46e5` → `var(--accent-hover)`
-- [ ] `lib/email.ts` reverted to original hex values after sed
-- [ ] Sidebar background/border updated to dark tokens
-- [ ] Sidebar nav active state updated to yellow
-- [ ] Header avatar: yellow bg with dark text
-- [ ] AppShell footer: dark theme tokens
-- [ ] Yellow-bg buttons use `text-zinc-900` not `text-white`
-- [ ] TypeScript compiles (`npx tsc --noEmit`)
+- [ ] `TabType` extended with `'analytics'`
+- [ ] `AnalyticsTab` component created with all 4 sections (KPI, chart, table, prune)
+- [ ] `AnalyticsTab` fetches data from `GET /api/admin/analytics` using `apiFetch`
+- [ ] KPI cards display all 4 metrics
+- [ ] Daily visits bar chart uses `recharts BarChart` (last 30 days)
+- [ ] Demo log table is paginated (25 per page)
+- [ ] Prune button calls `DELETE /api/admin/analytics/prune` with confirmation
+- [ ] Prune shows toast with deleted counts + refetches data
+- [ ] `SuperAdminModal` has 4th Analytics tab button with `BarChart3` icon
+- [ ] Tab content renders `AnalyticsTab` when analytics tab is active
+- [ ] Landing page fires `POST /api/analytics/visit` on mount (fire-and-forget)
+- [ ] Loading skeleton shown while data fetches
+- [ ] Empty states for chart and table
+- [ ] Responsive: 2-col KPI on mobile, 4-col on desktop
+- [ ] TypeScript compiles cleanly
+- [ ] Commit with: `feat(PROJ-23): Implement frontend for CR-28 visit analytics`

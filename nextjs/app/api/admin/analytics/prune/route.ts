@@ -21,11 +21,14 @@ export async function DELETE() {
 
     const cutoff = new Date(Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000);
 
-    const [visitResult, demoResult] = await prisma.$transaction([
+    const [visitResult, demoResult, eventResult] = await prisma.$transaction([
       prisma.visitLog.deleteMany({
         where: { timestamp: { lt: cutoff } },
       }),
       prisma.demoLoginAttempt.deleteMany({
+        where: { timestamp: { lt: cutoff } },
+      }),
+      prisma.pageEvent.deleteMany({
         where: { timestamp: { lt: cutoff } },
       }),
     ]);
@@ -33,6 +36,7 @@ export async function DELETE() {
     return NextResponse.json({
       visits: visitResult.count,
       demoLogins: demoResult.count,
+      events: eventResult.count,
     });
   } catch (error) {
     console.error('[admin/analytics/prune] Error pruning analytics:', error);

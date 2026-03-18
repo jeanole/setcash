@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { signIn } from 'next-auth/react';
+import { trackCta } from '@/components/analytics/EventTracker';
 
 declare global {
   interface Window {
@@ -115,6 +116,7 @@ export default function DemoLoginButton() {
   }
 
   function handleClick() {
+    trackCta('demo_login_click');
     setError(null);
     setShowTurnstile(true);
     setState('verifying');

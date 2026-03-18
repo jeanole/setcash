@@ -9,7 +9,16 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
-import { Eye, TrendingUp, LogIn, CheckCircle, XCircle } from 'lucide-react';
+import {
+  Eye,
+  TrendingUp,
+  LogIn,
+  CheckCircle,
+  XCircle,
+  Globe,
+  MousePointerClick,
+  LayoutDashboard,
+} from 'lucide-react';
 import { apiFetch, useSuperAdminApi } from './useSuperAdminApi';
 import ToastContainer from './ToastContainer';
 
@@ -42,10 +51,18 @@ interface DemoLog {
   pageSize: number;
 }
 
+interface ReferrerRow  { referrer: string;  count: number }
+interface UtmRow       { utmSource: string; count: number }
+interface CtaRow       { label: string;     count: number }
+interface ScrollRow    { milestone: string; count: number }
+interface PageRow      { path: string;      count: number }
+
 interface AnalyticsData {
   kpi: KpiData;
   dailyVisits: DailyVisit[];
   demoLog: DemoLog;
+  trafficSources: { referrers: ReferrerRow[]; utmSources: UtmRow[] };
+  events: { ctaClicks: CtaRow[]; scrollDepth: ScrollRow[]; topPages: PageRow[] };
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -89,6 +106,52 @@ function KpiCard({ icon, value, label }: KpiCardProps) {
   );
 }
 
+function SimpleTable({
+  title,
+  col1,
+  col2,
+  rows,
+  emptyText,
+}: {
+  title: string;
+  col1: string;
+  col2: string;
+  rows: { label: string; count: number }[];
+  emptyText: string;
+}) {
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <div className="px-5 py-4 border-b border-slate-100">
+        <h4 className="text-sm font-semibold text-slate-700">{title}</h4>
+      </div>
+      {rows.length === 0 ? (
+        <p className="px-5 py-6 text-sm text-slate-400 text-center">{emptyText}</p>
+      ) : (
+        <table className="w-full">
+          <thead>
+            <tr className="bg-slate-50 text-xs font-semibold text-slate-500 uppercase">
+              <th className="px-5 py-2 text-left tracking-wider">{col1}</th>
+              <th className="px-5 py-2 text-right tracking-wider">{col2}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, i) => (
+              <tr key={i} className="border-t border-slate-100 hover:bg-slate-50 transition-colors">
+                <td className="px-5 py-2.5 text-sm text-slate-700 font-mono truncate max-w-[240px]">
+                  {row.label}
+                </td>
+                <td className="px-5 py-2.5 text-sm text-slate-700 font-mono text-right tabular-nums">
+                  {row.count.toLocaleString()}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
 // Skeleton loader
 function SkeletonBlock({ className }: { className?: string }) {
   return <div className={`bg-slate-200 rounded animate-pulse ${className ?? ''}`} />;
@@ -97,7 +160,6 @@ function SkeletonBlock({ className }: { className?: string }) {
 function AnalyticsSkeleton() {
   return (
     <div className="space-y-6">
-      {/* KPI row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[...Array(4)].map((_, i) => (
           <div key={i} className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
@@ -107,12 +169,10 @@ function AnalyticsSkeleton() {
           </div>
         ))}
       </div>
-      {/* Chart */}
       <div className="bg-white rounded-xl border border-slate-200 p-5">
         <SkeletonBlock className="h-5 w-56 mb-4" />
         <SkeletonBlock className="h-[250px] w-full" />
       </div>
-      {/* Table */}
       <div className="bg-white rounded-xl border border-slate-200">
         <div className="p-5 border-b border-slate-100">
           <SkeletonBlock className="h-5 w-36" />
@@ -173,12 +233,12 @@ export default function AnalyticsTab() {
 
     setIsPruning(true);
     try {
-      const result = await apiFetch<{ visits: number; demoLogins: number }>(
+      const result = await apiFetch<{ visits: number; demoLogins: number; events: number }>(
         '/api/admin/analytics/prune',
         { method: 'DELETE' }
       );
       showToast(
-        `Deleted ${result.visits} visit(s) and ${result.demoLogins} demo login(s)`
+        `Deleted ${result.visits} visit(s), ${result.demoLogins} demo login(s), ${result.events} event(s)`
       );
       await fetchAnalytics(1, true);
     } catch (error) {
@@ -206,10 +266,9 @@ export default function AnalyticsTab() {
     );
   }
 
-  const { kpi, dailyVisits, demoLog } = data;
+  const { kpi, dailyVisits, demoLog, trafficSources, events } = data;
   const totalPages = Math.max(1, Math.ceil(demoLog.total / demoLog.pageSize));
 
-  // For XAxis we want to show a tick every ~5 days
   const chartTicks = dailyVisits
     .filter((_, idx) => idx % 5 === 0)
     .map((d) => d.date);
@@ -282,17 +341,76 @@ export default function AnalyticsTab() {
                     border: '1px solid #e2e8f0',
                   }}
                 />
-                <Bar
-                  dataKey="count"
-                  fill="var(--vb-accent)"
-                  radius={[4, 4, 0, 0]}
-                />
+                <Bar dataKey="count" fill="var(--vb-accent)" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
         </section>
 
-        {/* ── C) Demo Login Log Table ── */}
+        {/* ── C) Traffic Sources ── */}
+        <section aria-label="Traffic sources">
+          <div className="flex items-center gap-2 mb-3">
+            <Globe className="w-4 h-4 text-slate-400" aria-hidden="true" />
+            <h3 className="text-base font-semibold text-slate-800">Traffic Sources (Last 30 Days)</h3>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <SimpleTable
+              title="Top Referrers"
+              col1="Domain"
+              col2="Visits"
+              rows={trafficSources.referrers.map((r) => ({ label: r.referrer, count: r.count }))}
+              emptyText="No referrer data yet"
+            />
+            <SimpleTable
+              title="UTM Sources"
+              col1="utm_source"
+              col2="Visits"
+              rows={trafficSources.utmSources.map((r) => ({ label: r.utmSource, count: r.count }))}
+              emptyText="No UTM data yet"
+            />
+          </div>
+        </section>
+
+        {/* ── D) Visitor Behaviour ── */}
+        <section aria-label="Visitor behaviour">
+          <div className="flex items-center gap-2 mb-3">
+            <MousePointerClick className="w-4 h-4 text-slate-400" aria-hidden="true" />
+            <h3 className="text-base font-semibold text-slate-800">Visitor Behaviour (Last 30 Days)</h3>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <SimpleTable
+              title="CTA Clicks"
+              col1="Button / Action"
+              col2="Clicks"
+              rows={events.ctaClicks}
+              emptyText="No CTA clicks yet"
+            />
+            <SimpleTable
+              title="Scroll Depth"
+              col1="Milestone"
+              col2="Reached by"
+              rows={events.scrollDepth.map((r) => ({ label: r.milestone, count: r.count }))}
+              emptyText="No scroll data yet"
+            />
+          </div>
+        </section>
+
+        {/* ── E) Top Authenticated Pages ── */}
+        <section aria-label="Top authenticated pages">
+          <div className="flex items-center gap-2 mb-3">
+            <LayoutDashboard className="w-4 h-4 text-slate-400" aria-hidden="true" />
+            <h3 className="text-base font-semibold text-slate-800">Top App Pages (Last 30 Days)</h3>
+          </div>
+          <SimpleTable
+            title="Authenticated Page Views"
+            col1="Path"
+            col2="Views"
+            rows={events.topPages.map((r) => ({ label: r.path, count: r.count }))}
+            emptyText="No authenticated page view data yet"
+          />
+        </section>
+
+        {/* ── F) Demo Login Log Table ── */}
         <section
           className="bg-white rounded-xl border border-slate-200 overflow-hidden"
           aria-label="Demo login log"
@@ -331,28 +449,16 @@ export default function AnalyticsTab() {
                         </td>
                         <td className="px-5 py-3 text-center">
                           {item.turnstileSuccess ? (
-                            <CheckCircle
-                              className="w-4 h-4 text-emerald-500 inline-block"
-                              aria-label="Turnstile passed"
-                            />
+                            <CheckCircle className="w-4 h-4 text-emerald-500 inline-block" aria-label="Turnstile passed" />
                           ) : (
-                            <XCircle
-                              className="w-4 h-4 text-red-400 inline-block"
-                              aria-label="Turnstile failed"
-                            />
+                            <XCircle className="w-4 h-4 text-red-400 inline-block" aria-label="Turnstile failed" />
                           )}
                         </td>
                         <td className="px-5 py-3 text-center">
                           {item.loginSuccess ? (
-                            <CheckCircle
-                              className="w-4 h-4 text-emerald-500 inline-block"
-                              aria-label="Login succeeded"
-                            />
+                            <CheckCircle className="w-4 h-4 text-emerald-500 inline-block" aria-label="Login succeeded" />
                           ) : (
-                            <XCircle
-                              className="w-4 h-4 text-red-400 inline-block"
-                              aria-label="Login failed"
-                            />
+                            <XCircle className="w-4 h-4 text-red-400 inline-block" aria-label="Login failed" />
                           )}
                         </td>
                       </tr>
@@ -392,7 +498,7 @@ export default function AnalyticsTab() {
           )}
         </section>
 
-        {/* ── D) Prune Section ── */}
+        {/* ── G) Prune Section ── */}
         <section
           className="bg-white rounded-xl border border-slate-200 p-5"
           aria-label="Data pruning"

@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-    // Compute KPIs in parallel
+    // Compute all data in parallel
     const [
       totalVisits,
       visitsLast7Days,
@@ -57,6 +57,11 @@ export async function GET(req: NextRequest) {
       dailyVisitsRaw,
       demoLogItems,
       demoLogTotal,
+      referrerBreakdownRaw,
+      utmSourceBreakdownRaw,
+      ctaClicksRaw,
+      scrollDepthRaw,
+      topPagesRaw,
     ] = await Promise.all([
       // Total visits (all time)
       prisma.visitLog.count(),
@@ -103,6 +108,61 @@ export async function GET(req: NextRequest) {
 
       // Total count for pagination
       prisma.demoLoginAttempt.count(),
+
+      // Top referrers (last 30 days, non-null, top 10)
+      prisma.$queryRaw<Array<{ referrer: string; count: bigint }>>`
+        SELECT "referrer", COUNT(*)::bigint AS count
+        FROM "VisitLog"
+        WHERE "timestamp" >= ${thirtyDaysAgo}
+          AND "referrer" IS NOT NULL
+        GROUP BY "referrer"
+        ORDER BY count DESC
+        LIMIT 10
+      `,
+
+      // UTM source breakdown (last 30 days, non-null, top 10)
+      prisma.$queryRaw<Array<{ utmSource: string; count: bigint }>>`
+        SELECT "utmSource", COUNT(*)::bigint AS count
+        FROM "VisitLog"
+        WHERE "timestamp" >= ${thirtyDaysAgo}
+          AND "utmSource" IS NOT NULL
+        GROUP BY "utmSource"
+        ORDER BY count DESC
+        LIMIT 10
+      `,
+
+      // CTA clicks (last 30 days, grouped by label)
+      prisma.$queryRaw<Array<{ eventLabel: string | null; count: bigint }>>`
+        SELECT "eventLabel", COUNT(*)::bigint AS count
+        FROM "PageEvent"
+        WHERE "timestamp" >= ${thirtyDaysAgo}
+          AND "eventType" = 'cta_click'
+        GROUP BY "eventLabel"
+        ORDER BY count DESC
+        LIMIT 20
+      `,
+
+      // Scroll depth distribution (last 30 days)
+      prisma.$queryRaw<Array<{ eventLabel: string | null; count: bigint }>>`
+        SELECT "eventLabel", COUNT(*)::bigint AS count
+        FROM "PageEvent"
+        WHERE "timestamp" >= ${thirtyDaysAgo}
+          AND "eventType" = 'scroll_depth'
+        GROUP BY "eventLabel"
+        ORDER BY "eventLabel" ASC
+      `,
+
+      // Top authenticated pages (last 30 days, page_view events)
+      prisma.$queryRaw<Array<{ path: string; count: bigint }>>`
+        SELECT "path", COUNT(*)::bigint AS count
+        FROM "PageEvent"
+        WHERE "timestamp" >= ${thirtyDaysAgo}
+          AND "eventType" = 'page_view'
+          AND "isAuthenticated" = true
+        GROUP BY "path"
+        ORDER BY count DESC
+        LIMIT 15
+      `,
     ]);
 
     const demoSuccessRate =
@@ -112,6 +172,31 @@ export async function GET(req: NextRequest) {
 
     const dailyVisits = dailyVisitsRaw.map((row) => ({
       date: row.date,
+      count: Number(row.count),
+    }));
+
+    const referrerBreakdown = referrerBreakdownRaw.map((row) => ({
+      referrer: row.referrer,
+      count: Number(row.count),
+    }));
+
+    const utmSourceBreakdown = utmSourceBreakdownRaw.map((row) => ({
+      utmSource: row.utmSource,
+      count: Number(row.count),
+    }));
+
+    const ctaClicks = ctaClicksRaw.map((row) => ({
+      label: row.eventLabel ?? '(unlabelled)',
+      count: Number(row.count),
+    }));
+
+    const scrollDepth = scrollDepthRaw.map((row) => ({
+      milestone: row.eventLabel ?? '?',
+      count: Number(row.count),
+    }));
+
+    const topPages = topPagesRaw.map((row) => ({
+      path: row.path,
       count: Number(row.count),
     }));
 
@@ -128,6 +213,15 @@ export async function GET(req: NextRequest) {
         total: demoLogTotal,
         page,
         pageSize,
+      },
+      trafficSources: {
+        referrers: referrerBreakdown,
+        utmSources: utmSourceBreakdown,
+      },
+      events: {
+        ctaClicks,
+        scrollDepth,
+        topPages,
       },
     });
   } catch (error) {

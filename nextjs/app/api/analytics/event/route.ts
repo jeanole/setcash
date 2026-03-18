@@ -1,5 +1,6 @@
 // ============================================================================
-// POST /api/analytics/visit — Log a landing page visit (public, no auth)
+// POST /api/analytics/event — Log a page event (public, no auth required)
+// Tracks: cta_click, scroll_depth, time_on_page, page_view
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -8,50 +9,48 @@ import { db as prisma } from '@/lib/db';
 import { visitLogLimiter } from '@/lib/ratelimit';
 import { classifyUA, getCountryCode, getClientIp } from '@/lib/analytics';
 
-const visitSchema = z.object({
-  path:        z.string().max(200).optional().default('/'),
-  referrer:    z.string().max(500).optional().nullable(),
-  utmSource:   z.string().max(100).optional().nullable(),
-  utmMedium:   z.string().max(100).optional().nullable(),
-  utmCampaign: z.string().max(100).optional().nullable(),
+const EVENT_TYPES = ['cta_click', 'scroll_depth', 'time_on_page', 'page_view'] as const;
+
+const eventSchema = z.object({
+  path:            z.string().max(200).optional().default('/'),
+  eventType:       z.enum(EVENT_TYPES),
+  eventLabel:      z.string().max(200).optional().nullable(),
+  isAuthenticated: z.boolean().optional().default(false),
 });
 
 export async function POST(req: NextRequest) {
   try {
-    // Rate limit by IP
     const ip = getClientIp(req);
-    const rl = await visitLogLimiter.limit(ip);
+    const rl = await visitLogLimiter.limit(`event:${ip}`);
     if (!rl.success) {
       return new NextResponse(null, { status: 429 });
     }
 
-    // Validate input
     const body = await req.json().catch(() => ({}));
-    const parsed = visitSchema.safeParse(body);
+    const parsed = eventSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json({ error: 'Invalid request.' }, { status: 400 });
     }
 
-    const { path, referrer, utmSource, utmMedium, utmCampaign } = parsed.data;
+    const { path, eventType, eventLabel, isAuthenticated } = parsed.data;
     const countryCode = getCountryCode(req);
     const userAgent = req.headers.get('user-agent');
     const deviceType = classifyUA(userAgent);
 
-    await prisma.visitLog.create({
+    await prisma.pageEvent.create({
       data: {
         countryCode,
         deviceType,
         path,
-        referrer:    referrer ?? null,
-        utmSource:   utmSource ?? null,
-        utmMedium:   utmMedium ?? null,
-        utmCampaign: utmCampaign ?? null,
+        eventType,
+        eventLabel: eventLabel ?? null,
+        isAuthenticated,
       },
     });
 
     return new NextResponse(null, { status: 204 });
   } catch (error) {
-    console.error('[analytics/visit] Error logging visit:', error);
+    console.error('[analytics/event] Error logging event:', error);
     return NextResponse.json({ error: 'Internal server error.' }, { status: 500 });
   }
 }

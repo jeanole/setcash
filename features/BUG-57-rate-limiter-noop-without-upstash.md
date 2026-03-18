@@ -1,6 +1,6 @@
 # BUG-57: Rate Limiter Is a Silent No-Op When Upstash Redis Is Not Configured
 
-**Status:** Open
+**Status:** Resolved
 **Reported:** 2026-03-14
 **Severity:** Medium
 **Skill Tag:** [Backend]

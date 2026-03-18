@@ -1,6 +1,6 @@
 # SetCash — Project Index
 
-**Next Available IDs:** PROJ-26 · BUG-84 · CR-31
+**Next Available IDs:** PROJ-26 · BUG-84 · CR-32
 
 
 | ID | Type | Title | Status | Priority | Feature | Date |
@@ -102,7 +102,7 @@
 | [BUG-54](BUG-54-user-deletion-missing-transaction.md) | Bug | User Deletion Not Wrapped in Transaction | Resolved | Medium | PROJ-17 | 2026-03-14 |
 | [BUG-55](BUG-55-admin-user-update-bypasses-zod.md) | Bug | Admin User Update Bypasses Zod Validation on resetPassword Path | Resolved | Medium | PROJ-17 | 2026-03-14 |
 | [BUG-56](BUG-56-password-change-no-rate-limiting.md) | Bug | No Rate Limiting on Password Change Endpoint | Resolved | Medium | PROJ-20 | 2026-03-14 |
-| [BUG-57](BUG-57-rate-limiter-noop-without-upstash.md) | Bug | Rate Limiter Is a Silent No-Op When Upstash Redis Is Not Configured | Open | Medium | PROJ-19 | 2026-03-14 |
+| [BUG-57](BUG-57-rate-limiter-noop-without-upstash.md) | Bug | Rate Limiter Is a Silent No-Op When Upstash Redis Is Not Configured | Resolved | Medium | PROJ-19 | 2026-03-14 |
 | CR-22 | CR | Add Qwen2.5-VL / Qwen3-VL / DeepSeek Providers + Structured System Prompt | Deployed | Medium | PROJ-19 | 2026-03-14 |
 | CR-23 | CR | Enrich Telegram Upload Response with OCR Fields, Errors, and Bill Link | Deployed | Medium | PROJ-12 | 2026-03-14 |
 | [BUG-58](BUG-58-ssrf-dns-rebinding-bypass.md) | Bug | SSRF Check Does Not Resolve DNS — DNS Rebinding Bypass Possible | Resolved | Medium | PROJ-19 | 2026-03-14 |
@@ -137,8 +137,9 @@
 | CR-26 | CR | SetCash Brand & Logo Style Specification | Pending Review | Medium | PROJ-21 | 2026-03-15 |
 | [PROJ-22](PROJ-22-demo-test-account.md) | Feature | Demo / Test Account | In Progress | Medium | PROJ-5, PROJ-10 | 2026-03-16 |
 | CR-27 | CR | Demo / Test Account with Restricted Access | Pending Review | Medium | PROJ-22 | 2026-03-16 |
-| [PROJ-23](PROJ-23-visit-analytics-demo-tracking.md) | Feature | Visit Analytics & Demo Usage Tracking | Planned | Medium | PROJ-22, PROJ-5 | 2026-03-16 |
-| CR-28 | CR | Insights into Site Visits and Demo Usage | Pending Review | Medium | PROJ-23 | 2026-03-16 |
+| [PROJ-23](PROJ-23-visit-analytics-demo-tracking.md) | Feature | Visit Analytics & Demo Usage Tracking | Deployed | Medium | PROJ-22, PROJ-5 | 2026-03-16 |
+| CR-28 | CR | Insights into Site Visits and Demo Usage | Deployed | Medium | PROJ-23 | 2026-03-16 |
+| CR-31 | CR | Visitor Origin & Intention Tracking | Deployed | High | PROJ-23 | 2026-03-18 |
 | [PROJ-24](PROJ-24-upload-limits-project-quotas.md) | Feature | Upload Limits & Project Quotas | Deployed | Medium | PROJ-7, PROJ-17 | 2026-03-16 |
 | CR-29 | CR | Upload Limits per Project for Paid Tier Foundation | Pending Review | Medium | PROJ-24 | 2026-03-16 |
 | [PROJ-25](PROJ-25-s3-file-storage.md) | Feature | S3-Compatible File Storage for Bill Images | In Progress | Medium | PROJ-7 | 2026-03-16 |

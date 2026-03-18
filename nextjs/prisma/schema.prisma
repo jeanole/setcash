@@ -406,8 +406,26 @@ model VisitLog {
   countryCode String?
   deviceType  String
   path        String
+  referrer    String?
+  utmSource   String?
+  utmMedium   String?
+  utmCampaign String?
 
   @@index([timestamp])
+}
+
+model PageEvent {
+  id              String   @id @default(uuid())
+  timestamp       DateTime @default(now())
+  countryCode     String?
+  deviceType      String
+  path            String
+  eventType       String
+  eventLabel      String?
+  isAuthenticated Boolean  @default(false)
+
+  @@index([timestamp])
+  @@index([eventType])
 }
 
 model DemoLoginAttempt {
