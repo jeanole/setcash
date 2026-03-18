@@ -1,6 +1,6 @@
 # SetCash — Project Index
 
-**Next Available IDs:** PROJ-26 · BUG-84 · CR-31
+**Next Available IDs:** PROJ-26 · BUG-84 · CR-32
 
 
 | ID | Type | Title | Status | Priority | Feature | Date |
@@ -139,6 +139,7 @@
 | CR-27 | CR | Demo / Test Account with Restricted Access | Pending Review | Medium | PROJ-22 | 2026-03-16 |
 | [PROJ-23](PROJ-23-visit-analytics-demo-tracking.md) | Feature | Visit Analytics & Demo Usage Tracking | Deployed | Medium | PROJ-22, PROJ-5 | 2026-03-16 |
 | CR-28 | CR | Insights into Site Visits and Demo Usage | Deployed | Medium | PROJ-23 | 2026-03-16 |
+| CR-31 | CR | Visitor Origin & Intention Tracking | Deployed | High | PROJ-23 | 2026-03-18 |
 | [PROJ-24](PROJ-24-upload-limits-project-quotas.md) | Feature | Upload Limits & Project Quotas | Deployed | Medium | PROJ-7, PROJ-17 | 2026-03-16 |
 | CR-29 | CR | Upload Limits per Project for Paid Tier Foundation | Pending Review | Medium | PROJ-24 | 2026-03-16 |
 | [PROJ-25](PROJ-25-s3-file-storage.md) | Feature | S3-Compatible File Storage for Bill Images | In Progress | Medium | PROJ-7 | 2026-03-16 |

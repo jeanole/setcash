@@ -63,6 +63,37 @@ Provide the super-admin with visibility into landing page visits and demo login 
 
 ---
 
+### CR-31: Visitor Origin & Intention Tracking
+**Requested:** 2026-03-18 | **Priority:** High | **Status:** Deployed
+
+**Current Behavior:** Analytics captures only visit count, country, device type, and path. No visibility into where visitors came from or what they interacted with.
+
+**Desired Behavior:**
+- Referrer domain captured per visit (traffic source attribution)
+- UTM parameters captured per visit (campaign attribution)
+- CTA click events tracked (demo button, sign-in)
+- Scroll depth milestones tracked (25 / 50 / 75 / 100%)
+- Time-on-page tracked (sendBeacon on unload)
+- Authenticated page views tracked per route
+
+**Rationale:** Provides actionable insight into traffic origin (organic, paid, social, direct) and visitor engagement quality. Helps evaluate content and campaign performance without third-party tools.
+
+**Acceptance Criteria:**
+- [x] `VisitLog` has `referrer`, `utmSource`, `utmMedium`, `utmCampaign` fields
+- [x] `VisitTracker` sends referrer domain + UTM params from query string
+- [x] `PageEvent` table stores CTA clicks, scroll depth, time-on-page, page_view events
+- [x] `POST /api/analytics/event` endpoint (public, rate-limited)
+- [x] `EventTracker` component: scroll depth milestones + sendBeacon time-on-page
+- [x] `AuthPageTracker` component: authenticated page_view events on route change
+- [x] `DemoLoginButton` calls `trackCta('demo_login_click')` on click
+- [x] Admin analytics API returns `trafficSources` and `events` breakdown
+- [x] `AnalyticsTab` shows: Top Referrers, UTM Sources, CTA Clicks, Scroll Depth, Top App Pages
+- [x] Prune also deletes old `PageEvent` records
+
+**Resolution:** Deployed 2026-03-18
+
+---
+
 #### Tech Design (CR-28)
 
 ##### A) Component Structure
