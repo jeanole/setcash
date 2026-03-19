@@ -1,6 +1,6 @@
 # BUG-84: Superadmin Config Tab Sends Upload Limit as String — Zod Validation Fails
 
-**Status:** Open
+**Status:** Resolved
 **Reported:** 2026-03-19
 **Severity:** High
 **Skill Tag:** [Frontend]
@@ -52,7 +52,7 @@ The fix is in `nextjs/components/superadmin/ConfigTab.tsx` — the `handleSave` 
 
 ## Resolution
 
-**Status:** Open
-**Resolved Date:** —
-**Fixed In:** — *(commit hash or PR)*
-**Fix Description:** —
+**Status:** Resolved
+**Resolved Date:** 2026-03-19
+**Fixed In:** next commit
+**Fix Description:** Changed `ConfigTab.tsx` to send `parseInt(rawValue, 10)` instead of the raw string in the PATCH request body. Also fixed the `SystemConfig` interface to use `number | null` instead of `string` to match the API response type.
