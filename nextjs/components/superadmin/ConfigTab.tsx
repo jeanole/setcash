@@ -38,8 +38,8 @@ export default function ConfigTab() {
 
     if (rawValue !== '') {
       const parsed = parseInt(rawValue, 10);
-      if (isNaN(parsed) || parsed < 0) {
-        showToast('Please enter a valid positive number, or leave empty for no default.', 'error');
+      if (isNaN(parsed) || parsed < 1) {
+        showToast('Please enter a number of 1 or more, or leave empty for no default.', 'error');
         return;
       }
     }
@@ -93,7 +93,8 @@ export default function ConfigTab() {
             <input
               id="default-upload-limit"
               type="number"
-              min="0"
+              min="1"
+              step="1"
               placeholder="No default limit"
               value={defaultUploadLimit}
               onChange={(e) => setDefaultUploadLimit(e.target.value)}
