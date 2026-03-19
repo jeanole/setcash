@@ -1,6 +1,6 @@
 # SetCash — Project Index
 
-**Next Available IDs:** PROJ-26 · BUG-84 · CR-32
+**Next Available IDs:** PROJ-26 · BUG-85 · CR-33
 
 
 | ID | Type | Title | Status | Priority | Feature | Date |
@@ -143,3 +143,5 @@
 | [PROJ-24](PROJ-24-upload-limits-project-quotas.md) | Feature | Upload Limits & Project Quotas | Deployed | Medium | PROJ-7, PROJ-17 | 2026-03-16 |
 | CR-29 | CR | Upload Limits per Project for Paid Tier Foundation | Pending Review | Medium | PROJ-24 | 2026-03-16 |
 | [PROJ-25](PROJ-25-s3-file-storage.md) | Feature | S3-Compatible File Storage for Bill Images | In Progress | Medium | PROJ-7 | 2026-03-16 |
+| CR-32 | CR | Enhanced Visitor Insights — Browser, OS, Device, Screen, Language, Sessions | Deployed | Medium | PROJ-23 | 2026-03-19 |
+| [BUG-84](BUG-84-config-upload-limit-string-not-number.md) | Bug | Superadmin Config Tab Sends Upload Limit as String — Zod Validation Fails | Open | High | PROJ-17 | 2026-03-19 |
