@@ -18,6 +18,10 @@ import {
   Globe,
   MousePointerClick,
   LayoutDashboard,
+  Users,
+  Monitor,
+  Smartphone,
+  Languages,
 } from 'lucide-react';
 import { apiFetch, useSuperAdminApi } from './useSuperAdminApi';
 import ToastContainer from './ToastContainer';
@@ -27,6 +31,7 @@ import ToastContainer from './ToastContainer';
 interface KpiData {
   totalVisits: number;
   visitsLast7Days: number;
+  uniqueSessions: number;
   demoLoginsLast7Days: number;
   demoSuccessRate: number;
 }
@@ -56,6 +61,7 @@ interface UtmRow       { utmSource: string; count: number }
 interface CtaRow       { label: string;     count: number }
 interface ScrollRow    { milestone: string; count: number }
 interface PageRow      { path: string;      count: number }
+interface LabelCount   { label: string;     count: number }
 
 interface AnalyticsData {
   kpi: KpiData;
@@ -63,6 +69,14 @@ interface AnalyticsData {
   demoLog: DemoLog;
   trafficSources: { referrers: ReferrerRow[]; utmSources: UtmRow[] };
   events: { ctaClicks: CtaRow[]; scrollDepth: ScrollRow[]; topPages: PageRow[] };
+  visitors: {
+    browsers: LabelCount[];
+    operatingSystems: LabelCount[];
+    devices: LabelCount[];
+    countries: LabelCount[];
+    languages: LabelCount[];
+    screens: LabelCount[];
+  };
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -160,8 +174,8 @@ function SkeletonBlock({ className }: { className?: string }) {
 function AnalyticsSkeleton() {
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[...Array(4)].map((_, i) => (
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        {[...Array(5)].map((_, i) => (
           <div key={i} className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
             <SkeletonBlock className="w-8 h-8" />
             <SkeletonBlock className="h-7 w-20" />
@@ -266,7 +280,7 @@ export default function AnalyticsTab() {
     );
   }
 
-  const { kpi, dailyVisits, demoLog, trafficSources, events } = data;
+  const { kpi, dailyVisits, demoLog, trafficSources, events, visitors } = data;
   const totalPages = Math.max(1, Math.ceil(demoLog.total / demoLog.pageSize));
 
   const chartTicks = dailyVisits
@@ -277,7 +291,7 @@ export default function AnalyticsTab() {
     <>
       <div className="space-y-6">
         {/* ── A) KPI Cards ── */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4" role="list" aria-label="Analytics KPIs">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4" role="list" aria-label="Analytics KPIs">
           <KpiCard
             icon={<Eye className="w-4 h-4" aria-hidden="true" />}
             value={kpi.totalVisits.toLocaleString()}
@@ -287,6 +301,11 @@ export default function AnalyticsTab() {
             icon={<TrendingUp className="w-4 h-4" aria-hidden="true" />}
             value={kpi.visitsLast7Days.toLocaleString()}
             label="Visits (7d)"
+          />
+          <KpiCard
+            icon={<Users className="w-4 h-4" aria-hidden="true" />}
+            value={kpi.uniqueSessions.toLocaleString()}
+            label="Unique Sessions (7d)"
           />
           <KpiCard
             icon={<LogIn className="w-4 h-4" aria-hidden="true" />}
@@ -371,7 +390,61 @@ export default function AnalyticsTab() {
           </div>
         </section>
 
-        {/* ── D) Visitor Behaviour ── */}
+        {/* ── D) Visitor Insights ── */}
+        <section aria-label="Visitor insights">
+          <div className="flex items-center gap-2 mb-3">
+            <Monitor className="w-4 h-4 text-slate-400" aria-hidden="true" />
+            <h3 className="text-base font-semibold text-slate-800">Visitor Insights (Last 30 Days)</h3>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <SimpleTable
+              title="Browsers"
+              col1="Browser"
+              col2="Visits"
+              rows={visitors.browsers}
+              emptyText="No browser data yet"
+            />
+            <SimpleTable
+              title="Operating Systems"
+              col1="OS"
+              col2="Visits"
+              rows={visitors.operatingSystems}
+              emptyText="No OS data yet"
+            />
+            <SimpleTable
+              title="Device Types"
+              col1="Device"
+              col2="Visits"
+              rows={visitors.devices}
+              emptyText="No device data yet"
+            />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+            <SimpleTable
+              title="Countries"
+              col1="Country"
+              col2="Visits"
+              rows={visitors.countries}
+              emptyText="No country data yet"
+            />
+            <SimpleTable
+              title="Languages"
+              col1="Language"
+              col2="Visits"
+              rows={visitors.languages}
+              emptyText="No language data yet"
+            />
+            <SimpleTable
+              title="Screen Resolutions"
+              col1="Resolution"
+              col2="Visits"
+              rows={visitors.screens}
+              emptyText="No screen data yet"
+            />
+          </div>
+        </section>
+
+        {/* ── E) Visitor Behaviour ── */}
         <section aria-label="Visitor behaviour">
           <div className="flex items-center gap-2 mb-3">
             <MousePointerClick className="w-4 h-4 text-slate-400" aria-hidden="true" />

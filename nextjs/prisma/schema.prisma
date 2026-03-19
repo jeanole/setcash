@@ -401,15 +401,21 @@ model SystemConfig {
 }
 
 model VisitLog {
-  id          String   @id @default(uuid())
-  timestamp   DateTime @default(now())
-  countryCode String?
-  deviceType  String
-  path        String
-  referrer    String?
-  utmSource   String?
-  utmMedium   String?
-  utmCampaign String?
+  id           String   @id @default(uuid())
+  timestamp    DateTime @default(now())
+  countryCode  String?
+  deviceType   String
+  path         String
+  referrer     String?
+  utmSource    String?
+  utmMedium    String?
+  utmCampaign  String?
+  browser      String?
+  os           String?
+  screenWidth  Int?
+  screenHeight Int?
+  language     String?
+  sessionId    String?
 
   @@index([timestamp])
 }
@@ -423,6 +429,7 @@ model PageEvent {
   eventType       String
   eventLabel      String?
   isAuthenticated Boolean  @default(false)
+  sessionId       String?
 
   @@index([timestamp])
   @@index([eventType])
