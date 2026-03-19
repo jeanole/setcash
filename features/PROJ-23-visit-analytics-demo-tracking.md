@@ -369,3 +369,185 @@ No new packages needed — `recharts` already installed, country from CF header.
 - **Regression:** No regressions detected
 - **Production Ready:** YES (with caveat on BUG-3 if not behind Cloudflare)
 - **Recommendation:** Deploy. Fix BUG-3 and BUG-4 in next sprint. BUG-1, BUG-2, BUG-5 are nice-to-have.
+
+### CR-32 QA Test Results
+
+**Tested:** 2026-03-19
+**App URL:** http://localhost:3000 (static code review -- no running app)
+**Tester:** QA Engineer (AI)
+**Scope:** CR-32 -- Enhanced Visitor Insights (browser, OS, screen resolution, language, session ID tracking)
+
+#### Acceptance Criteria Status
+
+##### AC-1: Browser detection from User-Agent
+- [x] `parseBrowser()` correctly identifies Chrome, Safari, Firefox, Edge, Opera, Samsung Internet, Brave, Vivaldi, Yandex, IE
+- [x] Returns null for unknown/bot UAs (null input returns null, no-match returns null)
+- [x] Stored in VisitLog.browser field (schema + route confirmed)
+
+##### AC-2: OS detection from User-Agent
+- [x] `parseOS()` correctly identifies Windows, macOS, iOS, Android, Linux, ChromeOS
+- [x] Returns null for unknown UAs
+- [x] Stored in VisitLog.os field
+
+##### AC-3: Screen resolution tracking
+- [x] VisitTracker sends `window.screen.width` and `window.screen.height`
+- [x] Validated by Zod: `z.number().int().min(0).max(10000).optional().nullable()`
+- [x] Stored in VisitLog.screenWidth / screenHeight
+
+##### AC-4: Language tracking
+- [x] VisitTracker sends `navigator.language`
+- [x] Validated by Zod: `z.string().max(20).optional().nullable()`
+- [x] Stored in VisitLog.language
+
+##### AC-5: Session ID tracking
+- [x] `getSessionId()` generates UUID via `crypto.randomUUID()`, stored in sessionStorage
+- [x] Same session ID reused across page navigations within same tab (sessionStorage persists)
+- [x] New tab gets new session ID (sessionStorage is per-tab)
+- [x] Sent in both visit and event requests (VisitTracker, EventTracker, AuthPageTracker all call `getSessionId()`)
+- [x] Stored in VisitLog.sessionId and PageEvent.sessionId
+
+##### AC-6: Unique Sessions KPI
+- [x] Admin API returns `kpi.uniqueSessions` via `COUNT(DISTINCT sessionId)` for last 7 days
+- [x] Displayed as 5th KPI card ("Unique Sessions (7d)") in AnalyticsTab
+
+##### AC-7: Browser breakdown in admin API
+- [x] Returns top 10 browsers with counts (last 30 days, non-null)
+- [x] Displayed in "Browsers" SimpleTable
+
+##### AC-8: OS breakdown in admin API
+- [x] Returns top 10 OS with counts (last 30 days, non-null)
+- [x] Displayed in "Operating Systems" SimpleTable
+
+##### AC-9: Device type breakdown in admin API
+- [x] Returns device types with counts (last 30 days)
+- [x] Displayed in "Device Types" SimpleTable
+
+##### AC-10: Country breakdown in admin API
+- [x] Returns top 15 countries with counts (last 30 days, non-null)
+- [x] Displayed in "Countries" SimpleTable
+
+##### AC-11: Language breakdown in admin API
+- [x] Returns top 10 languages with counts (last 30 days, non-null)
+- [x] Displayed in "Languages" SimpleTable
+
+##### AC-12: Screen resolution breakdown in admin API
+- [x] Concatenates `screenWidth || 'x' || screenHeight` as resolution label in SQL
+- [x] Returns top 10 resolutions (last 30 days, non-null screenWidth AND screenHeight)
+- [x] Displayed in "Screen Resolutions" SimpleTable
+
+##### AC-13: Dashboard layout
+- [x] Visitor Insights section with 6 tables in 3x2 grid (`md:grid-cols-3` x 2 rows)
+- [x] KPI row expanded to 5 columns on desktop (`grid-cols-2 lg:grid-cols-5`)
+
+#### Edge Cases Status
+
+##### EC-1: Visit with null/missing new fields
+- [x] All new fields nullable in Prisma schema (`String?`, `Int?`)
+- [x] All new fields optional in Zod (`optional().nullable()`)
+
+##### EC-2: Screen dimensions at boundary
+- [x] screenWidth=0 accepted (`min(0)`)
+- [x] screenWidth=10000 accepted (`max(10000)`)
+- [x] screenWidth=10001 rejected by Zod
+- [x] screenWidth=-1 rejected by Zod
+
+##### EC-3: Language string edge cases
+- [x] `"en-US"` accepted (5 chars, under max 20)
+- [x] 21-char string rejected by Zod `max(20)`
+- [x] null/undefined accepted, stored as null
+
+##### EC-4: Session ID validation
+- [x] Max 64 chars enforced (`z.string().max(64)`) on both visit and event endpoints
+- [x] 65-char sessionId rejected
+
+##### EC-5: parseBrowser edge cases
+- [x] Null UA returns null
+- [x] Empty string returns null (no regex matches)
+- [x] Chrome-like UA with "Edg/" returns "Edge" (Edge check at line 39 precedes Chrome at line 47)
+
+##### EC-6: parseOS edge cases
+- [x] iPad UA returns "iOS" (`/iPhone|iPad|iPod/` matches)
+- [x] Chromebook UA returns "ChromeOS" (`/CrOS/` matches)
+- [x] Null returns null
+
+##### EC-7: Admin API with no visitor insights data
+- [x] All 6 breakdown arrays return empty `[]` (`.map()` over empty raw results)
+- [x] uniqueSessions KPI returns 0 (`Number(uniqueSessionsLast7Days[0]?.count ?? 0)`)
+
+##### EC-8: sessionStorage unavailable (SSR context)
+- [x] `getSessionId()` returns `''` when `typeof window === 'undefined'`
+
+#### Security Audit Results
+
+##### SEC-1: New fields input validation
+- [x] All new Zod schemas properly constrain input types and sizes
+- [x] No SQL injection via new fields -- Prisma parameterized queries used throughout
+
+##### SEC-2: No PII leakage
+- [x] Screen resolution, browser, OS, language are non-PII
+- [x] Session ID is random UUID, not linked to user identity
+- [x] sessionStorage cleared on tab close
+
+##### SEC-3: Admin API authorization
+- [x] New aggregation queries only accessible to superadmin (role check on admin analytics GET)
+- [x] No new public endpoints added
+
+##### SEC-4: Raw SQL injection in new queries
+- [x] All 6 new queries use Prisma tagged template literals (parameterized)
+- [x] Resolution concatenation done in SQL using column references and string literal -- no user input interpolation
+- [x] Date parameters passed as parameterized values
+
+##### SEC-5: Empty string sessionId data quality
+- [ ] BUG: Empty string sessionId not coerced to null (see BUG-6 below)
+
+#### Responsive / Cross-Browser (Static Analysis)
+
+- [x] KPI grid: `grid-cols-2 lg:grid-cols-5` -- 2 cols mobile, 5 cols desktop
+- [x] Visitor Insights grids: `grid-cols-1 md:grid-cols-3` -- stacks on mobile, 3 cols on tablet+
+- [x] SimpleTable: `overflow-hidden` on container, `truncate max-w-[240px]` on label cells -- handles long text
+- [x] Demo log table: `overflow-x-auto` with `min-w-[480px]` for horizontal scroll on mobile
+- [ ] BUG: Skeleton loader KPI grid mismatch (see BUG-7 below)
+
+#### Regression Check
+
+- [x] Visit tracking still fires on landing page (VisitTracker unchanged fire-on-mount, now with additional fields)
+- [x] Event tracking (scroll, CTA, time-on-page) still works (EventTracker, trackCta unchanged)
+- [x] AuthPageTracker still sends page_view events with sessionId
+- [x] Demo login logging unaffected (no changes to demo login route)
+- [x] Prune deletes from all 3 tables (VisitLog, DemoLoginAttempt, PageEvent) in transaction
+- [x] Existing 4 KPI cards still display correctly, 5th added without displacing others
+- [x] Previous BUG-4 (full skeleton flash on pagination) has been fixed -- `isInitialLoad` and `isPaging` now separated
+
+#### Bugs Found
+
+##### BUG-6: Empty string sessionId stored instead of null [Backend]
+- **Severity:** Low
+- **Location:** `nextjs/app/api/analytics/visit/route.ts` line 60, `nextjs/app/api/analytics/event/route.ts` line 49
+- **Steps to Reproduce:**
+  1. POST to `/api/analytics/visit` with `{ "sessionId": "" }`
+  2. Zod accepts empty string (no `.min(1)` constraint)
+  3. `sessionId ?? null` does not coerce `""` to null (`??` only triggers on null/undefined)
+  4. Empty string `""` is stored in the database
+- **Impact:** `COUNT(DISTINCT sessionId)` in the unique sessions KPI would count `""` as a valid session, potentially inflating the unique sessions count. In practice, `getSessionId()` always returns a UUID on the client side, but a manual API caller could send `""`.
+- **Root Cause:** Missing `.min(1)` or `.transform(v => v || null)` on the sessionId Zod field
+- **Priority:** Nice to have
+
+##### BUG-7: Skeleton loader shows 4 KPI cards instead of 5 [Frontend]
+- **Severity:** Low
+- **Location:** `nextjs/components/superadmin/AnalyticsTab.tsx` lines 177-185
+- **Steps to Reproduce:**
+  1. Open SuperAdmin modal, click Analytics tab
+  2. During initial load, skeleton renders with `grid-cols-2 lg:grid-cols-4` and 4 skeleton cards
+  3. Once data loads, actual KPI row renders with `grid-cols-2 lg:grid-cols-5` and 5 cards
+  4. Layout shift: skeleton snaps from 4-column to 5-column grid on load completion
+- **Root Cause:** `AnalyticsSkeleton` was not updated to match the new 5-KPI layout. The skeleton still uses the CR-28 layout with 4 cards.
+- **Priority:** Nice to have
+
+#### Summary
+- **Acceptance Criteria:** 13/13 passed
+- **Edge Cases:** 8/8 passed
+- **Security:** 4/4 passed (1 minor data quality note)
+- **Bugs Found:** 2 total (0 critical, 0 high, 0 medium, 2 low)
+- **Regression:** No regressions detected; previous BUG-4 confirmed fixed
+- **Production Ready:** YES
+- **Recommendation:** Deploy. BUG-6 and BUG-7 are cosmetic/edge-case issues suitable for a future cleanup pass. No blocking issues found.
