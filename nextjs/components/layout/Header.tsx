@@ -2,7 +2,8 @@
 
 import SignOutButton from '@/components/auth/SignOutButton';
 import NotificationBell from '@/components/layout/NotificationBell';
-import { Menu } from 'lucide-react';
+import { Menu, Plus } from 'lucide-react';
+import Link from 'next/link';
 
 interface HeaderProps {
   title?: string;
@@ -44,6 +45,13 @@ export default function Header({ title, user, onMenuToggle, onProfileOpen }: Hea
       </h1>
 
       <div className="ml-auto flex items-center gap-3">
+        <Link
+          href="/bills/new"
+          className="w-8 h-8 rounded-full bg-[var(--vb-accent)] border border-zinc-900 flex items-center justify-center text-zinc-900 shrink-0 hover:bg-[var(--vb-accent-hover)] transition-colors btn-brutal-sm"
+          aria-label="Upload new bill"
+        >
+          <Plus className="w-4 h-4" strokeWidth={2.5} />
+        </Link>
         <NotificationBell />
         {user ? (
           <>
