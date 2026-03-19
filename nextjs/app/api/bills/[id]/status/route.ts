@@ -35,7 +35,7 @@ export async function PATCH(
     // Verify bill belongs to this project
     const bill = await prisma.bill.findFirst({
       where: { id, projectId },
-      select: { id: true, status: true, submittedByEmail: true },
+      select: { id: true, status: true, submittedByEmail: true, billNumber: true, vendor: true },
     });
 
     if (!bill) {
@@ -73,6 +73,30 @@ export async function PATCH(
       where: { id },
       data: { status: status as BillStatus },
     });
+
+    // Fire-and-forget: notify submitter on rejection
+    if (status === 'rejected') {
+      void Promise.resolve().then(async () => {
+        try {
+          const project = await prisma.project.findUnique({
+            where: { id: projectId },
+            select: { name: true },
+          });
+          const billLabel = bill.billNumber ?? bill.vendor ?? id;
+          const projectName = project?.name ?? projectId;
+          await prisma.notification.create({
+            data: {
+              userEmail: bill.submittedByEmail,
+              type: 'bill_rejected',
+              message: `Your bill '${billLabel}' in '${projectName}' was rejected.`,
+              projectId,
+            },
+          });
+        } catch {
+          // ignore
+        }
+      });
+    }
 
     // Log the status change
     await prisma.editLog.create({

@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { db as prisma } from '@/lib/db';
 import { z } from 'zod';
+import { notifyProjectAdmins } from '@/lib/notifications';
 
 // Validation schema for GET query params
 const listVgeldSchema = z.object({
@@ -145,6 +146,25 @@ export async function POST(req: NextRequest) {
         toUser: to,
         createdBy: session.user.email,
       },
+    });
+
+    // Fire-and-forget: notify project admins about the new transfer request
+    void Promise.resolve().then(async () => {
+      try {
+        const project = await prisma.project.findUnique({
+          where: { id: projectId },
+          select: { name: true },
+        });
+        const projectName = project?.name ?? projectId;
+        const amountStr = Number(transfer.amount).toFixed(2);
+        await notifyProjectAdmins(
+          projectId,
+          'transfer_requested',
+          `A transfer of ${amountStr} was requested in '${projectName}'.`
+        );
+      } catch {
+        // ignore
+      }
     });
 
     return NextResponse.json({ ok: true, id: transfer.id });

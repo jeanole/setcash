@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Bell, BellOff, Mail, MessageCircle, UserPlus, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeftRight, Bell, BellOff, CheckCircle, Mail, MessageCircle, UserPlus, X, XCircle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 function parseMessage(raw: string): { text: string; url?: string } {
@@ -108,6 +108,12 @@ export default function NotificationBell() {
     setOpen(false);
     if (n.type === 'project_invite') {
       router.push('/settings/projects');
+    } else if (n.type === 'bill_rejected') {
+      router.push('/bills');
+    } else if (n.type === 'transfer_requested' || n.type === 'transfer_confirmed') {
+      router.push('/vgeld');
+    } else if (n.type === 'budget_overrun') {
+      router.push('/budget');
     }
     // pending_invite: action is in email, just mark read
   };
@@ -176,6 +182,14 @@ export default function NotificationBell() {
                   ? <MessageCircle className="w-4 h-4 text-zinc-700" />
                   : n.type === 'pending_invite'
                   ? <Mail className="w-4 h-4 text-zinc-700" />
+                  : n.type === 'bill_rejected'
+                  ? <XCircle className="w-4 h-4 text-red-600" />
+                  : n.type === 'transfer_requested'
+                  ? <ArrowLeftRight className="w-4 h-4 text-amber-500" />
+                  : n.type === 'transfer_confirmed'
+                  ? <CheckCircle className="w-4 h-4 text-green-600" />
+                  : n.type === 'budget_overrun'
+                  ? <AlertTriangle className="w-4 h-4 text-orange-500" />
                   : <UserPlus className="w-4 h-4 text-zinc-700" />;
 
                 return (
