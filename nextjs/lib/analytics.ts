@@ -1,5 +1,5 @@
 // ============================================================================
-// Analytics Utilities — UA classification & country code extraction
+// Analytics Utilities — UA classification, browser/OS parsing & geo extraction
 // ============================================================================
 
 import { NextRequest } from 'next/server';
@@ -26,6 +26,45 @@ export function classifyUA(userAgent: string | null): 'mobile' | 'desktop' | 'bo
   }
 
   return 'desktop';
+}
+
+/**
+ * Parse the browser name from a User-Agent string.
+ */
+export function parseBrowser(userAgent: string | null): string | null {
+  if (!userAgent) return null;
+  const ua = userAgent;
+
+  // Order matters — check specific browsers before generic engine names
+  if (/Edg(e|A)?\//.test(ua)) return 'Edge';
+  if (/OPR\/|Opera/.test(ua)) return 'Opera';
+  if (/SamsungBrowser\//.test(ua)) return 'Samsung Internet';
+  if (/UCBrowser\//.test(ua)) return 'UC Browser';
+  if (/Brave/.test(ua)) return 'Brave';
+  if (/Vivaldi\//.test(ua)) return 'Vivaldi';
+  if (/YaBrowser\//.test(ua)) return 'Yandex';
+  if (/Firefox\//.test(ua) && !/Seamonkey\//.test(ua)) return 'Firefox';
+  if (/Chrome\//.test(ua) && !/Chromium\//.test(ua)) return 'Chrome';
+  if (/Chromium\//.test(ua)) return 'Chromium';
+  if (/Safari\//.test(ua) && !/Chrome\//.test(ua)) return 'Safari';
+  if (/MSIE|Trident/.test(ua)) return 'Internet Explorer';
+  return null;
+}
+
+/**
+ * Parse the OS from a User-Agent string.
+ */
+export function parseOS(userAgent: string | null): string | null {
+  if (!userAgent) return null;
+  const ua = userAgent;
+
+  if (/iPhone|iPad|iPod/.test(ua)) return 'iOS';
+  if (/Mac OS X|Macintosh/.test(ua)) return 'macOS';
+  if (/Android/.test(ua)) return 'Android';
+  if (/CrOS/.test(ua)) return 'ChromeOS';
+  if (/Linux/.test(ua)) return 'Linux';
+  if (/Windows/.test(ua)) return 'Windows';
+  return null;
 }
 
 /**

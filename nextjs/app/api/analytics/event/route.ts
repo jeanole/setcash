@@ -16,6 +16,7 @@ const eventSchema = z.object({
   eventType:       z.enum(EVENT_TYPES),
   eventLabel:      z.string().max(200).optional().nullable(),
   isAuthenticated: z.boolean().optional().default(false),
+  sessionId:       z.string().min(1).max(64).optional().nullable(),
 });
 
 export async function POST(req: NextRequest) {
@@ -32,7 +33,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid request.' }, { status: 400 });
     }
 
-    const { path, eventType, eventLabel, isAuthenticated } = parsed.data;
+    const { path, eventType, eventLabel, isAuthenticated, sessionId } = parsed.data;
     const countryCode = getCountryCode(req);
     const userAgent = req.headers.get('user-agent');
     const deviceType = classifyUA(userAgent);
@@ -45,6 +46,7 @@ export async function POST(req: NextRequest) {
         eventType,
         eventLabel: eventLabel ?? null,
         isAuthenticated,
+        sessionId: sessionId ?? null,
       },
     });
 

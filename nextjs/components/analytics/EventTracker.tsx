@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { getSessionId } from '@/lib/sessionId';
 
 interface EventTrackerProps {
   /** Mark events as authenticated (default: false) */
@@ -20,6 +21,7 @@ function sendEvent(
       eventType,
       eventLabel: eventLabel ?? null,
       isAuthenticated,
+      sessionId: getSessionId(),
     }),
   }).catch(() => {});
 }
@@ -66,6 +68,7 @@ export default function EventTracker({ isAuthenticated = false }: EventTrackerPr
         eventType: 'time_on_page',
         eventLabel: `${seconds}s`,
         isAuthenticated: auth.current,
+        sessionId: getSessionId(),
       });
 
       if (navigator.sendBeacon) {

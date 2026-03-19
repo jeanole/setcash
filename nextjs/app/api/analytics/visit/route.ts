@@ -6,14 +6,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { db as prisma } from '@/lib/db';
 import { visitLogLimiter } from '@/lib/ratelimit';
-import { classifyUA, getCountryCode, getClientIp } from '@/lib/analytics';
+import { classifyUA, getCountryCode, getClientIp, parseBrowser, parseOS } from '@/lib/analytics';
 
 const visitSchema = z.object({
-  path:        z.string().max(200).optional().default('/'),
-  referrer:    z.string().max(500).optional().nullable(),
-  utmSource:   z.string().max(100).optional().nullable(),
-  utmMedium:   z.string().max(100).optional().nullable(),
-  utmCampaign: z.string().max(100).optional().nullable(),
+  path:         z.string().max(200).optional().default('/'),
+  referrer:     z.string().max(500).optional().nullable(),
+  utmSource:    z.string().max(100).optional().nullable(),
+  utmMedium:    z.string().max(100).optional().nullable(),
+  utmCampaign:  z.string().max(100).optional().nullable(),
+  screenWidth:  z.number().int().min(0).max(10000).optional().nullable(),
+  screenHeight: z.number().int().min(0).max(10000).optional().nullable(),
+  language:     z.string().max(20).optional().nullable(),
+  sessionId:    z.string().min(1).max(64).optional().nullable(),
 });
 
 export async function POST(req: NextRequest) {
@@ -32,20 +36,28 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid request.' }, { status: 400 });
     }
 
-    const { path, referrer, utmSource, utmMedium, utmCampaign } = parsed.data;
+    const { path, referrer, utmSource, utmMedium, utmCampaign, screenWidth, screenHeight, language, sessionId } = parsed.data;
     const countryCode = getCountryCode(req);
     const userAgent = req.headers.get('user-agent');
     const deviceType = classifyUA(userAgent);
+    const browser = parseBrowser(userAgent);
+    const os = parseOS(userAgent);
 
     await prisma.visitLog.create({
       data: {
         countryCode,
         deviceType,
         path,
-        referrer:    referrer ?? null,
-        utmSource:   utmSource ?? null,
-        utmMedium:   utmMedium ?? null,
-        utmCampaign: utmCampaign ?? null,
+        referrer:     referrer ?? null,
+        utmSource:    utmSource ?? null,
+        utmMedium:    utmMedium ?? null,
+        utmCampaign:  utmCampaign ?? null,
+        browser:      browser ?? null,
+        os:           os ?? null,
+        screenWidth:  screenWidth ?? null,
+        screenHeight: screenHeight ?? null,
+        language:     language ?? null,
+        sessionId:    sessionId ?? null,
       },
     });
 
