@@ -5,7 +5,7 @@ import { apiFetch, useSuperAdminApi } from './useSuperAdminApi';
 import ToastContainer from './ToastContainer';
 
 interface SystemConfig {
-  defaultUploadLimit?: string;
+  defaultUploadLimit?: number | null;
 }
 
 export default function ConfigTab() {
@@ -21,7 +21,7 @@ export default function ConfigTab() {
     try {
       const data = await apiFetch<SystemConfig>('/api/superadmin/system-config');
       setConfig(data);
-      setDefaultUploadLimit(data.defaultUploadLimit ?? '');
+      setDefaultUploadLimit(data.defaultUploadLimit != null ? String(data.defaultUploadLimit) : '');
     } catch (error) {
       handleApiError(error, 'Failed to load system config');
     } finally {
@@ -38,16 +38,16 @@ export default function ConfigTab() {
 
     if (rawValue !== '') {
       const parsed = parseInt(rawValue, 10);
-      if (isNaN(parsed) || parsed < 0) {
-        showToast('Please enter a valid positive number, or leave empty for no default.', 'error');
+      if (isNaN(parsed) || parsed < 1) {
+        showToast('Please enter a number of 1 or more, or leave empty for no default.', 'error');
         return;
       }
     }
 
     setIsSaving(true);
     try {
-      const body: Record<string, string | null> = {
-        defaultUploadLimit: rawValue === '' ? null : rawValue,
+      const body: Record<string, number | null> = {
+        defaultUploadLimit: rawValue === '' ? null : parseInt(rawValue, 10),
       };
       await apiFetch('/api/superadmin/system-config', {
         method: 'PATCH',
@@ -93,7 +93,8 @@ export default function ConfigTab() {
             <input
               id="default-upload-limit"
               type="number"
-              min="0"
+              min="1"
+              step="1"
               placeholder="No default limit"
               value={defaultUploadLimit}
               onChange={(e) => setDefaultUploadLimit(e.target.value)}
