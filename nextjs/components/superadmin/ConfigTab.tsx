@@ -5,7 +5,7 @@ import { apiFetch, useSuperAdminApi } from './useSuperAdminApi';
 import ToastContainer from './ToastContainer';
 
 interface SystemConfig {
-  defaultUploadLimit?: string;
+  defaultUploadLimit?: number | null;
 }
 
 export default function ConfigTab() {
@@ -21,7 +21,7 @@ export default function ConfigTab() {
     try {
       const data = await apiFetch<SystemConfig>('/api/superadmin/system-config');
       setConfig(data);
-      setDefaultUploadLimit(data.defaultUploadLimit ?? '');
+      setDefaultUploadLimit(data.defaultUploadLimit != null ? String(data.defaultUploadLimit) : '');
     } catch (error) {
       handleApiError(error, 'Failed to load system config');
     } finally {
@@ -46,8 +46,8 @@ export default function ConfigTab() {
 
     setIsSaving(true);
     try {
-      const body: Record<string, string | null> = {
-        defaultUploadLimit: rawValue === '' ? null : rawValue,
+      const body: Record<string, number | null> = {
+        defaultUploadLimit: rawValue === '' ? null : parseInt(rawValue, 10),
       };
       await apiFetch('/api/superadmin/system-config', {
         method: 'PATCH',
