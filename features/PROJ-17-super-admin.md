@@ -617,6 +617,7 @@ This is a low-priority UX improvement, not a blocker for CR-8 or production depl
 | ID | Severity | Title | Status |
 |----|----------|-------|--------|
 | [BUG-43](BUG-43-system-nav-visible-all-users-blank-error.md) | Critical | System Nav Item Visible to All Users and Produces Blank Error | Resolved |
+| [BUG-84](BUG-84-config-upload-limit-string-not-number.md) | High | Superadmin Config Tab Sends Upload Limit as String — Zod Validation Fails | Open |
 
 ## Deployment
 **READY FOR DEPLOYMENT** - All critical bugs resolved (BUG-PROJ17-1 fixed).

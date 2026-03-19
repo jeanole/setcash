@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect } from 'react';
+import { getSessionId } from '@/lib/sessionId';
 
 /**
  * Fire-and-forget visit tracking pixel.
  * Renders nothing — mounts once and sends POST /api/analytics/visit
- * including referrer domain and UTM parameters from the URL query string.
+ * including referrer domain, UTM parameters, screen size, and language.
  */
 export default function VisitTracker() {
   useEffect(() => {
@@ -25,11 +26,15 @@ export default function VisitTracker() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        path:        window.location.pathname,
-        referrer:    referrer ?? undefined,
-        utmSource:   params.get('utm_source') ?? undefined,
-        utmMedium:   params.get('utm_medium') ?? undefined,
-        utmCampaign: params.get('utm_campaign') ?? undefined,
+        path:         window.location.pathname,
+        referrer:     referrer ?? undefined,
+        utmSource:    params.get('utm_source') ?? undefined,
+        utmMedium:    params.get('utm_medium') ?? undefined,
+        utmCampaign:  params.get('utm_campaign') ?? undefined,
+        screenWidth:  window.screen.width,
+        screenHeight: window.screen.height,
+        language:     navigator.language ?? undefined,
+        sessionId:    getSessionId(),
       }),
     }).catch(() => {});
   }, []);

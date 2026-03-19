@@ -52,6 +52,7 @@ export async function GET(req: NextRequest) {
     const [
       totalVisits,
       visitsLast7Days,
+      uniqueSessionsLast7Days,
       demoLoginsLast7Days,
       demoSuccessLast7Days,
       dailyVisitsRaw,
@@ -62,6 +63,12 @@ export async function GET(req: NextRequest) {
       ctaClicksRaw,
       scrollDepthRaw,
       topPagesRaw,
+      browserBreakdownRaw,
+      osBreakdownRaw,
+      deviceBreakdownRaw,
+      countryBreakdownRaw,
+      languageBreakdownRaw,
+      screenBreakdownRaw,
     ] = await Promise.all([
       // Total visits (all time)
       prisma.visitLog.count(),
@@ -70,6 +77,14 @@ export async function GET(req: NextRequest) {
       prisma.visitLog.count({
         where: { timestamp: { gte: sevenDaysAgo } },
       }),
+
+      // Unique sessions in last 7 days
+      prisma.$queryRaw<Array<{ count: bigint }>>`
+        SELECT COUNT(DISTINCT "sessionId")::bigint AS count
+        FROM "VisitLog"
+        WHERE "timestamp" >= ${sevenDaysAgo}
+          AND "sessionId" IS NOT NULL
+      `,
 
       // Demo logins in last 7 days
       prisma.demoLoginAttempt.count({
@@ -163,12 +178,79 @@ export async function GET(req: NextRequest) {
         ORDER BY count DESC
         LIMIT 15
       `,
+
+      // Browser breakdown (last 30 days)
+      prisma.$queryRaw<Array<{ browser: string; count: bigint }>>`
+        SELECT "browser", COUNT(*)::bigint AS count
+        FROM "VisitLog"
+        WHERE "timestamp" >= ${thirtyDaysAgo}
+          AND "browser" IS NOT NULL
+        GROUP BY "browser"
+        ORDER BY count DESC
+        LIMIT 10
+      `,
+
+      // OS breakdown (last 30 days)
+      prisma.$queryRaw<Array<{ os: string; count: bigint }>>`
+        SELECT "os", COUNT(*)::bigint AS count
+        FROM "VisitLog"
+        WHERE "timestamp" >= ${thirtyDaysAgo}
+          AND "os" IS NOT NULL
+        GROUP BY "os"
+        ORDER BY count DESC
+        LIMIT 10
+      `,
+
+      // Device type breakdown (last 30 days)
+      prisma.$queryRaw<Array<{ deviceType: string; count: bigint }>>`
+        SELECT "deviceType", COUNT(*)::bigint AS count
+        FROM "VisitLog"
+        WHERE "timestamp" >= ${thirtyDaysAgo}
+        GROUP BY "deviceType"
+        ORDER BY count DESC
+      `,
+
+      // Country breakdown (last 30 days)
+      prisma.$queryRaw<Array<{ countryCode: string; count: bigint }>>`
+        SELECT "countryCode", COUNT(*)::bigint AS count
+        FROM "VisitLog"
+        WHERE "timestamp" >= ${thirtyDaysAgo}
+          AND "countryCode" IS NOT NULL
+        GROUP BY "countryCode"
+        ORDER BY count DESC
+        LIMIT 15
+      `,
+
+      // Language breakdown (last 30 days)
+      prisma.$queryRaw<Array<{ language: string; count: bigint }>>`
+        SELECT "language", COUNT(*)::bigint AS count
+        FROM "VisitLog"
+        WHERE "timestamp" >= ${thirtyDaysAgo}
+          AND "language" IS NOT NULL
+        GROUP BY "language"
+        ORDER BY count DESC
+        LIMIT 10
+      `,
+
+      // Screen resolution breakdown (last 30 days)
+      prisma.$queryRaw<Array<{ resolution: string; count: bigint }>>`
+        SELECT ("screenWidth" || 'x' || "screenHeight") AS resolution, COUNT(*)::bigint AS count
+        FROM "VisitLog"
+        WHERE "timestamp" >= ${thirtyDaysAgo}
+          AND "screenWidth" IS NOT NULL
+          AND "screenHeight" IS NOT NULL
+        GROUP BY "screenWidth", "screenHeight"
+        ORDER BY count DESC
+        LIMIT 10
+      `,
     ]);
 
     const demoSuccessRate =
       demoLoginsLast7Days > 0
         ? Math.round((demoSuccessLast7Days / demoLoginsLast7Days) * 100)
         : 0;
+
+    const uniqueSessions = Number(uniqueSessionsLast7Days[0]?.count ?? 0);
 
     const dailyVisits = dailyVisitsRaw.map((row) => ({
       date: row.date,
@@ -200,10 +282,41 @@ export async function GET(req: NextRequest) {
       count: Number(row.count),
     }));
 
+    const browsers = browserBreakdownRaw.map((row) => ({
+      label: row.browser,
+      count: Number(row.count),
+    }));
+
+    const operatingSystems = osBreakdownRaw.map((row) => ({
+      label: row.os,
+      count: Number(row.count),
+    }));
+
+    const devices = deviceBreakdownRaw.map((row) => ({
+      label: row.deviceType,
+      count: Number(row.count),
+    }));
+
+    const countries = countryBreakdownRaw.map((row) => ({
+      label: row.countryCode,
+      count: Number(row.count),
+    }));
+
+    const languages = languageBreakdownRaw.map((row) => ({
+      label: row.language,
+      count: Number(row.count),
+    }));
+
+    const screens = screenBreakdownRaw.map((row) => ({
+      label: row.resolution,
+      count: Number(row.count),
+    }));
+
     return NextResponse.json({
       kpi: {
         totalVisits,
         visitsLast7Days,
+        uniqueSessions,
         demoLoginsLast7Days,
         demoSuccessRate,
       },
@@ -222,6 +335,14 @@ export async function GET(req: NextRequest) {
         ctaClicks,
         scrollDepth,
         topPages,
+      },
+      visitors: {
+        browsers,
+        operatingSystems,
+        devices,
+        countries,
+        languages,
+        screens,
       },
     });
   } catch (error) {

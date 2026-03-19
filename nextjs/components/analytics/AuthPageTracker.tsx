@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
+import { getSessionId } from '@/lib/sessionId';
 import EventTracker, { trackCta } from './EventTracker';
 
 export { trackCta };
@@ -26,6 +27,7 @@ export default function AuthPageTracker() {
         path: pathname,
         eventType: 'page_view',
         isAuthenticated: true,
+        sessionId: getSessionId(),
       }),
     }).catch(() => {});
   }, [pathname]);
