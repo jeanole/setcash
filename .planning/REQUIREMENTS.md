@@ -36,8 +36,8 @@
 ### Testing
 
 - [ ] **TEST-01**: Integration tests cover bill create, update, and delete lifecycle with real database
-- [ ] **TEST-02**: Integration tests cover bill status transitions (draft → submitted → approved/rejected)
-- [ ] **TEST-03**: Integration tests verify auth guards (unauthenticated → 401, wrong role → 403)
+- [ ] **TEST-02**: Integration tests cover bill status transitions (draft -> submitted -> approved/rejected)
+- [ ] **TEST-03**: Integration tests verify auth guards (unauthenticated -> 401, wrong role -> 403)
 - [ ] **TEST-04**: Integration tests verify allocation math (motive + category percentages sum correctly)
 - [ ] **TEST-05**: Integration tests verify budget matrix calculations
 
@@ -74,13 +74,33 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (populated during roadmap creation) | | |
+| SEC-01 | Phase 1 | Pending |
+| SEC-02 | Phase 1 | Pending |
+| SEC-03 | Phase 1 | Pending |
+| SEC-04 | Phase 1 | Pending |
+| QUAL-04 | Phase 1 | Pending |
+| QUAL-05 | Phase 1 | Pending |
+| BUGS-01 | Phase 2 | Pending |
+| BUGS-02 | Phase 2 | Pending |
+| BUGS-03 | Phase 2 | Pending |
+| QUAL-01 | Phase 3 | Pending |
+| QUAL-02 | Phase 3 | Pending |
+| QUAL-03 | Phase 4 | Pending |
+| QUAL-07 | Phase 4 | Pending |
+| DATA-01 | Phase 4 | Pending |
+| DATA-02 | Phase 4 | Pending |
+| TEST-01 | Phase 4 | Pending |
+| TEST-02 | Phase 4 | Pending |
+| TEST-03 | Phase 4 | Pending |
+| TEST-04 | Phase 4 | Pending |
+| TEST-05 | Phase 4 | Pending |
+| QUAL-06 | Phase 5 | Pending |
 
 **Coverage:**
-- v1 requirements: 19 total
-- Mapped to phases: 0
-- Unmapped: 19 ⚠️
+- v1 requirements: 21 total
+- Mapped to phases: 21
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-01*
-*Last updated: 2026-04-01 after initial definition*
+*Last updated: 2026-04-01 after roadmap creation*
