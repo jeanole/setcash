@@ -30,7 +30,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. The next-auth version in package.json is pinned to exactly 5.0.0-beta.30 with no caret or tilde, and npm install does not resolve a different version
   4. A cross-origin POST request to any mutation endpoint is rejected — the Origin header is validated against the app domain
   5. npm ls shows no @types/* package in production dependencies and better-sqlite3 is absent from package.json entirely
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 01-01-PLAN.md -- Path traversal guard (assertPathWithin helper + patch all file-serving routes)
+- [ ] 01-02-PLAN.md -- Admin role re-fetch (verifyAdminRole helper + patch critical write routes)
+- [ ] 01-03-PLAN.md -- Origin validation + dependency cleanup (middleware Origin check, pin next-auth, clean deps)
 
 ### Phase 2: Bug Triage and Fixes
 **Goal**: The backlog of 45+ tracked bug reports has a known, accurate status and every reproducible bug is fixed
@@ -84,7 +88,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Security and Dependency Baseline | 0/TBD | Not started | - |
+| 1. Security and Dependency Baseline | 0/3 | Planning complete | - |
 | 2. Bug Triage and Fixes | 0/TBD | Not started | - |
 | 3. Shared Helper Extraction | 0/TBD | Not started | - |
 | 4. Data Correctness and Test Coverage | 0/TBD | Not started | - |
