@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { db as prisma } from '@/lib/db';
+import { db as prisma, withDbRetry } from '@/lib/db';
 import fs from 'fs';
 import path from 'path';
 import { UPLOADS_DIR } from '@/lib/upload';
@@ -30,14 +30,16 @@ export async function GET(
     const relPath = pathSegments.join('/');
 
     // Look up image by file path in bill_images first
-    const image = await prisma.billImage.findFirst({
-      where: { filePath: relPath },
-      include: {
-        bill: {
-          select: { projectId: true },
+    const image = await withDbRetry(() =>
+      prisma.billImage.findFirst({
+        where: { filePath: relPath },
+        include: {
+          bill: {
+            select: { projectId: true },
+          },
         },
-      },
-    });
+      })
+    );
 
     let targetProjectId: string | null = null;
 
@@ -45,10 +47,12 @@ export async function GET(
       targetProjectId = image.bill.projectId;
     } else {
       // Fallback to legacy bill lookup
-      const bill = await prisma.bill.findFirst({
-        where: { filename: relPath },
-        select: { projectId: true },
-      });
+      const bill = await withDbRetry(() =>
+        prisma.bill.findFirst({
+          where: { filename: relPath },
+          select: { projectId: true },
+        })
+      );
       if (bill) {
         targetProjectId = bill.projectId;
       }
@@ -94,6 +98,21 @@ export async function GET(
     });
   } catch (error) {
     console.error('Error serving file:', error);
+
+    // Return 503 for transient database connection errors so clients know to retry.
+    const msg = error instanceof Error ? error.message.toLowerCase() : '';
+    if (
+      msg.includes('the database system is not yet accepting connections') ||
+      msg.includes('connection refused') ||
+      msg.includes('econnrefused') ||
+      msg.includes('cannot connect now')
+    ) {
+      return new NextResponse('Service temporarily unavailable', {
+        status: 503,
+        headers: { 'Retry-After': '5' },
+      });
+    }
+
     return new NextResponse('Internal server error', { status: 500 });
   }
 }
