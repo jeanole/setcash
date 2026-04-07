@@ -1,6 +1,7 @@
 node_modules/
 .env
 .env.test
+.env.test.example
 service-account.json
 google-credentials.json
 *-credentials.json

@@ -7,6 +7,7 @@ import { auth } from '@/auth';
 import { prisma } from '@/lib/db';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
+import { notifyProjectAdmins } from '@/lib/notifications';
 
 const bulkUpdateSchema = z.object({
   updates: z.array(
@@ -65,7 +66,7 @@ export async function POST(req: NextRequest) {
       }),
       prisma.category.findMany({
         where: { id: { in: distinctCategoryIds }, projectId },
-        select: { id: true },
+        select: { id: true, name: true, budget: true },
       }),
     ]);
 

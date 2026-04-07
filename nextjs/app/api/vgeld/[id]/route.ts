@@ -59,6 +59,30 @@ export async function PATCH(
       data: { confirmedBy: session.user.email },
     });
 
+    // Fire-and-forget: notify the transfer requester
+    if (transfer.createdBy) {
+      void Promise.resolve().then(async () => {
+        try {
+          const project = await prisma.project.findUnique({
+            where: { id: projectId },
+            select: { name: true },
+          });
+          const projectName = project?.name ?? projectId;
+          const amountStr = Number(transfer.amount).toFixed(2);
+          await prisma.notification.create({
+            data: {
+              userEmail: transfer.createdBy as string,
+              type: 'transfer_confirmed',
+              message: `Your transfer of ${amountStr} in '${projectName}' was confirmed.`,
+              projectId,
+            },
+          });
+        } catch {
+          // ignore
+        }
+      });
+    }
+
     return NextResponse.json({ ok: true, confirmedBy: session.user.email });
   } catch (error) {
     console.error('Error confirming V-Geld transfer:', error);
