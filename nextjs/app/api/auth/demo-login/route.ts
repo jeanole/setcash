@@ -56,8 +56,11 @@ export async function POST(req: NextRequest) {
     .catch((err) => console.error('[DemoLogin] Failed to log attempt:', err));
 
   // Return demo credentials — the client will use signIn('credentials', ...)
-  const email = process.env.DEMO_USER_EMAIL ?? 'testuser@setcash.app';
-  const password = process.env.DEMO_USER_PASSWORD ?? 'supersafepw';
+  const email = process.env.DEMO_USER_EMAIL;
+  const password = process.env.DEMO_USER_PASSWORD;
+  if (!email || !password) {
+    return NextResponse.json({ error: 'Demo login not configured' }, { status: 503 });
+  }
 
   return NextResponse.json({ email, password });
 }

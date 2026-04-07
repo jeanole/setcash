@@ -4,8 +4,11 @@ import bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 async function main() {
-  const adminEmail = process.env.ADMIN_EMAIL ?? 'admin@example.com';
-  const adminPassword = process.env.ADMIN_PASSWORD ?? 'admin123';
+  const adminEmail = process.env.ADMIN_EMAIL;
+  const adminPassword = process.env.ADMIN_PASSWORD;
+  if (!adminEmail || !adminPassword) {
+    throw new Error('ADMIN_EMAIL and ADMIN_PASSWORD env vars are required for seeding');
+  }
 
   // 1. Upsert admin user
   const passwordHash = await bcrypt.hash(adminPassword, 10);
@@ -113,8 +116,13 @@ async function main() {
   console.log(`✓ Admin user defaultProjectId set to: ${projectId}`);
 
   // 8. Demo user — credentials from env vars
-  const demoEmail = process.env.DEMO_USER_EMAIL ?? 'testuser@setcash.app';
-  const demoPassword = process.env.DEMO_USER_PASSWORD ?? 'supersafepw';
+  const demoEmail = process.env.DEMO_USER_EMAIL;
+  const demoPassword = process.env.DEMO_USER_PASSWORD;
+  if (!demoEmail || !demoPassword) {
+    console.log('⊘ DEMO_USER_EMAIL / DEMO_USER_PASSWORD not set — skipping demo user');
+    console.log('Seed complete.');
+    return;
+  }
   const demoPasswordHash = await bcrypt.hash(demoPassword, 10);
 
   // Find the example project
