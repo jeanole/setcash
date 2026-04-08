@@ -1,11 +1,11 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.1
-milestone_name: Onboarding Tour
-status: ready_to_plan
-stopped_at: null
-last_updated: "2026-04-08"
-last_activity: 2026-04-08 -- Roadmap created for v1.1 (Phases 6-8)
+milestone: v1.0
+milestone_name: Hardening
+status: planning
+stopped_at: Phase 6 context gathered
+last_updated: "2026-04-08T16:16:58.311Z"
+last_activity: 2026-04-08 — Roadmap created for v1.1 Onboarding Tour
 progress:
   total_phases: 3
   completed_phases: 0
@@ -74,6 +74,6 @@ None for v1.1 phases. Standard implementation work.
 
 ## Session Continuity
 
-Last session: 2026-04-08
-Stopped at: Roadmap created for v1.1 Onboarding Tour (Phases 6-8)
-Resume file: —
+Last session: 2026-04-08T16:16:58.239Z
+Stopped at: Phase 6 context gathered
+Resume file: .planning/phases/06-tour-infrastructure/06-CONTEXT.md
