@@ -40,6 +40,7 @@ export const authConfig = {
         session.user.currentProjectName = token.currentProjectName as string | null;
         session.user.isExampleProject = (token.isExampleProject as boolean) ?? false;
         session.user.isDemoAccount = (token.isDemoAccount as boolean) ?? false;
+        session.user.hasSeenTour = (token.hasSeenTour as boolean) ?? false;
       }
       return session;
     },

@@ -10,6 +10,7 @@ export type SessionUser = {
   role: 'user' | 'admin' | 'owner' | 'superadmin';
   currentProjectId: string | null;
   isDemoAccount: boolean;
+  hasSeenTour: boolean;
 };
 
 // ---------------------------------------------------------------------------
@@ -30,5 +31,6 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
     role: session.user.role ?? 'user',
     currentProjectId: session.user.currentProjectId ?? null,
     isDemoAccount: session.user.isDemoAccount ?? false,
+    hasSeenTour: session.user.hasSeenTour ?? false,
   };
 }

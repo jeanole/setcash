@@ -21,6 +21,7 @@ declare module 'next-auth' {
       currentProjectName: string | null;
       isExampleProject: boolean;
       isDemoAccount: boolean;
+      hasSeenTour: boolean;
     };
   }
 }
@@ -35,6 +36,7 @@ declare module '@auth/core/jwt' {
     currentProjectName: string | null;
     isExampleProject: boolean;
     isDemoAccount: boolean;
+    hasSeenTour: boolean;
   }
 }
 
@@ -191,6 +193,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           name: user.email,
           isSuperAdmin: user.isSuperAdmin,
           isDemoAccount: user.isDemoAccount,
+          hasSeenTour: user.hasSeenTour,
           defaultProjectId: user.defaultProjectId,
           memberships: user.memberships,
         };
@@ -221,6 +224,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           email: string;
           isSuperAdmin?: boolean;
           isDemoAccount?: boolean;
+          hasSeenTour?: boolean;
           defaultProjectId?: string | null;
           memberships?: Array<{ projectId: string; role: string }>;
         };
@@ -228,6 +232,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.id = u.id;
         token.email = u.email;
         token.isDemoAccount = u.isDemoAccount ?? false;
+        token.hasSeenTour = u.hasSeenTour ?? false;
 
         // Derive role
         if (u.isSuperAdmin) {
@@ -348,7 +353,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         try {
           const dbUser = await prisma.user.findUnique({
             where: { email: userEmail },
-            select: { defaultProjectId: true, isSuperAdmin: true, isDemoAccount: true },
+            select: { defaultProjectId: true, isSuperAdmin: true, isDemoAccount: true, hasSeenTour: true },
           });
 
           // Always sync superadmin role from DB — role may change while user is logged in
@@ -356,8 +361,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             token.role = 'superadmin';
           }
 
-          // Sync isDemoAccount from DB
+          // Sync isDemoAccount and hasSeenTour from DB
           token.isDemoAccount = dbUser?.isDemoAccount ?? false;
+          token.hasSeenTour = dbUser?.hasSeenTour ?? false;
 
           if (dbUser?.defaultProjectId) {
             // Only re-fetch project details if project changed
@@ -410,6 +416,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.currentProjectName = token.currentProjectName as string | null;
         session.user.isExampleProject = (token.isExampleProject as boolean) ?? false;
         session.user.isDemoAccount = (token.isDemoAccount as boolean) ?? false;
+        session.user.hasSeenTour = (token.hasSeenTour as boolean) ?? false;
       }
       return session;
     },
