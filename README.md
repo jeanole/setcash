@@ -1,3 +1,5 @@
+*On the one hand this is a project adressing a real world issue on the other hand this is a testpiece to get to know Agentic Coding. It started small and took a few turns. I tested different Agentic Skill sets to find out how to create bigger projects. First inspired by Alex Sprogis and later GSD - GetShitDone. This project also included some minor work with pencil.ai for layout and desing. Keen to go further. If you are intersted in using this project: text me!*
+
 # SetCash
 
 Your receipts deserve better than a shoebox.
