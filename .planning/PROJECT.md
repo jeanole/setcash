@@ -1,4 +1,4 @@
-# SetCash — Hardening Milestone
+# SetCash — Onboarding Tour Milestone
 
 ## What This Is
 
@@ -29,36 +29,36 @@ Every bill submission, approval, and budget calculation must be **correct, secur
 
 ### Active
 
-- [ ] Triage and fix all reproducible bugs from the 45+ tracked bug reports
-- [ ] Close path traversal vulnerability in uploads endpoint
-- [ ] Fix stale JWT role checks — re-verify roles on critical operations
-- [ ] Extract duplicated bill helpers (saveAllocations, syncLegacyImageColumns) to shared module
-- [ ] Replace N+1 sequential DB writes with batch operations (createMany)
-- [ ] Replace synchronous file I/O with async equivalents in request handlers
-- [ ] Move bill creation post-steps inside transaction scope
-- [ ] Remove legacy columns (legacyId, motiveLegacy) after confirming no external readers
-- [ ] Clean up dependencies (@types in deps, better-sqlite3 remnant)
-- [ ] Pin next-auth to exact version to prevent accidental beta upgrades
-- [ ] Add integration tests for critical paths (bill CRUD, auth, allocations, budget)
-- [ ] Add path traversal guards to all file-serving endpoints
-- [ ] Add automated cleanup for expired tokens (password reset, email verification)
+- [ ] 6-step guided onboarding tour with speech-bubble tooltips anchored to UI elements
+- [ ] Tour progression controls (Next/Back/Skip/Done)
+- [ ] Tour triggers on first login for new users, every login for demo/test users
+- [ ] Tour state persisted per user (hasSeenTour flag)
+- [ ] Tour content: sidebar nav, bill creation, budget matrix, approval workflow, exports, settings
+- [ ] Callouts for Telegram notifications and AI/OCR integration in relevant steps
 
 ### Out of Scope
 
-- New features or UI enhancements — this milestone is hardening only
-- Migration to object storage (S3/GCS) — scaling concern, not reliability
-- E2E browser tests — add after integration test coverage improves
-- CSRF token implementation — SameSite cookies provide partial protection; revisit in security milestone
-- Automated database backups — ops concern, not application code
+- Full interactive walkthrough with sandbox data — lightweight tooltips only
+- Video tutorials or embedded help docs — keep it simple, one sentence per step
+- Customizable tour content per project — single global tour for v1.1
+- Tour analytics/tracking (which step users drop off) — defer to future milestone
+
+## Current Milestone: v1.1 Onboarding Tour
+
+**Goal:** Guide new users through SetCash's core features with a 6-step speech-bubble tooltip tour on first login (always for test/demo users).
+
+**Target features:**
+- 6-step guided tour with speech-bubble tooltips anchored to UI elements
+- Step-by-step progression with Next/Back/Skip/Done controls
+- Tour triggers: first login for new users, every login for demo/test users
+- Tour content covering: navigation, bill creation, budget matrix, approval workflow, exports, settings — with callouts for Telegram and AI/OCR
 
 ## Context
 
-- 45+ bug reports tracked in `features/BUG-*.md`, status unknown (many may be stale or already fixed)
-- Codebase audit (`.planning/codebase/CONCERNS.md`) identified security, performance, and reliability issues
-- Only 3 of 87 API routes have tests — regression risk is high
-- Bill creation flow is the most fragile area: file uploads + allocations + edit logs happen outside transaction
-- next-auth is on beta channel (v5.0.0-beta.30) — pinning required
-- Duplicated code in bill routes increases maintenance burden and divergence risk
+- App already has a working demo login flow — tour should integrate with that
+- UI uses Tailwind CSS v4, React 18, Next.js 14 App Router
+- No existing tooltip/popover library in the project — will need a tour library or custom implementation
+- Test/demo account detection available via `isDemoAccount` flag in session JWT
 
 ## Constraints
 
@@ -71,9 +71,9 @@ Every bill submission, approval, and budget calculation must be **correct, secur
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Triage bugs before fixing | Many of 45+ bugs may be stale or duplicates — avoid wasted effort | — Pending |
-| Hardening only, no new features | Focus drives quality; mixing features dilutes reliability work | — Pending |
-| Integration tests over E2E | Faster to write, more stable, covers the critical gaps first | — Pending |
+| Lightweight tooltip tour, not interactive walkthrough | Minimal complexity, fast to build, non-intrusive UX | — Pending |
+| Per-user tour state flag | Simple boolean tracks completion; demo users bypass it | — Pending |
+| 6 fixed steps covering core workflow | Covers the critical path without overwhelming new users | — Pending |
 
 ## Evolution
 
@@ -93,4 +93,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-01 after initialization*
+*Last updated: 2026-04-08 after milestone v1.1 initialization*

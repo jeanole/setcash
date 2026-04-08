@@ -1,13 +1,13 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: planning
-stopped_at: Phase 1 context gathered
-last_updated: "2026-04-02T06:45:52.565Z"
-last_activity: 2026-04-01 — Roadmap created
+milestone: v1.1
+milestone_name: Onboarding Tour
+status: defining_requirements
+stopped_at: null
+last_updated: "2026-04-08"
+last_activity: 2026-04-08 -- Milestone v1.1 started
 progress:
-  total_phases: 5
+  total_phases: 0
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -18,19 +18,17 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-01)
+See: .planning/PROJECT.md (updated 2026-04-08)
 
 **Core value:** Every bill submission, approval, and budget calculation must be correct, secure, and reliable — financial data tolerates zero silent failures.
-**Current focus:** Phase 1 — Security and Dependency Baseline
+**Current focus:** Defining requirements for v1.1 Onboarding Tour
 
 ## Current Position
 
-Phase: 1 of 5 (Security and Dependency Baseline)
-Plan: 0 of TBD in current phase
-Status: Ready to plan
-Last activity: 2026-04-01 — Roadmap created
-
-Progress: [░░░░░░░░░░] 0%
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-04-08 — Milestone v1.1 started
 
 ## Performance Metrics
 
@@ -60,9 +58,9 @@ Progress: [░░░░░░░░░░] 0%
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
-- Triage bugs before fixing: avoids wasted effort on stale/duplicate reports
-- Hardening only, no new features: focus drives quality
-- Integration tests over E2E: faster to write, more stable, covers critical gaps first
+- Lightweight tooltip tour, not interactive walkthrough
+- Per-user tour state flag (boolean, demo users bypass)
+- 6 fixed steps covering core workflow
 
 ### Pending Todos
 
@@ -75,6 +73,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-02T06:45:52.374Z
-Stopped at: Phase 1 context gathered
-Resume file: .planning/phases/01-security-and-dependency-baseline/01-CONTEXT.md
+Last session: 2026-04-08
+Stopped at: Milestone v1.1 initialization
+Resume file: —
