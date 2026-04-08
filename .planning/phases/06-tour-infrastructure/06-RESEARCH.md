@@ -339,17 +339,15 @@ No relevant changes. This phase uses stable, established patterns (Prisma migrat
 | A2 | Tour step content (titles, body text) are placeholders -- actual content defined by user in Phase 7/8 | Code Examples | No risk -- config file is easily editable |
 | A3 | Explicit string IDs for steps (e.g., `'welcome'`, `'bills'`) are preferable to array indices for debugging and future analytics (v2 TOUR-02) | Architecture Patterns | Low risk -- array index works too, discretion area |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Tour step content and selectors**
+1. **Tour step content and selectors** — RESOLVED: Use placeholder content in Phase 6. Phase 8 (INTG-01) adds `data-tour` attributes to actual UI elements, at which point selectors become concrete. Step content can be finalized then.
    - What we know: 6 steps covering the core workflow (per STATE.md)
    - What's unclear: Exact title/body text and target CSS selectors for each step
-   - Recommendation: Use placeholder content in Phase 6. Phase 8 (INTG-01) adds `data-tour` attributes to actual UI elements, at which point selectors become concrete. Step content can be finalized then.
 
-2. **Rate limiting for completion endpoint**
+2. **Rate limiting for completion endpoint** — RESOLVED: Added `tourComplete: { max: 5, window: '1 m' }` rate limiter per project convention (Plan 03).
    - What we know: Single fire-and-forget call per user (D-10 says idempotent)
    - What's unclear: Whether it needs rate limiting at all
-   - Recommendation: Add a light rate limiter (e.g., `tourComplete: { max: 5, window: '1 m' }`) to prevent abuse. Follows project convention where every POST endpoint has rate limiting. This is a Claude's discretion area.
 
 ## Validation Architecture
 
