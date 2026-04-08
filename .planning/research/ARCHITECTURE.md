@@ -1,374 +1,353 @@
-# Architecture Patterns — Hardening Build Order
+# Architecture Research — Onboarding Tour Integration
 
-**Project:** SetCash Hardening Milestone
-**Researched:** 2026-04-01
-**Confidence:** HIGH (based on direct codebase audit, no inference required)
+**Domain:** Tooltip-based onboarding tour in existing Next.js 14 App Router app
+**Researched:** 2026-04-08
+**Confidence:** HIGH (based on direct codebase audit + verified library documentation)
 
 ---
 
-## System Layers
+## System Overview
 
-This is a monolithic Next.js 14 App Router application. The layers are well-defined:
+The tour is a client-side overlay system that sits between AppShell and the page content. It does not add new routes, new API endpoints (except one for persisting completion state), or new database tables. It adds one DB column, one React context provider, one hook, and a set of step definition constants.
 
 ```
-Browser
-  └── Edge Middleware (nextjs/middleware.ts)         — JWT gate, no DB
-        └── Server Components (app/(protected)/)    — SSR shells
-              └── Client Components (components/)   — interactive UI
-                    └── API Routes (app/api/)        — REST handlers
-                          └── Shared Lib (lib/)      — business logic
-                                └── Prisma → PostgreSQL
+┌─────────────────────────────────────────────────────────────────┐
+│  (protected)/layout.tsx  (server component)                     │
+│    └── ClientSessionProvider                                    │
+│          └── TourProvider  ← NEW (wraps AppShell)               │
+│                └── AppShell  (client component)                 │
+│                      ├── Sidebar  (nav links need data-tour-*)  │
+│                      ├── Header                                 │
+│                      ├── {children}  (page content)             │
+│                      └── TourOverlay  ← NEW (renders tooltips)  │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-### Component Boundaries
+### Component Responsibilities
 
-| Component | Responsibility | Talks To |
-|-----------|---------------|---------|
-| `middleware.ts` | JWT presence check, redirect to login | `auth.config.ts` (edge-safe, no Prisma) |
-| `app/(protected)/layout.tsx` | Server-side auth verification, session hydration | `auth.ts` (full Prisma config) |
-| `app/api/bills/route.ts` | Bill creation: parse form, create DB record, move files, allocations, edit log | `auth.ts`, `lib/db.ts`, `lib/upload.ts`, `lib/notifications.ts` |
-| `app/api/bills/[id]/route.ts` | Bill read/update/delete with ownership check | `auth.ts`, `lib/db.ts` |
-| `app/api/uploads/[[...path]]/route.ts` | Authenticated file serving with project scoping | `auth.ts`, `lib/db.ts`, local filesystem |
-| `lib/bills.ts` | (does not exist yet) Target location for extracted shared helpers | — |
-| `lib/upload.ts` | Multipart parsing (formidable), file path helpers, UPLOADS_DIR constant | Filesystem |
-| `lib/ratelimit.ts` | Named rate limiters (Upstash Redis + in-memory fallback) | — |
-| `lib/notifications.ts` | Project-scoped notification creation | `lib/db.ts` |
-| `auth.ts` | Full NextAuth config (Prisma, bcrypt, JWT callbacks) | `lib/db.ts` |
-| `auth.config.ts` | Edge-compatible NextAuth config (no Prisma, no bcrypt) | — |
+| Component | New/Modified | Responsibility |
+|-----------|-------------|----------------|
+| `TourProvider` | NEW | React context holding tour state (active, currentStep, steps). Reads session to decide auto-start. Exposes `startTour()`, `nextStep()`, `prevStep()`, `skipTour()`, `completeTour()`. |
+| `TourOverlay` | NEW | Renders the spotlight backdrop + speech-bubble tooltip positioned relative to the target element. Uses Floating UI (already indirectly available via Radix, or add `@floating-ui/react-dom`). |
+| `TourTooltip` | NEW | The speech-bubble UI component: title, body text, step indicator (2/6), Next/Back/Skip/Done buttons. Pure presentational. |
+| `TOUR_STEPS` | NEW | Constant array defining the 6 steps: `{ id, target, title, content, route?, placement }`. Defined in `lib/tour/steps.ts`. |
+| `useTour` | NEW | Hook that consumes TourProvider context. Components call `useTour()` to check if tour is active and which step is current. |
+| `AppShell` | MODIFIED | Renders `<TourOverlay />` as last child (portal-free, lives in the flex layout). |
+| `Sidebar` NavLinks | MODIFIED | Add `data-tour="nav-bills"`, `data-tour="nav-budget"`, etc. to nav link elements for targeting. |
+| `(protected)/layout.tsx` | MODIFIED | Wraps content with `<TourProvider>` between `ClientSessionProvider` and `AppShell`. Passes `isDemoAccount` and `hasSeenTour` as props. |
+| `User` model | MODIFIED | Add `hasSeenTour Boolean @default(false)` column. |
+| `POST /api/tour/complete` | NEW | Single endpoint: sets `hasSeenTour = true` for the authenticated user. |
+
+---
+
+## Recommended Project Structure
+
+```
+nextjs/
+├── components/
+│   └── tour/
+│       ├── TourProvider.tsx       # Context provider + auto-start logic
+│       ├── TourOverlay.tsx        # Backdrop + positioned tooltip container
+│       ├── TourTooltip.tsx        # Speech-bubble UI component
+│       └── index.ts               # Barrel: export { TourProvider } from './TourProvider'
+├── lib/
+│   └── tour/
+│       ├── steps.ts               # TOUR_STEPS constant array
+│       ├── types.ts               # TourStep interface, TourState type
+│       └── useTour.ts             # Hook consuming TourContext
+├── app/
+│   └── api/
+│       └── tour/
+│           └── complete/
+│               └── route.ts       # POST handler to persist completion
+└── prisma/
+    └── migrations/
+        └── YYYYMMDD_add_has_seen_tour/
+            └── migration.sql      # ALTER TABLE "User" ADD COLUMN "hasSeenTour" ...
+```
+
+### Structure Rationale
+
+- **components/tour/**: Isolated from other component domains. TourProvider is a layout-level component; TourOverlay and TourTooltip are its children. No other component folder needs modification.
+- **lib/tour/**: Step definitions and types live here because they are data, not UI. The `useTour` hook follows the existing pattern (`lib/hooks/useBills.ts` etc.) but lives in `lib/tour/` because it is tightly coupled to tour types.
+- **app/api/tour/complete/**: Follows the existing API route naming convention. Single-purpose endpoint.
+
+---
+
+## Architectural Patterns
+
+### Pattern 1: Provider at Layout Level, Not Page Level
+
+**What:** Mount `TourProvider` inside the `(protected)/layout.tsx` server component, wrapping `AppShell`. This means the tour context persists across client-side navigations between protected pages.
+
+**When to use:** Always for multi-step tours that reference elements in the persistent shell (sidebar, header) AND elements inside page content.
+
+**Trade-offs:**
+- PRO: Sidebar nav links, header elements, and page content are all within the provider's scope. No need to reinitialize tour state on navigation.
+- PRO: Tour survives `router.push()` between steps (e.g., from dashboard to /bills).
+- CON: Provider must handle the case where target elements do not exist yet (page not loaded). Solved with a `waitForElement` utility.
+
+**Implementation in existing layout:**
+
+```typescript
+// app/(protected)/layout.tsx — the only server-component change
+import { TourProvider } from '@/components/tour';
+
+export default async function ProtectedLayout({ children }: { children: ReactNode }) {
+  const session = await auth();
+  if (!session) redirect('/login');
+
+  // Fetch hasSeenTour alongside existing profile fields
+  const dbUser = session.user?.id
+    ? await db.user.findUnique({
+        where: { id: session.user.id },
+        select: { hasSeenTour: true, username: true, firstName: true, lastName: true, mobile: true },
+      })
+    : null;
+
+  return (
+    <ClientSessionProvider session={session}>
+      <AuthPageTracker />
+      <TourProvider
+        isDemoAccount={session.user?.isDemoAccount ?? false}
+        hasSeenTour={dbUser?.hasSeenTour ?? false}
+      >
+        <AppShell currentUser={currentUser}>
+          {children}
+        </AppShell>
+      </TourProvider>
+    </ClientSessionProvider>
+  );
+}
+```
+
+### Pattern 2: Data Attributes for Tour Targeting
+
+**What:** Add `data-tour="step-id"` attributes to existing elements that tour steps reference. The tour library queries `document.querySelector('[data-tour="nav-bills"]')` to find the anchor element.
+
+**When to use:** Always. CSS selectors or component refs are fragile. Data attributes are explicit, greppable, and do not break if class names change.
+
+**Elements needing data-tour attributes:**
+
+| Step | Target Element | File | Attribute |
+|------|---------------|------|-----------|
+| 1. Navigation | Sidebar `<nav>` element | `Sidebar.tsx` line 295 | `data-tour="sidebar-nav"` |
+| 2. Bills | Bills nav link | `Sidebar.tsx` NavLinks | `data-tour="nav-bills"` |
+| 3. Budget | Budget nav link | `Sidebar.tsx` NavLinks | `data-tour="nav-budget"` |
+| 4. Create Bill | "New Bill" button on /bills page | `components/bills/BillList.tsx` or equivalent | `data-tour="create-bill"` |
+| 5. Exports | Export button/section | `components/bills/BillList.tsx` or equivalent | `data-tour="export-bills"` |
+| 6. Settings | Settings nav link | `Sidebar.tsx` NavLinks | `data-tour="nav-settings"` |
+
+**Example modification to NavLinks:**
+
+```typescript
+// In Sidebar.tsx NavLinks component
+<a
+  key={item.href}
+  href={item.href}
+  data-tour={`nav-${item.label.toLowerCase()}`}  // ← add this
+  onClick={() => onClose?.()}
+  className={cn(/* existing classes */)}
+>
+```
+
+### Pattern 3: Single-Page Tour (No Cross-Route Navigation)
+
+**What:** Keep all 6 tour steps anchored to elements visible on the dashboard/initial page, primarily sidebar nav items and the AppShell header. Do NOT navigate the user to /bills or /budget during the tour.
+
+**When to use:** For a v1 lightweight tour. Cross-route tours add significant complexity (waiting for route transitions, handling loading states, back-button edge cases).
+
+**Trade-offs:**
+- PRO: All target elements exist in the DOM simultaneously (sidebar is always rendered). No async waiting, no navigation race conditions.
+- PRO: Tour completes in seconds without disorienting page transitions.
+- CON: Cannot point at page-specific elements like the "New Bill" button (it only exists on /bills). Mitigate by pointing at the Bills nav link and describing what the user will find there.
+- CON: Less "hands-on" feeling. Acceptable per project requirement ("lightweight tooltips only").
+
+**If cross-route navigation is needed later:** react-joyride 3.x supports a `beforeStep` callback that can call `router.push()` and return a Promise. The tour pauses until the Promise resolves and the target element appears. This is a v2 enhancement.
+
+### Pattern 4: Tour State via Database Column (Not localStorage)
+
+**What:** Store tour completion as `User.hasSeenTour: Boolean` in PostgreSQL. Read it in the server component layout. Write it via a POST endpoint when the user completes or skips the tour.
+
+**When to use:** When the "always show for demo accounts" requirement exists and tour state must survive device/browser changes for real users.
+
+**Trade-offs:**
+- PRO: Works across devices and browsers. A user who completed the tour on desktop does not see it again on mobile.
+- PRO: Server component can read it without client-side hydration delay. The TourProvider receives `hasSeenTour` as a prop from the server, so the initial render already knows whether to show the tour.
+- PRO: Demo account bypass is clean: `if (isDemoAccount || !hasSeenTour) { autoStart() }`.
+- CON: Requires a Prisma migration and a new API endpoint. Minimal overhead for a single boolean column.
+
+**Why not localStorage:**
+- Does not survive incognito mode or device switches.
+- Demo accounts sharing a browser would have conflicting localStorage state.
+- Cannot be read server-side, causing a flash of "tour started then immediately hidden" on hydration.
+
+**Why not session/JWT:**
+- JWT is already carrying 7+ custom fields. Adding more increases cookie size.
+- Tour completion is permanent user state, not session state. If the user logs out and back in, the tour should still be marked complete.
 
 ---
 
 ## Data Flow
 
-### Bill Creation Flow (current — fragile)
+### Tour Initialization Flow
 
 ```
-POST /api/bills
-  1. auth()                              — verify JWT
-  2. billCreateLimiter.check()           — rate limit
-  3. parseForm()                         — formidable multipart parse
-  4. $transaction(Serializable)          — calculateBillNumber + bill.create  <- TRANSACTION ENDS HERE
-  5. fs.renameSync() x N                 — move temp files to uploads/
-  6. prisma.billImage.create() x N       — image records (OUTSIDE transaction)
-  7. syncLegacyImageColumns()            — update bill.filename (OUTSIDE transaction)
-  8. saveAllocations()                   — N+1 create() calls (OUTSIDE transaction)
-  9. getMotiveDisplayString()            — reread allocations for display string
-  10. prisma.bill.update(motiveLegacy)   — update denorm field (OUTSIDE transaction)
-  11. prisma.editLog.create()            — audit log (OUTSIDE transaction)
-  12. return { ok, id }
+Server: layout.tsx
+  1. auth() → session (has isDemoAccount)
+  2. db.user.findUnique({ hasSeenTour }) → boolean
+  3. Render <TourProvider isDemoAccount={isDemoAccount} hasSeenTour={hasSeenTour}>
+
+Client: TourProvider
+  4. On mount, evaluate: shouldAutoStart = isDemoAccount || !hasSeenTour
+  5. If shouldAutoStart AND on dashboard route → set tourState.active = true
+  6. Render children normally; TourOverlay reads tourState from context
 ```
 
-Steps 5-11 are outside the transaction. A failure at any of those steps leaves a bill record
-with no images, no allocations, and no audit log.
-
-### File Serving Flow (current — path traversal risk)
+### Tour Step Progression Flow
 
 ```
-GET /api/uploads/[...path]
-  1. auth()                              — verify JWT
-  2. prisma.billImage.findFirst(relPath) — primary lookup
-  3. prisma.bill.findFirst(filename)     — fallback legacy lookup (looser)
-  4. check session.user.currentProjectId === targetProjectId
-  5. path.join(UPLOADS_DIR, relPath)     — NO guard: resolved path not verified
-  6. fs.readFileSync(filePath)           — entire file into memory (blocking)
-  7. return new NextResponse(buffer)
+User clicks "Next" in TourTooltip
+  1. TourProvider.nextStep() increments currentStepIndex
+  2. TourOverlay reads new step from TOUR_STEPS[currentStepIndex]
+  3. TourOverlay queries document.querySelector(`[data-tour="${step.target}"]`)
+  4. If element found → position tooltip relative to element using Floating UI
+  5. If element not found → skip to next step (defensive, should not happen in single-page mode)
 ```
 
-The legacy fallback at step 3 accepts arbitrary relPath values matched against bill.filename.
-The resolved path at step 5 is never verified to stay under UPLOADS_DIR.
-
-### Role Check Flow (current — stale JWT risk)
+### Tour Completion Flow
 
 ```
-PUT /api/bills/[id]
-  1. auth()                              — reads JWT from cookie
-  2. session.user.role check             — reads role EMBEDDED IN JWT (set at sign-in)
-  3. business logic proceeds
+User clicks "Done" (last step) or "Skip" (any step)
+  1. TourProvider.completeTour() sets tourState.active = false
+  2. If NOT isDemoAccount:
+     a. POST /api/tour/complete (fire-and-forget, no loading state needed)
+     b. Server: auth(), prisma.user.update({ hasSeenTour: true })
+  3. If isDemoAccount: no persistence (tour shows again next login)
 ```
 
-session.user.role is the role stored in the JWT at sign-in. If a user's project role changed
-after that, the stale JWT still grants or denies access incorrectly until rotation.
+### Key Data Flows
+
+1. **hasSeenTour read:** Server component → prop → TourProvider (zero client-side fetch needed)
+2. **hasSeenTour write:** TourProvider → fetch POST /api/tour/complete → DB update (fire-and-forget)
+3. **isDemoAccount bypass:** Session JWT → server component → prop → TourProvider (existing data flow, no changes)
 
 ---
 
-## Hardening Component Boundaries
+## Integration Points
 
-Each concern is isolated to a specific layer. These boundaries define what can change without
-touching anything else.
+### Existing Components Modified
 
-### 1. Shared Bill Helpers (lib/bills.ts)
+| File | Change | Risk |
+|------|--------|------|
+| `app/(protected)/layout.tsx` | Add `hasSeenTour` to DB query select, wrap with `<TourProvider>` | LOW — additive, no existing behavior changes |
+| `components/layout/AppShell.tsx` | Add `<TourOverlay />` as last child inside the flex container | LOW — additive, overlay is position:fixed |
+| `components/layout/Sidebar.tsx` | Add `data-tour` attributes to nav links and `<nav>` element | ZERO — data attributes have no visual or behavioral effect |
+| `prisma/schema.prisma` | Add `hasSeenTour Boolean @default(false)` to User model | LOW — additive column with default, no existing queries affected |
 
-What: Extract saveAllocations, syncLegacyImageColumns, getMotiveDisplayString from both bill
-route files into a single shared module.
+### New Components
 
-Boundary: Only app/api/bills/route.ts and app/api/bills/[id]/route.ts need import changes.
-No other file is affected.
+| File | Purpose | Dependencies |
+|------|---------|-------------|
+| `components/tour/TourProvider.tsx` | Context + state machine | `lib/tour/steps.ts`, `lib/tour/types.ts` |
+| `components/tour/TourOverlay.tsx` | Backdrop + positioning | `@floating-ui/react-dom`, `lib/tour/useTour.ts` |
+| `components/tour/TourTooltip.tsx` | Speech-bubble UI | Tailwind only (no new deps) |
+| `lib/tour/steps.ts` | Step definitions | `lib/tour/types.ts` |
+| `lib/tour/types.ts` | TypeScript interfaces | None |
+| `lib/tour/useTour.ts` | Context consumer hook | React |
+| `app/api/tour/complete/route.ts` | Persist completion | `auth.ts`, `lib/db.ts` |
 
-Constraint: The extracted functions must accept a Prisma transaction client (tx) as a
-parameter so they can be called from inside $transaction(). Current functions close over the
-module-level prisma import. Signature change is required.
+### External Dependencies
 
-N+1 fix lives here: When extracting, replace the for loop of prisma.billMotive.create() calls
-with prisma.billMotive.createMany({ data: [...] }). Same for billCategory. This is safe
-because createMany on PostgreSQL is atomic and returns a count (not the created records),
-which the current code does not use.
+| Package | Purpose | Why This One |
+|---------|---------|-------------|
+| `@floating-ui/react-dom` | Position tooltip relative to target element | Lightweight (3.5 kB gzipped), handles scroll/resize/overflow. Already the positioning engine used by Radix and Headless UI. No full tour library needed because the tour logic is simple enough to own (6 fixed steps, no branching, no async targets). |
 
-### 2. Transaction Scope Expansion (app/api/bills/route.ts)
+**Why not react-joyride:** react-joyride (v3.0.2, just released) is the most popular React tour library with 400K+ weekly npm downloads. It would work. However, for 6 fixed tooltip steps with no cross-route navigation, it is overkill: it brings its own state machine, theming system, and Floater dependency. The custom approach with Floating UI is ~200 lines of code total and gives full control over the speech-bubble design to match Tailwind CSS conventions. If the tour grows beyond 10 steps or needs cross-route navigation in v2, migrating to react-joyride would be straightforward because the `data-tour` targeting pattern is the same.
 
-What: Move prisma.billImage.create() records, syncLegacyImageColumns(), saveAllocations(),
-getMotiveDisplayString() update, and prisma.editLog.create() inside the existing
-$transaction() block.
+**Why not driver.js:** driver.js (v1.4.0) is lightweight and framework-agnostic. It handles spotlight overlays well. However, it uses its own CSS for styling (not Tailwind), does not integrate with React state (imperative API only), and the React wrapper (`driverjs-react`) is a community package with low adoption. The speech-bubble design would fight against driver.js defaults rather than leverage them.
 
-Boundary: Changes are confined entirely to app/api/bills/route.ts. No schema changes.
-No interface changes to callers.
+---
 
-Constraint: fs.renameSync() (the actual file move from temp to uploads directory) cannot be
-inside a DB transaction. The correct pattern is:
-- Move the file first (before the transaction), using a temp-to-staging path
-- If the transaction fails, clean up the staged file
-- This is an at-least-once compensation pattern, not strict atomicity
+## Anti-Patterns
 
-Dependency: Requires the shared helper extraction (1) first, because the extracted functions
-must accept a transaction client parameter.
+### Anti-Pattern 1: Mounting Tour at Page Level
 
-### 3. Path Traversal Guard (app/api/uploads/[[...path]]/route.ts)
+**What people do:** Put `<TourProvider>` inside individual page components (e.g., `/dashboard/page.tsx`).
+**Why it is wrong:** The sidebar nav links live in AppShell, which is rendered by the layout. Page-level providers cannot access elements outside their subtree. Navigation between pages destroys and recreates the provider, losing tour state.
+**Do this instead:** Mount TourProvider in `(protected)/layout.tsx`, above AppShell.
 
-What: After constructing filePath = path.join(UPLOADS_DIR, relPath), add a guard to confirm
-the resolved path starts with UPLOADS_DIR.
+### Anti-Pattern 2: Using CSS Selectors for Targeting
 
-Boundary: One file, four lines of code. No schema or interface changes. The existing
-bug-reports/screenshots/[filename]/route.ts already does this correctly and is the
-reference pattern.
+**What people do:** Target tour steps with `.sidebar a:nth-child(2)` or `#bills-link`.
+**Why it is wrong:** CSS selectors are fragile — reordering nav items, changing class names, or restructuring JSX breaks the tour silently. IDs pollute the global namespace.
+**Do this instead:** Use `data-tour="nav-bills"` attributes. They are explicit, greppable, and decoupled from styling.
 
-Dependency: None. This is a standalone, safe-to-do-first change.
+### Anti-Pattern 3: Navigating Between Routes During Tour
 
-### 4. Stale JWT Role Re-verification
+**What people do:** Step 1 points at sidebar, step 2 calls `router.push('/bills')` and points at the "New Bill" button, step 3 calls `router.push('/budget')`.
+**Why it is wrong:** Race conditions between route transition and element mounting. Loading states interrupt the tour. Back button breaks tour state. Mobile navigation drawer opens/closes unexpectedly.
+**Do this instead:** For v1, keep all steps targeting elements in the persistent shell (sidebar, header). Describe what each section contains in the tooltip text rather than navigating there.
 
-What: On critical write operations (DELETE bill, status transitions, admin-only endpoints),
-re-fetch the user's current ProjectMember.role from the database instead of reading
-session.user.role (JWT-embedded).
+### Anti-Pattern 4: Storing Tour State in localStorage
 
-Where this is needed:
-- PUT /api/bills/[id] line 297 — isAdmin check uses session.user.role
-- DELETE /api/bills/[id] line 475 — same pattern
-- Any status transition endpoint (submitted to approved, approved to rejected)
+**What people do:** `localStorage.setItem('hasSeenTour', 'true')` on completion.
+**Why it is wrong:** Does not survive incognito, device switches, or browser clears. Demo accounts sharing a browser get conflicting state. Cannot be read server-side, causing hydration mismatch (tour flashes then hides).
+**Do this instead:** Database column `User.hasSeenTour` read in the server component layout.
 
-Boundary: Each affected route file adds one prisma.projectMember.findUnique() call after
-auth(). No schema changes. No shared code needed.
+### Anti-Pattern 5: Polling for Target Elements
 
-Dependency: None. Independent of all other work.
-
-### 5. Integration Tests (__tests__/api/)
-
-What: Add tests for: bill CRUD, authorization (403 when not owner or admin), allocation math,
-stale-role edge case.
-
-Existing infrastructure:
-- createTestContext() / cleanupTestContext() in __tests__/helpers.ts
-- makeSession() — builds mock NextAuth session
-- jest.mock('@/auth') + mockAuth.mockResolvedValueOnce() — established pattern
-- jest.config.ts — real database, 30-second timeout, ts-jest with ESM transformation
-
-The test pattern from categories.test.ts is the template:
-  1. Import the route handler function directly
-  2. Mock auth at module level
-  3. Seed test data via Prisma in beforeAll, clean in afterAll
-  4. Call handler with new Request(url), assert on res.status and res.json()
-
-Gap: Bill creation tests require multipart FormData, not JSON. parseForm() uses formidable
-which needs a Readable stream mock. This is the only complexity above the categories pattern.
-
-Dependency: Integration tests for bill creation should follow helper extraction, not precede
-it. Testing the fragile path and then refactoring means rewriting tests.
-
-### 6. Legacy Column Removal (prisma/schema.prisma)
-
-What: Remove legacyId from 15+ models, and motiveLegacy from Bill.
-
-Two-phase approach required:
-
-Phase A (safe): Confirm motiveLegacy is the only remaining reader/writer. Currently written
-in POST /api/bills and PUT /api/bills/[id], and read in Google Sheets export. After
-saveAllocations is extracted and lib/bills.ts has getMotiveDisplayString, replace the Sheets
-export read with a fresh join on BillMotive.
-
-Phase B (destructive): After Phase A is live and verified, add a Prisma migration to drop the
-columns. This requires a git grep motiveLegacy and git grep legacyId scan across all
-non-migration files before the migration runs.
-
-Dependency: Phase A requires lib/bills.ts extraction (1) to be complete.
-
-### 7. Dependency Cleanup (package.json)
-
-What: Move @types/* packages from dependencies to devDependencies. Remove better-sqlite3
-and @types/better-sqlite3. Pin next-auth to exact version.
-
-Boundary: package.json only. No code changes. Requires npm install after change.
-
-Dependency: None. Safe to do independently, but do last to avoid disrupting active work.
+**What people do:** `setInterval(() => document.querySelector(target), 100)` to wait for elements to appear.
+**Why it is wrong:** Wasteful, introduces timing bugs, and accumulates if the element never appears.
+**Do this instead:** In single-page mode, all targets exist immediately (sidebar is always rendered). If cross-route is added later, use `MutationObserver` with a timeout, or react-joyride which handles this internally.
 
 ---
 
 ## Suggested Build Order
 
-The dependency graph drives this order. Items with no dependencies can be parallelized.
+The dependency graph is simple because the tour is additive.
 
 ```
-Phase 1 (no dependencies — do in parallel):
-  - Path traversal guard         4 lines, zero risk
-  - Stale JWT re-verification    additive DB read in critical routes
-  - Dependency cleanup           package.json only
+Phase 1: Foundation (no dependencies)
+  1. Prisma migration: add hasSeenTour to User          ← DB change, deploy-safe
+  2. lib/tour/types.ts + lib/tour/steps.ts              ← data definitions
+  3. POST /api/tour/complete endpoint                    ← simple API route
 
-Phase 2 (after Phase 1):
-  - Extract lib/bills.ts         shared helpers, tx-client parameter
+Phase 2: UI Components (depends on Phase 1 types)
+  4. components/tour/TourTooltip.tsx                     ← pure UI, testable in isolation
+  5. components/tour/TourOverlay.tsx                     ← positioning logic
+  6. components/tour/TourProvider.tsx + lib/tour/useTour  ← state machine
 
-Phase 3 (after Phase 2):
-  - Expand transaction scope     wrap post-creation steps in tx
-  - Integration tests            bill CRUD + auth edge cases
+Phase 3: Integration (depends on Phase 2 components)
+  7. Add data-tour attributes to Sidebar.tsx nav links   ← zero-risk attribute additions
+  8. Modify layout.tsx to query hasSeenTour + wrap with TourProvider
+  9. Modify AppShell.tsx to render TourOverlay
 
-Phase 4 (after Phase 3):
-  - Legacy column removal        confirm no readers, then migrate
+Phase 4: Polish + Testing
+  10. Integration test: tour completion endpoint
+  11. Manual testing: demo account always-show, real account once-show
+  12. Edge cases: mobile viewport, dark mode, RTL (if applicable)
 ```
 
-Rationale:
-
-Path traversal and stale JWT are security fixes. They are independent and low-risk and should
-be done before structural refactoring creates merge complexity.
-
-Helper extraction must precede transaction expansion because the helpers must accept a
-transaction client parameter. Doing transaction expansion against the current duplicated code
-would require applying the change twice and would make the duplication worse.
-
-Integration tests for bill creation should follow the extraction. Testing the current fragile
-path and then refactoring means rewriting the tests.
-
-Legacy column removal is last because it is irreversible and depends on confirming the
-extracted motiveLegacy write path has been fully replaced by the BillMotive join.
+**Phase ordering rationale:**
+- Migration first because the API endpoint and layout query depend on the column existing.
+- Types and steps before components because TourProvider imports step definitions.
+- TourTooltip before TourOverlay because the overlay renders the tooltip.
+- Data-tour attributes before layout integration so target elements are queryable when TourProvider mounts.
+- Tests last because the feature is small enough to build and wire up first, then validate.
 
 ---
 
-## Patterns to Follow
+## Sources
 
-### Pattern: Extracted Helper Accepting Transaction Client
-
-```typescript
-// lib/bills.ts
-import { Prisma } from '@prisma/client';
-
-type TxClient = Prisma.TransactionClient;
-
-export async function saveAllocations(
-  tx: TxClient,
-  billId: string,
-  motiveAllocations: { motiveId: string; percentage: number }[],
-  categoryAllocations: { categoryId: string; percentage: number }[],
-  projectId: string
-): Promise<void> {
-  await tx.billMotive.deleteMany({ where: { billId } });
-  await tx.billCategory.deleteMany({ where: { billId } });
-
-  const [uncatMotive, uncatCategory] = await Promise.all([
-    tx.motive.findFirst({ where: { name: 'Default', projectId } }),
-    tx.category.findFirst({ where: { name: 'Uncategorized', projectId } }),
-  ]);
-
-  const motiveRows = buildRows(motiveAllocations, uncatMotive?.id);
-  const categoryRows = buildRows(categoryAllocations, uncatCategory?.id);
-
-  await Promise.all([
-    tx.billMotive.createMany({ data: motiveRows.map(r => ({ ...r, billId })) }),
-    tx.billCategory.createMany({ data: categoryRows.map(r => ({ ...r, billId })) }),
-  ]);
-}
-```
-
-### Pattern: Path Traversal Guard
-
-```typescript
-const filePath = path.join(UPLOADS_DIR, relPath);
-const resolvedPath = path.resolve(filePath);
-const resolvedBase = path.resolve(UPLOADS_DIR);
-if (!resolvedPath.startsWith(resolvedBase + path.sep)) {
-  return new NextResponse('Forbidden', { status: 403 });
-}
-```
-
-Reference: nextjs/app/api/bug-reports/screenshots/[filename]/route.ts lines 33-38.
-
-### Pattern: DB Role Re-verification
-
-```typescript
-// After auth(), for critical write operations only:
-const membership = session.user.role !== 'superadmin'
-  ? await prisma.projectMember.findUnique({
-      where: { projectId_userEmail: { projectId, userEmail: session.user.email } },
-      select: { role: true },
-    })
-  : null;
-
-const isAdmin = membership?.role === 'admin'
-  || membership?.role === 'owner'
-  || session.user.role === 'superadmin'; // superadmin has no membership row
-```
-
-### Pattern: Integration Test for API Route
-
-```typescript
-// __tests__/api/bills.test.ts
-import { auth } from '@/auth';
-import { POST } from '@/app/api/bills/route';
-import { createTestContext, cleanupTestContext, makeSession, TestContext } from '../helpers';
-
-jest.mock('@/auth');
-const mockAuth = auth as jest.MockedFunction<typeof auth>;
-
-describe('POST /api/bills', () => {
-  let ctx: TestContext;
-  beforeAll(async () => { ctx = await createTestContext(); });
-  afterAll(async () => { await cleanupTestContext(ctx); });
-
-  it('should return 401 when not authenticated', async () => {
-    mockAuth.mockResolvedValueOnce(null);
-    const req = new Request('http://localhost/api/bills', { method: 'POST' });
-    const res = await POST(req as never);
-    expect(res.status).toBe(401);
-  });
-});
-```
+- Codebase audit: `app/(protected)/layout.tsx`, `components/layout/AppShell.tsx`, `components/layout/Sidebar.tsx`, `prisma/schema.prisma`, `auth.ts`, `auth.config.ts`
+- [react-joyride multi-route docs](https://react-joyride.com/multi-route) — multi-route patterns evaluated and deferred
+- [react-joyride npm](https://www.npmjs.com/package/react-joyride) — v3.0.2, React 18 compatible
+- [driver.js official site](https://driverjs.com/) — evaluated, not recommended for React integration
+- [OnboardJS comparison](https://onboardjs.com/blog/5-best-react-onboarding-libraries-in-2025-compared) — library landscape overview
+- [Floating UI](https://floating-ui.com/) — recommended positioning library
+- [Sandro Roth tour library evaluation](https://sandroroth.com/blog/evaluating-tour-libraries/) — independent comparison
 
 ---
-
-## Anti-Patterns to Avoid
-
-### Anti-Pattern: Expanding Transaction Without Extracting First
-
-Starting the transaction expansion before extracting to lib/bills.ts means saveAllocations
-still closes over the module-level prisma client, not the transaction client tx. The code
-appears to work but silently bypasses transaction isolation — allocations write to the real
-DB even if the transaction rolls back.
-
-Detection: If saveAllocations(billId, ...) receives no tx parameter, it is using the
-module-level prisma client.
-
-### Anti-Pattern: Testing Against Fragile Code Then Refactoring
-
-Writing bill creation tests against the current un-extracted, non-transactional flow means
-the tests encode the buggy behavior. When the transaction is expanded, the tests pass for
-the wrong reasons. Write tests against the refactored code.
-
-### Anti-Pattern: Dropping Legacy Columns Without Confirming All Readers
-
-motiveLegacy is read in the Google Sheets export code path. Dropping the column before
-replacing that read with a join causes a runtime error on the export endpoint. A full
-git grep is required before the migration.
-
-### Anti-Pattern: Re-verifying Role on Every Route
-
-Only critical, irreversible operations need a DB role re-check: DELETE, status transitions,
-admin-only writes. GET endpoints do not need it. Over-applying adds unnecessary DB load.
-
----
-
-*Source: direct codebase audit — app/api/bills/route.ts, app/api/bills/[id]/route.ts,
-app/api/uploads/[[...path]]/route.ts, __tests__/, jest.config.ts, .planning/codebase/CONCERNS.md,
-.planning/codebase/ARCHITECTURE.md*
+*Architecture research for: SetCash onboarding tour milestone*
+*Researched: 2026-04-08*

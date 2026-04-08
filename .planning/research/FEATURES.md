@@ -1,113 +1,128 @@
-# Feature Landscape — Hardening Milestone
+# Feature Landscape
 
-**Domain:** Multi-tenant financial/expense tracking app (SetCash)
-**Researched:** 2026-04-01
-**Milestone scope:** Production hardening — no new features, no UI changes
+**Domain:** Tooltip-based onboarding tour for an existing Next.js expense tracking app
+**Researched:** 2026-04-08
+**Milestone scope:** v1.1 Onboarding Tour — 6-step guided tooltip tour for new and demo users
 
 ---
 
 ## Table Stakes
 
-Features/fixes that a production financial app must have. Missing any of these means the app is
-not production-ready. They are not optional.
+Features users expect from any tooltip-based product tour. Missing any of these makes the tour feel broken or unprofessional.
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| Path traversal guard on uploads endpoint | Financial apps are high-value targets; unauthenticated file-system reads are critical-severity (OWASP A01) | Low | Pattern already applied in bug-report screenshots route — copy it to uploads route. Resolve final path, assert it starts with UPLOADS_DIR. Decode URL-encoded segments before resolving. |
-| Transaction scope for bill creation | Financial data tolerates zero silent failures; partial bill records (bill row exists, allocations missing) corrupt budget calculations silently | Medium | Move image records, saveAllocations, motive display update, and edit-log writes inside the existing Prisma serializable transaction. File moves cannot be transactional — add compensating cleanup on error. |
-| Server-side role re-fetch for critical operations | JWT-embedded roles are stale after a role change; stale admin tokens remain valid until expiry — a demoted admin can still approve/delete bills | Low | Re-fetch user.role from DB on any state-changing operation (bill status change, delete, admin actions). Add a thin getEffectiveRole(userId) helper in lib/auth.ts. |
-| Replace synchronous fs calls with async | Synchronous file I/O blocks the Node.js event loop; under concurrent load all requests queue behind a disk read | Medium | Replace readFileSync, renameSync, unlinkSync, existsSync across 5 files with fs.promises equivalents. Affects uploads serving, bill image handling, upload utility. |
-| Extract duplicated saveAllocations and related helpers | Two identical copies of the same function guarantees divergence bugs — each future bug fix must be applied in two places | Low | Extract to nextjs/lib/bills.ts. Both bill route files import from the shared module. This is the prerequisite for the createMany optimization and transaction scope work. |
-| Replace N+1 allocation writes with createMany | Sequential awaited DB writes for each allocation create one round-trip per allocation — 5 motives + 5 categories = 10 serial queries per bill save | Low | Use prisma.billMotive.createMany() and prisma.billCategory.createMany(). Natural follow-on after extraction to shared module. |
-| Pin next-auth to exact version | ^5.0.0-beta.30 allows silent beta upgrades; auth is security-critical — beta APIs have no semver stability guarantee | Low | Change package.json to "next-auth": "5.0.0-beta.30" (no caret). Document upgrade path to stable v5 when released. |
-| Move @types/* to devDependencies | Type-only packages in dependencies are bundled into production Docker image; not harmful but violates standard Node.js convention and inflates image size | Low | Move @types/archiver, @types/cropperjs, @types/formidable, @types/pdfkit to devDependencies. |
-| Remove better-sqlite3 dependency | SQLite driver is unused after PostgreSQL migration; native module compilation increases install time and image size | Low | Remove better-sqlite3 and @types/better-sqlite3 from package.json. Archive scripts/migrate-sqlite-to-pg.ts (do not delete — preserves migration history). |
-| Integration tests for critical paths | Only 3 of 87 API routes have tests; bill CRUD, auth, allocations, and authorization checks have zero coverage — regressions are invisible | High | Cover: bill create/update/delete lifecycle, allocation math, bill status transitions, auth guard (unauthenticated 401, wrong role 403). Use real DB per project convention. |
-| Automated token cleanup | Expired PasswordResetToken, EmailVerificationToken, and TelegramLinkCode records accumulate indefinitely; large token tables slow auth lookups | Low | Add a scheduled cleanup (Prisma deleteMany where expiresAt < now()) run via a lightweight cron or Next.js startup hook. |
+| Step-by-step tooltip progression (Next/Back) | Core mechanic; users expect linear navigation through steps | Low | 6 steps per PROJECT.md; library handles navigation state machine |
+| Element highlighting / spotlight overlay | Without dimming the background and cutting out the target, users cannot find what the tooltip references | Low | Dark overlay with CSS cutout around target element; all major libraries (driver.js, react-joyride) provide this out of the box |
+| Scroll-into-view before showing tooltip | Target element may be below the fold; tooltip must scroll it into the viewport first | Low | All major libraries handle this automatically; critical for budget matrix step |
+| Skip / Dismiss button on every step | Users who already know the app must bail out immediately; forcing them through 6 steps creates resentment | Low | "Skip tour" link in tooltip footer; persist completion on skip (same as finishing) |
+| Done / Finish button on last step | Clear signal the tour is over; last step needs "Done" instead of "Next" | Low | Conditional label on final step; trivial |
+| Progress indicator (step N of 6) | Users tolerate a 6-step tour only if they know how much is left; progress indicators measurably improve completion rates | Low | Dots or "3/6" text in tooltip; best practice says 3-5 ideal, 6 is acceptable |
+| Smart tooltip positioning (flip/shift) | Tooltips must not overflow viewport edges; auto-flip when target is near screen edge | Low | Floating UI or library-internal positioning engine handles this; driver.js uses its own engine |
+| Completion persistence (hasSeenTour flag) | Tour must not re-show on every page load for regular users; this is the single most annoying bug in product tours | Med | Requires Prisma migration: add `hasSeenTour Boolean @default(false)` to User model, plus PATCH endpoint to mark complete |
+| Demo user re-trigger on every login | PROJECT.md explicitly requires tour shows every login for demo/test accounts | Low | Check `isDemoAccount` from session JWT (already available); bypass hasSeenTour flag |
+| Backdrop click to dismiss | Standard UX pattern; clicking the dark overlay should close/skip the tour | Low | Config option in all major libraries |
+| Auto-start on first login | New users should see the tour without clicking anything; requiring them to find a "Start Tour" button defeats the purpose | Med | Detect `hasSeenTour === false` in AppShell after mount; auto-trigger with short delay (500ms) to let page render settle |
+| Tour does not break page interaction after completion | After tour ends, all click handlers, scrolling, and navigation must work normally; no leftover overlay or z-index issues | Low | Library cleanup on tour end; test manually |
 
 ---
 
 ## Differentiators
 
-Features that go above the baseline. Not required for "production-ready" but represent above-average
-hardening common in well-run financial apps.
+Features that elevate the tour beyond basic expectations. Not required, but noticeably improve quality.
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| Stream file responses instead of loading into memory | Prevents memory pressure under concurrent downloads; important if bill images can be large (10+ MB receipts) | Medium | Replace readFileSync + Response(buffer) with ReadableStream wrapping fs.createReadStream(). Prerequisite: async I/O work is done first. |
-| Legacy column removal (legacyId, motiveLegacy) | Removes fragile motiveLegacy denormalization that must be kept in sync on every bill write — current source of subtle bugs | High | Requires: (1) audit all consumers including external integrations reading legacyId, (2) write migration, (3) replace motiveLegacy reads with joins. High risk — gate behind explicit user confirmation that no external system reads these columns. |
-| Origin header validation on mutations | Adds defense-in-depth against CSRF beyond SameSite cookies; standard for financial apps handling money transfers | Medium | Check Origin header on POST/PUT/DELETE routes. Reject requests where Origin does not match the app domain. Simpler than full CSRF tokens, compatible with App Router. |
-| Idempotency keys on bill create and VGeld transfer | Prevents duplicate bill creation or double-transfers on network retries; a known issue class in financial apps | High | Client sends X-Idempotency-Key header; server stores key+result in a short-lived DB table. Returns cached result on duplicate key. High complexity — defer unless duplicate-submission bugs are observed in production. |
-| Rate limiting on authentication endpoints | Brute-force protection on login and password reset; standard expectation for any app with user accounts | Medium | Apply per-IP rate limit (e.g., 10 attempts per 15 minutes) on /api/auth/signin, /api/auth/reset-password, /api/auth/verify-email. Can use a simple in-memory or Redis-backed counter. |
-| Explicit Content-Security-Policy header | Mitigates XSS; the app serves user-uploaded images and receipts which are attack vectors | High | CSP for Next.js App Router is non-trivial due to inline scripts from the React runtime. Requires nonce-based approach or unsafe-inline fallback. Revisit in dedicated security milestone unless XSS risk is assessed as high. |
+| Keyboard navigation (Esc to dismiss, arrow keys for steps) | Accessibility win; power users expect keyboard control; WCAG 2.1 compliance | Low | driver.js supports this out of the box; react-joyride needs `disableCloseOnEsc: false` config |
+| ARIA live regions announcing step changes | Screen readers announce "Step 3 of 6: Track budget allocations" on each transition | Med | Requires `role="dialog"` + `aria-label` on tooltip, `aria-live="polite"` region for step content changes |
+| Smooth scroll + entrance animations | Polished feel; tooltip fades/slides in rather than popping abruptly | Low | CSS transitions; driver.js includes smooth animations by default |
+| Mobile-responsive step adaptation | On mobile (375px), sidebar is hidden behind hamburger; tour step 1 must either open the drawer or adapt | Med | Hook into `onBeforeStep` to programmatically open mobile sidebar before highlighting nav items; or skip sidebar step on mobile |
+| Themed tooltips matching SetCash design system | Tour looks native rather than third-party; uses `--vb-` custom properties and Tailwind classes | Med | Custom popover component rendered inside library's tooltip slot; Tailwind styling with app's color tokens |
+| Re-trigger tour from settings/profile | Users who skipped may want to revisit; admins demoing to team want to restart | Low | "Restart tour" button in profile dropdown or settings page; resets tour state client-side without touching DB |
+| Tooltip arrow pointing to exact element | Visual line connecting tooltip to its target anchor | Low | Standard in all libraries; CSS triangle or SVG arrow |
+| Delayed auto-start with welcome message | Instead of jumping straight to step 1, show a "Welcome to SetCash! Take a quick tour?" modal with Start/Skip | Low | Friendlier onboarding; gives user agency before tour begins |
 
 ---
 
 ## Anti-Features
 
-Things to deliberately NOT do in this hardening milestone.
+Things to explicitly NOT build for v1.1.
 
 | Anti-Feature | Why Avoid | What to Do Instead |
 |--------------|-----------|-------------------|
-| Migrate file storage to S3/GCS | Scope creep — this is a scaling concern, not a reliability concern for current load; requires environment changes, signed URL auth, and upload flow changes | Track as future scaling milestone. Note the horizontal scaling limit in docs. |
-| Add E2E browser tests (Playwright/Cypress) | Slow to write, slow to run, brittle on UI changes — wrong investment when 84 of 87 API routes have zero integration test coverage | Write integration tests first; E2E adds value only once the API layer is trusted. |
-| Implement CSRF tokens | SameSite=Lax + Origin header check provides adequate protection for a cookie-auth app without the complexity of token synchronization across SSR and API routes | Use Origin header validation (differentiator) if additional CSRF hardening is needed. |
-| Upgrade next-auth to stable v5 | Stable v5 is a significant API surface change from beta.30 — introduces migration risk in the same milestone as reliability hardening | Pin the current beta, plan upgrade as a separate milestone item after test coverage exists to catch regressions. |
-| Rewrite formidable integration | The mock-stream workaround is fragile but functional; rewriting it risks breaking file uploads | Document the fragility in a code comment; track as tech debt for a future milestone. |
-| Add analytics retention automation | Out of scope per PROJECT.md; analytics tables growing unboundedly is a cost concern, not a correctness or security concern | Superadmin prune endpoint already exists. Document the manual prune procedure. |
-| Remove or restructure the Telegram bot | Scaling limit (polling mode, single instance) is a future concern — the bot works correctly today | Note the horizontal-scaling limitation in architecture docs. |
+| Interactive walkthrough with sandbox data | PROJECT.md explicitly marks out of scope; massive complexity (fake data, sandbox isolation) for marginal benefit over tooltips | Lightweight tooltips pointing at real UI elements |
+| Video tutorials or embedded help docs | Out of scope per PROJECT.md; video hosting, player integration, content creation are separate projects | One sentence per tooltip, under 140 characters |
+| Per-project customizable tour content | Out of scope for v1.1; tour content changes rarely; admin editor is over-engineering | Hardcode 6 steps in a TypeScript config array |
+| Tour analytics / drop-off tracking | Deferred to future milestone per PROJECT.md; adds schema complexity (step-level events) for data nobody will act on yet | Binary completion tracking only (hasSeenTour) |
+| Multi-page tour spanning route changes | Route transitions cause component unmounting; re-mounting tour state across pages adds enormous complexity | All 6 steps target elements visible from the main dashboard/bills page; single-page tour |
+| Conditional steps based on user role | Branching logic (admin sees 8 steps, user sees 5) adds complexity and testing burden | Show same 6 steps to all users; admin-only features use phrasing like "Admins can approve bills here" |
+| Floating persistent help button | Clutters the UI permanently for a feature used once; demo users get auto-trigger every login | Allow re-trigger from profile menu or settings if needed |
+| i18n / translated tour content | App is currently single-language; adding translation infrastructure just for 6 tooltips is premature | Hardcode English strings; extract to i18n keys only when app-wide i18n is adopted |
+| Custom tooltip animation library (Framer Motion, etc.) | Adding a motion library for 6 fade-ins is dependency bloat | CSS transitions or library-built-in animations |
 
 ---
 
 ## Feature Dependencies
 
 ```
-saveAllocations extraction (lib/bills.ts)
-  |-- createMany optimization        (requires shared module first)
-  |-- Transaction scope fix          (requires shared module first)
-  |-- Integration tests (bill flow)  (tests import shared helpers)
+Prisma migration (hasSeenTour field on User)
+  --> API endpoint (PATCH /api/users/me/tour-complete)
+  --> Tour auto-start logic (reads hasSeenTour from session or API)
 
-Async I/O replacement
-  |-- File streaming (differentiator) (streaming requires async foundation)
+isDemoAccount session flag (ALREADY EXISTS in JWT)
+  --> Demo re-trigger logic (bypass hasSeenTour check)
 
-Integration tests (auth guards)
-  |-- Role re-fetch (critical ops)   (tests validate the fix works)
+AppShell component (ALREADY EXISTS)
+  --> Tour wrapper mounts here (wraps children or renders alongside)
+  --> Tour reads session to decide whether to auto-start
+
+Sidebar component (ALREADY EXISTS)
+  --> Tour step 1 target (needs data-tour="sidebar-nav" attribute)
+  --> Mobile: sidebar is a drawer, needs programmatic open for tour
+
+data-tour attributes on target elements
+  --> All 6 tour steps (each step needs a stable selector)
+  --> Must be added to: Sidebar, "New Bill" button, Budget Matrix link,
+      Bill status area, Export buttons, Settings link
+
+Tour step config array
+  --> Tour component (reads steps, renders tooltips)
+  --> Decoupled from library choice (plain object array)
 ```
 
-Key dependency chain: extract shared helpers first, then apply transaction fix and createMany,
-then write integration tests that validate both.
+Key dependency chain: DB migration first, then API endpoint, then session enrichment (or client-side fetch), then tour component with auto-start logic.
 
 ---
 
-## MVP Recommendation (Hardening Milestone Order)
+## MVP Recommendation
 
-Prioritize strictly by risk reduction:
+Prioritize for v1.1 in this order:
 
-1. Path traversal guard — critical severity, one-day fix, blocks file-system reads
-2. Pin next-auth exact version — prevents surprise auth breakage, 30-minute fix
-3. Dependency hygiene (@types to devDeps, remove better-sqlite3) — low-risk cleanup, clears noise
-4. Extract shared bill helpers — prerequisite for items 5 and 6
-5. Transaction scope for bill creation — highest correctness risk in the codebase
-6. Replace N+1 writes with createMany — straightforward after extraction
-7. Server-side role re-fetch — closes stale-JWT privilege escalation
-8. Replace synchronous fs calls — event-loop safety under concurrent load
-9. Automated token cleanup — prevents table bloat, low complexity
-10. Integration tests — highest effort, highest long-term value; bill create/update/delete + auth + allocation math
+1. **hasSeenTour DB migration + API endpoint** — foundational; everything else depends on knowing whether to show the tour
+2. **6-step tooltip tour with Next/Back/Skip/Done** — the core deliverable; library-powered step progression
+3. **Element highlighting with backdrop overlay** — users cannot find target elements without visual focus
+4. **Auto-start on first login + demo re-trigger** — seamless; no user action required to begin
+5. **Progress indicator (step counter)** — keeps users oriented through 6 steps
+6. **Keyboard dismiss (Esc key)** — minimal effort, significant accessibility baseline
+7. **data-tour attributes on target elements** — stable selectors for tour anchoring; avoids fragile CSS class selectors
 
-Defer differentiators to a second pass after the above are complete.
+Defer to v1.2 or later:
+- **Full ARIA live regions**: Basic keyboard nav is sufficient for v1.1; add screen reader support in accessibility pass
+- **Mobile sidebar step adaptation**: If sidebar step is broken on mobile, skip it on small viewports rather than building drawer-opening hooks
+- **Custom themed tooltip component**: Use library defaults with Tailwind class overrides; full custom rendering is polish work
+- **Re-trigger from settings**: Low priority; demo users get it every login, regular users rarely want to replay
+- **Welcome modal before tour starts**: Nice-to-have; direct auto-start is simpler for v1.1
 
 ---
 
 ## Sources
 
-- Next.js Security Best Practices 2026: https://www.authgear.com/post/nextjs-security-best-practices
-- Next.js Security Hardening (Medium): https://medium.com/@widyanandaadi22/next-js-security-hardening-five-steps-to-bulletproof-your-app-in-2026-61e00d4c006e
-- Node.js Path Traversal Guide (StackHawk): https://www.stackhawk.com/blog/node-js-path-traversal-guide-examples-and-prevention/
-- Secure Coding: Path Traversal in Node.js: https://www.nodejs-security.com/blog/secure-coding-practices-nodejs-path-traversal-vulnerabilities
-- Idempotency in Finance (CockroachLabs): https://www.cockroachlabs.com/blog/idempotency-in-finance/
-- Idempotent Payment APIs (Medium): https://medium.com/codeelevation/how-to-design-idempotent-payment-apis-for-reliable-financial-transactions-24513f6420ae
-- Integration Testing with Prisma (Prisma Docs): https://www.prisma.io/docs/orm/prisma-client/testing/integration-testing
-- Web Application Security Checklist (StackHawk): https://www.stackhawk.com/blog/web-application-security-checklist-10-improvements/
-- Security Checklist for React/Next.js (The New Stack): https://thenewstack.io/a-security-checklist-for-your-react-and-next-js-apps/
-- SetCash codebase audit: .planning/codebase/CONCERNS.md
-- SetCash project context: .planning/PROJECT.md
+- [OnboardJS: 5 Best React Onboarding Libraries in 2026](https://onboardjs.com/blog/5-best-react-onboarding-libraries-in-2025-compared)
+- [Chameleon: Top 8 React Product Tour Libraries](https://www.chameleon.io/blog/react-product-tour)
+- [Userorbit: Best Open-Source Product Tour Libraries 2026](https://userorbit.com/blog/best-open-source-product-tour-libraries)
+- [Appcues: Tooltips Best Practices](https://www.appcues.com/blog/tooltips)
+- [Userpilot: Onboarding Tooltips for SaaS](https://userpilot.com/blog/onboarding-tooltips-saas/)
+- [Flook: 13 Mobile Tooltip Best Practices](https://flook.co/blog/posts/mobile-tooltip-best-practices)
+- [CSS-Tricks: Onboarding UIs with Anchor Positioning](https://css-tricks.com/one-of-those-onboarding-uis-with-anchor-positioning/)
+- [Appcues: Product Tour UI/UX Patterns](https://www.appcues.com/blog/product-tours-ui-patterns)
+- SetCash codebase: AppShell.tsx, Sidebar.tsx, schema.prisma, session JWT flags
