@@ -46,6 +46,7 @@ model User {
   isSuperAdmin  Boolean   @default(false)
   isActive      Boolean   @default(true)
   isDemoAccount Boolean   @default(false)
+  hasSeenTour   Boolean   @default(false)
   createdAt     DateTime  @default(now())
 
   username      String?   @unique
