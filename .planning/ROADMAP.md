@@ -98,7 +98,12 @@ Plans:
   2. A POST to the tour completion API endpoint marks the current user's tour as seen and returns success — subsequent reads of tour state reflect the change
   3. A TourProvider React context is available to any component in the protected layout, exposing current step, step count, and navigation callbacks
   4. All 6 tour steps are defined in a single configuration file with target CSS selector, title, body text, and placement — adding or reordering a step requires editing only this file
-**Plans**: TBD
+**Plans**: 4 plans
+Plans:
+- [ ] 06-01-PLAN.md — Add hasSeenTour to User model and wire through JWT/session pipeline
+- [ ] 06-02-PLAN.md — Create centralized tour step configuration (6 steps)
+- [ ] 06-03-PLAN.md — POST /api/tour/complete endpoint with rate limiting and client wrapper
+- [ ] 06-04-PLAN.md — TourProvider React context and protected layout mount
 
 ### Phase 7: Tour UI Components
 **Goal**: Users see a polished, accessible speech-bubble tooltip tour with spotlight highlighting and full navigation controls
@@ -136,6 +141,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8
 | 3. Shared Helper Extraction | v1.0 | 0/TBD | Not started | - |
 | 4. Data Correctness and Test Coverage | v1.0 | 0/TBD | Not started | - |
 | 5. Legacy Column Removal | v1.0 | 0/TBD | Not started | - |
-| 6. Tour Infrastructure | v1.1 | 0/TBD | Not started | - |
+| 6. Tour Infrastructure | v1.1 | 0/4 | Planning complete | - |
 | 7. Tour UI Components | v1.1 | 0/TBD | Not started | - |
 | 8. App Integration | v1.1 | 0/TBD | Not started | - |
