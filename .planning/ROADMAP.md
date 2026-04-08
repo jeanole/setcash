@@ -1,24 +1,20 @@
-# Roadmap: SetCash Hardening Milestone
+# Roadmap: SetCash
 
-## Overview
+## Milestones
 
-Four dependency-ordered phases transform SetCash from a working-but-fragile financial app into a production-hardened one. Security fixes and dependency cleanup come first — they have no prerequisites and are the highest-severity issues. Bug triage runs next, independently. Shared helper extraction is the central technical prerequisite: it unlocks transaction scope expansion, batch writes, and a trustworthy integration test suite. Data correctness and test coverage follow once the foundation is solid. Legacy column removal is isolated last because it is the only irreversible step in the entire milestone.
+- 🚧 **v1.0 Hardening** - Phases 1-5 (in progress)
+- 📋 **v1.1 Onboarding Tour** - Phases 6-8 (planned)
 
 ## Phases
 
-**Phase Numbering:**
-- Integer phases (1, 2, 3): Planned milestone work
-- Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
-
-Decimal phases appear between their surrounding integers in numeric order.
+<details>
+<summary>🚧 v1.0 Hardening (Phases 1-5) — in progress</summary>
 
 - [ ] **Phase 1: Security and Dependency Baseline** - Eliminate path traversal, stale JWT roles, and dirty dependencies before any structural changes
 - [ ] **Phase 2: Bug Triage and Fixes** - Triage all 45+ tracked bug reports, fix reproducible ones, close stale/duplicate ones
 - [ ] **Phase 3: Shared Helper Extraction** - Extract duplicated bill helpers to lib/bills.ts and replace N+1 allocation writes with batch operations
 - [ ] **Phase 4: Data Correctness and Test Coverage** - Wrap bill creation in a transaction, replace synchronous I/O, stream file responses, clean up expired tokens, and write integration tests
 - [ ] **Phase 5: Legacy Column Removal** - Remove legacyId and motiveLegacy columns after confirming no external consumers remain
-
-## Phase Details
 
 ### Phase 1: Security and Dependency Baseline
 **Goal**: Known security vulnerabilities are closed and the dependency tree is clean before any structural refactoring begins
@@ -81,15 +77,70 @@ Plans:
   4. Integration tests written in Phase 4 pass without modification after the columns are dropped — no test was relying on legacy column data
 **Plans**: TBD
 
+</details>
+
+### v1.1 Onboarding Tour
+
+**Milestone Goal:** Guide new users through SetCash's core features with a 6-step speech-bubble tooltip tour on first login (always for test/demo users).
+
+- [ ] **Phase 6: Tour Infrastructure** - Database persistence, API endpoint, React context provider, and centralized step configuration
+- [ ] **Phase 7: Tour UI Components** - Speech-bubble tooltip, spotlight overlay, navigation controls, and keyboard support
+- [ ] **Phase 8: App Integration** - Wire tour into existing UI with data-tour attributes, auto-start logic, mobile adaptation, and theme support
+
+## Phase Details
+
+### Phase 6: Tour Infrastructure
+**Goal**: The tour has a persistent backend, a React context for state management, and a single configuration file defining all 6 steps with their target selectors and content
+**Depends on**: Phase 5 (previous milestone)
+**Requirements**: INFRA-01, INFRA-02, INFRA-03, INFRA-04
+**Success Criteria** (what must be TRUE):
+  1. User's tour completion state survives logout and login — the hasSeenTour flag is stored in the database and read on session load
+  2. A POST to the tour completion API endpoint marks the current user's tour as seen and returns success — subsequent reads of tour state reflect the change
+  3. A TourProvider React context is available to any component in the protected layout, exposing current step, step count, and navigation callbacks
+  4. All 6 tour steps are defined in a single configuration file with target CSS selector, title, body text, and placement — adding or reordering a step requires editing only this file
+**Plans**: 4 plans
+Plans:
+- [ ] 06-01-PLAN.md — Add hasSeenTour to User model and wire through JWT/session pipeline
+- [ ] 06-02-PLAN.md — Create centralized tour step configuration (6 steps)
+- [ ] 06-03-PLAN.md — POST /api/tour/complete endpoint with rate limiting and client wrapper
+- [ ] 06-04-PLAN.md — TourProvider React context and protected layout mount
+
+### Phase 7: Tour UI Components
+**Goal**: Users see a polished, accessible speech-bubble tooltip tour with spotlight highlighting and full navigation controls
+**Depends on**: Phase 6
+**Requirements**: UI-01, UI-02, UI-03, UI-04
+**Success Criteria** (what must be TRUE):
+  1. A speech-bubble tooltip with a directional arrow is visually anchored to the target element and repositions correctly when the window is resized
+  2. The target element is highlighted with a spotlight cutout while the rest of the page is dimmed by a semi-transparent overlay — clicking the overlay does not dismiss the tour
+  3. The tooltip displays Next, Back, Skip, and Done buttons appropriate to the current step position (no Back on step 1, Done on last step instead of Next)
+  4. Pressing Escape dismisses the tour, and left/right arrow keys navigate between steps — focus is trapped within the tooltip while it is open
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 8: App Integration
+**Goal**: The tour is wired into the live application, starts automatically for the right users, works on all viewports, and respects the current theme
+**Depends on**: Phase 7
+**Requirements**: INTG-01, INTG-02, INTG-03, INTG-04
+**Success Criteria** (what must be TRUE):
+  1. Every UI element targeted by a tour step has a data-tour attribute matching the step configuration — the tour can locate and anchor to each target without fragile class or ID selectors
+  2. A new user logging in for the first time sees the tour start automatically without any manual trigger — a demo/test user sees the tour on every login regardless of the hasSeenTour flag
+  3. On mobile viewports (below 768px), tour steps that target elements not visible or not meaningful on mobile are either skipped or repositioned — the tour completes without broken positioning or invisible targets
+  4. Tour tooltip background, text color, arrow color, and overlay opacity match the active theme (light or dark) — switching themes mid-tour updates the tooltip appearance
+**Plans**: TBD
+**UI hint**: yes
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8
 
-| Phase | Plans Complete | Status | Completed |
-|-------|----------------|--------|-----------|
-| 1. Security and Dependency Baseline | 0/3 | Planning complete | - |
-| 2. Bug Triage and Fixes | 0/TBD | Not started | - |
-| 3. Shared Helper Extraction | 0/TBD | Not started | - |
-| 4. Data Correctness and Test Coverage | 0/TBD | Not started | - |
-| 5. Legacy Column Removal | 0/TBD | Not started | - |
+| Phase | Milestone | Plans Complete | Status | Completed |
+|-------|-----------|----------------|--------|-----------|
+| 1. Security and Dependency Baseline | v1.0 | 0/3 | Planning complete | - |
+| 2. Bug Triage and Fixes | v1.0 | 0/TBD | Not started | - |
+| 3. Shared Helper Extraction | v1.0 | 0/TBD | Not started | - |
+| 4. Data Correctness and Test Coverage | v1.0 | 0/TBD | Not started | - |
+| 5. Legacy Column Removal | v1.0 | 0/TBD | Not started | - |
+| 6. Tour Infrastructure | v1.1 | 0/4 | Planning complete | - |
+| 7. Tour UI Components | v1.1 | 0/TBD | Not started | - |
+| 8. App Integration | v1.1 | 0/TBD | Not started | - |

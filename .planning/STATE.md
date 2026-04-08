@@ -1,15 +1,15 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.1
-milestone_name: Onboarding Tour
-status: defining_requirements
-stopped_at: null
-last_updated: "2026-04-08"
-last_activity: 2026-04-08 -- Milestone v1.1 started
+milestone: v1.0
+milestone_name: Hardening
+status: executing
+stopped_at: Phase 6 context gathered
+last_updated: "2026-04-08T17:57:45.769Z"
+last_activity: 2026-04-08 -- Phase 6 planning complete
 progress:
-  total_phases: 0
+  total_phases: 3
   completed_phases: 0
-  total_plans: 0
+  total_plans: 4
   completed_plans: 0
   percent: 0
 ---
@@ -21,14 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-08)
 
 **Core value:** Every bill submission, approval, and budget calculation must be correct, secure, and reliable — financial data tolerates zero silent failures.
-**Current focus:** Defining requirements for v1.1 Onboarding Tour
+**Current focus:** Phase 6 — Tour Infrastructure
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 6 of 8 (Tour Infrastructure)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-04-08 — Milestone v1.1 started
+Status: Ready to execute
+Last activity: 2026-04-08 -- Phase 6 planning complete
+
+Progress: [░░░░░░░░░░] 0%
 
 ## Performance Metrics
 
@@ -68,11 +70,10 @@ None yet.
 
 ### Blockers/Concerns
 
-- Phase 3 (Integration tests): Multipart FormData mocking for bill creation tests with formidable has no established pattern in the current test suite — an exploratory spike is needed before estimating test scope
-- Phase 5 (Legacy column removal): Google Sheets sync, Telegram bot, and any external scripts need explicit manual audit before Phase 5 can begin — TypeScript analysis alone cannot confirm no SELECT * or raw SQL reads legacyId
+None for v1.1 phases. Standard implementation work.
 
 ## Session Continuity
 
-Last session: 2026-04-08
-Stopped at: Milestone v1.1 initialization
-Resume file: —
+Last session: 2026-04-08T16:16:58.239Z
+Stopped at: Phase 6 context gathered
+Resume file: .planning/phases/06-tour-infrastructure/06-CONTEXT.md
