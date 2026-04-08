@@ -1,0 +1,20 @@
+services:
+  vbudget:
+    image: ${DOCKER_IMAGE:-vbudget}
+    container_name: vbudget
+    restart: unless-stopped
+    user: "1001:1001"
+    ports:
+      - "5000:3000"
+    volumes:
+      - /dockerfiles/vbudget:/app/data
+    environment:
+      - NODE_ENV=production
+    networks:
+      - vbudget-net
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+
+networks:
+  vbudget-net:
+    driver: bridge

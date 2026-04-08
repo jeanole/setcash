@@ -1,0 +1,361 @@
+/* ========== Residual CSS — things Tailwind CDN can't handle ========== */
+
+/* ========== vBudget UI polish (theme refresh layer) ========== */
+:root {
+    --vb-ring: 0 0 0 3px rgba(99, 102, 241, 0.22);
+    --vb-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06), 0 1px 1px rgba(15, 23, 42, 0.04);
+    --vb-shadow-lg: 0 12px 28px rgba(15, 23, 42, 0.12), 0 2px 6px rgba(15, 23, 42, 0.06);
+    --vb-shadow-xl: 0 18px 44px rgba(15, 23, 42, 0.16), 0 4px 10px rgba(15, 23, 42, 0.08);
+}
+
+html {
+    -webkit-text-size-adjust: 100%;
+}
+
+body {
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background-image:
+        radial-gradient(900px 500px at 10% -10%, rgba(99, 102, 241, 0.08), transparent 60%),
+        radial-gradient(700px 400px at 110% 0%, rgba(16, 185, 129, 0.06), transparent 55%);
+    background-attachment: fixed;
+}
+
+/* More consistent focus rings across clickable elements */
+a:focus-visible,
+button:focus-visible,
+[role="button"]:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+    outline: none;
+    box-shadow: var(--vb-ring);
+}
+
+/* Slightly nicer default shadows (Tailwind CDN utilities) */
+.shadow-sm {
+    box-shadow: var(--vb-shadow-sm) !important;
+}
+.shadow-lg {
+    box-shadow: var(--vb-shadow-lg) !important;
+}
+.shadow-xl {
+    box-shadow: var(--vb-shadow-xl) !important;
+}
+
+/* Sidebar depth when open (keeps current slide animation) */
+.sidebar.open {
+    box-shadow: 0 20px 60px rgba(15, 23, 42, 0.22);
+}
+
+/* Improve scrollbars a bit (best-effort; varies by browser) */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(148, 163, 184, 0.9) transparent;
+}
+*::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.75);
+    border-radius: 9999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+    background: rgba(100, 116, 139, 0.85);
+    border: 3px solid transparent;
+    background-clip: content-box;
+}
+
+/* Tab content visibility (toggled by JS) */
+.tab-content {
+    display: none;
+}
+.tab-content.active {
+    display: block;
+}
+
+
+/* Cropper.js container — must fill parent and not clip the crop UI */
+#cropperContainer img {
+    display: block;
+    max-width: 100%;
+    max-height: 100%;
+}
+#cropperContainer .cropper-container {
+    max-height: 100% !important;
+    max-width: 100% !important;
+}
+
+/* Sidebar slide transition (mobile: slide-out overlay) */
+.sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+}
+.sidebar.open {
+    transform: translateX(0);
+}
+
+/* Sidebar overlay fade (mobile only) */
+.sidebar-overlay {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s;
+}
+.sidebar-overlay.open {
+    opacity: 1;
+    pointer-events: all;
+}
+
+/* Sidebar is overlay on all screen sizes — no persistent desktop sidebar */
+
+/* Gallery carousel transform transition */
+.gallery-track {
+    transition: transform 0.3s ease;
+}
+
+/* Progress bar width transition */
+.progress-fill {
+    transition: width 0.3s;
+}
+
+/* Budget matrix sticky first column */
+.bm-corner,
+.bm-row-header,
+.bm-table tfoot tr > th:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    box-shadow: 3px 0 6px -2px rgba(0, 0, 0, 0.1);
+}
+
+/* Budget matrix sticky header row */
+.bm-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    box-shadow: 0 3px 6px -2px rgba(0, 0, 0, 0.1);
+}
+
+/* Corner cell: sticky both directions */
+.bm-table thead .bm-corner {
+    z-index: 4;
+}
+
+/* Budget cell input: spreadsheet-like sizing */
+.budget-cell-input {
+    width: 100% !important;
+    max-width: none !important;
+    padding: 5px 7px;
+    font-size: 14px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    border: 2px solid transparent;
+    border-radius: 0;
+    background: transparent;
+    transition:
+        border-color 0.1s,
+        background 0.1s;
+    cursor: cell;
+    -moz-appearance: textfield;
+}
+.budget-cell-input:hover:not(:focus) {
+    background: rgba(99, 102, 241, 0.04);
+    border-color: rgba(99, 102, 241, 0.2);
+}
+.budget-cell-input:focus {
+    outline: none;
+    border-color: #6366f1;
+    background: #fff;
+    box-shadow: none;
+}
+.budget-cell-input::-webkit-outer-spin-button,
+.budget-cell-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+/* Budget header inline edit input */
+.bm-header-input {
+    border: 2px solid #6366f1 !important;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 14px;
+    font-weight: 600;
+    width: 120px;
+    max-width: 160px !important;
+    background: #fff;
+    outline: none;
+}
+
+/* Budget inline add input */
+.bm-inline-input {
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 4px;
+    padding: 5px 8px;
+    font-size: 13px;
+    width: 120px;
+    max-width: 140px !important;
+    background: #fff;
+    outline: none;
+    transition: border-color 0.15s;
+}
+.bm-inline-input:focus {
+    border-color: #6366f1 !important;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+}
+.bm-inline-input::placeholder {
+    color: #94a3b8;
+    font-style: italic;
+}
+
+/* Sortable column headers */
+th.sortable {
+    cursor: pointer;
+    user-select: none;
+    position: relative;
+    padding-right: 20px !important;
+}
+th.sortable:hover {
+    background: #f1f5f9;
+}
+th.sortable::after {
+    content: "\2195";
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 12px;
+    color: #cbd5e1;
+}
+th.sortable.sort-asc::after {
+    content: "\25B2";
+    color: #6366f1;
+}
+th.sortable.sort-desc::after {
+    content: "\25BC";
+    color: #6366f1;
+}
+
+/* Full-size image modal navigation */
+.fullsize-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+}
+.fullsize-nav.gallery-prev {
+    left: -50px;
+}
+.fullsize-nav.gallery-next {
+    right: -50px;
+}
+
+@media (max-width: 640px) {
+    .fullsize-nav.gallery-prev {
+        left: 4px;
+    }
+    .fullsize-nav.gallery-next {
+        right: 4px;
+    }
+}
+
+/* Clickable row hover (needs !important to override stripe) */
+.clickable-row:hover {
+    background: #eef2ff !important;
+}
+.bill-draft-row {
+    background: #fef2f2 !important;
+}
+.bill-draft-row:hover {
+    background: #fee2e2 !important;
+}
+
+/* OCR / AI Analysis field highlight */
+.ocr-field-highlight {
+    border-color: #f59e0b !important;
+    background: #fffbeb !important;
+    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
+}
+.ocr-field-label {
+    display: inline-block;
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: #d97706;
+    background: #fef3c7;
+    padding: 1px 6px;
+    border-radius: 4px;
+    margin-left: 6px;
+    vertical-align: middle;
+}
+.ocr-verify-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: #d97706;
+    background: transparent;
+    border: 1px solid #f59e0b;
+    padding: 1px 7px;
+    border-radius: 4px;
+    margin-left: 5px;
+    vertical-align: middle;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+.ocr-verify-btn:hover {
+    background: #f59e0b;
+    color: #fff;
+}
+
+/* OCR status badges in bills list */
+.ocr-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 9999px;
+    white-space: nowrap;
+    vertical-align: middle;
+}
+.ocr-badge-pending {
+    background: #e0e7ff;
+    color: #4338ca;
+}
+.ocr-badge-done {
+    background: #fef3c7;
+    color: #b45309;
+}
+.ocr-badge-failed {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+/* OCR badge spinner animation */
+.ocr-spinner {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: ocr-spin 0.75s linear infinite;
+}
+@keyframes ocr-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Budget header actions hover reveal */
+.bm-header-actions {
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+.bm-col-header:hover .bm-header-actions,
+.bm-row-header:hover .bm-header-actions {
+    opacity: 1;
+}

@@ -11,3 +11,6 @@ README.md
 *.md
 .git
 .gitignore
+e2e
+playwright.config.ts
+__tests__

@@ -1,0 +1,484 @@
+{
+  "version": "2.8",
+  "children": [
+    {
+      "type": "frame",
+      "id": "bi8Au",
+      "x": 0,
+      "y": 0,
+      "name": "Frame",
+      "clip": true,
+      "width": 800,
+      "height": 600,
+      "fill": "#FFFFFF",
+      "layout": "none"
+    },
+    {
+      "type": "frame",
+      "id": "3GmiI",
+      "x": 900,
+      "y": 0,
+      "name": "SetCash Landing Page",
+      "width": 1440,
+      "fill": "#FFE500",
+      "layout": "vertical",
+      "children": [
+        {
+          "type": "frame",
+          "id": "emk0E",
+          "name": "Navbar",
+          "width": "fill_container",
+          "height": 64,
+          "fill": "#FFE500",
+          "stroke": {
+            "align": "inside",
+            "thickness": {
+              "bottom": 4
+            },
+            "fill": "#000000"
+          },
+          "padding": [
+            0,
+            80
+          ],
+          "justifyContent": "space_between",
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "frame",
+              "id": "jgEnq",
+              "name": "navLogo",
+              "layout": "vertical",
+              "gap": 2,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "ztJpx",
+                  "name": "navLogoText",
+                  "fill": "#000000",
+                  "content": "SETCASH",
+                  "fontFamily": "Space Grotesk",
+                  "fontSize": 22,
+                  "fontWeight": "700",
+                  "letterSpacing": -0.5
+                },
+                {
+                  "type": "text",
+                  "id": "cpHlv",
+                  "name": "navSubText",
+                  "fill": "#000000",
+                  "content": "expense tracker",
+                  "fontFamily": "Inter",
+                  "fontSize": 11,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "GjvpW",
+          "name": "MainRow",
+          "width": "fill_container",
+          "padding": [
+            60,
+            80
+          ],
+          "children": [
+            {
+              "type": "frame",
+              "id": "gZIAS",
+              "name": "LeftCol",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 40,
+              "padding": [
+                48,
+                0
+              ],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "O6YMJ",
+                  "name": "headline",
+                  "fill": "#000000",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "NOT A STARTUP.\nJUST A CURIOUS\nDUDE WITH WIFI.",
+                  "lineHeight": 0.95,
+                  "fontFamily": "Space Grotesk",
+                  "fontSize": 78,
+                  "fontWeight": "700",
+                  "letterSpacing": -1
+                },
+                {
+                  "type": "rectangle",
+                  "id": "3A6Sh",
+                  "name": "divider",
+                  "fill": "#000000",
+                  "width": "fill_container",
+                  "height": 4
+                },
+                {
+                  "type": "frame",
+                  "id": "PKktW",
+                  "name": "bulletsWrapper",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 16,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "blYd1",
+                      "name": "bullet1",
+                      "width": "fill_container",
+                      "gap": 14,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "lozgh",
+                          "name": "dot1",
+                          "fill": "#000000",
+                          "width": 16,
+                          "height": 16
+                        },
+                        {
+                          "type": "text",
+                          "id": "9QrYT",
+                          "name": "txt1",
+                          "fill": "#000000",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Not VC-backed. Just vibes and AI agents.",
+                          "fontFamily": "Space Grotesk",
+                          "fontSize": 18,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "9k63w",
+                      "name": "bullet2",
+                      "width": "fill_container",
+                      "gap": 14,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "HHiA2",
+                          "name": "dot2",
+                          "fill": "#000000",
+                          "width": 16,
+                          "height": 16
+                        },
+                        {
+                          "type": "text",
+                          "id": "0yWAz",
+                          "name": "txt2",
+                          "fill": "#000000",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Built for fun. Used by real people somehow.",
+                          "fontFamily": "Space Grotesk",
+                          "fontSize": 18,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "LIXDr",
+                      "name": "bullet3",
+                      "width": "fill_container",
+                      "gap": 14,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "5pIoN",
+                          "name": "dot3",
+                          "fill": "#000000",
+                          "width": 16,
+                          "height": 16
+                        },
+                        {
+                          "type": "text",
+                          "id": "By7PH",
+                          "name": "txt3",
+                          "fill": "#000000",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Zero roadmap. Maximum curiosity.",
+                          "fontFamily": "Space Grotesk",
+                          "fontSize": 18,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "rectangle",
+                  "id": "aWsvq",
+                  "name": "divider",
+                  "fill": "#000000",
+                  "width": "fill_container",
+                  "height": 4
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "0nGzH",
+              "name": "RightCol",
+              "width": 440,
+              "layout": "vertical",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "eCA4Q",
+                  "name": "loginCard",
+                  "width": "fill_container",
+                  "fill": "#FFFFFF",
+                  "stroke": {
+                    "align": "outside",
+                    "thickness": 4,
+                    "fill": "#000000"
+                  },
+                  "effect": {
+                    "type": "shadow",
+                    "shadowType": "outer",
+                    "color": "#000000",
+                    "offset": {
+                      "x": 8,
+                      "y": 8
+                    }
+                  },
+                  "layout": "vertical",
+                  "gap": 24,
+                  "padding": [
+                    36,
+                    32
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "4kG9E",
+                      "name": "loginTitle",
+                      "fill": "#000000",
+                      "textGrowth": "fixed-width-height",
+                      "width": 336,
+                      "height": 34,
+                      "content": "SIGN IN - COME CLOSE",
+                      "fontFamily": "Space Grotesk",
+                      "fontSize": 28,
+                      "fontWeight": "700",
+                      "letterSpacing": -0.5
+                    },
+                    {
+                      "type": "rectangle",
+                      "id": "DvujA",
+                      "name": "loginDivider",
+                      "fill": "#EEEEEE",
+                      "width": "fill_container",
+                      "height": 2
+                    },
+                    {
+                      "type": "text",
+                      "id": "HQ6Tn",
+                      "name": "emailLabel",
+                      "fill": "#000000",
+                      "content": "EMAIL",
+                      "fontFamily": "Space Grotesk",
+                      "fontSize": 11,
+                      "fontWeight": "700",
+                      "letterSpacing": 2
+                    },
+                    {
+                      "type": "frame",
+                      "id": "GdU4d",
+                      "name": "emailInput",
+                      "width": "fill_container",
+                      "height": 48,
+                      "fill": "#FFE500",
+                      "stroke": {
+                        "align": "outside",
+                        "thickness": 3,
+                        "fill": "#000000"
+                      },
+                      "padding": [
+                        0,
+                        16
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "Y7G3V",
+                          "name": "emailPlaceholder",
+                          "fill": "#888888",
+                          "content": "your@email.com",
+                          "fontFamily": "Inter",
+                          "fontSize": 14,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "k0E2N",
+                      "name": "passLabel",
+                      "fill": "#000000",
+                      "content": "PASSWORD",
+                      "fontFamily": "Space Grotesk",
+                      "fontSize": 11,
+                      "fontWeight": "700",
+                      "letterSpacing": 2
+                    },
+                    {
+                      "type": "frame",
+                      "id": "T5KB1",
+                      "name": "passInput",
+                      "width": "fill_container",
+                      "height": 48,
+                      "fill": "#FFE500",
+                      "stroke": {
+                        "align": "outside",
+                        "thickness": 3,
+                        "fill": "#000000"
+                      },
+                      "padding": [
+                        0,
+                        16
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "OYi60",
+                          "name": "passPlaceholder",
+                          "fill": "#888888",
+                          "content": "••••••••",
+                          "fontFamily": "Inter",
+                          "fontSize": 14,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "38veE",
+                      "name": "signInBtn",
+                      "width": "fill_container",
+                      "height": 52,
+                      "fill": "#000000",
+                      "effect": {
+                        "type": "shadow",
+                        "shadowType": "outer",
+                        "color": "#00000044",
+                        "offset": {
+                          "x": 6,
+                          "y": 6
+                        }
+                      },
+                      "padding": [
+                        0,
+                        24
+                      ],
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "zgCnn",
+                          "name": "signInBtnTxt",
+                          "fill": "#FFE500",
+                          "content": "SIGN IN →",
+                          "fontFamily": "Space Grotesk",
+                          "fontSize": 16,
+                          "fontWeight": "700",
+                          "letterSpacing": 2
+                        }
+                      ]
+                    },
+                    {
+                      "type": "rectangle",
+                      "id": "HaNak",
+                      "name": "loginCardDivider2",
+                      "fill": "#EEEEEE",
+                      "width": "fill_container",
+                      "height": 2
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "ySeJ2",
+          "name": "Tagline",
+          "width": "fill_container",
+          "fill": "#000000",
+          "gap": 48,
+          "padding": [
+            32,
+            80
+          ],
+          "justifyContent": "space_between",
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "text",
+              "id": "5XpQG",
+              "name": "tagDesc",
+              "fill": "#AAAAAA",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "SetCash is what happens when a tech-affine dude looking for attention figures out what building with agents could be like. For pleasure, out of curiosity, to distract from real life. It works, though. Turns out accidental utility is still utility.",
+              "lineHeight": 1.6,
+              "fontFamily": "Inter",
+              "fontSize": 15,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "qvUmY",
+              "name": "tagRight",
+              "layout": "vertical",
+              "gap": 4,
+              "alignItems": "end",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "2SDLD",
+                  "name": "tagRightTop",
+                  "fill": "#FFE500",
+                  "content": "FREE FOR NOBODY",
+                  "fontFamily": "Space Grotesk",
+                  "fontSize": 11,
+                  "fontWeight": "700",
+                  "letterSpacing": 3
+                },
+                {
+                  "type": "text",
+                  "id": "QJ6AD",
+                  "name": "tagRightSub",
+                  "fill": "#666666",
+                  "content": "No credit card. No crumpled paper.",
+                  "fontFamily": "Inter",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

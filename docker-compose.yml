@@ -1,0 +1,34 @@
+services:
+  vbudget-next:
+    build:
+      context: ./nextjs
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    env_file: .env
+    volumes:
+      - vbudget-uploads:/app/data/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15-alpine
+    ports:
+      - "5432:5432"
+    volumes:
+      - vbudget-pg-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: setcash
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-setcash_dev}
+      POSTGRES_DB: setcash
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U setcash"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  vbudget-pg-data:
+  vbudget-uploads:

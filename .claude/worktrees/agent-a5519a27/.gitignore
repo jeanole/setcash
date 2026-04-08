@@ -1,0 +1,9 @@
+node_modules/
+.env
+service-account.json
+google-credentials.json
+*-credentials.json
+data/
+nul
+cookies.txt
+tmpclaude-*

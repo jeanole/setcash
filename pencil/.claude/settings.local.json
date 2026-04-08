@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node -e \"JSON.parse\\(require\\(''fs''\\).readFileSync\\(''C:/Users/jensmoeller/code/vbudget/pencil/pencil_setcash'', ''utf8''\\)\\); console.log\\(''Valid JSON''\\);\")"
+    ]
+  }
+}

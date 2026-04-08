@@ -28,3 +28,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 /dist
+
+# playwright
+e2e/.auth/
+e2e/test-results/
+e2e/playwright-report/
+e2e/results.xml

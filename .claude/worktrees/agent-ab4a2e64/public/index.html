@@ -1,0 +1,2304 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1" />
+        <title>vBudget</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+            rel="stylesheet"
+        />
+        <script src="https://cdn.tailwindcss.com"></script>
+        <script>
+            tailwind.config = {
+                theme: {
+                    extend: {
+                        fontFamily: {
+                            sans: [
+                                "Inter",
+                                "system-ui",
+                                "-apple-system",
+                                "sans-serif",
+                            ],
+                        },
+                    },
+                },
+            };
+        </script>
+        <link rel="stylesheet" href="/style.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css" />
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js"></script>
+        <script src="/js/state.js"></script>
+        <script src="/js/utils.js"></script>
+        <script src="/js/allocation-widget.js"></script>
+        <script src="/js/gallery.js"></script>
+        <script src="/js/spending.js"></script>
+        <script src="/js/vgeld.js"></script>
+        <script src="/js/reports.js"></script>
+        <script src="/js/bills.js"></script>
+        <script src="/js/budget.js"></script>
+        <script src="/js/sidebar.js"></script>
+        <script src="/js/notifications.js"></script>
+        <script src="/js/admin.js"></script>
+        <script src="/js/superadmin.js"></script>
+        <script src="/js/telegram.js"></script>
+        <script src="/js/core.js"></script>
+    </head>
+    <body class="bg-slate-50 text-slate-700 min-h-screen font-sans">
+        <!-- Sidebar overlay -->
+        <div
+            id="sidebarOverlay"
+            class="sidebar-overlay fixed inset-0 bg-black/40 z-[1100]"
+            onclick="closeMenu()"
+        ></div>
+
+        <!-- Sidebar -->
+        <nav
+            id="sidebar"
+            class="sidebar fixed top-0 left-0 h-full w-72 bg-white border-r border-slate-200 z-[1200] flex flex-col overflow-y-auto"
+        >
+            <div
+                class="flex items-center justify-between px-5 pt-5 pb-4 border-b border-slate-100"
+            >
+                <span
+                    id="sidebarTitle"
+                    class="text-lg font-bold text-slate-900 truncate"
+                    >vBudget</span
+                >
+                <button
+                    class="text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md px-2 py-1 text-xl leading-none"
+                    onclick="closeMenu()"
+                >
+                    &#x2715;
+                </button>
+            </div>
+            <div
+                class="px-5 py-4 border-b border-slate-100 flex flex-col gap-0.5"
+            >
+                <span
+                    id="sidebarEmail"
+                    class="font-semibold text-sm text-slate-800"
+                ></span>
+                <span
+                    id="sidebarRole"
+                    class="text-xs text-slate-400 mt-0.5"
+                ></span>
+                <span
+                    id="sidebarVGeld"
+                    class="text-xs font-medium text-emerald-600 mt-1"
+                    style="display: none"
+                ></span>
+            </div>
+            <div
+                class="py-3 border-b border-slate-100 flex flex-col"
+                id="sidebarNavSection"
+            >
+                <div
+                    class="px-5 pb-2 text-[0.7rem] font-bold tracking-wider uppercase text-slate-400"
+                >
+                    Navigation
+                </div>
+                <button
+                    class="sidebar-nav block w-full text-left px-5 py-2.5 text-sm text-indigo-700 bg-indigo-50 font-semibold transition-colors bg-transparent border-none cursor-pointer"
+                    data-pane="upload"
+                    onclick="switchPane('upload')"
+                >
+                    Upload
+                </button>
+                <button
+                    class="sidebar-nav block w-full text-left px-5 py-2.5 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors bg-transparent border-none cursor-pointer"
+                    data-pane="bills"
+                    onclick="switchPane('bills')"
+                >
+                    Bills<span
+                        id="draftBadge"
+                        class="bg-rose-500 text-white rounded-full text-[0.65rem] px-1.5 py-px ml-1.5 align-middle"
+                        style="display: none"
+                    ></span>
+                </button>
+                <button
+                    class="sidebar-nav block w-full text-left px-5 py-2.5 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors bg-transparent border-none cursor-pointer"
+                    data-pane="spending"
+                    onclick="switchPane('spending')"
+                >
+                    Spending
+                </button>
+                <button
+                    class="sidebar-nav block w-full text-left px-5 py-2.5 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors bg-transparent border-none cursor-pointer"
+                    data-pane="vgeld"
+                    onclick="switchPane('vgeld')"
+                >
+                    V-Geld
+                </button>
+                <button
+                    class="sidebar-nav block w-full text-left px-5 py-2.5 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors bg-transparent border-none cursor-pointer"
+                    data-pane="budget"
+                    onclick="switchPane('budget')"
+                >
+                    Budget Matrix
+                </button>
+                <button
+                    class="sidebar-nav block w-full text-left px-5 py-2.5 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors bg-transparent border-none cursor-pointer"
+                    data-pane="reports"
+                    onclick="switchPane('reports')"
+                >
+                    Reports
+                </button>
+            </div>
+            <div class="py-3 border-b border-slate-100 flex flex-col">
+                <div
+                    class="px-5 pb-2 text-[0.7rem] font-bold tracking-wider uppercase text-slate-400"
+                >
+                    Settings
+                </div>
+                <button
+                    class="sidebar-nav block w-full text-left px-5 py-2.5 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors bg-transparent border-none cursor-pointer"
+                    data-pane="settings"
+                    onclick="switchPane('settings')"
+                >
+                    Settings
+                </button>
+                <button
+                    class="superadmin-only block w-full text-left px-5 py-2.5 text-sm text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition-colors bg-transparent border-none cursor-pointer font-medium"
+                    style="display: none"
+                    onclick="openSuperAdminModal(); closeMenu();"
+                >
+                    System
+                </button>
+            </div>
+            <div
+                class="py-3 border-b border-slate-100"
+                id="sidebarProjectsSection"
+            >
+                <div
+                    class="px-5 pb-2 text-[0.7rem] font-bold tracking-wider uppercase text-slate-400"
+                >
+                    Projects
+                </div>
+                <div id="sidebarProjectList"></div>
+                <button
+                    id="newProjectBtn"
+                    class="block w-full text-left px-5 py-2.5 text-sm text-indigo-600 hover:bg-indigo-50 transition-colors bg-transparent border-none cursor-pointer font-medium"
+                    onclick="openNewProjectModal()"
+                >
+                    + New Project
+                </button>
+            </div>
+            <div class="mt-auto py-3 border-t border-slate-100 flex flex-col">
+                <a
+                    href="/logout"
+                    class="block px-5 py-3 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors"
+                    >Logout</a
+                >
+                <span
+                    id="sidebarVersion"
+                    class="px-5 text-[0.7rem] text-slate-400 mt-1"
+                ></span>
+            </div>
+        </nav>
+
+        <!-- Persistent header bar — always visible on all screen sizes -->
+        <header class="sticky top-0 z-[1000] bg-white/85 backdrop-blur border-b border-slate-200 flex items-center gap-3 px-4 py-3">
+            <button
+                class="flex flex-col justify-center gap-[5px] w-9 h-9 p-1.5 bg-transparent border-none cursor-pointer rounded-lg hover:bg-slate-100 shrink-0"
+                onclick="openMenu()"
+                aria-label="Menu"
+            >
+                <span class="block w-full h-0.5 bg-slate-800 rounded"></span
+                ><span class="block w-full h-0.5 bg-slate-800 rounded"></span
+                ><span class="block w-full h-0.5 bg-slate-800 rounded"></span>
+            </button>
+            <div class="flex-1 min-w-0">
+                <h1
+                    id="appTitle"
+                    class="text-base font-bold text-slate-900 truncate m-0 leading-tight"
+                >
+                    vBudget
+                </h1>
+            </div>
+            <div class="flex items-center gap-2 shrink-0 text-right">
+                <div class="hidden sm:flex flex-col items-end leading-tight">
+                    <span id="headerUserEmail" class="text-xs font-medium text-slate-700 truncate max-w-[160px]"></span>
+                    <span id="headerUserRole" class="text-[0.65rem] text-slate-400"></span>
+                </div>
+                <!-- Notification bell -->
+                <button
+                    id="notificationBellBtn"
+                    class="relative w-9 h-9 flex items-center justify-center rounded-lg hover:bg-slate-100 border-none bg-transparent cursor-pointer text-slate-600"
+                    onclick="toggleNotifications()"
+                    aria-label="Notifications"
+                    style="display: none"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                    </svg>
+                    <span id="notificationBadge" class="absolute top-1 right-1 min-w-[16px] h-4 bg-rose-500 text-white text-[0.6rem] font-bold rounded-full flex items-center justify-center px-0.5" style="display: none"></span>
+                </button>
+            </div>
+        </header>
+        <!-- Notification dropdown -->
+        <div id="notificationDropdown" class="fixed top-14 right-3 z-[1050] bg-white border border-slate-200 rounded-xl shadow-lg w-80 max-h-96 flex flex-col" style="display: none">
+            <div class="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+                <span class="text-sm font-semibold text-slate-800">Notifications</span>
+                <button onclick="markAllNotificationsRead()" class="text-xs text-indigo-600 hover:text-indigo-800 border-none bg-transparent cursor-pointer">Mark all read</button>
+            </div>
+            <div id="notificationList" class="overflow-y-auto flex-1 divide-y divide-slate-100">
+                <p class="text-sm text-slate-400 text-center py-6">No notifications</p>
+            </div>
+        </div>
+
+        <!-- Project selector overlay -->
+        <div
+            id="projectSelectorOverlay"
+            class="fixed inset-0 bg-black/50 z-[1000] flex items-center justify-center p-5"
+            style="display: none"
+        >
+            <div
+                class="bg-white rounded-2xl shadow-xl p-8 min-w-[320px] max-w-md w-full text-center"
+            >
+                <h2 class="text-lg font-bold text-slate-900 mb-6">
+                    Select Project
+                </h2>
+                <p class="text-slate-400 mb-5 text-sm">
+                    Choose a project to continue:
+                </p>
+                <div id="projectList" class="flex flex-col gap-2"></div>
+            </div>
+        </div>
+
+        <div id="app" class="main-content px-4 md:px-6 pb-8 max-w-7xl mx-auto">
+            <div
+                id="not-signed-in"
+                class="bg-white rounded-xl shadow-sm border border-slate-100 p-6 mb-5"
+                style="display: none"
+            >
+                <p class="text-slate-600 mb-4">Please log in to continue.</p>
+                <a href="/login"
+                    ><button
+                        type="button"
+                        class="bg-indigo-600 text-white px-5 py-2.5 rounded-lg font-medium hover:bg-indigo-700 transition-colors"
+                    >
+                        Login
+                    </button></a
+                >
+            </div>
+            <div id="signed-in" style="display: none">
+                <p id="user" style="display: none"></p>
+
+                <div id="tab-upload" class="tab-content active">
+                    <div
+                        class="bg-white rounded-xl shadow-sm border border-slate-100 p-5 md:p-6 mb-5"
+                    >
+                        <h2 class="text-base font-semibold text-slate-900 mb-4">
+                            Upload Bill
+                        </h2>
+                        <form id="uploadForm" class="flex flex-col gap-4">
+                            <div>
+                                <label
+                                    class="block text-sm font-medium text-slate-700 mb-2"
+                                    >Photos (optional, max 10)</label
+                                >
+                                <div
+                                    class="border-2 border-dashed border-slate-200 rounded-xl p-4 bg-slate-50/50"
+                                    id="uploadPhotoArea"
+                                >
+                                    <div
+                                        class="flex flex-wrap gap-2.5 mb-3 empty:mb-0"
+                                        id="uploadThumbnails"
+                                    ></div>
+                                    <div class="flex gap-2.5 flex-wrap">
+                                        <label
+                                            class="inline-flex items-center justify-center px-4 py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-medium cursor-pointer hover:bg-indigo-700 transition-colors min-h-[44px]"
+                                        >
+                                            <input
+                                                type="file"
+                                                accept="image/*"
+                                                multiple
+                                                id="uploadFileInput"
+                                                class="hidden"
+                                            />
+                                            Choose Files
+                                        </label>
+                                        <label
+                                            class="inline-flex items-center justify-center px-4 py-2.5 bg-emerald-500 text-white rounded-lg text-sm font-medium cursor-pointer hover:bg-emerald-600 transition-colors min-h-[44px]"
+                                        >
+                                            <input
+                                                type="file"
+                                                accept="image/*"
+                                                capture="environment"
+                                                id="uploadCameraInput"
+                                                class="hidden"
+                                            />
+                                            Take Photo
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="uploadAnalyseSection" style="display:none" class="flex flex-col gap-2">
+                                <button type="button" id="uploadAnalyseBtn"
+                                    onclick="triggerUploadAnalysis()"
+                                    class="text-sm px-4 py-2.5 bg-amber-50 text-amber-700 rounded-lg hover:bg-amber-100 transition-colors border border-amber-200 cursor-pointer w-fit flex items-center gap-2 font-medium">
+                                    &#x2736; Analyse with AI
+                                </button>
+                                <div id="uploadAnalyseStatus" class="hidden text-sm px-3 py-2 rounded-lg"></div>
+                            </div>
+                            <label
+                                class="flex flex-col gap-1.5 text-sm font-medium text-slate-700"
+                                >Type
+                                <select
+                                    name="type"
+                                    class="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none max-w-md"
+                                >
+                                    <option>Kauf</option>
+                                    <option>Leih</option>
+                                    <option>Verbrauch</option>
+                                </select></label
+                            >
+                            <label
+                                class="flex flex-col gap-1.5 text-sm font-medium text-slate-700"
+                                >Brutto 19% (EUR)
+                                <input
+                                    type="number"
+                                    name="brutto19"
+                                    step="0.01"
+                                    min="0"
+                                    value="0"
+                                    class="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none max-w-md"
+                            /></label>
+                            <label
+                                class="flex flex-col gap-1.5 text-sm font-medium text-slate-700"
+                                >Brutto 7% (EUR)
+                                <input
+                                    type="number"
+                                    name="brutto7"
+                                    step="0.01"
+                                    min="0"
+                                    value="0"
+                                    class="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none max-w-md"
+                            /></label>
+                            <label
+                                class="flex flex-col gap-1.5 text-sm font-medium text-slate-700"
+                                >Brutto 0% (EUR)
+                                <input
+                                    type="number"
+                                    name="brutto0"
+                                    step="0.01"
+                                    min="0"
+                                    value="0"
+                                    class="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none max-w-md"
+                            /></label>
+                            <div
+                                class="bg-slate-50 px-3 py-2 rounded-lg flex gap-4 flex-wrap text-sm"
+                            >
+                                <span
+                                    >Netto 19%:
+                                    <strong id="uploadNetto19"
+                                        >0,00 €</strong
+                                    ></span
+                                >
+                                <span
+                                    >Netto 7%:
+                                    <strong id="uploadNetto7"
+                                        >0,00 €</strong
+                                    ></span
+                                >
+                                <span
+                                    >Netto 0%:
+                                    <strong id="uploadNetto0"
+                                        >0,00 €</strong
+                                    ></span
+                                >
+                                <span
+                                    >Netto Total:
+                                    <strong
+                                        id="uploadNettoTotal"
+                                        class="text-slate-900"
+                                        >0,00 €</strong
+                                    ></span
+                                >
+                            </div>
+                            <label
+                                class="flex flex-col gap-1.5 text-sm font-medium text-slate-700"
+                                >Vendor
+                                <input
+                                    name="vendor"
+                                    class="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none max-w-md"
+                            /></label>
+                            <label
+                                class="flex flex-col gap-1.5 text-sm font-medium text-slate-700"
+                                >Item
+                                <input
+                                    name="item"
+                                    class="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none max-w-md"
+                            /></label>
+                            <label
+                                class="flex flex-col gap-1.5 text-sm font-medium text-slate-700"
+                                >Comment
+                                <input
+                                    name="comment"
+                                    class="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none max-w-md"
+                            /></label>
+                            <label
+                                class="flex flex-col gap-1.5 text-sm font-medium text-slate-700"
+                                >Date
+                                <input
+                                    type="date"
+                                    name="date"
+                                    class="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none max-w-md"
+                            /></label>
+                            <div>
+                                <label
+                                    class="block text-sm font-medium text-slate-700 mb-2"
+                                    >Motive Allocations</label
+                                >
+                                <div
+                                    id="uploadMotiveAlloc"
+                                    class="allocation-widget"
+                                ></div>
+                            </div>
+                            <div>
+                                <label
+                                    class="block text-sm font-medium text-slate-700 mb-2"
+                                    >Kategorie Allocations</label
+                                >
+                                <div
+                                    id="uploadCategoryAlloc"
+                                    class="allocation-widget"
+                                ></div>
+                            </div>
+                            <button
+                                type="submit"
+                                class="bg-indigo-600 text-white px-5 py-2.5 rounded-lg font-medium hover:bg-indigo-700 transition-colors w-fit"
+                            >
+                                Upload
+                            </button>
+                        </form>
+                        <div id="uploadResult"></div>
+                    </div>
+                </div>
+
+                <div id="tab-bills" class="tab-content">
+                    <div
+                        class="bg-white rounded-xl shadow-sm border border-slate-100 p-5 md:p-6 mb-5 overflow-x-auto"
+                    >
+                        <div class="flex items-center justify-between mb-4">
+                            <h2 class="text-base font-semibold text-slate-900 m-0">All Bills</h2>
+                            <button onclick="openUploadModal()"
+                                class="text-sm px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium flex items-center gap-1.5">
+                                + Upload
+                            </button>
+                        </div>
+                        <div class="admin-only" style="display: none">
+                            <button
+                                onclick="deleteSelected()"
+                                class="text-sm px-3 py-1.5 bg-rose-500 text-white rounded-lg hover:bg-rose-600 transition-colors mb-3"
+                                id="deleteSelectedBtn"
+                                style="display: none"
+                            >
+                                Delete Selected (<span id="selectedCount"
+                                    >0</span
+                                >)
+                            </button>
+                        </div>
+                        <div id="billsResult"></div>
+                        <div
+                            class="flex flex-wrap gap-2 items-center mb-3 mt-3"
+                            id="billsFilterBar"
+                        >
+                            <select
+                                id="filterPerson"
+                                class="px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg max-w-[180px] focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                            >
+                                <option value="">All Persons</option>
+                            </select>
+                            <select
+                                id="filterMotive"
+                                class="px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg max-w-[180px] focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                            >
+                                <option value="">All Motives</option>
+                            </select>
+                            <select
+                                id="filterCategory"
+                                class="px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg max-w-[180px] focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                            >
+                                <option value="">All Categories</option>
+                            </select>
+                            <select
+                                id="filterRole"
+                                class="px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg max-w-[180px] focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                            >
+                                <option value="">All Roles</option>
+                            </select>
+                            <select
+                                id="filterType"
+                                class="px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg max-w-[180px] focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                            >
+                                <option value="">All Types</option>
+                                <option value="Kauf">Kauf</option>
+                                <option value="Leih">Leih</option>
+                                <option value="Verbrauch">Verbrauch</option>
+                            </select>
+                            <input
+                                type="date"
+                                id="filterDateFrom"
+                                title="Date from"
+                                class="px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                            />
+                            <input
+                                type="date"
+                                id="filterDateTo"
+                                title="Date to"
+                                class="px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                            />
+                            <input
+                                type="text"
+                                id="filterSearch"
+                                placeholder="Search vendor, item, comment..."
+                                class="px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg max-w-[220px] focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                            />
+                            <button
+                                class="text-sm px-3 py-1.5 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-colors"
+                                onclick="resetBillFilters()"
+                            >
+                                Reset
+                            </button>
+                            <span
+                                id="billsCount"
+                                class="text-xs text-slate-400 whitespace-nowrap"
+                            ></span>
+                        </div>
+                        <table id="billsTable" class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b border-slate-200">
+                                    <th
+                                        class="admin-only px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                                        style="display: none"
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            id="selectAllBills"
+                                            onchange="toggleSelectAll(this)"
+                                        />
+                                    </th>
+                                    <th
+                                        class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                                    >
+                                        Actions
+                                    </th>
+                                    <th
+                                        class="sortable px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                                        data-sort="billNumber"
+                                    >
+                                        Nr.
+                                    </th>
+                                    <th
+                                        class="sortable px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                                        data-sort="date"
+                                    >
+                                        Date
+                                    </th>
+                                    <th
+                                        class="sortable px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                                        data-sort="email"
+                                    >
+                                        Uploaded By
+                                    </th>
+                                    <th
+                                        class="sortable px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                                        data-sort="role"
+                                    >
+                                        Role
+                                    </th>
+                                    <th
+                                        class="sortable px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                                        data-sort="type"
+                                    >
+                                        Type
+                                    </th>
+                                    <th
+                                        class="sortable px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                                        data-sort="vendor"
+                                    >
+                                        Vendor
+                                    </th>
+                                    <th
+                                        class="sortable px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                                        data-sort="item"
+                                    >
+                                        Item
+                                    </th>
+                                    <th
+                                        class="sortable px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                                        data-sort="brutto19"
+                                    >
+                                        Brutto 19%
+                                    </th>
+                                    <th
+                                        class="sortable px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                                        data-sort="brutto7"
+                                    >
+                                        Brutto 7%
+                                    </th>
+                                    <th
+                                        class="sortable px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                                        data-sort="brutto0"
+                                    >
+                                        Brutto 0%
+                                    </th>
+                                    <th
+                                        class="sortable px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                                        data-sort="total"
+                                    >
+                                        Brutto
+                                    </th>
+                                    <th
+                                        class="sortable px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                                        data-sort="netto"
+                                    >
+                                        Netto
+                                    </th>
+                                    <th
+                                        class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                                    >
+                                        Motive / Kategorie
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody
+                                id="billsBody"
+                                class="divide-y divide-slate-100"
+                            ></tbody>
+                        </table>
+                        <div
+                            class="flex justify-center gap-1 mt-4 flex-wrap"
+                            id="billsPagination"
+                        ></div>
+                    </div>
+                </div>
+
+                <div id="tab-spending" class="tab-content">
+                    <div
+                        class="bg-white rounded-xl shadow-sm border border-slate-100 p-5 md:p-6 mb-5 overflow-x-auto"
+                    >
+                        <h2 class="text-base font-semibold text-slate-900 mb-4">
+                            Spending by Motive
+                            <span class="text-xs font-normal text-slate-400"
+                                >(netto)</span
+                            >
+                        </h2>
+                        <table id="spendingTable" class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b border-slate-200">
+                                    <th
+                                        class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                                    >
+                                        Motive
+                                    </th>
+                                    <th
+                                        class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                                    >
+                                        Budget (netto)
+                                    </th>
+                                    <th
+                                        class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                                    >
+                                        Spent (netto)
+                                    </th>
+                                    <th
+                                        class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                                    >
+                                        Remaining
+                                    </th>
+                                    <th
+                                        class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                                    >
+                                        Used
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody
+                                id="spendingBody"
+                                class="divide-y divide-slate-100"
+                            ></tbody>
+                            <tfoot>
+                                <tr
+                                    class="border-t-2 border-slate-200 bg-slate-50"
+                                >
+                                    <th
+                                        class="px-3 py-2.5 text-left text-sm font-semibold text-slate-900"
+                                    >
+                                        Grand Total
+                                    </th>
+                                    <th
+                                        id="grandTotalBudget"
+                                        class="px-3 py-2.5 text-left text-sm font-semibold text-slate-900"
+                                    ></th>
+                                    <th
+                                        id="grandTotalSpent"
+                                        class="px-3 py-2.5 text-left text-sm font-semibold text-slate-900"
+                                    ></th>
+                                    <th
+                                        id="grandTotalRemaining"
+                                        class="px-3 py-2.5 text-left text-sm font-semibold text-slate-900"
+                                    ></th>
+                                    <th
+                                        id="grandTotalPercent"
+                                        class="px-3 py-2.5 text-left text-sm font-semibold text-slate-900"
+                                    ></th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                    <div
+                        class="bg-white rounded-xl shadow-sm border border-slate-100 p-5 md:p-6 mb-5 overflow-x-auto"
+                    >
+                        <h2 class="text-base font-semibold text-slate-900 mb-4">
+                            Spending by Kategorie
+                            <span class="text-xs font-normal text-slate-400"
+                                >(netto)</span
+                            >
+                        </h2>
+                        <table
+                            id="categorySpendingTable"
+                            class="w-full text-sm"
+                        >
+                            <thead>
+                                <tr class="border-b border-slate-200">
+                                    <th
+                                        class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                                    >
+                                        Kategorie
+                                    </th>
+                                    <th
+                                        class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                                    >
+                                        Budget (netto)
+                                    </th>
+                                    <th
+                                        class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                                    >
+                                        Spent (netto)
+                                    </th>
+                                    <th
+                                        class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                                    >
+                                        Remaining
+                                    </th>
+                                    <th
+                                        class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                                    >
+                                        Used
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody
+                                id="categorySpendingBody"
+                                class="divide-y divide-slate-100"
+                            ></tbody>
+                            <tfoot>
+                                <tr
+                                    class="border-t-2 border-slate-200 bg-slate-50"
+                                >
+                                    <th
+                                        class="px-3 py-2.5 text-left text-sm font-semibold text-slate-900"
+                                    >
+                                        Grand Total
+                                    </th>
+                                    <th
+                                        id="catGrandTotalBudget"
+                                        class="px-3 py-2.5 text-left text-sm font-semibold text-slate-900"
+                                    ></th>
+                                    <th
+                                        id="catGrandTotalSpent"
+                                        class="px-3 py-2.5 text-left text-sm font-semibold text-slate-900"
+                                    ></th>
+                                    <th
+                                        id="catGrandTotalRemaining"
+                                        class="px-3 py-2.5 text-left text-sm font-semibold text-slate-900"
+                                    ></th>
+                                    <th
+                                        id="catGrandTotalPercent"
+                                        class="px-3 py-2.5 text-left text-sm font-semibold text-slate-900"
+                                    ></th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="tab-vgeld" class="tab-content">
+                    <div
+                        class="bg-white rounded-xl shadow-sm border border-slate-100 p-5 md:p-6 mb-5 overflow-x-auto"
+                    >
+                        <h2 class="text-base font-semibold text-slate-900 mb-4">
+                            V-Geld Analysis by User
+                        </h2>
+                        <table id="vgeldAnalysisTable" class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b border-slate-200">
+                                    <th
+                                        class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                                    >
+                                        User
+                                    </th>
+                                    <th
+                                        class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                                    >
+                                        V-Geld Received
+                                    </th>
+                                    <th
+                                        class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                                    >
+                                        Spent
+                                    </th>
+                                    <th
+                                        class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                                    >
+                                        Remaining
+                                    </th>
+                                    <th
+                                        class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                                    >
+                                        Used
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody
+                                id="vgeldAnalysisBody"
+                                class="divide-y divide-slate-100"
+                            ></tbody>
+                            <tfoot>
+                                <tr
+                                    class="border-t-2 border-slate-200 bg-slate-50"
+                                >
+                                    <th
+                                        class="px-3 py-2.5 text-left text-sm font-semibold text-slate-900"
+                                    >
+                                        Total
+                                    </th>
+                                    <th
+                                        id="vgeldTotalReceived"
+                                        class="px-3 py-2.5 text-left text-sm font-semibold text-slate-900"
+                                    ></th>
+                                    <th
+                                        id="vgeldTotalSpent"
+                                        class="px-3 py-2.5 text-left text-sm font-semibold text-slate-900"
+                                    ></th>
+                                    <th
+                                        id="vgeldTotalRemaining"
+                                        class="px-3 py-2.5 text-left text-sm font-semibold text-slate-900"
+                                    ></th>
+                                    <th
+                                        id="vgeldTotalPercent"
+                                        class="px-3 py-2.5 text-left text-sm font-semibold text-slate-900"
+                                    ></th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                    <div
+                        class="bg-white rounded-xl shadow-sm border border-slate-100 p-5 md:p-6 mb-5 overflow-x-auto"
+                    >
+                        <h2 class="text-base font-semibold text-slate-900 mb-4">
+                            V-Geld Transfers
+                        </h2>
+                        <div id="vgeldFormSection" style="display: none">
+                            <h3
+                                class="text-sm font-semibold text-slate-800 mb-3"
+                            >
+                                New Transfer (Admin only)
+                            </h3>
+                            <form
+                                id="vgeldForm"
+                                class="flex flex-row flex-wrap items-end gap-3 mb-4"
+                            >
+                                <label
+                                    class="flex flex-col gap-1 text-sm font-medium text-slate-700"
+                                    >Amount (EUR)
+                                    <input
+                                        type="number"
+                                        name="amount"
+                                        step="0.01"
+                                        min="0.01"
+                                        required
+                                        class="px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                                /></label>
+                                <label
+                                    class="flex flex-col gap-1 text-sm font-medium text-slate-700"
+                                    >From
+                                    <input
+                                        type="text"
+                                        name="from"
+                                        placeholder="External source or user"
+                                        class="px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                                /></label>
+                                <label
+                                    class="flex flex-col gap-1 text-sm font-medium text-slate-700"
+                                    >To
+                                    <select
+                                        name="to"
+                                        id="vgeldToSelect"
+                                        required
+                                        class="px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                                    ></select
+                                ></label>
+                                <button
+                                    type="submit"
+                                    class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
+                                >
+                                    Add Transfer
+                                </button>
+                            </form>
+                            <div id="vgeldResult"></div>
+                        </div>
+                        <h3 class="text-sm font-semibold text-slate-800 mb-3">
+                            Transfer History
+                        </h3>
+                        <table id="vgeldTable" class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b border-slate-200">
+                                    <th
+                                        class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                                    >
+                                        Date
+                                    </th>
+                                    <th
+                                        class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                                    >
+                                        Amount
+                                    </th>
+                                    <th
+                                        class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                                    >
+                                        From
+                                    </th>
+                                    <th
+                                        class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                                    >
+                                        To
+                                    </th>
+                                    <th
+                                        class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                                    >
+                                        Recorded By
+                                    </th>
+                                    <th
+                                        class="admin-only px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                                        style="display: none"
+                                    >
+                                        Action
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody
+                                id="vgeldBody"
+                                class="divide-y divide-slate-100"
+                            ></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="tab-budget" class="tab-content">
+                    <div
+                        class="bg-white rounded-xl shadow-sm border border-slate-100 p-5 md:p-6 mb-5"
+                    >
+                        <div
+                            class="flex justify-between items-center flex-wrap gap-3 mb-4"
+                        >
+                            <h2
+                                class="text-base font-semibold text-slate-900 m-0"
+                            >
+                                Budget Matrix
+                                <span class="text-xs font-normal text-slate-400"
+                                    >(netto)</span
+                                >
+                            </h2>
+                            <div class="flex items-center gap-3 flex-wrap">
+                                <div
+                                    id="budgetSaveWrap"
+                                    class="admin-only"
+                                    style="display: none"
+                                >
+                                    <button
+                                        id="budgetSaveBtn"
+                                        onclick="saveBudgetMatrix()"
+                                        class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
+                                    >
+                                        Save All Changes
+                                    </button>
+                                    <span
+                                        id="budgetSaveResult"
+                                        class="ml-2 text-sm"
+                                    ></span>
+                                </div>
+                                <div class="text-right">
+                                    <div
+                                        id="budgetGrandTotal"
+                                        class="text-sm font-semibold text-slate-900"
+                                    ></div>
+                                    <div
+                                        id="budgetGrandSpent"
+                                        class="text-sm font-semibold"
+                                    ></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div
+                            id="budgetMatrixContainer"
+                            class="overflow-auto max-h-[70vh]"
+                            style="scroll-snap-type: x mandatory"
+                        ></div>
+                        <div class="mt-4 pt-4 border-t border-slate-100">
+                            <button
+                                class="bg-slate-100 text-slate-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-200 transition-colors"
+                                onclick="
+                                    window.open('/api/budget-report', '_blank')
+                                "
+                            >
+                                Export Budget PDF
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="tab-reports" class="tab-content">
+                    <div
+                        class="bg-white rounded-xl shadow-sm border border-slate-100 p-5 md:p-6 mb-5"
+                    >
+                        <h2 class="text-base font-semibold text-slate-900 mb-2">
+                            PDF Reports
+                        </h2>
+                        <p class="text-sm text-slate-500 mb-5">
+                            Download a PDF report with all bills and images for
+                            a user.
+                        </p>
+                        <div class="mb-5">
+                            <label
+                                class="flex flex-col gap-2 max-w-md text-sm font-medium text-slate-700"
+                            >
+                                <span>Select User:</span>
+                                <select
+                                    id="reportUserSelect"
+                                    class="px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                                ></select>
+                            </label>
+                        </div>
+                        <button
+                            onclick="downloadReport()"
+                            class="bg-indigo-600 text-white px-5 py-2.5 rounded-lg font-medium hover:bg-indigo-700 transition-colors text-sm"
+                        >
+                            Download PDF Report
+                        </button>
+                        <div id="reportResult" class="mt-3"></div>
+                    </div>
+                </div>
+
+                <!-- ==================== SETTINGS PANE (tabbed) ==================== -->
+                <div id="tab-settings" class="tab-content">
+                    <!-- Tab bar -->
+                    <div class="flex border-b border-slate-200 mb-5 overflow-x-auto">
+                        <button
+                            class="settings-tab px-4 py-2.5 text-sm font-medium border-b-2 border-indigo-600 text-indigo-600 whitespace-nowrap bg-transparent cursor-pointer"
+                            data-settings-tab="adm-settings"
+                            onclick="switchSettingsTab('adm-settings')"
+                        >Settings</button>
+                        <button
+                            class="settings-tab admin-only px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 whitespace-nowrap bg-transparent cursor-pointer"
+                            data-settings-tab="adm-members"
+                            onclick="switchSettingsTab('adm-members')"
+                            style="display: none"
+                        >Members</button>
+                        <button
+                            class="settings-tab admin-only px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 whitespace-nowrap bg-transparent cursor-pointer"
+                            data-settings-tab="adm-export"
+                            onclick="switchSettingsTab('adm-export')"
+                            style="display: none"
+                        >Export</button>
+                        <button
+                            class="settings-tab admin-only px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 whitespace-nowrap bg-transparent cursor-pointer"
+                            data-settings-tab="adm-telegram"
+                            onclick="switchSettingsTab('adm-telegram')"
+                            style="display: none"
+                        >Telegram</button>
+                        <button
+                            class="settings-tab admin-only px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 whitespace-nowrap bg-transparent cursor-pointer"
+                            data-settings-tab="adm-ai"
+                            onclick="switchSettingsTab('adm-ai')"
+                            style="display: none"
+                        >AI Analysis</button>
+                        <button
+                            class="settings-tab px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 whitespace-nowrap bg-transparent cursor-pointer"
+                            data-settings-tab="adm-projects"
+                            onclick="switchSettingsTab('adm-projects')"
+                        >Projects</button>
+                    </div>
+
+                    <!-- Settings sub-tab -->
+                    <div id="settings-tab-adm-settings" class="settings-tab-content">
+                        <div
+                            class="bg-white rounded-xl shadow-sm border border-slate-100 p-5 md:p-6 mb-5 admin-only"
+                            style="display: none"
+                        >
+                            <h2 class="text-base font-semibold text-slate-900 mb-4">
+                                Project Settings
+                            </h2>
+                            <form
+                                id="admProjectForm"
+                                class="flex flex-row flex-wrap items-end gap-3 mb-3"
+                            >
+                                <input
+                                    type="text"
+                                    id="admProjectTitle"
+                                    placeholder="Project Title"
+                                    class="flex-1 min-w-[200px] px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                                />
+                                <input
+                                    type="text"
+                                    id="admProjectSubtitle"
+                                    placeholder="Subtitle (optional)"
+                                    class="flex-1 min-w-[150px] px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                                />
+                                <button
+                                    type="submit"
+                                    class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
+                                >
+                                    Save
+                                </button>
+                            </form>
+                            <div id="admProjectResult"></div>
+                            <p class="text-xs text-slate-400 mt-2">
+                                Appears in the app header and PDF exports.
+                            </p>
+                        </div>
+                        <div
+                            class="bg-white rounded-xl shadow-sm border border-slate-100 p-5 md:p-6 mb-5"
+                        >
+                            <h2 class="text-base font-semibold text-slate-900 mb-4">
+                                Change Password
+                            </h2>
+                            <form
+                                id="changePasswordForm"
+                                class="flex flex-col gap-3 max-w-sm"
+                            >
+                                <input
+                                    type="password"
+                                    id="currentPassword"
+                                    placeholder="Current password"
+                                    required
+                                    class="px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                                />
+                                <input
+                                    type="password"
+                                    id="newPassword"
+                                    placeholder="New password (min 6 chars)"
+                                    required
+                                    class="px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                                />
+                                <input
+                                    type="password"
+                                    id="confirmPassword"
+                                    placeholder="Confirm new password"
+                                    required
+                                    class="px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                                />
+                                <button
+                                    type="submit"
+                                    class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors w-fit"
+                                >
+                                    Update Password
+                                </button>
+                            </form>
+                            <div id="changePasswordResult" class="mt-2"></div>
+                        </div>
+                        <div
+                            class="bg-white rounded-xl shadow-sm border border-slate-100 p-5 md:p-6 mb-5 owner-only"
+                            style="display: none"
+                        >
+                            <h2
+                                class="text-base font-semibold text-slate-900 mb-4 text-rose-600"
+                            >
+                                Danger Zone
+                            </h2>
+                            <p class="text-sm text-slate-600 mb-3">
+                                Permanently delete this project and all its data.
+                                This cannot be undone.
+                            </p>
+                            <button
+                                id="admDeleteProjectBtn"
+                                class="bg-rose-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-rose-700 transition-colors"
+                                onclick="admDeleteProject()"
+                            >
+                                Delete Project
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Members sub-tab -->
+                    <div id="settings-tab-adm-members" class="settings-tab-content" style="display: none">
+                        <div
+                            class="bg-white rounded-xl shadow-sm border border-slate-100 p-5 md:p-6 mb-5"
+                        >
+                            <h2 class="text-base font-semibold text-slate-900 mb-4">
+                                Project Members
+                            </h2>
+                            <form
+                                id="admMemberForm"
+                                class="flex flex-row flex-wrap items-end gap-3 mb-4"
+                            >
+                                <input
+                                    type="email"
+                                    name="email"
+                                    placeholder="User email (must exist)"
+                                    required
+                                    class="flex-1 min-w-[200px] px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                                />
+                                <select
+                                    name="projectRole"
+                                    class="px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                                >
+                                    <option value="user">User</option>
+                                    <option value="admin">Admin</option>
+                                    <option value="owner">Owner</option>
+                                </select>
+                                <button
+                                    type="submit"
+                                    class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
+                                >
+                                    Add Member
+                                </button>
+                            </form>
+                            <div id="admMemberResult"></div>
+                            <table class="w-full text-sm mt-4">
+                                <thead>
+                                    <tr class="border-b border-slate-200">
+                                        <th
+                                            class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                                        >
+                                            Email
+                                        </th>
+                                        <th
+                                            class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                                        >
+                                            Role
+                                        </th>
+                                        <th
+                                            class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                                        >
+                                            Position
+                                        </th>
+                                        <th
+                                            class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                                        >
+                                            Actions
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody
+                                    id="admMemberBody"
+                                    class="divide-y divide-slate-100"
+                                ></tbody>
+                            </table>
+                        </div>
+                        <div
+                            class="bg-white rounded-xl shadow-sm border border-slate-100 p-5 md:p-6 mb-5"
+                        >
+                            <h2 class="text-base font-semibold text-slate-900 mb-4">
+                                Positions
+                            </h2>
+                            <form
+                                id="admPositionForm"
+                                class="flex flex-row flex-wrap items-end gap-3 mb-4"
+                            >
+                                <input
+                                    type="text"
+                                    name="name"
+                                    placeholder="Position name"
+                                    required
+                                    class="flex-1 min-w-[200px] px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                                />
+                                <button
+                                    type="submit"
+                                    class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
+                                >
+                                    Add Position
+                                </button>
+                            </form>
+                            <div id="admPositionResult"></div>
+                            <table class="w-full text-sm mt-4">
+                                <thead>
+                                    <tr class="border-b border-slate-200">
+                                        <th
+                                            class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                                        >
+                                            Name
+                                        </th>
+                                        <th
+                                            class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                                        >
+                                            Actions
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody
+                                    id="admPositionBody"
+                                    class="divide-y divide-slate-100"
+                                ></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Export sub-tab -->
+                    <div id="settings-tab-adm-export" class="settings-tab-content" style="display: none">
+                        <div
+                            class="bg-white rounded-xl shadow-sm border border-slate-100 p-5 md:p-6 mb-5"
+                        >
+                            <h2 class="text-base font-semibold text-slate-900 mb-4">
+                                Export / Backup
+                            </h2>
+                            <div class="flex gap-3 flex-wrap">
+                                <a
+                                    href="/api/admin/export/excel"
+                                    class="inline-flex items-center px-4 py-2.5 bg-emerald-500 text-white rounded-lg text-sm font-medium hover:bg-emerald-600 transition-colors no-underline"
+                                    >Excel Export (Bills, V-Geld, Budget)</a
+                                >
+                                <a
+                                    href="/api/admin/export/images"
+                                    class="inline-flex items-center px-4 py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors no-underline"
+                                    >Download All Images (ZIP)</a
+                                >
+                            </div>
+                            <p class="text-xs text-slate-400 mt-2">
+                                Excel contains sheets for Bills, V-Geld, and Budget
+                                Matrix. Images are organized in folders by bill.
+                            </p>
+                            <h3
+                                class="text-sm font-semibold text-slate-800 mb-3 mt-5"
+                            >
+                                Google Sheet Export
+                            </h3>
+                            <div id="admCredStatus" class="mb-3 text-sm"></div>
+                            <form
+                                id="admExportSheetForm"
+                                class="flex flex-row flex-wrap items-end gap-3"
+                            >
+                                <input
+                                    type="text"
+                                    id="admExportSheetId"
+                                    placeholder="Export Sheet ID"
+                                    class="flex-1 min-w-[200px] px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                                />
+                                <button
+                                    type="submit"
+                                    class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
+                                >
+                                    Save
+                                </button>
+                                <button
+                                    type="button"
+                                    class="bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-600 transition-colors"
+                                    onclick="admExportGoogleSheet(this)"
+                                >
+                                    Export Now
+                                </button>
+                            </form>
+                            <div
+                                id="admGoogleExportResult"
+                                class="mt-2 text-sm"
+                            ></div>
+                            <p class="text-xs text-slate-400 mt-1">
+                                Create a Google Sheet, share it (Editor) with the
+                                service account email, and paste the Sheet ID here.
+                            </p>
+                            <h3
+                                class="text-sm font-semibold text-slate-800 mb-3 mt-5"
+                            >
+                                Service Account Credentials
+                            </h3>
+                            <form id="admCredForm" class="flex flex-col gap-3">
+                                <textarea
+                                    id="admCredJson"
+                                    placeholder="Paste service account JSON here..."
+                                    class="w-full h-24 px-3 py-2 rounded-lg border border-slate-200 text-xs font-mono focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none resize-y"
+                                ></textarea>
+                                <button
+                                    type="submit"
+                                    class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors w-fit"
+                                >
+                                    Save Credentials
+                                </button>
+                            </form>
+                            <div id="admCredResult"></div>
+                        </div>
+                    </div>
+
+                    <!-- Telegram sub-tab -->
+                    <div id="settings-tab-adm-telegram" class="settings-tab-content" style="display: none">
+                        <div
+                            class="bg-white rounded-xl shadow-sm border border-slate-100 p-5 md:p-6 mb-5"
+                        >
+                            <h2 class="text-base font-semibold text-slate-900 mb-4">
+                                Telegram Integration
+                            </h2>
+                            <div id="admTgBotStatus" class="mb-3 text-sm"></div>
+                            <form
+                                id="admTelegramForm"
+                                class="flex flex-row flex-wrap items-center gap-3 mb-3"
+                            >
+                                <label
+                                    class="flex items-center gap-1.5 text-sm font-medium text-slate-700"
+                                >
+                                    <input
+                                        type="checkbox"
+                                        id="admTgEnabled"
+                                        class="rounded"
+                                    />
+                                    Enabled
+                                </label>
+                                <input
+                                    type="text"
+                                    id="admTgBotToken"
+                                    placeholder="Bot Token (from BotFather)"
+                                    class="flex-1 min-w-[260px] px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                                />
+                                <button
+                                    type="submit"
+                                    class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
+                                >
+                                    Save &amp; Apply
+                                </button>
+                            </form>
+                            <div id="admTgSettingsResult"></div>
+                            <p class="text-xs text-slate-400 mt-2">
+                                Create a bot via <strong>@BotFather</strong> on
+                                Telegram, copy the token here, enable it, and
+                                save.<br />
+                                Users link their account by sending
+                                <code
+                                    class="bg-slate-100 px-1 py-0.5 rounded text-xs"
+                                    >/link &lt;code&gt;</code
+                                >
+                                to your bot.
+                            </p>
+                        </div>
+                        <div
+                            class="bg-white rounded-xl shadow-sm border border-slate-100 p-5 md:p-6 mb-5"
+                        >
+                            <h2 class="text-base font-semibold text-slate-900 mb-4">
+                                Linked Accounts
+                            </h2>
+                            <table class="w-full text-sm">
+                                <thead>
+                                    <tr class="border-b border-slate-200">
+                                        <th
+                                            class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                                        >
+                                            Email
+                                        </th>
+                                        <th
+                                            class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                                        >
+                                            Telegram User ID
+                                        </th>
+                                        <th
+                                            class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                                        >
+                                            Linked
+                                        </th>
+                                        <th
+                                            class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                                        ></th>
+                                    </tr>
+                                </thead>
+                                <tbody
+                                    id="admTgLinksBody"
+                                    class="divide-y divide-slate-100"
+                                ></tbody>
+                            </table>
+                            <div id="admTgLinksResult"></div>
+                        </div>
+                    </div>
+
+                    <!-- AI Analysis sub-tab -->
+                    <div id="settings-tab-adm-ai" class="settings-tab-content" style="display: none">
+                        <div
+                            class="bg-white rounded-xl shadow-sm border border-slate-100 p-5 md:p-6 mb-5"
+                        >
+                            <h2 class="text-base font-semibold text-slate-900 mb-4">
+                                AI Bill Analysis
+                            </h2>
+                            <div id="admOcrStatus" class="mb-4 text-sm"></div>
+                            <form id="admOcrForm" class="flex flex-col gap-4 max-w-lg">
+                                <label
+                                    class="flex items-center gap-2 text-sm font-medium text-slate-700"
+                                >
+                                    <input
+                                        type="checkbox"
+                                        id="admOcrEnabled"
+                                        class="rounded"
+                                    />
+                                    Enable AI Analysis for this project
+                                </label>
+                                <label
+                                    class="flex flex-col gap-1.5 text-sm font-medium text-slate-700"
+                                    >Provider
+                                    <select
+                                        id="admOcrProvider"
+                                        class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                                    >
+                                        <option value="openai">OpenAI (GPT-4o)</option>
+                                        <option value="gemini">Google Gemini</option>
+                                        <option value="claude">Anthropic Claude</option>
+                                        <option value="custom">Custom (OpenAI-compatible)</option>
+                                    </select>
+                                </label>
+                                <label
+                                    class="flex flex-col gap-1.5 text-sm font-medium text-slate-700"
+                                    >API Key
+                                    <input
+                                        type="password"
+                                        id="admOcrApiKey"
+                                        placeholder="Enter API key"
+                                        class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                                    />
+                                    <span id="admOcrApiKeyMasked" class="text-xs text-slate-400"></span>
+                                </label>
+                                <label
+                                    id="admOcrBaseUrlLabel"
+                                    class="flex flex-col gap-1.5 text-sm font-medium text-slate-700"
+                                    style="display: none"
+                                    >Base URL
+                                    <input
+                                        type="url"
+                                        id="admOcrBaseUrl"
+                                        placeholder="https://your-endpoint.example.com/v1"
+                                        class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                                    />
+                                </label>
+                                <button
+                                    type="submit"
+                                    class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors w-fit"
+                                >
+                                    Save
+                                </button>
+                            </form>
+                            <div id="admOcrResult" class="mt-2"></div>
+                            <p class="text-xs text-slate-400 mt-3">
+                                When enabled, uploaded bill images can be analysed by an AI vision model to extract fields like date, vendor, item, and amounts.
+                                Extracted fields are marked "to be checked" so users know to verify them.
+                            </p>
+                        </div>
+                        <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-5 md:p-6 mb-5">
+                            <div class="flex items-center justify-between mb-4">
+                                <h2 class="text-base font-semibold text-slate-900">Recent Analysis Runs</h2>
+                                <button onclick="admLoadOcrLog()" class="text-xs px-2.5 py-1 bg-slate-100 text-slate-600 rounded-md hover:bg-slate-200 transition-colors border-none cursor-pointer">Refresh</button>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-sm">
+                                    <thead>
+                                        <tr class="text-left text-xs font-medium text-slate-500 uppercase tracking-wider border-b border-slate-100">
+                                            <th class="px-3 py-2">Time</th>
+                                            <th class="px-3 py-2">Bill</th>
+                                            <th class="px-3 py-2">Provider</th>
+                                            <th class="px-3 py-2">Status</th>
+                                            <th class="px-3 py-2">Fields</th>
+                                            <th class="px-3 py-2">Detail</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="admOcrLogBody">
+                                        <tr><td colspan="6" class="px-3 py-4 text-slate-400 text-center">Loading...</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Projects Overview sub-tab -->
+                    <div id="settings-tab-adm-projects" class="settings-tab-content" style="display: none">
+                        <div
+                            class="bg-white rounded-xl shadow-sm border border-slate-100 p-5 md:p-6 mb-5"
+                        >
+                            <h2 class="text-base font-semibold text-slate-900 mb-4">
+                                Projects Overview
+                            </h2>
+                            <table class="w-full text-sm">
+                                <thead>
+                                    <tr class="border-b border-slate-200">
+                                        <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Project</th>
+                                        <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Subtitle</th>
+                                        <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Your Role</th>
+                                        <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="admProjectsBody" class="divide-y divide-slate-100"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- ==================== USER SETTINGS PANE ==================== -->
+                <!-- ==================== CROP MODAL ==================== -->
+                <div
+                    id="cropModal"
+                    class="fixed inset-0 bg-black/80 z-[3000] flex flex-col items-center justify-center p-4"
+                    style="display: none"
+                >
+                    <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl flex flex-col">
+                        <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+                            <h2 class="text-base font-semibold text-slate-900">Crop Image</h2>
+                            <span id="cropModalCounter" class="text-xs text-slate-400"></span>
+                        </div>
+                        <div id="cropperContainer" style="width: 100%; height: 60vh; background: #0f172a; position: relative">
+                            <img id="cropperTarget" />
+                        </div>
+                        <div class="flex items-center justify-between gap-3 px-5 py-4">
+                            <button
+                                type="button"
+                                onclick="cropModalCancel()"
+                                class="px-4 py-2 text-sm text-slate-500 hover:text-slate-700 bg-transparent border-none cursor-pointer"
+                            >Cancel</button>
+                            <div class="flex gap-3">
+                                <button
+                                    type="button"
+                                    onclick="cropModalSkip()"
+                                    class="px-4 py-2 text-sm rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 bg-white cursor-pointer"
+                                >Skip (use original)</button>
+                                <button
+                                    type="button"
+                                    onclick="cropModalSave()"
+                                    class="px-4 py-2 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 border-none cursor-pointer font-medium"
+                                >Crop & Save</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ==================== NEW PROJECT MODAL ==================== -->
+                <div
+                    id="newProjectModal"
+                    class="fixed inset-0 bg-black/50 z-[2000] flex items-center justify-center p-5"
+                    style="display: none"
+                    onclick="
+                        if (event.target === this) this.style.display = 'none';
+                    "
+                >
+                    <div
+                        class="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md relative"
+                    >
+                        <button
+                            onclick="
+                                document.getElementById(
+                                    'newProjectModal',
+                                ).style.display = 'none'
+                            "
+                            class="absolute top-3 right-3 text-slate-400 hover:text-slate-700 bg-transparent border-none text-lg cursor-pointer"
+                        >
+                            &times;
+                        </button>
+                        <h2 class="text-base font-semibold text-slate-900 mb-4">
+                            Create New Project
+                        </h2>
+                        <form id="newProjectForm" class="flex flex-col gap-3">
+                            <input
+                                type="text"
+                                id="newProjectName"
+                                placeholder="Project name"
+                                required
+                                class="px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                            />
+                            <input
+                                type="text"
+                                id="newProjectSubtitle"
+                                placeholder="Subtitle (optional)"
+                                class="px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                            />
+                            <button
+                                type="submit"
+                                class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
+                            >
+                                Create Project
+                            </button>
+                        </form>
+                        <div id="newProjectResult" class="mt-2"></div>
+                    </div>
+                </div>
+
+                <p id="footerLinks" class="text-xs text-slate-400 mt-4">
+                    <span id="appVersion"></span>
+                </p>
+            </div>
+        </div>
+
+        <!-- Bill Detail Modal -->
+        <div
+            id="billModal"
+            class="fixed inset-0 bg-black/50 z-[1300] flex items-center justify-center p-4 md:p-5"
+            style="display: none"
+        >
+            <div
+                class="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto"
+            >
+                <div
+                    class="flex justify-between items-center px-5 py-4 border-b border-slate-100 sticky top-0 bg-white z-10 rounded-t-2xl"
+                >
+                    <h2 class="text-base font-semibold text-slate-900 m-0">
+                        Bill Details
+                    </h2>
+                    <button
+                        class="text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full w-9 h-9 flex items-center justify-center text-2xl leading-none bg-transparent border-none cursor-pointer"
+                        onclick="closeModal()"
+                    >
+                        &times;
+                    </button>
+                </div>
+                <div class="p-5 md:p-6">
+                    <div class="mb-6 pb-6 border-b border-slate-100">
+                        <h3 class="text-sm font-semibold text-slate-800 mb-3">
+                            Images
+                            <span
+                                id="imageCounter"
+                                class="font-normal text-xs text-slate-400"
+                            ></span>
+                        </h3>
+                        <div id="billGallery" class="mb-3">
+                            <p
+                                id="noImageText"
+                                class="text-slate-400 text-center py-5 bg-slate-50 rounded-lg m-0 text-sm"
+                            >
+                                No images uploaded
+                            </p>
+                            <div
+                                id="galleryCarousel"
+                                class="relative bg-slate-50 rounded-lg overflow-hidden mb-3"
+                                style="display: none"
+                            >
+                                <div class="overflow-hidden rounded-lg">
+                                    <div
+                                        class="gallery-track flex"
+                                        id="galleryTrack"
+                                    ></div>
+                                </div>
+                                <button
+                                    class="gallery-nav absolute top-1/2 -translate-y-1/2 left-2 bg-black/40 text-white border-none w-9 h-9 rounded-full text-xl cursor-pointer flex items-center justify-center z-[2] hover:bg-black/70 p-0 leading-none"
+                                    id="galleryPrev"
+                                    onclick="galleryNav(-1)"
+                                >
+                                    &lsaquo;
+                                </button>
+                                <button
+                                    class="gallery-nav absolute top-1/2 -translate-y-1/2 right-2 bg-black/40 text-white border-none w-9 h-9 rounded-full text-xl cursor-pointer flex items-center justify-center z-[2] hover:bg-black/70 p-0 leading-none"
+                                    id="galleryNext"
+                                    onclick="galleryNav(1)"
+                                >
+                                    &rsaquo;
+                                </button>
+                                <!-- Image action overlay (top-right) -->
+                                <div id="galleryImageActions" class="absolute top-2 right-2 flex gap-1.5 z-[3]" style="display: none !important">
+                                    <a id="downloadLink" title="Download" class="w-8 h-8 rounded-lg bg-black/50 hover:bg-black/75 text-white flex items-center justify-center transition-colors cursor-pointer">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                    </a>
+                                    <button type="button" id="cropImageBtn" title="Crop" onclick="cropCurrentImage()" class="w-8 h-8 rounded-lg bg-black/50 hover:bg-black/75 text-white flex items-center justify-center transition-colors cursor-pointer border-none p-0">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 2 6 8 2 8"/><polyline points="18 22 18 16 22 16"/><path d="M2 2l4 4 12 12 4 4"/><path d="M6 8l12 0 0 8"/></svg>
+                                    </button>
+                                    <button type="button" id="deleteImageBtn" title="Delete" onclick="deleteCurrentImage()" class="w-8 h-8 rounded-lg bg-black/50 hover:bg-rose-500/80 text-white flex items-center justify-center transition-colors cursor-pointer border-none p-0">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                                    </button>
+                                </div>
+                                <div
+                                    class="flex justify-center gap-1.5 py-2 pb-3"
+                                    id="galleryDots"
+                                ></div>
+                            </div>
+                        </div>
+                        <div class="flex gap-2 items-center flex-wrap">
+                            <label
+                                class="inline-flex items-center justify-center px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-sm font-medium cursor-pointer hover:bg-indigo-700 transition-colors"
+                                style="display: none"
+                                id="addImageLabel"
+                            >
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    multiple
+                                    id="addImageInput"
+                                    class="hidden"
+                                />
+                                Add Images
+                            </label>
+                            <label
+                                class="inline-flex items-center justify-center px-3 py-1.5 bg-emerald-500 text-white rounded-lg text-sm font-medium cursor-pointer hover:bg-emerald-600 transition-colors"
+                                style="display: none"
+                                id="addCameraLabel"
+                            >
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    capture="environment"
+                                    id="addCameraInput"
+                                    class="hidden"
+                                />
+                                Take Photo
+                            </label>
+                        </div>
+                        <div id="imageResult"></div>
+                    </div>
+
+                    <div class="mb-6 pb-6 border-b border-slate-100">
+                        <h3 class="text-sm font-semibold text-slate-800 mb-3">
+                            Details
+                        </h3>
+                        <form id="billDetailForm" class="flex flex-col gap-4">
+                            <input type="hidden" id="detailBillId" name="id" />
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <label
+                                    class="flex flex-col gap-1.5 text-sm font-medium text-slate-700"
+                                    >Bill Nr.
+                                    <input
+                                        type="text"
+                                        id="detailBillNumber"
+                                        readonly
+                                        class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm bg-slate-50 outline-none"
+                                /></label>
+                                <label
+                                    class="flex flex-col gap-1.5 text-sm font-medium text-slate-700"
+                                    >Date
+                                    <input
+                                        type="date"
+                                        id="detailDate"
+                                        name="date"
+                                        class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                                /></label>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <label
+                                    class="flex flex-col gap-1.5 text-sm font-medium text-slate-700"
+                                    >Uploaded By
+                                    <select
+                                        id="detailEmail"
+                                        name="email"
+                                        class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                                    ></select
+                                ></label>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <label
+                                    class="flex flex-col gap-1.5 text-sm font-medium text-slate-700"
+                                    >Type
+                                    <select
+                                        id="detailType"
+                                        name="type"
+                                        class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                                    >
+                                        <option>Kauf</option>
+                                        <option>Leih</option>
+                                        <option>Verbrauch</option>
+                                    </select></label
+                                >
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <label
+                                    class="flex flex-col gap-1.5 text-sm font-medium text-slate-700"
+                                    >Vendor
+                                    <input
+                                        type="text"
+                                        id="detailVendor"
+                                        name="vendor"
+                                        class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                                /></label>
+                                <label
+                                    class="flex flex-col gap-1.5 text-sm font-medium text-slate-700"
+                                    >Item
+                                    <input
+                                        type="text"
+                                        id="detailItem"
+                                        name="item"
+                                        class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                                /></label>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <label
+                                    class="flex flex-col gap-1.5 text-sm font-medium text-slate-700"
+                                    >Brutto 19% (EUR)
+                                    <input
+                                        type="number"
+                                        id="detailBrutto19"
+                                        name="brutto19"
+                                        step="0.01"
+                                        min="0"
+                                        class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                                /></label>
+                                <label
+                                    class="flex flex-col gap-1.5 text-sm font-medium text-slate-700"
+                                    >Brutto 7% (EUR)
+                                    <input
+                                        type="number"
+                                        id="detailBrutto7"
+                                        name="brutto7"
+                                        step="0.01"
+                                        min="0"
+                                        class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                                /></label>
+                                <label
+                                    class="flex flex-col gap-1.5 text-sm font-medium text-slate-700"
+                                    >Brutto 0% (EUR)
+                                    <input
+                                        type="number"
+                                        id="detailBrutto0"
+                                        name="brutto0"
+                                        step="0.01"
+                                        min="0"
+                                        class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                                /></label>
+                            </div>
+                            <div
+                                class="grid grid-cols-2 md:grid-cols-4 gap-4 bg-slate-50 p-3 rounded-lg"
+                            >
+                                <label
+                                    class="text-sm font-medium text-slate-700"
+                                    >Netto 19%
+                                    <span
+                                        id="detailNetto19"
+                                        class="font-semibold block"
+                                    ></span
+                                ></label>
+                                <label
+                                    class="text-sm font-medium text-slate-700"
+                                    >Netto 7%
+                                    <span
+                                        id="detailNetto7"
+                                        class="font-semibold block"
+                                    ></span
+                                ></label>
+                                <label
+                                    class="text-sm font-medium text-slate-700"
+                                    >Netto 0%
+                                    <span
+                                        id="detailNetto0"
+                                        class="font-semibold block"
+                                    ></span
+                                ></label>
+                                <label
+                                    class="text-sm font-medium text-slate-700"
+                                    >Netto Total
+                                    <span
+                                        id="detailNettoTotal"
+                                        class="font-bold text-slate-900 block"
+                                    ></span
+                                ></label>
+                            </div>
+                            <div class="grid grid-cols-1 gap-4">
+                                <label
+                                    class="flex flex-col gap-1.5 text-sm font-medium text-slate-700"
+                                    >Comment
+                                    <input
+                                        type="text"
+                                        id="detailComment"
+                                        name="comment"
+                                        class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                                /></label>
+                            </div>
+                            <div>
+                                <label
+                                    class="block text-sm font-medium text-slate-700 mb-2"
+                                    >Motive Allocations</label
+                                >
+                                <div
+                                    id="detailMotiveAlloc"
+                                    class="allocation-widget"
+                                ></div>
+                            </div>
+                            <div>
+                                <label
+                                    class="block text-sm font-medium text-slate-700 mb-2"
+                                    >Kategorie Allocations</label
+                                >
+                                <div
+                                    id="detailCategoryAlloc"
+                                    class="allocation-widget"
+                                ></div>
+                            </div>
+                            <div id="ocrStatusBar" class="hidden px-3 py-2 rounded-lg text-sm flex items-center gap-2"></div>
+                            <div class="flex gap-3 mt-2">
+                                <button
+                                    type="submit"
+                                    class="bg-indigo-600 text-white px-5 py-2.5 rounded-lg font-medium hover:bg-indigo-700 transition-colors text-sm"
+                                >
+                                    Save Changes
+                                </button>
+                                <button
+                                    type="button"
+                                    id="analyseBillBtn"
+                                    class="bg-amber-500 text-white px-5 py-2.5 rounded-lg font-medium hover:bg-amber-600 transition-colors text-sm"
+                                    style="display: none"
+                                    onclick="triggerBillAnalysis()"
+                                >
+                                    Analyse Bill
+                                </button>
+                                <button
+                                    type="button"
+                                    class="bg-rose-500 text-white px-5 py-2.5 rounded-lg font-medium hover:bg-rose-600 transition-colors text-sm admin-only"
+                                    style="display: none"
+                                    onclick="deleteBill()"
+                                >
+                                    Delete Bill
+                                </button>
+                            </div>
+                        </form>
+                        <div id="detailResult"></div>
+                    </div>
+
+                    <div>
+                        <h3 class="text-sm font-semibold text-slate-800 mb-3">
+                            History
+                        </h3>
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b border-slate-200">
+                                    <th
+                                        class="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                                    >
+                                        When
+                                    </th>
+                                    <th
+                                        class="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                                    >
+                                        Who
+                                    </th>
+                                    <th
+                                        class="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                                    >
+                                        Changes
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody
+                                id="billLogBody"
+                                class="divide-y divide-slate-100"
+                            ></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Full Size Image Modal -->
+        <div
+            id="imageModal"
+            class="fixed inset-0 bg-black/80 z-[1400] flex items-center justify-center"
+            style="display: none"
+            onclick="closeImageModal()"
+        >
+            <div
+                class="relative max-w-[95vw] max-h-[95vh]"
+                onclick="event.stopPropagation()"
+            >
+                <button
+                    class="absolute -top-10 right-0 text-white bg-black/50 hover:bg-black/70 rounded-full w-9 h-9 flex items-center justify-center text-2xl leading-none border-none cursor-pointer"
+                    onclick="closeImageModal()"
+                >
+                    &times;
+                </button>
+                <button
+                    class="gallery-nav fullsize-nav bg-black/40 text-white border-none w-9 h-9 rounded-full text-xl cursor-pointer flex items-center justify-center hover:bg-black/70 p-0 leading-none gallery-prev"
+                    id="fullPrev"
+                    onclick="fullsizeNav(-1)"
+                >
+                    &lsaquo;
+                </button>
+                <img
+                    id="fullSizeImage"
+                    class="max-w-[95vw] max-h-[90vh] block rounded-lg shadow-2xl"
+                />
+                <button
+                    class="gallery-nav fullsize-nav bg-black/40 text-white border-none w-9 h-9 rounded-full text-xl cursor-pointer flex items-center justify-center hover:bg-black/70 p-0 leading-none gallery-next"
+                    id="fullNext"
+                    onclick="fullsizeNav(1)"
+                >
+                    &rsaquo;
+                </button>
+                <div
+                    class="absolute -bottom-8 left-1/2 -translate-x-1/2 text-white text-sm font-medium bg-black/50 px-3 py-1 rounded-full"
+                    id="fullsizeCounter"
+                ></div>
+            </div>
+        </div>
+
+
+        <!-- Telegram Link Modal -->
+        <div
+            id="telegramLinkModal"
+            class="fixed inset-0 bg-black/50 z-[2000] flex items-center justify-center"
+            style="display: none"
+            onclick="if (event.target === this) this.style.display = 'none';"
+        >
+            <div
+                class="bg-white rounded-2xl shadow-xl p-6 min-w-[300px] max-w-[440px] w-[90%] relative"
+            >
+                <button
+                    onclick="
+                        document.getElementById(
+                            'telegramLinkModal',
+                        ).style.display = 'none'
+                    "
+                    class="absolute top-3 right-3 text-slate-400 hover:text-slate-700 bg-transparent border-none text-lg cursor-pointer"
+                >
+                    &times;
+                </button>
+                <h2 class="text-base font-semibold text-slate-900 mt-0 mb-4">
+                    Telegram verknüpfen
+                </h2>
+                <div id="telegramLinkBody"></div>
+            </div>
+        </div>
+        <!-- ==================== SUPER ADMIN MODAL ==================== -->
+        <div
+            id="superAdminModal"
+            class="fixed inset-0 bg-black/50 z-[3000] flex items-center justify-center p-4"
+            style="display: none"
+            onclick="if (event.target === this) closeSuperAdminModal();"
+        >
+            <div class="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+                <!-- Header -->
+                <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 shrink-0">
+                    <h2 class="text-lg font-bold text-slate-900">Super Admin</h2>
+                    <button
+                        onclick="closeSuperAdminModal()"
+                        class="text-slate-400 hover:text-slate-700 bg-transparent border-none text-xl cursor-pointer rounded-md px-2 py-1 hover:bg-slate-100"
+                    >&times;</button>
+                </div>
+                <!-- Tabs -->
+                <div class="flex border-b border-slate-200 px-6 shrink-0">
+                    <button class="sa-tab px-4 py-2.5 text-sm font-medium border-b-2 border-indigo-600 text-indigo-600" data-sa-tab="sa-projects" onclick="switchSaTab('sa-projects')">Projects</button>
+                    <button class="sa-tab px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700" data-sa-tab="sa-users" onclick="switchSaTab('sa-users')">Global Users</button>
+                </div>
+                <!-- Body -->
+                <div class="flex-1 overflow-y-auto p-6">
+                    <!-- Projects Tab -->
+                    <div id="sa-tab-sa-projects" class="sa-tab-content">
+                        <form id="saProjectForm" class="flex flex-row flex-wrap items-end gap-3 mb-4">
+                            <input type="text" name="name" placeholder="Project name" required class="flex-1 min-w-[180px] px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none" />
+                            <input type="text" name="subtitle" placeholder="Subtitle (optional)" class="flex-1 min-w-[140px] px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none" />
+                            <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors">Create Project</button>
+                        </form>
+                        <div id="saProjectResult"></div>
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b border-slate-200">
+                                    <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">ID</th>
+                                    <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Name</th>
+                                    <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Subtitle</th>
+                                    <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Created</th>
+                                    <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Members</th>
+                                    <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="saProjectBody" class="divide-y divide-slate-100"></tbody>
+                        </table>
+                    </div>
+                    <!-- Users Tab -->
+                    <div id="sa-tab-sa-users" class="sa-tab-content" style="display: none">
+                        <form id="saUserForm" class="flex flex-row flex-wrap items-end gap-3 mb-4">
+                            <input type="email" name="email" placeholder="Email" required class="flex-1 min-w-[180px] px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none" />
+                            <div class="relative">
+                                <input type="password" name="password" placeholder="Password" required class="px-3 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none w-40" id="saUserPwInput" />
+                            </div>
+                            <label class="flex items-center gap-1.5 text-sm text-slate-600 cursor-pointer">
+                                <input type="checkbox" name="isSuperAdmin" class="rounded" /> Super Admin
+                            </label>
+                            <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors">Create User</button>
+                        </form>
+                        <p class="text-xs text-slate-400 mb-3">Password must be at least 6 characters.</p>
+                        <div id="saUserResult"></div>
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b border-slate-200">
+                                    <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Email</th>
+                                    <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Super Admin</th>
+                                    <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Projects</th>
+                                    <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="saUserBody" class="divide-y divide-slate-100"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Super Admin: Membership sub-modal -->
+        <div
+            id="saMembershipModal"
+            class="fixed inset-0 bg-black/60 z-[3100] flex items-center justify-center p-4"
+            style="display: none"
+            onclick="if (event.target === this) closeSaMemberships();"
+        >
+            <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden">
+                <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 shrink-0">
+                    <h2 id="saMembershipTitle" class="text-base font-bold text-slate-900">Members</h2>
+                    <button onclick="closeSaMemberships()" class="text-slate-400 hover:text-slate-700 bg-transparent border-none text-xl cursor-pointer rounded-md px-2 py-1 hover:bg-slate-100">&times;</button>
+                </div>
+                <div class="flex-1 overflow-y-auto p-6">
+                    <!-- Members section -->
+                    <div class="mb-6">
+                        <h3 class="text-sm font-semibold text-slate-800 mb-3">Members</h3>
+                        <div class="flex flex-row flex-wrap items-end gap-2 mb-3">
+                            <select id="saMemberEmailSelect" class="px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none flex-1 min-w-[140px]">
+                                <option value="">-- Select user --</option>
+                            </select>
+                            <select id="saMemberRoleSelect" class="px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none">
+                                <option value="user">User</option>
+                                <option value="admin">Admin</option>
+                            </select>
+                            <select id="saMemberPosSelect" class="px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none">
+                                <option value="">-- No position --</option>
+                            </select>
+                            <button type="button" onclick="saAddMember()" class="bg-indigo-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors">Add</button>
+                        </div>
+                        <div id="saMemberResult"></div>
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b border-slate-200">
+                                    <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Email</th>
+                                    <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Role</th>
+                                    <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Position</th>
+                                    <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="saMemberBody" class="divide-y divide-slate-100"></tbody>
+                        </table>
+                    </div>
+                    <!-- Positions section -->
+                    <div class="pt-5 border-t border-slate-200">
+                        <h3 class="text-sm font-semibold text-slate-800 mb-3">Positions</h3>
+                        <div class="flex flex-row flex-wrap items-end gap-2 mb-3">
+                            <input type="text" id="saPositionNameInput" placeholder="Position name" class="px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none flex-1 min-w-[140px]" />
+                            <button type="button" onclick="saAddPosition()" class="bg-indigo-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors">Add</button>
+                        </div>
+                        <div id="saPositionResult"></div>
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b border-slate-200">
+                                    <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Name</th>
+                                    <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="saPositionBody" class="divide-y divide-slate-100"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Upload Bill Modal -->
+        <div id="uploadModal" class="fixed inset-0 bg-black/50 z-[1300] flex items-center justify-center p-4 md:p-5" style="display:none" onclick="if(event.target===this)closeUploadModal()">
+            <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+                <div class="flex justify-between items-center px-5 py-4 border-b border-slate-100 sticky top-0 bg-white z-10 rounded-t-2xl">
+                    <h2 class="text-base font-semibold text-slate-900 m-0">Upload Bill</h2>
+                    <button class="text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full w-9 h-9 flex items-center justify-center text-2xl leading-none bg-transparent border-none cursor-pointer" onclick="closeUploadModal()">&times;</button>
+                </div>
+                <div id="uploadModalBody" class="p-5 md:p-6"></div>
+            </div>
+        </div>
+    </body>
+</html>

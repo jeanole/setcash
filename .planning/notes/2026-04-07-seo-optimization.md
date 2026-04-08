@@ -1,0 +1,6 @@
+---
+date: "2026-04-07 12:01"
+promoted: false
+---
+
+SEO optimization
