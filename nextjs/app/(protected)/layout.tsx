@@ -5,6 +5,7 @@ import { db } from '@/lib/db';
 import AppShell from '@/components/layout/AppShell';
 import ClientSessionProvider from '@/components/providers/ClientSessionProvider';
 import AuthPageTracker from '@/components/analytics/AuthPageTracker';
+import TourProvider from '@/components/providers/TourProvider';
 
 // ---------------------------------------------------------------------------
 // Protected layout — server-side session guard
@@ -67,7 +68,9 @@ export default async function ProtectedLayout({
     <ClientSessionProvider session={session}>
       <AuthPageTracker />
       <AppShell currentUser={currentUser}>
-        {children}
+        <TourProvider>
+          {children}
+        </TourProvider>
       </AppShell>
     </ClientSessionProvider>
   );
