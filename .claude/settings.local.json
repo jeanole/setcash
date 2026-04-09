@@ -77,7 +77,11 @@
       "Bash(DATABASE_URL=\"postgresql://setcash:setcash_dev@localhost:5432/setcash\" E2E_BASE_URL=http://localhost:3001 npx playwright test --project=chromium -g \"valid login\" --reporter=line)",
       "WebSearch",
       "WebFetch(domain:bundlephobia.com)",
-      "WebFetch(domain:www.npmjs.com)"
+      "WebFetch(domain:www.npmjs.com)",
+      "Bash(docker build:*)",
+      "Bash(docker stop:*)",
+      "Bash(docker rm:*)",
+      "Bash(docker run:*)"
     ]
   }
 }
