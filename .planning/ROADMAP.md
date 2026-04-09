@@ -2,13 +2,13 @@
 
 ## Milestones
 
-- v1.0 Hardening - Phases 1-5 (in progress)
-- v1.1 Onboarding Tour - Phases 6-8 (planned)
+- 🚧 **v1.0 Hardening** - Phases 1-5 (in progress)
+- 📋 **v1.1 Onboarding Tour** - Phases 6-8 (planned)
 
 ## Phases
 
 <details>
-<summary>v1.0 Hardening (Phases 1-5) — in progress</summary>
+<summary>🚧 v1.0 Hardening (Phases 1-5) — in progress</summary>
 
 - [ ] **Phase 1: Security and Dependency Baseline** - Eliminate path traversal, stale JWT roles, and dirty dependencies before any structural changes
 - [ ] **Phase 2: Bug Triage and Fixes** - Triage all 45+ tracked bug reports, fix reproducible ones, close stale/duplicate ones
@@ -114,11 +114,7 @@ Plans:
   2. The target element is highlighted with a spotlight cutout while the rest of the page is dimmed by a semi-transparent overlay — clicking the overlay does not dismiss the tour
   3. The tooltip displays Next, Back, Skip, and Done buttons appropriate to the current step position (no Back on step 1, Done on last step instead of Next)
   4. Pressing Escape dismisses the tour, and left/right arrow keys navigate between steps — focus is trapped within the tooltip while it is open
-**Plans**: 3 plans
-Plans:
-- [ ] 07-01-PLAN.md — TourOverlay: SVG mask spotlight overlay with cutout
-- [ ] 07-02-PLAN.md — TourTooltip: Speech-bubble tooltip with arrow and navigation controls
-- [ ] 07-03-PLAN.md — TourController: Orchestrator with positioning, keyboard, and barrel export
+**Plans**: TBD
 **UI hint**: yes
 
 ### Phase 8: App Integration
@@ -145,6 +141,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8
 | 3. Shared Helper Extraction | v1.0 | 0/TBD | Not started | - |
 | 4. Data Correctness and Test Coverage | v1.0 | 0/TBD | Not started | - |
 | 5. Legacy Column Removal | v1.0 | 0/TBD | Not started | - |
-| 6. Tour Infrastructure | v1.1 | 4/4 | Complete | - |
-| 7. Tour UI Components | v1.1 | 0/3 | Planning complete | - |
+| 6. Tour Infrastructure | v1.1 | 0/4 | Planning complete | - |
+| 7. Tour UI Components | v1.1 | 0/TBD | Not started | - |
 | 8. App Integration | v1.1 | 0/TBD | Not started | - |
