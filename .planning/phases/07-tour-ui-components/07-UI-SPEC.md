@@ -49,7 +49,7 @@ Exceptions: 12px gap between target edge and tooltip edge (positioning gap in co
 |------|------|--------|-------------|-------|
 | Tooltip title | 14px (text-sm) | 600 (semibold) | 1.4 | Step title text inside tooltip |
 | Tooltip body | 14px (text-sm) | 400 (normal) | 1.5 | Step body text inside tooltip |
-| Button label | 14px (text-sm) | 500 (medium) | 1.0 | Next, Back, Skip, Done buttons |
+| Button label | 14px (text-sm) | 600 (semibold) | 1.0 | Next, Back, Skip, Done buttons |
 | Step counter (sr-only) | N/A | N/A | N/A | Screen-reader-only step announcement |
 
 Font family: `var(--font-inter), sans-serif` (inherited from body).
@@ -147,9 +147,9 @@ Three components in `nextjs/components/tour/`:
 
 | Button | Style | When Visible |
 |--------|-------|--------------|
-| Skip | Text button, var(--vb-text-muted), 14px medium, no border, no bg. Hover: underline | All steps |
-| Back | Outline button, 1px border var(--vb-card-border), bg transparent, 14px medium. Hover: bg var(--vb-accent-light) | Steps 2-6 (hidden on step 1) |
-| Next | Solid button, bg var(--vb-accent), text #1e293b, 14px medium, rounded-lg. Hover: bg var(--vb-accent-hover) | Steps 1-5 |
+| Skip | Text button, var(--vb-text-muted), 14px semibold, no border, no bg. Hover: underline | All steps |
+| Back | Outline button, 1px border var(--vb-card-border), bg transparent, 14px semibold. Hover: bg var(--vb-accent-light) | Steps 2-6 (hidden on step 1) |
+| Next | Solid button, bg var(--vb-accent), text #1e293b, 14px semibold, rounded-lg. Hover: bg var(--vb-accent-hover) | Steps 1-5 |
 | Done | Same style as Next | Step 6 only (replaces Next) |
 
 Button padding: 8px 16px (py-2 px-4). Button border-radius: 8px (rounded-lg).
@@ -157,7 +157,7 @@ Button padding: 8px 16px (py-2 px-4). Button border-radius: 8px (rounded-lg).
 #### Step Dots (D-09)
 
 - 6 dots, 8px diameter each (w-2 h-2)
-- Gap between dots: 6px
+- Gap between dots: 8px (gap-2)
 - Current step: bg var(--vb-accent), rounded-full
 - Other steps: bg #e2e8f0 (light) / var(--border) (dark), rounded-full
 - Container centered in nav bar
