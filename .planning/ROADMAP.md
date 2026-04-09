@@ -100,10 +100,10 @@ Plans:
   4. All 6 tour steps are defined in a single configuration file with target CSS selector, title, body text, and placement — adding or reordering a step requires editing only this file
 **Plans**: 4 plans
 Plans:
-- [ ] 06-01-PLAN.md — Add hasSeenTour to User model and wire through JWT/session pipeline
-- [ ] 06-02-PLAN.md — Create centralized tour step configuration (6 steps)
-- [ ] 06-03-PLAN.md — POST /api/tour/complete endpoint with rate limiting and client wrapper
-- [ ] 06-04-PLAN.md — TourProvider React context and protected layout mount
+- [x] 06-01-PLAN.md — Add hasSeenTour to User model and wire through JWT/session pipeline
+- [x] 06-02-PLAN.md — Create centralized tour step configuration (6 steps)
+- [x] 06-03-PLAN.md — POST /api/tour/complete endpoint with rate limiting and client wrapper
+- [x] 06-04-PLAN.md — TourProvider React context and protected layout mount
 
 ### Phase 7: Tour UI Components
 **Goal**: Users see a polished, accessible speech-bubble tooltip tour with spotlight highlighting and full navigation controls
