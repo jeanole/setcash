@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: Hardening
+milestone: v1.1
+milestone_name: Onboarding Tour
 status: executing
 stopped_at: Phase 7 UI-SPEC approved
-last_updated: "2026-04-09T19:04:53.411Z"
-last_activity: 2026-04-09
+last_updated: "2026-04-09T21:08:00.444Z"
+last_activity: 2026-04-09 -- Phase 07 planning complete
 progress:
   total_phases: 3
   completed_phases: 1
-  total_plans: 4
+  total_plans: 7
   completed_plans: 4
-  percent: 100
+  percent: 57
 ---
 
 # Project State
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-04-08)
 Phase: 7 of 8 (tour ui components)
 Plan: Not started
 Status: Ready to execute
-Last activity: 2026-04-09
+Last activity: 2026-04-09 -- Phase 07 planning complete
 
 Progress: [░░░░░░░░░░] 0%
 
