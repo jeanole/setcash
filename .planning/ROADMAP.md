@@ -130,7 +130,11 @@ Plans:
   2. A new user logging in for the first time sees the tour start automatically without any manual trigger — a demo/test user sees the tour on every login regardless of the hasSeenTour flag
   3. On mobile viewports (below 768px), tour steps that target elements not visible or not meaningful on mobile are either skipped or repositioned — the tour completes without broken positioning or invisible targets
   4. Tour tooltip background, text color, arrow color, and overlay opacity match the active theme (light or dark) — switching themes mid-tour updates the tooltip appearance
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 08-01-PLAN.md — Attach data-tour attributes to the 6 target host components (Sidebar/Header/ProjectSwitcher/QuickActions/RecentBillsList/DashboardClient)
+- [ ] 08-02-PLAN.md — Tour runtime adaptation (auto-start gating, viewport-aware target resolution, retry+skip-forward, budget-matrix copy update)
+- [ ] 08-03-PLAN.md — Requirements drift correction (INTG-03 → 1024px) and theme verification checklist + human verify checkpoint
 **UI hint**: yes
 
 ## Progress
@@ -147,4 +151,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8
 | 5. Legacy Column Removal | v1.0 | 0/TBD | Not started | - |
 | 6. Tour Infrastructure | v1.1 | 4/4 | Complete | - |
 | 7. Tour UI Components | v1.1 | 0/3 | Planning complete | - |
-| 8. App Integration | v1.1 | 0/TBD | Not started | - |
+| 8. App Integration | v1.1 | 0/3 | Planning complete | - |
