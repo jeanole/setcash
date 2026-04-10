@@ -45,6 +45,7 @@ export default function QuickActions() {
             key={action.href}
             href={action.href}
             role="listitem"
+            data-tour={action.label === 'New Bill' ? 'submit-bill' : undefined}
             className="group flex flex-col items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 p-4 text-center hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-700 transition-all hover:scale-[1.03] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
           >
             <span className="text-slate-500 group-hover:text-indigo-600">{action.icon}</span>

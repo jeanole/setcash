@@ -117,7 +117,7 @@ export default function DashboardClient({
             <SpendingByMotiveChart items={motiveItems} />
           </div>
 
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+          <div data-tour="budget-matrix" className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
             <h2 className="text-sm font-semibold text-slate-700 mb-4">
               Spending by Category
             </h2>

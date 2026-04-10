@@ -9,7 +9,7 @@ interface RecentBillsListProps {
 
 export default function RecentBillsList({ bills }: RecentBillsListProps) {
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+    <div data-tour="bill-list" className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-sm font-semibold text-slate-700">Recent Bills</h2>
         <Link
