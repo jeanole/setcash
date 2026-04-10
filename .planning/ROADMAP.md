@@ -116,9 +116,9 @@ Plans:
   4. Pressing Escape dismisses the tour, and left/right arrow keys navigate between steps — focus is trapped within the tooltip while it is open
 **Plans**: 3 plans
 Plans:
-- [ ] 07-01-PLAN.md — TourOverlay: SVG mask spotlight overlay with cutout
-- [ ] 07-02-PLAN.md — TourTooltip: Speech-bubble tooltip with arrow and navigation controls
-- [ ] 07-03-PLAN.md — TourController: Orchestrator with positioning, keyboard, and barrel export
+- [x] 07-01-PLAN.md — TourOverlay: SVG mask spotlight overlay with cutout
+- [x] 07-02-PLAN.md — TourTooltip: Speech-bubble tooltip with arrow and navigation controls
+- [x] 07-03-PLAN.md — TourController: Orchestrator with positioning, keyboard, and barrel export
 **UI hint**: yes
 
 ### Phase 8: App Integration
