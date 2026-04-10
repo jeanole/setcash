@@ -78,7 +78,7 @@ export default function ProjectSwitcher({ onClose }: ProjectSwitcherProps) {
   }
 
   return (
-    <div ref={containerRef} className="relative px-6 py-3 border-b border-slate-200">
+    <div ref={containerRef} data-tour="project-switcher" className="relative px-6 py-3 border-b border-slate-200">
       <button
         type="button"
         onClick={handleToggle}

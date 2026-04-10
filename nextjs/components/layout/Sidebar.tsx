@@ -292,7 +292,7 @@ export default function Sidebar({ currentUser, isMobileOpen, onClose }: SidebarP
         ) : (
           <ProjectSwitcher />
         )}
-        <nav className="flex-1 px-3 py-4 space-y-1" aria-label="Main menu">
+        <nav data-tour="sidebar-nav" className="flex-1 px-3 py-4 space-y-1" aria-label="Main menu">
           <NavLinks
             isActive={isActive}
             onClose={onClose}

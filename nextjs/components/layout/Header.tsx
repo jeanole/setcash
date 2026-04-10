@@ -33,6 +33,7 @@ export default function Header({ title, user, onMenuToggle, onProfileOpen }: Hea
     >
       <button
         type="button"
+        data-tour="sidebar-nav"
         onClick={onMenuToggle}
         className="lg:hidden mr-3 p-2 -ml-2 rounded-lg hover:bg-zinc-900/6 transition-colors"
         aria-label="Open navigation menu"
@@ -63,6 +64,7 @@ export default function Header({ title, user, onMenuToggle, onProfileOpen }: Hea
             </span>
             <button
               type="button"
+              data-tour="user-menu"
               onClick={onProfileOpen}
               className="w-8 h-8 rounded-full bg-[var(--vb-accent)] border border-zinc-900 flex items-center justify-center text-zinc-900 text-sm font-bold shrink-0 cursor-pointer focus:outline-none btn-brutal-sm"
               aria-label={`Edit profile — signed in as ${user.email}`}
