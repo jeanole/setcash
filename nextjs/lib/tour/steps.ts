@@ -8,6 +8,12 @@ export interface TourStep {
   title: string;
   body: string;
   placement: 'top' | 'bottom' | 'left' | 'right';
+  /**
+   * When true, the step is skipped entirely on viewports below the
+   * desktop breakpoint (1024px). See lib/tour/viewport.ts and Phase 8
+   * D-02 / D-04 for rationale. Undefined or false = shown on all viewports.
+   */
+  desktopOnly?: boolean;
 }
 
 export const TOUR_STEPS: readonly TourStep[] = [
@@ -35,8 +41,8 @@ export const TOUR_STEPS: readonly TourStep[] = [
   {
     id: 'budget-matrix',
     targetSelector: '[data-tour="budget-matrix"]',
-    title: 'Budget Overview',
-    body: 'See how spending compares to your budget across all categories.',
+    title: 'Spending Overview',
+    body: 'See your spending broken down by category at a glance. Open Budget from the sidebar for the full matrix view.',
     placement: 'bottom',
   },
   {
@@ -45,6 +51,7 @@ export const TOUR_STEPS: readonly TourStep[] = [
     title: 'Switch Projects',
     body: 'If you belong to multiple projects, switch between them here.',
     placement: 'bottom',
+    desktopOnly: true,
   },
   {
     id: 'user-menu',
