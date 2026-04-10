@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Onboarding Tour
 status: executing
-stopped_at: Phase 7 UI-SPEC approved
-last_updated: "2026-04-10T01:06:09.049Z"
+stopped_at: Phase 8 context gathered
+last_updated: "2026-04-10T08:10:18.533Z"
 last_activity: 2026-04-10
 progress:
   total_phases: 3
@@ -75,6 +75,6 @@ None for v1.1 phases. Standard implementation work.
 
 ## Session Continuity
 
-Last session: 2026-04-09T19:04:53.265Z
-Stopped at: Phase 7 UI-SPEC approved
-Resume file: .planning/phases/07-tour-ui-components/07-UI-SPEC.md
+Last session: 2026-04-10T08:10:18.480Z
+Stopped at: Phase 8 context gathered
+Resume file: .planning/phases/08-app-integration/08-CONTEXT.md
