@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTour } from '@/components/providers/TourProvider';
 import { TOUR_STEPS } from '@/lib/tour/steps';
 import type { TourStep } from '@/lib/tour/steps';
+import { resolveVisibleTarget, isDesktopViewport } from '@/lib/tour/viewport';
 import TourOverlay from './TourOverlay';
 import TourTooltip from './TourTooltip';
 
@@ -70,7 +71,7 @@ function isInViewport(el: Element): boolean {
 // ---------------------------------------------------------------------------
 
 export default function TourController() {
-  const { isActive, currentStep, stepCount, next, back, skip, complete } = useTour();
+  const { isActive, currentStep, stepCount, next, back, skip, complete, abort } = useTour();
 
   const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
   const [tooltipPosition, setTooltipPosition] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
@@ -80,6 +81,10 @@ export default function TourController() {
   const prevSelectorRef = useRef<string | null>(null);
   // Guard stale setState calls from scroll delay
   const mountedRef = useRef(true);
+  // Counts silent skip-forwards during the current activation. Reset to 0
+  // when the user performs any non-silent action (next/back/click). If it
+  // reaches stepCount, the tour aborts without marking completion (D-10).
+  const silentSkipCountRef = useRef(0);
 
   const step = TOUR_STEPS[currentStep];
 
@@ -92,8 +97,20 @@ export default function TourController() {
   }, []);
 
   // ---------------------------------------------------------------------------
-  // Target location and positioning
+  // Target location and positioning — Phase 8 D-02, D-04, D-10
   // ---------------------------------------------------------------------------
+  // Behavior:
+  //   1. If step has desktopOnly=true AND viewport is mobile (<1024px), skip
+  //      forward silently (D-02).
+  //   2. Use resolveVisibleTarget (handles sidebar-nav dual-binding where the
+  //      same selector lives on both desktop nav and mobile hamburger — we
+  //      want the one with a non-zero bounding box).
+  //   3. If target is null, retry up to 3 times at ~160ms intervals (~500ms
+  //      total budget). On final failure, silently advance via next() and
+  //      increment silentSkipCountRef.
+  //   4. If silentSkipCountRef reaches stepCount, abort() the tour WITHOUT
+  //      calling completeTour — hasSeenTour stays false (D-10).
+  //   5. On successful resolution, reset silentSkipCountRef to 0.
   useEffect(() => {
     if (!isActive) return;
 
@@ -105,44 +122,101 @@ export default function TourController() {
       }
     }
 
-    const targetEl = document.querySelector(step.targetSelector);
-
-    if (!targetEl) {
-      console.warn('Tour target not found: ' + step.targetSelector + '. Showing tooltip centered.');
-      setTargetRect(null);
-      setTooltipPosition({
-        top: window.innerHeight / 2 - 100,
-        left: window.innerWidth / 2 - 170,
-      });
-      prevSelectorRef.current = null;
+    // Guard: if every step has been silently skipped, abort without complete
+    if (silentSkipCountRef.current >= stepCount) {
+      silentSkipCountRef.current = 0;
+      abort();
       return;
     }
 
-    // Set aria-describedby on target element (D-14)
-    targetEl.setAttribute('aria-describedby', 'tour-tooltip-body');
-    prevSelectorRef.current = step.targetSelector;
-
-    // Auto-scroll if target is off-screen (D-07)
-    let scrollTimeout: ReturnType<typeof setTimeout> | null = null;
-
-    const measureAndSet = () => {
-      if (!mountedRef.current) return;
-      const rect = targetEl.getBoundingClientRect();
-      setTargetRect(rect);
-    };
-
-    if (!isInViewport(targetEl)) {
-      targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      // Wait 300ms for scroll to settle before measuring
-      scrollTimeout = setTimeout(measureAndSet, 300);
-    } else {
-      measureAndSet();
+    // Guard: desktopOnly steps on mobile — skip forward silently
+    if (step.desktopOnly && !isDesktopViewport()) {
+      silentSkipCountRef.current += 1;
+      if (currentStep < stepCount - 1) {
+        // Defer to next tick so we do not setState during render
+        const skipTimer = setTimeout(() => {
+          if (mountedRef.current) next();
+        }, 0);
+        return () => clearTimeout(skipTimer);
+      }
+      // Last step is desktopOnly and skipped — abort without complete
+      silentSkipCountRef.current = 0;
+      const abortTimer = setTimeout(() => {
+        if (mountedRef.current) abort();
+      }, 0);
+      return () => clearTimeout(abortTimer);
     }
 
-    return () => {
-      if (scrollTimeout) clearTimeout(scrollTimeout);
+    // Retry loop: up to 3 attempts at ~160ms intervals (~500ms total)
+    let attempts = 0;
+    const maxAttempts = 3;
+    const retryIntervalMs = 160;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let scrollTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const tryResolve = () => {
+      if (!mountedRef.current) return;
+
+      const targetEl = resolveVisibleTarget(step.targetSelector);
+
+      if (!targetEl) {
+        attempts += 1;
+        if (attempts < maxAttempts) {
+          retryTimer = setTimeout(tryResolve, retryIntervalMs);
+          return;
+        }
+        // Final failure — silent skip-forward (D-10)
+        console.warn(
+          `Tour target not found after ${maxAttempts} attempts: ${step.targetSelector}. Silently advancing.`,
+        );
+        silentSkipCountRef.current += 1;
+        setTargetRect(null); // clear any stale rect
+        if (currentStep < stepCount - 1) {
+          // Advance to next step on next tick
+          const advanceTimer = setTimeout(() => {
+            if (mountedRef.current) next();
+          }, 0);
+          retryTimer = advanceTimer;
+          return;
+        }
+        // Last step and still missing — abort without complete
+        silentSkipCountRef.current = 0;
+        const abortTimer = setTimeout(() => {
+          if (mountedRef.current) abort();
+        }, 0);
+        retryTimer = abortTimer;
+        return;
+      }
+
+      // Target found — successful resolution resets the silent-skip counter
+      silentSkipCountRef.current = 0;
+
+      // Set aria-describedby on target element (preserved from Phase 7 D-14)
+      targetEl.setAttribute('aria-describedby', 'tour-tooltip-body');
+      prevSelectorRef.current = step.targetSelector;
+
+      const measureAndSet = () => {
+        if (!mountedRef.current) return;
+        const rect = targetEl.getBoundingClientRect();
+        setTargetRect(rect);
+      };
+
+      // Auto-scroll if target is off-screen (preserved from Phase 7 D-07)
+      if (!isInViewport(targetEl)) {
+        targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        scrollTimer = setTimeout(measureAndSet, 300);
+      } else {
+        measureAndSet();
+      }
     };
-  }, [isActive, currentStep, step]);
+
+    tryResolve();
+
+    return () => {
+      if (retryTimer) clearTimeout(retryTimer);
+      if (scrollTimer) clearTimeout(scrollTimer);
+    };
+  }, [isActive, currentStep, step, stepCount, next, abort]);
 
   // ---------------------------------------------------------------------------
   // Tooltip positioning (runs after targetRect changes and tooltip has rendered)
@@ -172,7 +246,7 @@ export default function TourController() {
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
         if (!mountedRef.current) return;
-        const targetEl = document.querySelector(step.targetSelector);
+        const targetEl = resolveVisibleTarget(step.targetSelector);
         if (targetEl) {
           const rect = targetEl.getBoundingClientRect();
           setTargetRect(rect);
