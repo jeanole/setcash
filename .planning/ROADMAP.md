@@ -128,7 +128,7 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. Every UI element targeted by a tour step has a data-tour attribute matching the step configuration — the tour can locate and anchor to each target without fragile class or ID selectors
   2. A new user logging in for the first time sees the tour start automatically without any manual trigger — a demo/test user sees the tour on every login regardless of the hasSeenTour flag
-  3. On mobile viewports (below 768px), tour steps that target elements not visible or not meaningful on mobile are either skipped or repositioned — the tour completes without broken positioning or invisible targets
+  3. On mobile viewports (below 1024px, matching the Tailwind `lg:` breakpoint used by the sidebar), tour steps that target elements not visible or not meaningful on mobile are either skipped or repositioned — the tour completes without broken positioning or invisible targets
   4. Tour tooltip background, text color, arrow color, and overlay opacity match the active theme (light or dark) — switching themes mid-tour updates the tooltip appearance
 **Plans**: 3 plans
 Plans:

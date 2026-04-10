@@ -25,7 +25,7 @@ Requirements for onboarding tour milestone. Each maps to roadmap phases.
 
 - [ ] **INTG-01**: Existing UI elements have data-tour attributes for tour targeting
 - [ ] **INTG-02**: Tour auto-starts on first login for new users and on every login for demo/test users
-- [ ] **INTG-03**: Tour steps adapt or skip gracefully on mobile viewports
+- [ ] **INTG-03**: Tour steps adapt or skip gracefully on viewports below 1024px (the Tailwind `lg:` breakpoint used by Sidebar.tsx `hidden lg:flex` / `lg:hidden`). Corrected from initial "768px" assumption per Phase 8 CONTEXT.md D-14.
 - [ ] **INTG-04**: Tour tooltips and overlay match the current theme (light/dark mode)
 
 ## v2 Requirements
