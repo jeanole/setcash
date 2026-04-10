@@ -1,7 +1,8 @@
 'use client';
 
-import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react';
 import { useSession } from 'next-auth/react';
+import { usePathname, useRouter } from 'next/navigation';
 import { TOUR_STEPS } from '@/lib/tour/steps';
 import { completeTour } from '@/lib/api/tour';
 
@@ -13,6 +14,7 @@ interface TourContextValue {
   back: () => void;
   skip: () => void;
   complete: () => void;
+  abort: () => void;
 }
 
 const TourContext = createContext<TourContextValue | null>(null);
@@ -27,10 +29,18 @@ export default function TourProvider({ children }: { children: ReactNode }) {
   const { data: session, status } = useSession();
   const [isActive, setIsActive] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
+  const pathname = usePathname();
+  const router = useRouter();
+  const hasPushedRef = useRef(false);
+  const autoStartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Determine whether to show the tour once session is loaded
-  // Per D-09: read hasSeenTour and isDemoAccount from session
-  // Per D-03: demo users always see the tour regardless of hasSeenTour
+  // Auto-start gating — Phase 8 D-11:
+  //   status === 'authenticated'
+  //   AND (isDemoAccount OR !hasSeenTour)    (Phase 6 D-03)
+  //   AND pathname === '/dashboard'           (D-05)
+  // If pathname is not /dashboard, trigger a one-shot router.push('/dashboard') (D-07),
+  // then wait for the effect to re-run after the route change.
+  // On match, wait ~150ms for the dashboard to paint before setIsActive(true) (D-11).
   useEffect(() => {
     if (status !== 'authenticated' || !session?.user) return;
 
@@ -38,11 +48,38 @@ export default function TourProvider({ children }: { children: ReactNode }) {
     const isDemoAccount = user.isDemoAccount ?? false;
     const hasSeenTour = user.hasSeenTour ?? false;
 
-    if (isDemoAccount || !hasSeenTour) {
+    // Eligibility check — D-12: demo users bypass hasSeenTour
+    const eligible = isDemoAccount || !hasSeenTour;
+    if (!eligible) return;
+
+    // Already active — do not re-trigger
+    if (isActive) return;
+
+    // Pathname gate — D-05/D-07
+    if (pathname !== '/dashboard') {
+      // One-shot push to /dashboard; effect re-runs after navigation
+      if (!hasPushedRef.current) {
+        hasPushedRef.current = true;
+        router.push('/dashboard');
+      }
+      return;
+    }
+
+    // Settle delay — D-11: let the dashboard paint before activating
+    if (autoStartTimerRef.current) clearTimeout(autoStartTimerRef.current);
+    autoStartTimerRef.current = setTimeout(() => {
       setIsActive(true);
       setCurrentStep(0);
-    }
-  }, [status, session]);
+      autoStartTimerRef.current = null;
+    }, 150);
+
+    return () => {
+      if (autoStartTimerRef.current) {
+        clearTimeout(autoStartTimerRef.current);
+        autoStartTimerRef.current = null;
+      }
+    };
+  }, [status, session, pathname, router, isActive]);
 
   const stepCount = TOUR_STEPS.length;
 
@@ -68,6 +105,16 @@ export default function TourProvider({ children }: { children: ReactNode }) {
     handleComplete();
   }, [handleComplete]);
 
+  // Abort tour WITHOUT marking hasSeenTour — used when every step skips for
+  // missing targets (Phase 8 D-10). Unlike skip() / handleComplete(), this
+  // does NOT call /api/tour/complete, so the user gets another chance on
+  // next login.
+  const abort = useCallback(() => {
+    setIsActive(false);
+    setCurrentStep(0);
+    hasPushedRef.current = false;
+  }, []);
+
   const value: TourContextValue = {
     isActive,
     currentStep,
@@ -76,6 +123,7 @@ export default function TourProvider({ children }: { children: ReactNode }) {
     back,
     skip,
     complete: handleComplete,
+    abort,
   };
 
   return <TourContext.Provider value={value}>{children}</TourContext.Provider>;
