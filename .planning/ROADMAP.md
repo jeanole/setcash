@@ -3,7 +3,7 @@
 ## Milestones
 
 - v1.0 Hardening - Phases 1-5 (in progress)
-- v1.1 Onboarding Tour - Phases 6-8 (planned)
+- v1.1 Onboarding Tour - Phases 6-8 (shipped 2026-04-12)
 
 ## Phases
 
@@ -79,63 +79,16 @@ Plans:
 
 </details>
 
-### v1.1 Onboarding Tour
+<details>
+<summary>v1.1 Onboarding Tour (Phases 6-8) — SHIPPED 2026-04-12</summary>
 
-**Milestone Goal:** Guide new users through SetCash's core features with a 6-step speech-bubble tooltip tour on first login (always for test/demo users).
+- [x] Phase 6: Tour Infrastructure (4/4 plans)
+- [x] Phase 7: Tour UI Components (3/3 plans)
+- [x] Phase 8: App Integration (3/3 plans)
 
-- [ ] **Phase 6: Tour Infrastructure** - Database persistence, API endpoint, React context provider, and centralized step configuration
-- [ ] **Phase 7: Tour UI Components** - Speech-bubble tooltip, spotlight overlay, navigation controls, and keyboard support
-- [ ] **Phase 8: App Integration** - Wire tour into existing UI with data-tour attributes, auto-start logic, mobile adaptation, and theme support
+See [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md) for full details.
 
-## Phase Details
-
-### Phase 6: Tour Infrastructure
-**Goal**: The tour has a persistent backend, a React context for state management, and a single configuration file defining all 6 steps with their target selectors and content
-**Depends on**: Phase 5 (previous milestone)
-**Requirements**: INFRA-01, INFRA-02, INFRA-03, INFRA-04
-**Success Criteria** (what must be TRUE):
-  1. User's tour completion state survives logout and login — the hasSeenTour flag is stored in the database and read on session load
-  2. A POST to the tour completion API endpoint marks the current user's tour as seen and returns success — subsequent reads of tour state reflect the change
-  3. A TourProvider React context is available to any component in the protected layout, exposing current step, step count, and navigation callbacks
-  4. All 6 tour steps are defined in a single configuration file with target CSS selector, title, body text, and placement — adding or reordering a step requires editing only this file
-**Plans**: 4 plans
-Plans:
-- [x] 06-01-PLAN.md — Add hasSeenTour to User model and wire through JWT/session pipeline
-- [x] 06-02-PLAN.md — Create centralized tour step configuration (6 steps)
-- [x] 06-03-PLAN.md — POST /api/tour/complete endpoint with rate limiting and client wrapper
-- [x] 06-04-PLAN.md — TourProvider React context and protected layout mount
-
-### Phase 7: Tour UI Components
-**Goal**: Users see a polished, accessible speech-bubble tooltip tour with spotlight highlighting and full navigation controls
-**Depends on**: Phase 6
-**Requirements**: UI-01, UI-02, UI-03, UI-04
-**Success Criteria** (what must be TRUE):
-  1. A speech-bubble tooltip with a directional arrow is visually anchored to the target element and repositions correctly when the window is resized
-  2. The target element is highlighted with a spotlight cutout while the rest of the page is dimmed by a semi-transparent overlay — clicking the overlay does not dismiss the tour
-  3. The tooltip displays Next, Back, Skip, and Done buttons appropriate to the current step position (no Back on step 1, Done on last step instead of Next)
-  4. Pressing Escape dismisses the tour, and left/right arrow keys navigate between steps — focus is trapped within the tooltip while it is open
-**Plans**: 3 plans
-Plans:
-- [x] 07-01-PLAN.md — TourOverlay: SVG mask spotlight overlay with cutout
-- [x] 07-02-PLAN.md — TourTooltip: Speech-bubble tooltip with arrow and navigation controls
-- [x] 07-03-PLAN.md — TourController: Orchestrator with positioning, keyboard, and barrel export
-**UI hint**: yes
-
-### Phase 8: App Integration
-**Goal**: The tour is wired into the live application, starts automatically for the right users, works on all viewports, and respects the current theme
-**Depends on**: Phase 7
-**Requirements**: INTG-01, INTG-02, INTG-03, INTG-04
-**Success Criteria** (what must be TRUE):
-  1. Every UI element targeted by a tour step has a data-tour attribute matching the step configuration — the tour can locate and anchor to each target without fragile class or ID selectors
-  2. A new user logging in for the first time sees the tour start automatically without any manual trigger — a demo/test user sees the tour on every login regardless of the hasSeenTour flag
-  3. On mobile viewports (below 1024px, matching the Tailwind `lg:` breakpoint used by the sidebar), tour steps that target elements not visible or not meaningful on mobile are either skipped or repositioned — the tour completes without broken positioning or invisible targets
-  4. Tour tooltip background, text color, arrow color, and overlay opacity match the active theme (light or dark) — switching themes mid-tour updates the tooltip appearance
-**Plans**: 3 plans
-Plans:
-- [x] 08-01-PLAN.md — Attach data-tour attributes to the 6 target host components (Sidebar/Header/ProjectSwitcher/QuickActions/RecentBillsList/DashboardClient)
-- [x] 08-02-PLAN.md — Tour runtime adaptation (auto-start gating, viewport-aware target resolution, retry+skip-forward, budget-matrix copy update)
-- [x] 08-03-PLAN.md — Requirements drift correction (INTG-03 → 1024px) and theme verification checklist + human verify checkpoint (theme QA deferred)
-**UI hint**: yes
+</details>
 
 ## Progress
 
@@ -149,6 +102,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8
 | 3. Shared Helper Extraction | v1.0 | 0/TBD | Not started | - |
 | 4. Data Correctness and Test Coverage | v1.0 | 0/TBD | Not started | - |
 | 5. Legacy Column Removal | v1.0 | 0/TBD | Not started | - |
-| 6. Tour Infrastructure | v1.1 | 4/4 | Complete | - |
-| 7. Tour UI Components | v1.1 | 3/3 | Complete | - |
-| 8. App Integration | v1.1 | 3/3 | Complete | - |
+| 6. Tour Infrastructure | v1.1 | 4/4 | Complete | 2026-04-09 |
+| 7. Tour UI Components | v1.1 | 3/3 | Complete | 2026-04-10 |
+| 8. App Integration | v1.1 | 3/3 | Complete | 2026-04-12 |

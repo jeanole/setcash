@@ -1,8 +1,8 @@
-# SetCash — Onboarding Tour Milestone
+# SetCash
 
 ## What This Is
 
-SetCash is a multi-tenant expense tracking and budget management app built with Next.js 14, PostgreSQL/Prisma, and NextAuth. Users submit expense bills with images; admins approve and process them; budgets are managed via a matrix view. Google Sheets sync, Telegram notifications, and PDF/Excel exports round out the feature set.
+SetCash is a multi-tenant expense tracking and budget management app built with Next.js 14, PostgreSQL/Prisma, and NextAuth. Users submit expense bills with images; admins approve and process them; budgets are managed via a matrix view. Google Sheets sync, Telegram notifications, PDF/Excel exports, and a guided onboarding tour round out the feature set.
 
 ## Core Value
 
@@ -26,15 +26,13 @@ Every bill submission, approval, and budget calculation must be **correct, secur
 - ✓ Notification system with bell icon and preferences — existing
 - ✓ OCR receipt scanning — existing
 - ✓ VGeld (virtual currency) transfer system — existing
+- ✓ 6-step onboarding tour with tooltips, spotlight, keyboard nav — v1.1
+- ✓ Tour auto-start for new/demo users with mobile adaptation — v1.1
+- ✓ Tour theme support (light/dark via CSS variables) — v1.1
 
 ### Active
 
-- [ ] 6-step guided onboarding tour with speech-bubble tooltips anchored to UI elements
-- [ ] Tour progression controls (Next/Back/Skip/Done)
-- [ ] Tour triggers on first login for new users, every login for demo/test users
-- [ ] Tour state persisted per user (hasSeenTour flag)
-- [ ] Tour content: sidebar nav, bill creation, budget matrix, approval workflow, exports, settings
-- [ ] Callouts for Telegram notifications and AI/OCR integration in relevant steps
+(None — next milestone will define new requirements)
 
 ### Out of Scope
 
@@ -43,22 +41,12 @@ Every bill submission, approval, and budget calculation must be **correct, secur
 - Customizable tour content per project — single global tour for v1.1
 - Tour analytics/tracking (which step users drop off) — defer to future milestone
 
-## Current Milestone: v1.1 Onboarding Tour
-
-**Goal:** Guide new users through SetCash's core features with a 6-step speech-bubble tooltip tour on first login (always for test/demo users).
-
-**Target features:**
-- 6-step guided tour with speech-bubble tooltips anchored to UI elements
-- Step-by-step progression with Next/Back/Skip/Done controls
-- Tour triggers: first login for new users, every login for demo/test users
-- Tour content covering: navigation, bill creation, budget matrix, approval workflow, exports, settings — with callouts for Telegram and AI/OCR
-
 ## Context
 
-- App already has a working demo login flow — tour should integrate with that
-- UI uses Tailwind CSS v4, React 18, Next.js 14 App Router
-- No existing tooltip/popover library in the project — will need a tour library or custom implementation
-- Test/demo account detection available via `isDemoAccount` flag in session JWT
+- v1.1 shipped 2026-04-12: 6-step onboarding tour (3 phases, 10 plans, +936 lines)
+- Custom tour implementation — no external library dependency
+- Theme support uses CSS variables (`--bg-surface`, `--border`, `--text-primary`) that respond to `[data-theme="dark"]`
+- Tailwind v4 `dark:` modifier does NOT work with `[data-theme]` — always use CSS variables for theme-aware components
 
 ## Constraints
 
@@ -71,26 +59,16 @@ Every bill submission, approval, and budget calculation must be **correct, secur
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Lightweight tooltip tour, not interactive walkthrough | Minimal complexity, fast to build, non-intrusive UX | — Pending |
-| Per-user tour state flag | Simple boolean tracks completion; demo users bypass it | — Pending |
-| 6 fixed steps covering core workflow | Covers the critical path without overwhelming new users | — Pending |
+| Lightweight tooltip tour, not interactive walkthrough | Minimal complexity, fast to build, non-intrusive UX | ✓ Good — shipped in 4 days |
+| Per-user tour state flag | Simple boolean tracks completion; demo users bypass it | ✓ Good |
+| 6 fixed steps covering core workflow | Covers the critical path without overwhelming new users | ✓ Good |
+| CSS variables instead of Tailwind `dark:` | Tailwind v4 `dark:` doesn't respond to `[data-theme="dark"]` | ✓ Good — discovered during verification |
+| desktopOnly step flag for project-switcher | Only element hidden on mobile; clean skip without special-casing | ✓ Good |
+| Retry-3x-then-silent-skip | Graceful degradation for missing targets without blocking tour | ✓ Good |
 
 ## Evolution
 
 This document evolves at phase transitions and milestone boundaries.
 
-**After each phase transition** (via `/gsd:transition`):
-1. Requirements invalidated? → Move to Out of Scope with reason
-2. Requirements validated? → Move to Validated with phase reference
-3. New requirements emerged? → Add to Active
-4. Decisions to log? → Add to Key Decisions
-5. "What This Is" still accurate? → Update if drifted
-
-**After each milestone** (via `/gsd:complete-milestone`):
-1. Full review of all sections
-2. Core Value check — still the right priority?
-3. Audit Out of Scope — reasons still valid?
-4. Update Context with current state
-
 ---
-*Last updated: 2026-04-12 after Phase 8 (App Integration) complete — data-tour attributes, auto-start gating, viewport adaptation, retry/skip-forward all implemented. Theme verification deferred to pre-milestone QA.*
+*Last updated: 2026-04-12 after v1.1 Onboarding Tour milestone complete*
