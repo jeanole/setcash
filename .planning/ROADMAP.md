@@ -132,9 +132,9 @@ Plans:
   4. Tour tooltip background, text color, arrow color, and overlay opacity match the active theme (light or dark) — switching themes mid-tour updates the tooltip appearance
 **Plans**: 3 plans
 Plans:
-- [ ] 08-01-PLAN.md — Attach data-tour attributes to the 6 target host components (Sidebar/Header/ProjectSwitcher/QuickActions/RecentBillsList/DashboardClient)
-- [ ] 08-02-PLAN.md — Tour runtime adaptation (auto-start gating, viewport-aware target resolution, retry+skip-forward, budget-matrix copy update)
-- [ ] 08-03-PLAN.md — Requirements drift correction (INTG-03 → 1024px) and theme verification checklist + human verify checkpoint
+- [x] 08-01-PLAN.md — Attach data-tour attributes to the 6 target host components (Sidebar/Header/ProjectSwitcher/QuickActions/RecentBillsList/DashboardClient)
+- [x] 08-02-PLAN.md — Tour runtime adaptation (auto-start gating, viewport-aware target resolution, retry+skip-forward, budget-matrix copy update)
+- [x] 08-03-PLAN.md — Requirements drift correction (INTG-03 → 1024px) and theme verification checklist + human verify checkpoint (theme QA deferred)
 **UI hint**: yes
 
 ## Progress
@@ -150,5 +150,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8
 | 4. Data Correctness and Test Coverage | v1.0 | 0/TBD | Not started | - |
 | 5. Legacy Column Removal | v1.0 | 0/TBD | Not started | - |
 | 6. Tour Infrastructure | v1.1 | 4/4 | Complete | - |
-| 7. Tour UI Components | v1.1 | 0/3 | Planning complete | - |
-| 8. App Integration | v1.1 | 0/3 | Planning complete | - |
+| 7. Tour UI Components | v1.1 | 3/3 | Complete | - |
+| 8. App Integration | v1.1 | 3/3 | Complete | - |

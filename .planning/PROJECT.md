@@ -93,4 +93,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-10 after Phase 7 (Tour UI Components) complete — TourOverlay, TourTooltip, TourController with keyboard/a11y all verified*
+*Last updated: 2026-04-12 after Phase 8 (App Integration) complete — data-tour attributes, auto-start gating, viewport adaptation, retry/skip-forward all implemented. Theme verification deferred to pre-milestone QA.*
