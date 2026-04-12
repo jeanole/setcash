@@ -19,34 +19,34 @@ interface TourTooltipProps {
 }
 
 function ArrowIndicator({ placement }: { placement: TourStep['placement'] }) {
-  const base = 'absolute w-3 h-3 bg-[var(--vb-card-bg)] dark:bg-[var(--bg-surface)] rotate-45';
+  const base = 'absolute w-3 h-3 bg-[var(--bg-surface)] rotate-45';
 
   switch (placement) {
     case 'bottom':
       return (
         <div
-          className={cn(base, 'border-t border-l border-[var(--vb-card-border)] dark:border-[var(--border)]')}
+          className={cn(base, 'border-t border-l border-[var(--border)]')}
           style={{ top: -6, left: '50%', transform: 'translateX(-50%) rotate(45deg)' }}
         />
       );
     case 'top':
       return (
         <div
-          className={cn(base, 'border-b border-r border-[var(--vb-card-border)] dark:border-[var(--border)]')}
+          className={cn(base, 'border-b border-r border-[var(--border)]')}
           style={{ bottom: -6, left: '50%', transform: 'translateX(-50%) rotate(45deg)' }}
         />
       );
     case 'left':
       return (
         <div
-          className={cn(base, 'border-t border-r border-[var(--vb-card-border)] dark:border-[var(--border)]')}
+          className={cn(base, 'border-t border-r border-[var(--border)]')}
           style={{ right: -6, top: '50%', transform: 'translateY(-50%) rotate(45deg)' }}
         />
       );
     case 'right':
       return (
         <div
-          className={cn(base, 'border-b border-l border-[var(--vb-card-border)] dark:border-[var(--border)]')}
+          className={cn(base, 'border-b border-l border-[var(--border)]')}
           style={{ left: -6, top: '50%', transform: 'translateY(-50%) rotate(45deg)' }}
         />
       );
@@ -78,13 +78,13 @@ export default function TourTooltip({
 
   return createPortal(
     <div
-      ref={tooltipRef}
+      ref={tooltipRef as React.LegacyRef<HTMLDivElement>}
       role="dialog"
       aria-modal="true"
       aria-labelledby="tour-tooltip-title"
       aria-describedby="tour-tooltip-body"
       tabIndex={-1}
-      className="rounded-xl shadow-md border border-[var(--vb-card-border)] bg-[var(--vb-card-bg)] dark:bg-[var(--bg-surface)] dark:border-[var(--border)] animate-[scaleIn_0.15s_ease-out]"
+      className="rounded-xl shadow-md border border-[var(--border)] bg-[var(--bg-surface)] animate-[scaleIn_0.15s_ease-out]"
       style={{
         position: 'fixed',
         zIndex: 101,
@@ -101,20 +101,20 @@ export default function TourTooltip({
       <div className="p-4">
         <h3
           id="tour-tooltip-title"
-          className="text-sm font-semibold text-[var(--vb-text-primary)] dark:text-[var(--text-primary)]"
+          className="text-sm font-semibold text-[var(--text-primary)]"
         >
           {step.title}
         </h3>
         <p
           id="tour-tooltip-body"
-          className="mt-1 text-sm text-[var(--vb-text-secondary)] dark:text-[var(--text-secondary)]"
+          className="mt-1 text-sm text-[var(--text-secondary)]"
         >
           {step.body}
         </p>
       </div>
 
       {/* Navigation bar */}
-      <div className="flex items-center justify-between px-4 pt-2 pb-3 border-t border-[var(--vb-card-border)] dark:border-[var(--border)]">
+      <div className="flex items-center justify-between px-4 pt-2 pb-3 border-t border-[var(--border)]">
         {/* Left: Skip */}
         <button
           onClick={onSkip}
@@ -135,7 +135,7 @@ export default function TourTooltip({
                 'w-2 h-2 rounded-full',
                 i === currentStep
                   ? 'bg-[var(--vb-accent)]'
-                  : 'bg-slate-200 dark:bg-[var(--border)]'
+                  : 'bg-[var(--border)]'
               )}
             />
           ))}
@@ -146,7 +146,7 @@ export default function TourTooltip({
           {!isFirstStep && (
             <button
               onClick={onBack}
-              className="px-4 py-2 text-sm font-semibold rounded-lg border border-[var(--vb-card-border)] dark:border-[var(--border)] bg-transparent hover:bg-slate-50 dark:hover:bg-zinc-800"
+              className="px-4 py-2 text-sm font-semibold rounded-lg border border-[var(--border)] bg-transparent hover:bg-[var(--bg-primary)]"
             >
               Back
             </button>
