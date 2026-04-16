@@ -33,6 +33,12 @@ export default function TourProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const hasPushedRef = useRef(false);
   const autoStartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Gates auto-start after the user dismisses the tour. completeTour() writes
+  // hasSeenTour=true to the DB but the NextAuth JWT stays stale until a natural
+  // refresh, so without this ref the effect would see eligible=true and
+  // reactivate the tour ~150ms after Skip/Done. Also covers demo accounts,
+  // which ignore hasSeenTour. Resets on next provider mount.
+  const dismissedThisSessionRef = useRef(false);
 
   // Auto-start gating — Phase 8 D-11:
   //   status === 'authenticated'
@@ -43,6 +49,7 @@ export default function TourProvider({ children }: { children: ReactNode }) {
   // On match, wait ~150ms for the dashboard to paint before setIsActive(true) (D-11).
   useEffect(() => {
     if (status !== 'authenticated' || !session?.user) return;
+    if (dismissedThisSessionRef.current) return;
 
     const user = session.user as { hasSeenTour?: boolean; isDemoAccount?: boolean };
     const isDemoAccount = user.isDemoAccount ?? false;
@@ -94,6 +101,7 @@ export default function TourProvider({ children }: { children: ReactNode }) {
   // Per D-12: set isActive = false locally; no forced JWT refresh
   // completeTour() fires and forgets — JWT catches up on next natural refresh
   const handleComplete = useCallback(() => {
+    dismissedThisSessionRef.current = true;
     setIsActive(false);
     setCurrentStep(0);
     completeTour().catch((err) => {
@@ -110,6 +118,7 @@ export default function TourProvider({ children }: { children: ReactNode }) {
   // does NOT call /api/tour/complete, so the user gets another chance on
   // next login.
   const abort = useCallback(() => {
+    dismissedThisSessionRef.current = true;
     setIsActive(false);
     setCurrentStep(0);
     hasPushedRef.current = false;
