@@ -15,6 +15,10 @@ COPY . .
 ARG NEXT_PUBLIC_TURNSTILE_SITE_KEY
 ENV NEXT_PUBLIC_TURNSTILE_SITE_KEY=$NEXT_PUBLIC_TURNSTILE_SITE_KEY
 
+# Commit hash injected by CI (.git is not in the build context).
+ARG GIT_COMMIT
+ENV NEXT_PUBLIC_GIT_COMMIT=$GIT_COMMIT
+
 # Set build-time env vars (values don't matter for build, only for runtime)
 ENV DATABASE_URL=postgresql://dummy:dummy@localhost:5432/dummy
 ENV NEXTAUTH_SECRET=dummy-build-secret-not-for-production-use-only
