@@ -25,6 +25,12 @@ export function useTour() {
   return ctx;
 }
 
+// DIAGNOSTIC (tour-restart-skip-broken): module-scope counter increments on
+// every TourProvider mount within a page-load. If we ever see >1 here, the
+// provider is being remounted and the per-instance dismissed ref cannot save
+// us. Remove this and the [tour-debug] logs once the bug is closed.
+let __tourProviderMountCount = 0;
+
 export default function TourProvider({ children }: { children: ReactNode }) {
   const { data: session, status } = useSession();
   const [isActive, setIsActive] = useState(false);
@@ -40,6 +46,27 @@ export default function TourProvider({ children }: { children: ReactNode }) {
   // which ignore hasSeenTour. Resets on next provider mount.
   const dismissedThisSessionRef = useRef(false);
 
+  // DIAGNOSTIC (tour-restart-skip-broken): mount/unmount tracking
+  useEffect(() => {
+    __tourProviderMountCount += 1;
+    const myMountId = __tourProviderMountCount;
+    // eslint-disable-next-line no-console
+    console.log('[tour-debug] TourProvider MOUNT', {
+      mountCount: myMountId,
+      gitCommit: process.env.NEXT_PUBLIC_GIT_COMMIT,
+      pathname,
+      timestamp: new Date().toISOString(),
+    });
+    return () => {
+      // eslint-disable-next-line no-console
+      console.log('[tour-debug] TourProvider UNMOUNT', {
+        mountId: myMountId,
+        timestamp: new Date().toISOString(),
+      });
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Auto-start gating — Phase 8 D-11:
   //   status === 'authenticated'
   //   AND (isDemoAccount OR !hasSeenTour)    (Phase 6 D-03)
@@ -48,8 +75,26 @@ export default function TourProvider({ children }: { children: ReactNode }) {
   // then wait for the effect to re-run after the route change.
   // On match, wait ~150ms for the dashboard to paint before setIsActive(true) (D-11).
   useEffect(() => {
+    // DIAGNOSTIC (tour-restart-skip-broken)
+    const _user = session?.user as { hasSeenTour?: boolean; isDemoAccount?: boolean } | undefined;
+    // eslint-disable-next-line no-console
+    console.log('[tour-debug] autostart effect RUN', {
+      status,
+      pathname,
+      isActive,
+      dismissedRef: dismissedThisSessionRef.current,
+      hasSeenTour: _user?.hasSeenTour,
+      isDemoAccount: _user?.isDemoAccount,
+      hasPushedRef: hasPushedRef.current,
+      timestamp: new Date().toISOString(),
+    });
+
     if (status !== 'authenticated' || !session?.user) return;
-    if (dismissedThisSessionRef.current) return;
+    if (dismissedThisSessionRef.current) {
+      // eslint-disable-next-line no-console
+      console.log('[tour-debug] autostart BLOCKED by dismissedRef gate');
+      return;
+    }
 
     const user = session.user as { hasSeenTour?: boolean; isDemoAccount?: boolean };
     const isDemoAccount = user.isDemoAccount ?? false;
@@ -74,7 +119,11 @@ export default function TourProvider({ children }: { children: ReactNode }) {
 
     // Settle delay — D-11: let the dashboard paint before activating
     if (autoStartTimerRef.current) clearTimeout(autoStartTimerRef.current);
+    // eslint-disable-next-line no-console
+    console.log('[tour-debug] autostart SCHEDULING setIsActive(true) in 150ms');
     autoStartTimerRef.current = setTimeout(() => {
+      // eslint-disable-next-line no-console
+      console.log('[tour-debug] autostart FIRING setIsActive(true)');
       setIsActive(true);
       setCurrentStep(0);
       autoStartTimerRef.current = null;
@@ -101,6 +150,8 @@ export default function TourProvider({ children }: { children: ReactNode }) {
   // Per D-12: set isActive = false locally; no forced JWT refresh
   // completeTour() fires and forgets — JWT catches up on next natural refresh
   const handleComplete = useCallback(() => {
+    // eslint-disable-next-line no-console
+    console.log('[tour-debug] handleComplete called', { timestamp: new Date().toISOString() });
     dismissedThisSessionRef.current = true;
     setIsActive(false);
     setCurrentStep(0);
@@ -118,6 +169,8 @@ export default function TourProvider({ children }: { children: ReactNode }) {
   // does NOT call /api/tour/complete, so the user gets another chance on
   // next login.
   const abort = useCallback(() => {
+    // eslint-disable-next-line no-console
+    console.log('[tour-debug] abort called', { timestamp: new Date().toISOString() });
     dismissedThisSessionRef.current = true;
     setIsActive(false);
     setCurrentStep(0);
