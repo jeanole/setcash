@@ -25,11 +25,38 @@ export function useTour() {
   return ctx;
 }
 
-// DIAGNOSTIC (tour-restart-skip-broken): module-scope counter increments on
-// every TourProvider mount within a page-load. If we ever see >1 here, the
-// provider is being remounted and the per-instance dismissed ref cannot save
-// us. Remove this and the [tour-debug] logs once the bug is closed.
-let __tourProviderMountCount = 0;
+// Session-scoped dismissal persistence — survives TourProvider remounts within
+// the same browser tab session, but clears on tab close so demo users still
+// get the tour on their next login per Phase 8 D-12.
+//
+// Production-confirmed (2026-04-30): TourProvider remounts when navigating
+// /dashboard → /budget (the /budget segment has a loading.tsx Suspense boundary
+// that causes the parent provider tree to remount in React 18 streaming mode).
+// A useRef alone resets on remount, allowing the auto-start effect to see
+// dismissedRef=false again and reactivate the tour. sessionStorage survives
+// the remount and gates the effect correctly.
+const SESSION_DISMISS_KEY_PREFIX = 'tour-dismissed:';
+
+function readSessionDismiss(userId: string | undefined): boolean {
+  if (!userId) return false;
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.sessionStorage.getItem(SESSION_DISMISS_KEY_PREFIX + userId) === '1';
+  } catch {
+    // sessionStorage may throw in private mode or with strict cookie policies
+    return false;
+  }
+}
+
+function writeSessionDismiss(userId: string | undefined): void {
+  if (!userId) return;
+  if (typeof window === 'undefined') return;
+  try {
+    window.sessionStorage.setItem(SESSION_DISMISS_KEY_PREFIX + userId, '1');
+  } catch {
+    // ignore — ref still mirrors the value in-memory for this mount
+  }
+}
 
 export default function TourProvider({ children }: { children: ReactNode }) {
   const { data: session, status } = useSession();
@@ -39,33 +66,21 @@ export default function TourProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const hasPushedRef = useRef(false);
   const autoStartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Gates auto-start after the user dismisses the tour. completeTour() writes
-  // hasSeenTour=true to the DB but the NextAuth JWT stays stale until a natural
-  // refresh, so without this ref the effect would see eligible=true and
-  // reactivate the tour ~150ms after Skip/Done. Also covers demo accounts,
-  // which ignore hasSeenTour. Resets on next provider mount.
+  // In-memory mirror of the sessionStorage dismissal flag. Hydrated on mount
+  // (and on session change, in case userId becomes available after mount).
+  // Always read in tandem with sessionStorage to survive provider remounts.
   const dismissedThisSessionRef = useRef(false);
 
-  // DIAGNOSTIC (tour-restart-skip-broken): mount/unmount tracking
+  const userId = session?.user?.id as string | undefined;
+
+  // Hydrate the in-memory ref from sessionStorage. Runs on mount and whenever
+  // userId becomes available. Cheap idempotent read.
   useEffect(() => {
-    __tourProviderMountCount += 1;
-    const myMountId = __tourProviderMountCount;
-    // eslint-disable-next-line no-console
-    console.log('[tour-debug] TourProvider MOUNT', {
-      mountCount: myMountId,
-      gitCommit: process.env.NEXT_PUBLIC_GIT_COMMIT,
-      pathname,
-      timestamp: new Date().toISOString(),
-    });
-    return () => {
-      // eslint-disable-next-line no-console
-      console.log('[tour-debug] TourProvider UNMOUNT', {
-        mountId: myMountId,
-        timestamp: new Date().toISOString(),
-      });
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (!userId) return;
+    if (readSessionDismiss(userId)) {
+      dismissedThisSessionRef.current = true;
+    }
+  }, [userId]);
 
   // Auto-start gating — Phase 8 D-11:
   //   status === 'authenticated'
@@ -75,24 +90,12 @@ export default function TourProvider({ children }: { children: ReactNode }) {
   // then wait for the effect to re-run after the route change.
   // On match, wait ~150ms for the dashboard to paint before setIsActive(true) (D-11).
   useEffect(() => {
-    // DIAGNOSTIC (tour-restart-skip-broken)
-    const _user = session?.user as { hasSeenTour?: boolean; isDemoAccount?: boolean } | undefined;
-    // eslint-disable-next-line no-console
-    console.log('[tour-debug] autostart effect RUN', {
-      status,
-      pathname,
-      isActive,
-      dismissedRef: dismissedThisSessionRef.current,
-      hasSeenTour: _user?.hasSeenTour,
-      isDemoAccount: _user?.isDemoAccount,
-      hasPushedRef: hasPushedRef.current,
-      timestamp: new Date().toISOString(),
-    });
-
     if (status !== 'authenticated' || !session?.user) return;
-    if (dismissedThisSessionRef.current) {
-      // eslint-disable-next-line no-console
-      console.log('[tour-debug] autostart BLOCKED by dismissedRef gate');
+
+    // Cross-mount dismissal gate — checks both the in-memory ref and
+    // sessionStorage so a fresh provider remount does not bypass dismissal.
+    if (dismissedThisSessionRef.current || readSessionDismiss(userId)) {
+      dismissedThisSessionRef.current = true;
       return;
     }
 
@@ -119,11 +122,7 @@ export default function TourProvider({ children }: { children: ReactNode }) {
 
     // Settle delay — D-11: let the dashboard paint before activating
     if (autoStartTimerRef.current) clearTimeout(autoStartTimerRef.current);
-    // eslint-disable-next-line no-console
-    console.log('[tour-debug] autostart SCHEDULING setIsActive(true) in 150ms');
     autoStartTimerRef.current = setTimeout(() => {
-      // eslint-disable-next-line no-console
-      console.log('[tour-debug] autostart FIRING setIsActive(true)');
       setIsActive(true);
       setCurrentStep(0);
       autoStartTimerRef.current = null;
@@ -135,7 +134,7 @@ export default function TourProvider({ children }: { children: ReactNode }) {
         autoStartTimerRef.current = null;
       }
     };
-  }, [status, session, pathname, router, isActive]);
+  }, [status, session, pathname, router, isActive, userId]);
 
   const stepCount = TOUR_STEPS.length;
 
@@ -147,18 +146,19 @@ export default function TourProvider({ children }: { children: ReactNode }) {
     setCurrentStep((prev) => Math.max(prev - 1, 0));
   }, []);
 
-  // Per D-12: set isActive = false locally; no forced JWT refresh
-  // completeTour() fires and forgets — JWT catches up on next natural refresh
+  // Per D-12: set isActive = false locally; no forced JWT refresh.
+  // completeTour() fires and forgets — JWT catches up on next natural refresh.
+  // Persist the dismissal in sessionStorage so it survives TourProvider
+  // remounts within the same tab session (see SESSION_DISMISS_KEY_PREFIX above).
   const handleComplete = useCallback(() => {
-    // eslint-disable-next-line no-console
-    console.log('[tour-debug] handleComplete called', { timestamp: new Date().toISOString() });
     dismissedThisSessionRef.current = true;
+    writeSessionDismiss(userId);
     setIsActive(false);
     setCurrentStep(0);
     completeTour().catch((err) => {
       console.error('Error completing tour:', err);
     });
-  }, []);
+  }, [userId]);
 
   const skip = useCallback(() => {
     handleComplete();
@@ -167,15 +167,15 @@ export default function TourProvider({ children }: { children: ReactNode }) {
   // Abort tour WITHOUT marking hasSeenTour — used when every step skips for
   // missing targets (Phase 8 D-10). Unlike skip() / handleComplete(), this
   // does NOT call /api/tour/complete, so the user gets another chance on
-  // next login.
+  // next login. Still session-scoped dismissed so it does not loop within
+  // the current tab.
   const abort = useCallback(() => {
-    // eslint-disable-next-line no-console
-    console.log('[tour-debug] abort called', { timestamp: new Date().toISOString() });
     dismissedThisSessionRef.current = true;
+    writeSessionDismiss(userId);
     setIsActive(false);
     setCurrentStep(0);
     hasPushedRef.current = false;
-  }, []);
+  }, [userId]);
 
   const value: TourContextValue = {
     isActive,
