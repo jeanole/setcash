@@ -9,3 +9,7 @@ data/
 nul
 cookies.txt
 tmpclaude-*
+# Spurious empty lockfile regenerated at the repo root (no root package.json;
+# the real lockfile lives in nextjs/). Anchored so nextjs/package-lock.json
+# stays tracked.
+/package-lock.json
