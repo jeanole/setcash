@@ -2,12 +2,23 @@
 // Spending Overview — Server-Side Data Fetching
 //
 // Used directly in Server Components (no API route needed).
-// All queries are project-scoped and only include confirmed bills
-// (status = 'confirmed'; draft bills are always excluded).
+// All queries are project-scoped and only include "real spending" bills:
+// status IN (confirmed, approved, paid). Bills with status draft, pending,
+// or rejected do NOT count toward spending or budget calculations.
 // ============================================================================
 
 import { db as prisma } from '@/lib/db';
 import { BillStatus } from '@prisma/client';
+
+// ---------------------------------------------------------------------------
+// Policy constant — single source of truth for "real spending" statuses
+// ---------------------------------------------------------------------------
+
+export const SPENDING_BILL_STATUSES = [
+  BillStatus.confirmed,
+  BillStatus.approved,
+  BillStatus.paid,
+] as const;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -42,19 +53,17 @@ export interface SpendingTotals {
 // ---------------------------------------------------------------------------
 
 /**
- * The confirmed-bill status filter used in all spending queries.
- * The Prisma BillStatus enum has no null value; the default is 'confirmed'.
- * The spec says "status IS NULL OR status = 'confirmed'". Since the Bill.status
- * field is non-nullable in the Prisma schema (BillStatus enum, default confirmed),
- * "status IS NULL" can never occur. We therefore match the spec by including
- * only bills with status = 'confirmed'.
+ * Prisma where-fragment used in all spending queries.
+ * Policy: a bill counts as "real spending" when its status is one of
+ * {confirmed, approved, paid}. Bills with status {draft, pending, rejected}
+ * are excluded from all spending and budget calculations.
  *
  * EC-6: Deleted motives/categories are not shown because Prisma CASCADE deletes
  * remove allocation records from BillMotive/BillCategory when a motive/category
  * is deleted. Soft-delete would be needed to support the "(deleted)" row variant.
  */
 const CONFIRMED_BILL_FILTER = {
-  status: BillStatus.confirmed,
+  status: { in: SPENDING_BILL_STATUSES as unknown as BillStatus[] },
 } as const;
 
 function toNumber(value: unknown): number {

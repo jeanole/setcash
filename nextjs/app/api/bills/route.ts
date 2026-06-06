@@ -67,13 +67,47 @@ async function syncLegacyImageColumns(billId: string) {
   }
 }
 
-// Save allocations for a bill
+// Save allocations for a bill.
+// Rejects with a thrown Error (caller must return 400) if any supplied
+// motiveId/categoryId does not belong to the given project — this indicates
+// tampering or a client bug and must not be silently dropped.
 async function saveAllocations(
   billId: string,
   motiveAllocations: { motiveId: string; percentage: number }[],
   categoryAllocations: { categoryId: string; percentage: number }[],
   projectId: string
 ) {
+  // --- Cross-project injection guard (Task 1) ---
+  // Batch-fetch valid IDs scoped to this project, mirroring the pattern in
+  // budget-matrix/bulk-update/route.ts.
+  const distinctMotiveIds = [...new Set(motiveAllocations.map((a) => a.motiveId))];
+  const distinctCategoryIds = [...new Set(categoryAllocations.map((a) => a.categoryId))];
+
+  if (distinctMotiveIds.length > 0) {
+    const validMotives = await prisma.motive.findMany({
+      where: { id: { in: distinctMotiveIds }, projectId },
+      select: { id: true },
+    });
+    const validMotiveSet = new Set(validMotives.map((m) => m.id));
+    if (validMotives.length !== distinctMotiveIds.length) {
+      const invalid = distinctMotiveIds.filter((id) => !validMotiveSet.has(id));
+      throw new Error(`Invalid motive/category for this project (motiveIds: ${invalid.join(', ')})`);
+    }
+  }
+
+  if (distinctCategoryIds.length > 0) {
+    const validCategories = await prisma.category.findMany({
+      where: { id: { in: distinctCategoryIds }, projectId },
+      select: { id: true },
+    });
+    const validCategorySet = new Set(validCategories.map((c) => c.id));
+    if (validCategories.length !== distinctCategoryIds.length) {
+      const invalid = distinctCategoryIds.filter((id) => !validCategorySet.has(id));
+      throw new Error(`Invalid motive/category for this project (categoryIds: ${invalid.join(', ')})`);
+    }
+  }
+  // --- End cross-project guard ---
+
   // Delete existing allocations
   await prisma.billMotive.deleteMany({ where: { billId } });
   await prisma.billCategory.deleteMany({ where: { billId } });
@@ -415,11 +449,13 @@ export async function POST(req: NextRequest) {
     // Calculate netto
     const nettoAmount = brutto19 / 1.19 + brutto7 / 1.07 + brutto0;
 
-    // Build motive display string
+    // Build motive display string.
+    // projectId is included in the where clause (Task 1) so we never leak
+    // names from motives that belong to a different project.
     let motiveDisplay = '';
     if (motiveAllocations.length > 0) {
       const motives = await prisma.motive.findMany({
-        where: { id: { in: motiveAllocations.map((a) => a.motiveId) } },
+        where: { id: { in: motiveAllocations.map((a) => a.motiveId) }, projectId },
       });
       motiveDisplay = motives.map((m) => m.name).filter(Boolean).join(', ');
     }
@@ -449,65 +485,98 @@ export async function POST(req: NextRequest) {
       });
     }, { isolationLevel: 'Serializable' });
 
-    // Handle file uploads
+    // Handle file uploads — fs.renameSync runs first (after DB commit) so that
+    // the bill row exists before we reference it in BillImage records.
+    // If any post-commit DB write fails, we compensate by deleting the bill row
+    // (which cascades to BillImage/BillMotive/BillCategory) and re-deleting any
+    // files that were already moved to their final location (Task 2).
     const uploadedFiles = getUploadedFiles(files, 'photos');
-    
-    if (uploadedFiles.length > 0) {
-      const userFolder = ensureUploadDir(session.user.email);
-      const dateStr = new Date().toISOString().split('T')[0];
+    const movedFilePaths: string[] = [];
 
-      for (let i = 0; i < uploadedFiles.length; i++) {
-        const f = uploadedFiles[i];
-        const ext = path.extname(f.originalFilename || '') || '.jpg';
-        const suffix = uploadedFiles.length > 1 ? `_${i + 1}` : '';
-        const savedFilename = generateFilename(userFolder, bill.billNumber ?? bill.id, dateStr, suffix, f.originalFilename || '');
-        const relPath = `${userFolder}/${savedFilename}`;
-        const savedFilePath = path.join(UPLOADS_DIR, relPath);
+    try {
+      if (uploadedFiles.length > 0) {
+        const userFolder = ensureUploadDir(session.user.email);
+        const dateStr = new Date().toISOString().split('T')[0];
 
-        // Move file to final location
-        fs.renameSync(f.filepath, savedFilePath);
+        for (let i = 0; i < uploadedFiles.length; i++) {
+          const f = uploadedFiles[i];
+          const suffix = uploadedFiles.length > 1 ? `_${i + 1}` : '';
+          const savedFilename = generateFilename(userFolder, bill.billNumber ?? bill.id, dateStr, suffix, f.originalFilename || '');
+          const relPath = `${userFolder}/${savedFilename}`;
+          const savedFilePath = path.join(UPLOADS_DIR, relPath);
 
-        // Create image record
-        await prisma.billImage.create({
-          data: {
-            billId: bill.id,
-            filename: f.originalFilename || '',
-            filePath: relPath,
-            sortOrder: i,
-          },
+          // Move file to final location (outside try so bill row exists first)
+          fs.renameSync(f.filepath, savedFilePath);
+          movedFilePaths.push(savedFilePath);
+
+          // Create image record
+          await prisma.billImage.create({
+            data: {
+              billId: bill.id,
+              filename: f.originalFilename || '',
+              filePath: relPath,
+              sortOrder: i,
+            },
+          });
+        }
+
+        // Sync legacy columns with first image
+        await syncLegacyImageColumns(bill.id);
+      }
+
+      // Save allocations (throws 400-worthy Error if IDs are cross-project)
+      await saveAllocations(bill.id, motiveAllocations, categoryAllocations, projectId);
+
+      // Update motive display after allocations are saved
+      const updatedMotiveDisplay = await getMotiveDisplayString(bill.id);
+      if (updatedMotiveDisplay !== motiveDisplay) {
+        await prisma.bill.update({
+          where: { id: bill.id },
+          data: { motiveLegacy: updatedMotiveDisplay },
         });
       }
 
-      // Sync legacy columns with first image
-      await syncLegacyImageColumns(bill.id);
-    }
-
-    // Save allocations
-    await saveAllocations(bill.id, motiveAllocations, categoryAllocations, projectId);
-
-    // Update motive display after allocations are saved
-    const updatedMotiveDisplay = await getMotiveDisplayString(bill.id);
-    if (updatedMotiveDisplay !== motiveDisplay) {
-      await prisma.bill.update({
-        where: { id: bill.id },
-        data: { motiveLegacy: updatedMotiveDisplay },
+      // Log creation
+      await prisma.editLog.create({
+        data: {
+          projectId,
+          timestamp: new Date(),
+          user: session.user.email,
+          billId: bill.id,
+          changes: { _event: 'created' },
+          source: 'user',
+        },
       });
-    }
+    } catch (postCommitError) {
+      // Compensation: delete the bill row (cascades to BillImage, BillMotive,
+      // BillCategory) so we don't leave orphaned DB records.
+      try {
+        await prisma.bill.delete({ where: { id: bill.id } });
+      } catch (deleteError) {
+        console.error('Compensation delete failed for bill', bill.id, deleteError);
+      }
 
-    // Log creation
-    await prisma.editLog.create({
-      data: {
-        projectId,
-        timestamp: new Date(),
-        user: session.user.email,
-        billId: bill.id,
-        changes: { _event: 'created' },
-        source: 'user',
-      },
-    });
+      // Clean up any files that were already moved to their final location.
+      for (const filePath of movedFilePaths) {
+        try {
+          if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+          }
+        } catch (unlinkError) {
+          console.error('Compensation file cleanup failed:', filePath, unlinkError);
+        }
+      }
+
+      // Re-throw so the outer catch can return the appropriate HTTP response.
+      throw postCommitError;
+    }
 
     return NextResponse.json({ ok: true, id: bill.id });
   } catch (error) {
+    // Cross-project allocation injection: saveAllocations throws with this prefix
+    if (error instanceof Error && error.message.startsWith('Invalid motive/category for this project')) {
+      return NextResponse.json({ error: 'Invalid motive/category for this project' }, { status: 400 });
+    }
     console.error('Error creating bill:', error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Internal server error' },

@@ -150,10 +150,19 @@ export function validateFile(file: File): { valid: boolean; error?: string } {
 }
 
 /**
+ * Sanitize the local-part of an email address for use as a filesystem path
+ * segment. Takes everything before '@' and replaces any character that is not
+ * alphanumeric, '.', '_', or '-' with an underscore.
+ */
+function sanitizeEmailLocalPart(email: string): string {
+  return email.split('@')[0].replace(/[^A-Za-z0-9._-]/g, '_');
+}
+
+/**
  * Ensure upload directory exists for a user
  */
 export function ensureUploadDir(userEmail: string): string {
-  const userFolder = userEmail.split('@')[0];
+  const userFolder = sanitizeEmailLocalPart(userEmail);
   const userDir = path.join(UPLOADS_DIR, userFolder);
   
   if (!fs.existsSync(UPLOADS_DIR)) {

@@ -81,18 +81,21 @@ export async function GET() {
       matrix[`${r.categoryId}_${r.motiveId}`] = Number(r.amount);
     }
 
-    // Spending queries via raw SQL
+    // Spending queries via raw SQL.
+    // Policy: confirmed + approved + paid bills count as real spending.
     const motiveSpendingRaw = await prisma.$queryRaw<{ motiveId: string; spent: number }[]>`
       SELECT bm."motiveId", SUM(CAST(b."nettoAmount" AS DOUBLE PRECISION) * CAST(bm.percentage AS DOUBLE PRECISION) / 100) as spent
       FROM "BillMotive" bm JOIN "Bill" b ON b.id = bm."billId"
-      WHERE b."projectId" = ${projectId} AND b.status = 'confirmed'::"BillStatus"
+      WHERE b."projectId" = ${projectId}
+        AND b.status IN ('confirmed'::"BillStatus", 'approved'::"BillStatus", 'paid'::"BillStatus")
       GROUP BY bm."motiveId"
     `;
 
     const categorySpendingRaw = await prisma.$queryRaw<{ categoryId: string; spent: number }[]>`
       SELECT bc."categoryId", SUM(CAST(b."nettoAmount" AS DOUBLE PRECISION) * CAST(bc.percentage AS DOUBLE PRECISION) / 100) as spent
       FROM "BillCategory" bc JOIN "Bill" b ON b.id = bc."billId"
-      WHERE b."projectId" = ${projectId} AND b.status = 'confirmed'::"BillStatus"
+      WHERE b."projectId" = ${projectId}
+        AND b.status IN ('confirmed'::"BillStatus", 'approved'::"BillStatus", 'paid'::"BillStatus")
       GROUP BY bc."categoryId"
     `;
 

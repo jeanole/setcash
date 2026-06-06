@@ -92,7 +92,6 @@ export default function CinematicButton({
             backgroundColor: p.color,
             pointerEvents: 'none',
             transform: 'translate(-50%, -50%)',
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             ['--dx' as any]: p.dx,
             ['--dy' as any]: p.dy,
             animation: 'particle-burst 600ms ease-out forwards',

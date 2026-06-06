@@ -501,10 +501,12 @@ export async function handleMessage(
       const buf = mediaGroupBuffers.get(bufferKey)!;
       buf.messages.push(msg);
       if (buf.timer) clearTimeout(buf.timer);
-      buf.timer = setTimeout(
-        () => processMediaGroup(bufferKey, projectId, link.userEmail, bot),
-        1500
-      );
+      buf.timer = setTimeout(() => {
+        processMediaGroup(bufferKey, projectId, link.userEmail, bot).catch((e) => {
+          mediaGroupBuffers.delete(bufferKey);
+          console.error('[TG] processMediaGroup failed for', bufferKey, e);
+        });
+      }, 1500);
     } else {
       await processSinglePhoto(bot, msg, projectId, link.userEmail);
     }

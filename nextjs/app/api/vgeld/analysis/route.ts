@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { db as prisma } from '@/lib/db';
+import { SPENDING_BILL_STATUSES } from '@/lib/spending';
 
 // GET /api/vgeld/analysis - User summary with received/spent/remaining/%used
 export async function GET(req: NextRequest) {
@@ -33,16 +34,18 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Aggregate V-Geld received per user
+    // Aggregate V-Geld received per user — only confirmed transfers count
+    // (confirmedBy not null). Unconfirmed transfers are excluded.
     const vgeldGroups = await prisma.vgeld.groupBy({
       by: ['toUser'],
-      where: { projectId },
+      where: { projectId, confirmedBy: { not: null } },
       _sum: { amount: true },
     });
 
-    // Aggregate confirmed bill spending per user (total brutto = brutto19 + brutto7 + brutto0)
+    // Aggregate real-spending bills per user (confirmed + approved + paid).
+    // total brutto = brutto19 + brutto7 + brutto0
     const confirmedBills = await prisma.bill.findMany({
-      where: { projectId, status: 'confirmed' },
+      where: { projectId, status: { in: SPENDING_BILL_STATUSES as any } },
       select: { submittedByEmail: true, brutto19: true, brutto7: true, brutto0: true },
     });
 

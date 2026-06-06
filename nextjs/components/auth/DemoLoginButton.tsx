@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { signIn } from 'next-auth/react';
 import { trackCta } from '@/components/analytics/EventTracker';
 
 declare global {
@@ -97,18 +96,10 @@ export default function DemoLoginButton() {
         return;
       }
 
-      const result = await signIn('credentials', {
-        email: data.email,
-        password: data.password,
-        redirect: false,
-      });
-
-      if (result?.error) {
-        setError('Demo login failed. Please try again.');
-        setState('error');
-      } else if (result?.ok) {
-        window.location.href = '/dashboard';
-      }
+      // Navigate to the server-side exchange endpoint.
+      // The server validates the single-use token and completes sign-in without
+      // ever exposing the demo password to the browser.
+      window.location.href = `/api/auth/demo-login?token=${encodeURIComponent(data.token)}`;
     } catch {
       setError('Something went wrong. Please try again.');
       setState('error');

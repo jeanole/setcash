@@ -23,12 +23,18 @@ if (!process.env.TELEGRAM_ENCRYPTION_KEY) {
   }
 }
 
-app.prepare().then(() => {
-  initAllBots().catch(console.error);
+app
+  .prepare()
+  .then(() => {
+    initAllBots().catch(console.error);
 
-  createServer((req, res) => {
-    handle(req, res);
-  }).listen(port, () => {
-    console.log(`> Ready on http://localhost:${port}`);
+    createServer((req, res) => {
+      handle(req, res);
+    }).listen(port, () => {
+      console.log(`> Ready on http://localhost:${port}`);
+    });
+  })
+  .catch((err) => {
+    console.error('[Startup] Failed to prepare Next.js app:', err);
+    process.exit(1);
   });
-});

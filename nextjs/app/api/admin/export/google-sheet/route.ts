@@ -11,7 +11,11 @@ import { auth } from '@/auth';
 import { prisma } from '@/lib/db';
 import { getSheets } from '@/lib/google';
 
-// Per-project in-memory sync lock (BUG-67)
+// Per-project in-memory sync lock (BUG-67).
+// NOTE: This lock is per-process only — multiple Node.js processes (e.g. in a
+// horizontally-scaled deployment) each maintain their own Map. A Redis-backed
+// distributed lock would be needed for multi-process safety, but is out of
+// scope here; the in-memory lock is sufficient for the single-process case.
 const syncLocks = new Map<string, boolean>();
 
 const BILL_EXPORT_LIMIT = 5000;
@@ -37,13 +41,17 @@ export async function POST() {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // BUG-67: Reject concurrent syncs for the same project
+    // BUG-67: Reject concurrent syncs for the same project.
+    // The lock is acquired here and released in the finally block immediately
+    // below. The try/finally wraps EVERY code path after acquisition so the
+    // lock is always released — even when getSheets() or any other awaited
+    // call throws before reaching the success return.
     if (syncLocks.get(projectId)) {
       return NextResponse.json({ error: 'Sync already in progress' }, { status: 409 });
     }
     syncLocks.set(projectId, true);
-
     try {
+
     const sheets = await getSheets(projectId);
     if (!sheets) {
       return NextResponse.json(
@@ -373,8 +381,10 @@ export async function POST() {
 
     const sheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`;
     return NextResponse.json({ ok: true, sheetUrl });
+
     } finally {
-      // BUG-67: Release the per-project sync lock
+      // Always release the lock — covers early returns, thrown exceptions, and
+      // successful completion alike.
       syncLocks.delete(projectId);
     }
   } catch (error: any) {

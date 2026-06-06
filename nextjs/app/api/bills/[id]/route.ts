@@ -30,13 +30,47 @@ const updateBillSchema = z.object({
   })).optional(),
 });
 
-// Save allocations for a bill
+// Save allocations for a bill.
+// Rejects with a thrown Error (caller must return 400) if any supplied
+// motiveId/categoryId does not belong to the given project — this indicates
+// tampering or a client bug and must not be silently dropped.
 async function saveAllocations(
   billId: string,
   motiveAllocations: { motiveId: string; percentage: number }[],
   categoryAllocations: { categoryId: string; percentage: number }[],
   projectId: string
 ) {
+  // --- Cross-project injection guard (Task 1) ---
+  // Batch-fetch valid IDs scoped to this project, mirroring the pattern in
+  // budget-matrix/bulk-update/route.ts.
+  const distinctMotiveIds = [...new Set(motiveAllocations.map((a) => a.motiveId))];
+  const distinctCategoryIds = [...new Set(categoryAllocations.map((a) => a.categoryId))];
+
+  if (distinctMotiveIds.length > 0) {
+    const validMotives = await prisma.motive.findMany({
+      where: { id: { in: distinctMotiveIds }, projectId },
+      select: { id: true },
+    });
+    const validMotiveSet = new Set(validMotives.map((m) => m.id));
+    if (validMotives.length !== distinctMotiveIds.length) {
+      const invalid = distinctMotiveIds.filter((id) => !validMotiveSet.has(id));
+      throw new Error(`Invalid motive/category for this project (motiveIds: ${invalid.join(', ')})`);
+    }
+  }
+
+  if (distinctCategoryIds.length > 0) {
+    const validCategories = await prisma.category.findMany({
+      where: { id: { in: distinctCategoryIds }, projectId },
+      select: { id: true },
+    });
+    const validCategorySet = new Set(validCategories.map((c) => c.id));
+    if (validCategories.length !== distinctCategoryIds.length) {
+      const invalid = distinctCategoryIds.filter((id) => !validCategorySet.has(id));
+      throw new Error(`Invalid motive/category for this project (categoryIds: ${invalid.join(', ')})`);
+    }
+  }
+  // --- End cross-project guard ---
+
   // Delete existing allocations
   await prisma.billMotive.deleteMany({ where: { billId } });
   await prisma.billCategory.deleteMany({ where: { billId } });
@@ -434,6 +468,10 @@ export async function PUT(
 
     return NextResponse.json({ ok: true });
   } catch (error) {
+    // Cross-project allocation injection: saveAllocations throws with this prefix
+    if (error instanceof Error && error.message.startsWith('Invalid motive/category for this project')) {
+      return NextResponse.json({ error: 'Invalid motive/category for this project' }, { status: 400 });
+    }
     console.error('Error updating bill:', error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Internal server error' },

@@ -11,6 +11,7 @@ import { auth } from '@/auth';
 import { prisma } from '@/lib/db';
 import { exportLimiter } from '@/lib/ratelimit';
 import { UPLOADS_DIR } from '@/lib/upload';
+import { SPENDING_BILL_STATUSES } from '@/lib/spending';
 import fs from 'fs';
 import path from 'path';
 import { PassThrough } from 'stream';
@@ -53,19 +54,23 @@ export async function GET(
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    // Query bills and vgeld for target user
+    // Query bills and vgeld for target user.
+    // Policy: only confirmed + approved + paid bills count as real spending.
     const userBills = await prisma.bill.findMany({
       where: {
         projectId,
         submittedByEmail: { equals: targetEmail, mode: 'insensitive' },
+        status: { in: SPENDING_BILL_STATUSES as any },
       },
       orderBy: { date: 'asc' },
     });
 
+    // Only count confirmed V-Geld transfers (confirmedBy not null).
     const userVGeld = await prisma.vgeld.findMany({
       where: {
         projectId,
         toUser: { equals: targetEmail, mode: 'insensitive' },
+        confirmedBy: { not: null },
       },
       orderBy: { date: 'asc' },
     });
