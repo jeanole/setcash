@@ -55,8 +55,12 @@ export async function POST(
     return NextResponse.json({ error: 'Too many invite requests. Please try again later.' }, { status: 429 });
   }
 
-  // Only admins, owners, and superadmins can auto-add members to the project
+  // Only admins, owners, and superadmins can send invitations or auto-add members
   const canAutoAdd = inviterRole === 'admin' || inviterRole === 'owner' || inviterRole === 'superadmin';
+
+  if (!canAutoAdd) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
 
   const body = await req.json().catch(() => null);
   const parsed = schema.safeParse(body);

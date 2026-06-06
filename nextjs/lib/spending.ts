@@ -72,6 +72,16 @@ function toNumber(value: unknown): number {
   return isNaN(n) ? 0 : n;
 }
 
+/**
+ * Round a monetary amount to whole cents. Spending is accumulated in JS numbers
+ * (after Decimal→Number conversion) with percentage splits, so intermediate
+ * sums can carry IEEE-754 drift; rounding the aggregate to cents keeps reported
+ * totals exact to two decimal places.
+ */
+export function roundCents(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
 function calcPercentUsed(spent: number, budget: number): number | null {
   if (budget === 0) return null;
   return (spent / budget) * 100;
@@ -85,15 +95,17 @@ function buildSpendingItem(
   nettoSpent: number,
   itemStatus: 'normal' | 'deleted'
 ): SpendingItem {
-  const remaining = budget - spent;
+  const roundedSpent = roundCents(spent);
+  const roundedNetto = roundCents(nettoSpent);
+  const remaining = roundCents(budget - roundedSpent);
   return {
     id,
     name,
     budget,
-    spent,
-    nettoSpent,
+    spent: roundedSpent,
+    nettoSpent: roundedNetto,
     remaining,
-    percentUsed: calcPercentUsed(spent, budget),
+    percentUsed: calcPercentUsed(roundedSpent, budget),
     status: itemStatus,
   };
 }
@@ -182,12 +194,12 @@ export async function getSpendingByMotive(projectId: string): Promise<SpendingIt
     select: { brutto19: true, brutto7: true, brutto0: true, nettoAmount: true },
   });
 
-  const unallocatedSpent = unallocatedBills.reduce(
+  const unallocatedSpent = roundCents(unallocatedBills.reduce(
     (sum, b) => sum + toNumber(b.brutto19) + toNumber(b.brutto7) + toNumber(b.brutto0), 0
-  );
-  const unallocatedNettoSpent = unallocatedBills.reduce(
+  ));
+  const unallocatedNettoSpent = roundCents(unallocatedBills.reduce(
     (sum, b) => sum + toNumber(b.nettoAmount), 0
-  );
+  ));
   if (unallocatedSpent > 0 || unallocatedNettoSpent > 0) {
     items.push({
       id: null,
@@ -289,12 +301,12 @@ export async function getSpendingByCategory(projectId: string): Promise<Spending
     select: { brutto19: true, brutto7: true, brutto0: true, nettoAmount: true },
   });
 
-  const unallocatedSpent = unallocatedBills.reduce(
+  const unallocatedSpent = roundCents(unallocatedBills.reduce(
     (sum, b) => sum + toNumber(b.brutto19) + toNumber(b.brutto7) + toNumber(b.brutto0), 0
-  );
-  const unallocatedNettoSpent = unallocatedBills.reduce(
+  ));
+  const unallocatedNettoSpent = roundCents(unallocatedBills.reduce(
     (sum, b) => sum + toNumber(b.nettoAmount), 0
-  );
+  ));
   if (unallocatedSpent > 0 || unallocatedNettoSpent > 0) {
     items.push({
       id: null,

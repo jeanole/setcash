@@ -39,10 +39,13 @@ export async function POST(req: Request) {
 
   const { email, password } = parsed.data;
 
-  // Rate limit by IP
+  // Rate limit by IP — prefer the trusted Cloudflare header (cannot be spoofed
+  // by clients when the app is behind Cloudflare), then the reverse-proxy header,
+  // and fall back to x-forwarded-for which is least trustworthy.
   const ip =
+    req.headers.get('cf-connecting-ip')?.trim() ||
+    req.headers.get('x-real-ip')?.trim() ||
     req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-    req.headers.get('x-real-ip') ||
     'unknown';
   const { success } = await signUpLimiter.limit(ip);
   if (!success) {

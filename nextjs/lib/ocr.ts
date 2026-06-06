@@ -25,17 +25,32 @@ if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET === DEFAULT_SECRET
   );
 }
 
-if (process.env.NODE_ENV === 'production') {
+function ocrSecretIsValid(): boolean {
   const base = OCR_ENCRYPTION_SECRET || process.env.SESSION_SECRET;
-  if (!base || base === DEFAULT_SECRET || base.length < 16) {
-    console.error(
-      '[Startup] OCR_ENCRYPTION_SECRET / SESSION_SECRET is missing, too short, or using a default value. Refusing to start in production.'
+  return !!base && base !== DEFAULT_SECRET && base.length >= 16;
+}
+
+/**
+ * Hard-fail guard for the API-key encryption secret. Call this once at server
+ * startup (see server.ts) — NOT at module load. Performing the check (and any
+ * process exit) at import time would kill the `next build` worker, which
+ * evaluates route modules during page-data collection. Throws in production
+ * when the secret is missing, too short, or left at the default value.
+ */
+export function assertOcrEncryptionConfigured(): void {
+  if (process.env.NODE_ENV === 'production' && !ocrSecretIsValid()) {
+    throw new Error(
+      'OCR_ENCRYPTION_SECRET / SESSION_SECRET is missing, too short, or using a default value. Refusing to start in production.'
     );
-    process.exit(1);
   }
 }
 
 function getEncryptionKey(): Buffer {
+  // Defense in depth: never derive a key from the insecure default in
+  // production (startup assert should already have prevented reaching here).
+  if (process.env.NODE_ENV === 'production' && !ocrSecretIsValid()) {
+    throw new Error('OCR encryption secret is not configured.');
+  }
   const base = OCR_ENCRYPTION_SECRET || process.env.SESSION_SECRET || DEFAULT_SECRET;
   return crypto.createHash('sha256').update(base).digest();
 }

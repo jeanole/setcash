@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/db';
 import { getCredentialsPath, saveCredentials, validateCredentialsJson } from '@/lib/google';
+import { verifyAdminRole } from '@/lib/auth-guard';
 import { z } from 'zod';
 
 const PostSchema = z.object({
@@ -79,6 +80,13 @@ export async function POST(req: NextRequest) {
 
     if (!isAdmin) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    // SEC-02: re-verify admin authority against the DB before storing Google
+    // credentials/config — forces re-auth if the caller was demoted mid-session.
+    const guard = await verifyAdminRole(session.user.email ?? '', projectId);
+    if (!guard.authorized) {
+      return guard.response!;
     }
 
     const body = await req.json();

@@ -12,6 +12,7 @@ import { prisma } from '@/lib/db';
 import { z } from 'zod';
 import { encrypt, decrypt } from '@/lib/telegram/encryption';
 import { startProjectBot, stopProjectBot } from '@/lib/telegram/bot';
+import { verifyAdminRole } from '@/lib/auth-guard';
 
 const BOT_TOKEN_PATTERN = /^\d+:[A-Za-z0-9_-]+$/;
 
@@ -82,6 +83,13 @@ export async function PUT(req: NextRequest) {
   const projectId = session.user.currentProjectId;
   if (!projectId) {
     return NextResponse.json({ error: 'No project selected' }, { status: 400 });
+  }
+
+  // SEC-02: re-verify admin authority against the DB (not just the JWT) before
+  // mutating bot config — forces re-auth if the caller was demoted mid-session.
+  const guard = await verifyAdminRole(session.user.email ?? '', projectId);
+  if (!guard.authorized) {
+    return guard.response!;
   }
 
   let body: unknown;

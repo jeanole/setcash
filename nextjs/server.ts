@@ -1,6 +1,7 @@
 import { createServer } from 'http';
 import next from 'next';
 import { initAllBots } from './lib/telegram/bot';
+import { assertOcrEncryptionConfigured } from './lib/ocr';
 
 const dev = process.env.NODE_ENV !== 'production';
 const port = parseInt(process.env.PORT || '3001', 10);
@@ -21,6 +22,16 @@ if (!process.env.TELEGRAM_ENCRYPTION_KEY) {
       '[Startup] TELEGRAM_ENCRYPTION_KEY is not set. Calls to encrypt() will throw if a Telegram bot token is saved.'
     );
   }
+}
+
+// Validate the OCR/API-key encryption secret at startup (production-only).
+// This check lives here rather than at module load so `next build` is not
+// affected; the server refuses to start if the secret is misconfigured.
+try {
+  assertOcrEncryptionConfigured();
+} catch (err) {
+  console.error('[Startup]', err instanceof Error ? err.message : err);
+  process.exit(1);
 }
 
 app
