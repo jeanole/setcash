@@ -68,15 +68,19 @@ export async function GET(
       return new NextResponse('Forbidden', { status: 403 });
     }
 
-    // Serve the file
+    // Serve the file — guard against path traversal before touching the filesystem
     const filePath = path.join(UPLOADS_DIR, relPath);
+    const resolved = path.resolve(filePath);
+    const root = path.resolve(UPLOADS_DIR);
+    if (resolved !== root && !resolved.startsWith(root + path.sep)) {
+      return new NextResponse('Forbidden', { status: 403 });
+    }
 
-    if (!fs.existsSync(filePath)) {
+    if (!fs.existsSync(resolved)) {
       return new NextResponse('Not found', { status: 404 });
     }
 
-    const fileBuffer = fs.readFileSync(filePath);
-    const ext = path.extname(filePath).toLowerCase();
+    const ext = path.extname(resolved).toLowerCase();
 
     // Determine content type
     const contentType =
@@ -90,7 +94,17 @@ export async function GET(
               ? 'application/pdf'
               : 'image/jpeg';
 
-    return new NextResponse(fileBuffer, {
+    // Stream the file instead of loading it entirely into memory
+    const readableStream = new ReadableStream({
+      start(controller) {
+        const stream = fs.createReadStream(resolved);
+        stream.on('data', (chunk: string | Buffer) => controller.enqueue(chunk));
+        stream.on('end', () => controller.close());
+        stream.on('error', (err: Error) => controller.error(err));
+      },
+    });
+
+    return new NextResponse(readableStream, {
       headers: {
         'Content-Type': contentType,
         'Cache-Control': 'no-cache, must-revalidate',

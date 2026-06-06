@@ -54,7 +54,7 @@ export async function GET(req: NextRequest) {
 
     const logs = await prisma.editLog.findMany({
       where: { projectId },
-      orderBy: { id: 'asc' },
+      orderBy: { timestamp: 'desc' },
       take: limit,
     });
 

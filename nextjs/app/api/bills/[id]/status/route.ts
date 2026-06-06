@@ -12,6 +12,29 @@ const updateStatusSchema = z.object({
   status: z.enum(['draft', 'confirmed', 'pending', 'approved', 'rejected', 'paid']),
 });
 
+// ---------------------------------------------------------------------------
+// Status transition guard (Task 3)
+//
+// Defines which target statuses are reachable from each current status.
+// 'paid' is a terminal state — no further transitions are permitted.
+// This guard applies to ALL callers including admins; it is a data-integrity
+// constraint, not a permissions constraint.
+// ---------------------------------------------------------------------------
+type AllowedStatus = 'draft' | 'confirmed' | 'pending' | 'approved' | 'rejected' | 'paid';
+
+const ALLOWED_TRANSITIONS: Record<AllowedStatus, AllowedStatus[]> = {
+  draft:     ['confirmed', 'rejected'],
+  confirmed: ['pending', 'approved', 'rejected', 'draft'],
+  pending:   ['approved', 'rejected', 'confirmed'],
+  approved:  ['paid', 'rejected'],
+  rejected:  ['confirmed'],
+  paid:      [],
+};
+
+function isTransitionAllowed(current: AllowedStatus, next: AllowedStatus): boolean {
+  return ALLOWED_TRANSITIONS[current].includes(next);
+}
+
 // PATCH /api/bills/[id]/status - Update status (approve/reject/paid)
 export async function PATCH(
   req: NextRequest,
@@ -55,7 +78,9 @@ export async function PATCH(
     const { status } = validation.data;
 
     // Authorization: admin/owner/superadmin has full access;
-    // bill author can only approve or revert to draft when bill is in confirmed status
+    // bill author can only approve or revert to draft when bill is in confirmed status.
+    // NOTE: The self-approval permission (author may approve their own confirmed bill)
+    // is intentionally left unchanged pending product review — do not alter this block.
     if (!isAdmin) {
       const isAuthor = session.user.email === bill.submittedByEmail;
       const isSelfApprovalAllowed =
@@ -66,6 +91,12 @@ export async function PATCH(
       if (!isSelfApprovalAllowed) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
+    }
+
+    // Status transition guard — applies to all callers including admins.
+    // Prevents financially invalid state transitions (e.g. paid→draft).
+    if (!isTransitionAllowed(bill.status as AllowedStatus, status as AllowedStatus)) {
+      return NextResponse.json({ error: 'Invalid status transition' }, { status: 422 });
     }
 
     // Update bill status

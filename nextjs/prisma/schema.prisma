@@ -164,6 +164,8 @@ model Bill {
   @@index([projectId])
   @@index([submittedByEmail])
   @@index([status])
+  @@index([projectId, status])
+  @@index([projectId, date])
 }
 
 model BillImage {

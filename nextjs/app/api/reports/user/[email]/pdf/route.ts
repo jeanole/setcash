@@ -11,6 +11,7 @@ import { auth } from '@/auth';
 import { prisma } from '@/lib/db';
 import { exportLimiter } from '@/lib/ratelimit';
 import { UPLOADS_DIR } from '@/lib/upload';
+import { roundCents } from '@/lib/spending';
 import fs from 'fs';
 import path from 'path';
 import { PassThrough } from 'stream';
@@ -53,7 +54,10 @@ export async function GET(
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    // Query bills and vgeld for target user
+    // Query bills and vgeld for target user.
+    // This per-user report is a complete record of the user's submissions, so
+    // ALL statuses (including drafts) are listed here — unlike the spending
+    // aggregates, which count only {confirmed, approved, paid}.
     const userBills = await prisma.bill.findMany({
       where: {
         projectId,
@@ -62,10 +66,12 @@ export async function GET(
       orderBy: { date: 'asc' },
     });
 
+    // Only count confirmed V-Geld transfers (confirmedBy not null).
     const userVGeld = await prisma.vgeld.findMany({
       where: {
         projectId,
         toUser: { equals: targetEmail, mode: 'insensitive' },
+        confirmedBy: { not: null },
       },
       orderBy: { date: 'asc' },
     });
@@ -134,7 +140,7 @@ export async function GET(
     doc.moveDown(1);
 
     // V-Geld section
-    const totalVGeld = userVGeld.reduce((sum, v) => sum + Number(v.amount), 0);
+    const totalVGeld = roundCents(userVGeld.reduce((sum, v) => sum + Number(v.amount), 0));
     doc.fontSize(12).font('Helvetica-Bold').text('V-Geld Zahlungen');
     doc.fontSize(10).font('Helvetica');
 
@@ -216,10 +222,10 @@ export async function GET(
     doc.moveDown(1);
 
     // Summary
-    const totalAmount = userBills.reduce((sum, b) => sum + Number(b.grossAmount), 0);
-    const total19 = userBills.reduce((sum, b) => sum + Number(b.brutto19), 0);
-    const total7 = userBills.reduce((sum, b) => sum + Number(b.brutto7), 0);
-    const total0 = userBills.reduce((sum, b) => sum + Number(b.brutto0), 0);
+    const totalAmount = roundCents(userBills.reduce((sum, b) => sum + Number(b.grossAmount), 0));
+    const total19 = roundCents(userBills.reduce((sum, b) => sum + Number(b.brutto19), 0));
+    const total7 = roundCents(userBills.reduce((sum, b) => sum + Number(b.brutto7), 0));
+    const total0 = roundCents(userBills.reduce((sum, b) => sum + Number(b.brutto0), 0));
     const totalNetto19 = total19 / 1.19;
     const totalNetto7 = total7 / 1.07;
     const totalNetto = totalNetto19 + totalNetto7 + total0;

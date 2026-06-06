@@ -32,13 +32,25 @@ export async function PUT(
 
     const { id } = params;
 
+    const isAdmin =
+      session.user.role === 'admin' ||
+      session.user.role === 'owner' ||
+      session.user.role === 'superadmin';
+
     // Verify bill belongs to project
     const bill = await prisma.bill.findFirst({
       where: { id, projectId },
+      select: { id: true, submittedByEmail: true },
     });
 
     if (!bill) {
       return NextResponse.json({ error: 'Bill not found' }, { status: 404 });
+    }
+
+    // Only the bill's submitter or an admin/owner/superadmin may reorder images
+    const isSubmitter = session.user.email === bill.submittedByEmail;
+    if (!isAdmin && !isSubmitter) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const body = await req.json();

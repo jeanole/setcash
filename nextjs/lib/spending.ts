@@ -2,12 +2,23 @@
 // Spending Overview — Server-Side Data Fetching
 //
 // Used directly in Server Components (no API route needed).
-// All queries are project-scoped and only include confirmed bills
-// (status = 'confirmed'; draft bills are always excluded).
+// All queries are project-scoped and only include "real spending" bills:
+// status IN (confirmed, approved, paid). Bills with status draft, pending,
+// or rejected do NOT count toward spending or budget calculations.
 // ============================================================================
 
 import { db as prisma } from '@/lib/db';
 import { BillStatus } from '@prisma/client';
+
+// ---------------------------------------------------------------------------
+// Policy constant — single source of truth for "real spending" statuses
+// ---------------------------------------------------------------------------
+
+export const SPENDING_BILL_STATUSES = [
+  BillStatus.confirmed,
+  BillStatus.approved,
+  BillStatus.paid,
+] as const;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -42,25 +53,33 @@ export interface SpendingTotals {
 // ---------------------------------------------------------------------------
 
 /**
- * The confirmed-bill status filter used in all spending queries.
- * The Prisma BillStatus enum has no null value; the default is 'confirmed'.
- * The spec says "status IS NULL OR status = 'confirmed'". Since the Bill.status
- * field is non-nullable in the Prisma schema (BillStatus enum, default confirmed),
- * "status IS NULL" can never occur. We therefore match the spec by including
- * only bills with status = 'confirmed'.
+ * Prisma where-fragment used in all spending queries.
+ * Policy: a bill counts as "real spending" when its status is one of
+ * {confirmed, approved, paid}. Bills with status {draft, pending, rejected}
+ * are excluded from all spending and budget calculations.
  *
  * EC-6: Deleted motives/categories are not shown because Prisma CASCADE deletes
  * remove allocation records from BillMotive/BillCategory when a motive/category
  * is deleted. Soft-delete would be needed to support the "(deleted)" row variant.
  */
 const CONFIRMED_BILL_FILTER = {
-  status: BillStatus.confirmed,
+  status: { in: SPENDING_BILL_STATUSES as unknown as BillStatus[] },
 } as const;
 
 function toNumber(value: unknown): number {
   if (value === null || value === undefined) return 0;
   const n = Number(value);
   return isNaN(n) ? 0 : n;
+}
+
+/**
+ * Round a monetary amount to whole cents. Spending is accumulated in JS numbers
+ * (after Decimal→Number conversion) with percentage splits, so intermediate
+ * sums can carry IEEE-754 drift; rounding the aggregate to cents keeps reported
+ * totals exact to two decimal places.
+ */
+export function roundCents(value: number): number {
+  return Math.round(value * 100) / 100;
 }
 
 function calcPercentUsed(spent: number, budget: number): number | null {
@@ -76,15 +95,17 @@ function buildSpendingItem(
   nettoSpent: number,
   itemStatus: 'normal' | 'deleted'
 ): SpendingItem {
-  const remaining = budget - spent;
+  const roundedSpent = roundCents(spent);
+  const roundedNetto = roundCents(nettoSpent);
+  const remaining = roundCents(budget - roundedSpent);
   return {
     id,
     name,
     budget,
-    spent,
-    nettoSpent,
+    spent: roundedSpent,
+    nettoSpent: roundedNetto,
     remaining,
-    percentUsed: calcPercentUsed(spent, budget),
+    percentUsed: calcPercentUsed(roundedSpent, budget),
     status: itemStatus,
   };
 }
@@ -173,12 +194,12 @@ export async function getSpendingByMotive(projectId: string): Promise<SpendingIt
     select: { brutto19: true, brutto7: true, brutto0: true, nettoAmount: true },
   });
 
-  const unallocatedSpent = unallocatedBills.reduce(
+  const unallocatedSpent = roundCents(unallocatedBills.reduce(
     (sum, b) => sum + toNumber(b.brutto19) + toNumber(b.brutto7) + toNumber(b.brutto0), 0
-  );
-  const unallocatedNettoSpent = unallocatedBills.reduce(
+  ));
+  const unallocatedNettoSpent = roundCents(unallocatedBills.reduce(
     (sum, b) => sum + toNumber(b.nettoAmount), 0
-  );
+  ));
   if (unallocatedSpent > 0 || unallocatedNettoSpent > 0) {
     items.push({
       id: null,
@@ -280,12 +301,12 @@ export async function getSpendingByCategory(projectId: string): Promise<Spending
     select: { brutto19: true, brutto7: true, brutto0: true, nettoAmount: true },
   });
 
-  const unallocatedSpent = unallocatedBills.reduce(
+  const unallocatedSpent = roundCents(unallocatedBills.reduce(
     (sum, b) => sum + toNumber(b.brutto19) + toNumber(b.brutto7) + toNumber(b.brutto0), 0
-  );
-  const unallocatedNettoSpent = unallocatedBills.reduce(
+  ));
+  const unallocatedNettoSpent = roundCents(unallocatedBills.reduce(
     (sum, b) => sum + toNumber(b.nettoAmount), 0
-  );
+  ));
   if (unallocatedSpent > 0 || unallocatedNettoSpent > 0) {
     items.push({
       id: null,
