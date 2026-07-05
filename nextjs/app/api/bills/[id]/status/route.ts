@@ -7,6 +7,7 @@ import { auth } from '@/auth';
 import { db as prisma } from '@/lib/db';
 import { z } from 'zod';
 import { BillStatus } from '@prisma/client';
+import { verifyAdminRole } from '@/lib/auth-guard';
 
 const updateStatusSchema = z.object({
   status: z.enum(['draft', 'confirmed', 'pending', 'approved', 'rejected', 'paid']),
@@ -51,7 +52,8 @@ export async function PATCH(
       return NextResponse.json({ error: 'No project selected' }, { status: 400 });
     }
 
-    const isAdmin = session.user.role === 'admin' || session.user.role === 'owner' || session.user.role === 'superadmin';
+    const sessionClaimsAdmin =
+      session.user.role === 'admin' || session.user.role === 'owner' || session.user.role === 'superadmin';
 
     const { id } = params;
 
@@ -77,19 +79,26 @@ export async function PATCH(
 
     const { status } = validation.data;
 
-    // Authorization: admin/owner/superadmin has full access;
-    // bill author can only approve or revert to draft when bill is in confirmed status.
-    // NOTE: The self-approval permission (author may approve their own confirmed bill)
-    // is intentionally left unchanged pending product review — do not alter this block.
-    if (!isAdmin) {
-      const isAuthor = session.user.email === bill.submittedByEmail;
-      const isSelfApprovalAllowed =
-        isAuthor &&
-        bill.status === 'confirmed' &&
-        (status === 'approved' || status === 'draft');
+    // Authorization: admin/owner/superadmin has full access.
+    // The bill's own author may only revert their own confirmed bill back to
+    // 'draft' — self-approval (author approving their own bill) has been
+    // removed (product decision, BUG self-approval finding): transitioning to
+    // 'approved' now always requires a DB-verified admin.
+    const isAuthor = session.user.email === bill.submittedByEmail;
+    const isSelfDraftRevertAllowed =
+      isAuthor && bill.status === 'confirmed' && status === 'draft';
 
-      if (!isSelfApprovalAllowed) {
+    if (!isSelfDraftRevertAllowed) {
+      if (!sessionClaimsAdmin) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+
+      // SEC-02: re-verify admin authority against the DB rather than trusting
+      // the (possibly stale) JWT claim before allowing any admin-only status
+      // transition (including confirmed/pending → approved).
+      const guard = await verifyAdminRole(session.user.email, projectId);
+      if (!guard.authorized) {
+        return guard.response!;
       }
     }
 

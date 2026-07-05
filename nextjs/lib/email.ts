@@ -18,6 +18,22 @@ function getResendClient(): Resend | null {
 }
 
 // ---------------------------------------------------------------------------
+// Fallback logging when Resend is not configured. Never logs the URL/token in
+// production — it would leak a live password-reset/verification/invite
+// secret to log aggregators. Non-production keeps the URL for dev convenience.
+// ---------------------------------------------------------------------------
+
+function logEmailFallback(emailType: string, email: string, url: string): void {
+  if (process.env.NODE_ENV === 'production') {
+    console.error(
+      `[Email] RESEND_API_KEY not configured — could not send ${emailType} email to ${email}.`
+    );
+    return;
+  }
+  console.warn(`[Email] ${emailType} link for ${email}: ${url}`);
+}
+
+// ---------------------------------------------------------------------------
 // Send password reset email
 // ---------------------------------------------------------------------------
 
@@ -26,7 +42,7 @@ export async function sendPasswordResetEmail(email: string, resetUrl: string): P
 
   if (!client) {
     // Graceful fallback: log the link for local development
-    console.warn(`[Email] Password reset link for ${email}: ${resetUrl}`);
+    logEmailFallback('password reset', email, resetUrl);
     return;
   }
 
@@ -124,7 +140,7 @@ export async function sendVerificationEmail(email: string, verifyUrl: string): P
   const client = getResendClient();
 
   if (!client) {
-    console.warn(`[Email] Verification link for ${email}: ${verifyUrl}`);
+    logEmailFallback('verification', email, verifyUrl);
     return;
   }
 
@@ -228,7 +244,7 @@ export async function sendInvitationEmail(
   const client = getResendClient();
 
   if (!client) {
-    console.warn(`[Email] Invitation link for ${email}: ${inviteUrl}`);
+    logEmailFallback('invitation', email, inviteUrl);
     return;
   }
 
@@ -339,7 +355,7 @@ export async function sendPlatformInviteEmail(
   const client = getResendClient();
 
   if (!client) {
-    console.warn(`[Email] Platform invite link for ${email}: ${signupUrl}`);
+    logEmailFallback('platform invite', email, signupUrl);
     return;
   }
 

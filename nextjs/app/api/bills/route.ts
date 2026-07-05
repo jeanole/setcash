@@ -8,8 +8,11 @@ import { db as prisma } from '@/lib/db';
 import { z } from 'zod';
 import path from 'path';
 import fs from 'fs';
-import { parseForm, getUploadedFiles, ensureUploadDir, generateFilename, UPLOADS_DIR } from '@/lib/upload';
+import { parseForm, getUploadedFiles, ensureUploadDir, generateFilename, validateFile, UPLOADS_DIR } from '@/lib/upload';
 import { billCreateLimiter } from '@/lib/ratelimit';
+
+// Small float slack for allocation-sum validation
+const ALLOCATION_SUM_EPSILON = 0.01;
 
 // Validation schemas
 const createBillSchema = z.object({
@@ -412,6 +415,27 @@ export async function POST(req: NextRequest) {
     // Parse multipart form
     const { fields, files } = await parseForm(req);
 
+    // Get uploaded files and validate their content up front — this
+    // runs before the bill row is created so we never create an orphaned bill
+    // for a rejected upload. Any temp file cleanup below reuses this helper.
+    const uploadedFiles = getUploadedFiles(files, 'photos');
+
+    const cleanupTempFiles = () => {
+      for (const f of uploadedFiles) {
+        if (f.filepath && fs.existsSync(f.filepath)) {
+          try { fs.unlinkSync(f.filepath); } catch { /* best-effort cleanup */ }
+        }
+      }
+    };
+
+    for (const f of uploadedFiles) {
+      const result = validateFile(f);
+      if (!result.valid) {
+        cleanupTempFiles();
+        return NextResponse.json({ error: result.error || 'Invalid file' }, { status: 400 });
+      }
+    }
+
     // Extract and validate form data
     const date = fields.date?.[0] || new Date().toISOString();
     const type = fields.type?.[0] || 'Kauf';
@@ -440,6 +464,18 @@ export async function POST(req: NextRequest) {
       }
     } catch (e) {
       console.warn('Failed to parse categoryAllocations:', e);
+    }
+
+    // Reject if allocations sum to more than 100% (+ small float slack)
+    const motiveSum = motiveAllocations.reduce((acc, a) => acc + (Number(a?.percentage) || 0), 0);
+    if (motiveSum > 100 + ALLOCATION_SUM_EPSILON) {
+      cleanupTempFiles();
+      return NextResponse.json({ error: 'Motive allocations sum to more than 100%' }, { status: 400 });
+    }
+    const categorySum = categoryAllocations.reduce((acc, a) => acc + (Number(a?.percentage) || 0), 0);
+    if (categorySum > 100 + ALLOCATION_SUM_EPSILON) {
+      cleanupTempFiles();
+      return NextResponse.json({ error: 'Category allocations sum to more than 100%' }, { status: 400 });
     }
 
     // Determine status based on vendor and amount
@@ -489,8 +525,8 @@ export async function POST(req: NextRequest) {
     // the bill row exists before we reference it in BillImage records.
     // If any post-commit DB write fails, we compensate by deleting the bill row
     // (which cascades to BillImage/BillMotive/BillCategory) and re-deleting any
-    // files that were already moved to their final location (Task 2).
-    const uploadedFiles = getUploadedFiles(files, 'photos');
+    // files that were already moved to their final location.
+    // `uploadedFiles` was already fetched and content-validated above.
     const movedFilePaths: string[] = [];
 
     try {

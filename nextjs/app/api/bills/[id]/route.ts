@@ -9,26 +9,53 @@ import { z } from 'zod';
 import path from 'path';
 import fs from 'fs';
 import { UPLOADS_DIR } from '@/lib/upload';
+import { verifyAdminRole } from '@/lib/auth-guard';
+
+// Small float slack for allocation-sum validation
+const ALLOCATION_SUM_EPSILON = 0.01;
 
 // Validation schemas
-const updateBillSchema = z.object({
-  date: z.string().datetime().optional(),
-  type: z.string().optional(),
-  vendor: z.string().optional(),
-  item: z.string().optional(),
-  comment: z.string().optional(),
-  brutto19: z.number().min(0).optional(),
-  brutto7: z.number().min(0).optional(),
-  brutto0: z.number().min(0).optional(),
-  motiveAllocations: z.array(z.object({
-    motiveId: z.string(),
-    percentage: z.number().min(0).max(100),
-  })).optional(),
-  categoryAllocations: z.array(z.object({
-    categoryId: z.string(),
-    percentage: z.number().min(0).max(100),
-  })).optional(),
-});
+const updateBillSchema = z
+  .object({
+    date: z.string().datetime().optional(),
+    type: z.string().optional(),
+    vendor: z.string().optional(),
+    item: z.string().optional(),
+    comment: z.string().optional(),
+    brutto19: z.number().min(0).optional(),
+    brutto7: z.number().min(0).optional(),
+    brutto0: z.number().min(0).optional(),
+    motiveAllocations: z.array(z.object({
+      motiveId: z.string(),
+      percentage: z.number().min(0).max(100),
+    })).optional(),
+    categoryAllocations: z.array(z.object({
+      categoryId: z.string(),
+      percentage: z.number().min(0).max(100),
+    })).optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.motiveAllocations) {
+      const sum = data.motiveAllocations.reduce((acc, a) => acc + a.percentage, 0);
+      if (sum > 100 + ALLOCATION_SUM_EPSILON) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Motive allocations sum to more than 100%',
+          path: ['motiveAllocations'],
+        });
+      }
+    }
+    if (data.categoryAllocations) {
+      const sum = data.categoryAllocations.reduce((acc, a) => acc + a.percentage, 0);
+      if (sum > 100 + ALLOCATION_SUM_EPSILON) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Category allocations sum to more than 100%',
+          path: ['categoryAllocations'],
+        });
+      }
+    }
+  });
 
 // Save allocations for a bill.
 // Rejects with a thrown Error (caller must return 400) if any supplied
@@ -38,7 +65,8 @@ async function saveAllocations(
   billId: string,
   motiveAllocations: { motiveId: string; percentage: number }[],
   categoryAllocations: { categoryId: string; percentage: number }[],
-  projectId: string
+  projectId: string,
+  client: typeof prisma = prisma
 ) {
   // --- Cross-project injection guard (Task 1) ---
   // Batch-fetch valid IDs scoped to this project, mirroring the pattern in
@@ -47,7 +75,7 @@ async function saveAllocations(
   const distinctCategoryIds = [...new Set(categoryAllocations.map((a) => a.categoryId))];
 
   if (distinctMotiveIds.length > 0) {
-    const validMotives = await prisma.motive.findMany({
+    const validMotives = await client.motive.findMany({
       where: { id: { in: distinctMotiveIds }, projectId },
       select: { id: true },
     });
@@ -59,7 +87,7 @@ async function saveAllocations(
   }
 
   if (distinctCategoryIds.length > 0) {
-    const validCategories = await prisma.category.findMany({
+    const validCategories = await client.category.findMany({
       where: { id: { in: distinctCategoryIds }, projectId },
       select: { id: true },
     });
@@ -72,14 +100,14 @@ async function saveAllocations(
   // --- End cross-project guard ---
 
   // Delete existing allocations
-  await prisma.billMotive.deleteMany({ where: { billId } });
-  await prisma.billCategory.deleteMany({ where: { billId } });
+  await client.billMotive.deleteMany({ where: { billId } });
+  await client.billCategory.deleteMany({ where: { billId } });
 
   // Get default IDs
-  const uncatMotive = await prisma.motive.findFirst({
+  const uncatMotive = await client.motive.findFirst({
     where: { name: 'Default', projectId },
   });
-  const uncatCategory = await prisma.category.findFirst({
+  const uncatCategory = await client.category.findFirst({
     where: { name: 'Uncategorized', projectId },
   });
 
@@ -88,7 +116,7 @@ async function saveAllocations(
     let totalPct = 0;
     for (const a of motiveAllocations) {
       if (a.percentage > 0) {
-        await prisma.billMotive.create({
+        await client.billMotive.create({
           data: {
             billId,
             motiveId: a.motiveId,
@@ -100,7 +128,7 @@ async function saveAllocations(
     }
     // Fill remaining with default
     if (totalPct < 100 && uncatMotive) {
-      await prisma.billMotive.create({
+      await client.billMotive.create({
         data: {
           billId,
           motiveId: uncatMotive.id,
@@ -110,7 +138,7 @@ async function saveAllocations(
     }
   } else if (uncatMotive) {
     // No allocations, 100% to default
-    await prisma.billMotive.create({
+    await client.billMotive.create({
       data: {
         billId,
         motiveId: uncatMotive.id,
@@ -124,7 +152,7 @@ async function saveAllocations(
     let totalPct = 0;
     for (const a of categoryAllocations) {
       if (a.percentage > 0) {
-        await prisma.billCategory.create({
+        await client.billCategory.create({
           data: {
             billId,
             categoryId: a.categoryId,
@@ -136,7 +164,7 @@ async function saveAllocations(
     }
     // Fill remaining with uncategorized
     if (totalPct < 100 && uncatCategory) {
-      await prisma.billCategory.create({
+      await client.billCategory.create({
         data: {
           billId,
           categoryId: uncatCategory.id,
@@ -146,7 +174,7 @@ async function saveAllocations(
     }
   } else if (uncatCategory) {
     // No allocations, 100% to uncategorized
-    await prisma.billCategory.create({
+    await client.billCategory.create({
       data: {
         billId,
         categoryId: uncatCategory.id,
@@ -327,13 +355,23 @@ export async function PUT(
 
     // Check permissions - only submitter, project admin/owner, or superadmin can update
     const isOwner = bill.submittedByEmail.toLowerCase() === session.user.email.toLowerCase();
-    const isAdmin =
+    const sessionClaimsAdmin =
       session.user.role === 'admin' ||
       session.user.role === 'owner' ||
       session.user.role === 'superadmin';
-    
-    if (!isOwner && !isAdmin) {
+
+    if (!isOwner && !sessionClaimsAdmin) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    // SEC-02: non-owners are relying on admin authority to edit this bill —
+    // re-verify against the DB rather than trusting the (possibly stale) JWT
+    // claim. Superadmins are always authorized (see verifyAdminRole).
+    if (!isOwner) {
+      const guard = await verifyAdminRole(session.user.email, projectId);
+      if (!guard.authorized) {
+        return guard.response!;
+      }
     }
 
     const body = await req.json();
@@ -384,6 +422,27 @@ export async function PUT(
       updates.brutto0 = data.brutto0;
     }
 
+    // Paid/approved bill amount-edit rules.
+    const bruttoFieldsChanged = ['brutto19', 'brutto7', 'brutto0'].some((f) =>
+      Object.prototype.hasOwnProperty.call(changes, f)
+    );
+
+    if (bill.status === 'paid' && bruttoFieldsChanged) {
+      return NextResponse.json(
+        { error: 'Cannot change amounts of a paid bill' },
+        { status: 400 }
+      );
+    }
+
+    if (bill.status === 'approved' && bruttoFieldsChanged) {
+      // Amount changed on an already-approved bill — allow it (caller already
+      // passed the owner/admin permission check above), but reset status to
+      // 'pending' so the bill requires re-approval. Recorded in the EditLog
+      // below via `changes.status`.
+      changes.status = 'pending';
+      updates.status = 'pending';
+    }
+
     // Auto-promote draft to confirmed when vendor and amount are both present
     let newStatus = bill.status;
     if (bill.status === 'draft' as const) {
@@ -427,15 +486,20 @@ export async function PUT(
       }
     }
 
-    // Save allocations if provided
+    // Save allocations if provided.
+    // Wrap the delete+recreate rewrite in a transaction so a partial
+    // failure mid-way can't leave the bill with no allocations at all.
     if (data.motiveAllocations !== undefined || data.categoryAllocations !== undefined) {
-      await saveAllocations(
-        id,
-        data.motiveAllocations || [],
-        data.categoryAllocations || [],
-        projectId
-      );
-      
+      await prisma.$transaction(async (tx) => {
+        await saveAllocations(
+          id,
+          data.motiveAllocations || [],
+          data.categoryAllocations || [],
+          projectId,
+          tx as typeof prisma
+        );
+      });
+
       // Update legacy motive column
       const motiveStr = await getMotiveDisplayString(id);
       if (motiveStr !== bill.motiveLegacy) {
@@ -510,30 +574,79 @@ export async function DELETE(
 
     // Check permissions - only owner or admin can delete
     const isOwner = bill.submittedByEmail.toLowerCase() === session.user.email.toLowerCase();
-    const isAdmin = session.user.role === 'admin' || session.user.role === 'owner' || session.user.role === 'superadmin';
+    const sessionClaimsAdmin =
+      session.user.role === 'admin' || session.user.role === 'owner' || session.user.role === 'superadmin';
 
-    if (!isOwner && !isAdmin) {
+    if (!isOwner && !sessionClaimsAdmin) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Clean up image files
-    for (const img of bill.images) {
-      if (img.filePath) {
-        const imgPath = path.join(UPLOADS_DIR, img.filePath);
-        if (fs.existsSync(imgPath)) {
-          try {
-            fs.unlinkSync(imgPath);
-          } catch (e) {
-            console.error('Failed to delete image file:', e);
-          }
+    // SEC-02: non-owners are relying on admin authority — re-verify against
+    // the DB rather than trusting the (possibly stale) JWT claim.
+    let isVerifiedAdmin = false;
+    if (!isOwner) {
+      const guard = await verifyAdminRole(session.user.email, projectId);
+      if (!guard.authorized) {
+        return guard.response!;
+      }
+      isVerifiedAdmin = true;
+    }
+
+    // Bills that have reached 'approved' or 'paid' status may only be
+    // deleted by a DB-verified admin, even by the bill's own submitter.
+    if (bill.status === 'approved' || bill.status === 'paid') {
+      if (!isVerifiedAdmin) {
+        const guard = await verifyAdminRole(session.user.email, projectId);
+        if (!guard.authorized) {
+          return NextResponse.json(
+            { error: `Only an admin can delete a bill with status '${bill.status}'` },
+            { status: 403 }
+          );
         }
+        isVerifiedAdmin = true;
       }
     }
 
-    // Delete bill (cascades to images, motives, categories via Prisma)
-    await prisma.bill.delete({
-      where: { id },
-    });
+    // Record the deletion in the audit trail and remove the bill
+    // inside a single transaction BEFORE touching the filesystem.
+    // EditLog.billId is onDelete: SetNull, so this audit row survives the
+    // bill delete.
+    const imagePaths = bill.images.filter((img) => img.filePath).map((img) => img.filePath);
+
+    await prisma.$transaction([
+      prisma.editLog.create({
+        data: {
+          projectId,
+          timestamp: new Date(),
+          user: session.user.email,
+          billId: id,
+          changes: {
+            _event: 'deleted',
+            billNumber: bill.billNumber,
+            vendor: bill.vendor,
+            item: bill.item,
+            amount: Number(bill.grossAmount),
+          } as never,
+          source: 'user',
+        },
+      }),
+      prisma.bill.delete({
+        where: { id },
+      }),
+    ]);
+
+    // Clean up image files only after the DB transaction has committed —
+    // tolerate per-file unlink errors without failing the request.
+    for (const filePath of imagePaths) {
+      const imgPath = path.join(UPLOADS_DIR, filePath);
+      try {
+        if (fs.existsSync(imgPath)) {
+          fs.unlinkSync(imgPath);
+        }
+      } catch (e) {
+        console.error('Failed to delete image file:', e);
+      }
+    }
 
     return NextResponse.json({ ok: true });
   } catch (error) {

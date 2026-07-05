@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/db';
 import { z } from 'zod';
+import fs from 'fs';
+import path from 'path';
+import { UPLOADS_DIR } from '@/lib/upload';
 
 const updateSchema = z.object({
   name: z.string().min(1).max(100).optional(),
@@ -137,10 +140,33 @@ export async function DELETE(
       );
     }
 
+    // Collect all bill image file paths BEFORE the DB rows are deleted, so we
+    // can remove the corresponding files from disk once the delete has
+    // committed. BillImage.filePath is the sole source of truth for on-disk
+    // locations (Bill.filename is just a copy of the first image's filename).
+    const imagesToDelete = await prisma.billImage.findMany({
+      where: { bill: { projectId: id } },
+      select: { filePath: true },
+    });
+
     // Delete project (cascade will handle related data)
     await prisma.project.delete({
       where: { id },
     });
+
+    // Remove the bill image files from disk now that the DB rows are gone.
+    // Per-file failures are logged but never fail the request.
+    await Promise.all(
+      imagesToDelete.map(async (img) => {
+        if (!img.filePath) return;
+        const fullPath = path.join(UPLOADS_DIR, img.filePath);
+        try {
+          await fs.promises.unlink(fullPath);
+        } catch (e) {
+          console.error('Failed to delete bill image file during project deletion:', e);
+        }
+      })
+    );
 
     return NextResponse.json({ ok: true });
   } catch (error) {

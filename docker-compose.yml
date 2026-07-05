@@ -29,6 +29,26 @@ services:
       timeout: 5s
       retries: 5
 
+  postgres-backup:
+    image: prodrigestivill/postgres-backup-local:15
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - vbudget-pg-backups:/backups
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: setcash
+      POSTGRES_USER: setcash
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-setcash_dev}
+      SCHEDULE: "@daily"
+      BACKUP_KEEP_DAYS: 14
+      BACKUP_KEEP_WEEKS: 8
+      BACKUP_KEEP_MONTHS: 6
+      HEALTHCHECK_PORT: 8080
+    restart: unless-stopped
+
 volumes:
   vbudget-pg-data:
   vbudget-uploads:
+  vbudget-pg-backups:

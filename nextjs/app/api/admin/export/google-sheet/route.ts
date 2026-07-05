@@ -287,7 +287,9 @@ export async function POST() {
     // --- Write to Google Sheet ---
     const requiredTabs = ['Bills', 'V-Geld', 'Budget Matrix'];
 
-    // Ensure required tabs exist, remove extras
+    // Ensure required tabs exist. We intentionally never delete tabs that are
+    // not in requiredTabs — the sheet may contain user-added tabs (notes,
+    // charts, pivot tables, etc.) that must be preserved across syncs.
     const meta = await sheets.spreadsheets.get({ spreadsheetId });
     const existingSheets = meta.data.sheets || [];
     const existingNames = existingSheets.map((s: any) => s.properties?.title);
@@ -298,11 +300,6 @@ export async function POST() {
         setupRequests.push({ addSheet: { properties: { title } } });
       }
     }
-    for (const s of existingSheets) {
-      if (!requiredTabs.includes(s.properties?.title ?? '')) {
-        setupRequests.push({ deleteSheet: { sheetId: s.properties?.sheetId } });
-      }
-    }
     if (setupRequests.length > 0) {
       await sheets.spreadsheets.batchUpdate({
         spreadsheetId,
@@ -310,13 +307,9 @@ export async function POST() {
       });
     }
 
-    // Clear existing data
-    await sheets.spreadsheets.values.batchClear({
-      spreadsheetId,
-      requestBody: { ranges: requiredTabs },
-    });
-
-    // Write all data
+    // Write all data FIRST. If this throws, the previous contents of every
+    // tab are left untouched — nothing is cleared before the new data is
+    // safely written.
     await sheets.spreadsheets.values.batchUpdate({
       spreadsheetId,
       requestBody: {
@@ -327,6 +320,19 @@ export async function POST() {
           { range: 'Budget Matrix!A1', values: bmData },
         ],
       },
+    });
+
+    // Only now clear the leftover tail (rows below the freshly written data)
+    // so stale rows from a previous, larger export don't linger. A failure
+    // here (after the write already succeeded) never leaves a tab empty.
+    const tailClearRanges = [
+      `Bills!A${billsData.length + 1}:ZZ`,
+      `V-Geld!A${vgeldData.length + 1}:ZZ`,
+      `Budget Matrix!A${bmData.length + 1}:ZZ`,
+    ];
+    await sheets.spreadsheets.values.batchClear({
+      spreadsheetId,
+      requestBody: { ranges: tailClearRanges },
     });
 
     // Format headers: dark bg, white bold text, frozen first row

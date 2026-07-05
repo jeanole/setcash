@@ -35,21 +35,6 @@ async function main() {
     console.log(`✓ Example project exists: ${defaultProject.name}`);
   }
 
-  // Remove legacy "Default Project" if it exists and isn't the example project
-  const legacyProject = await prisma.project.findFirst({
-    where: { name: 'Default Project', isExample: false },
-  });
-  if (legacyProject) {
-    // Move users pointing at the legacy project to the example project
-    await prisma.user.updateMany({
-      where: { defaultProjectId: legacyProject.id },
-      data: { defaultProjectId: defaultProject!.id },
-    });
-    await prisma.projectMember.deleteMany({ where: { projectId: legacyProject.id } });
-    await prisma.project.delete({ where: { id: legacyProject.id } });
-    console.log(`✓ Deleted legacy "Default Project": ${legacyProject.id}`);
-  }
-
   const projectId = defaultProject!.id;
 
   // 3. Upsert project member (admin user -> default project, role=admin)

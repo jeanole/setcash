@@ -1,13 +1,9 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { db as prisma } from '@/lib/db';
 import { z } from 'zod';
 import crypto from 'crypto';
 import { forgotPasswordLimiter } from '@/lib/ratelimit';
 import { sendPasswordResetEmail } from '@/lib/email';
-
-const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
-const prisma = globalForPrisma.prisma ?? new PrismaClient();
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
 
 const schema = z.object({
   email: z.string().email(),

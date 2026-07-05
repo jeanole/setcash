@@ -6,7 +6,14 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { db as prisma } from '@/lib/db';
 
-const RETENTION_DAYS = 90;
+const DEFAULT_RETENTION_DAYS = 90;
+const MIN_RETENTION_DAYS = 30;
+
+function getRetentionDays(): number {
+  const raw = parseInt(process.env.ANALYTICS_RETENTION_DAYS ?? '', 10);
+  const days = Number.isFinite(raw) ? raw : DEFAULT_RETENTION_DAYS;
+  return Math.max(days, MIN_RETENTION_DAYS);
+}
 
 export async function DELETE() {
   try {
@@ -19,7 +26,8 @@ export async function DELETE() {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const cutoff = new Date(Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000);
+    const retentionDays = getRetentionDays();
+    const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
 
     const [visitResult, demoResult, eventResult] = await prisma.$transaction([
       prisma.visitLog.deleteMany({

@@ -108,6 +108,28 @@ export async function POST(req: NextRequest) {
       )
     );
 
+    // Audit trail: record who performed the bulk update and how many cells
+    // were touched. This is deliberately outside/after the transaction and
+    // wrapped in its own try/catch — a logging failure must never roll back
+    // (or fail) an already-committed budget matrix update.
+    try {
+      await prisma.editLog.create({
+        data: {
+          projectId,
+          timestamp: new Date(),
+          user: session.user.email,
+          billId: null,
+          changes: {
+            action: 'budget_matrix_bulk_update',
+            updatedCount: results.length,
+          } as never,
+          source: 'user',
+        },
+      });
+    } catch (e) {
+      console.error('Failed to write EditLog for budget matrix bulk update:', e);
+    }
+
     return NextResponse.json({
       success: true,
       updatedCount: results.length,

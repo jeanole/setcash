@@ -47,7 +47,25 @@ function parseWindow(window: string): number {
 class InMemoryRatelimit {
   private windows = new Map<string, number[]>();
 
-  constructor(private max: number, private windowMs: number) {}
+  constructor(private max: number, private windowMs: number) {
+    // Periodically evict identifiers whose hits have all fallen outside the
+    // window so the map doesn't grow unbounded for long-running processes.
+    // unref() so this timer never keeps the Node process alive on its own.
+    const cleanupInterval = setInterval(() => this.cleanup(), this.windowMs);
+    cleanupInterval.unref();
+  }
+
+  private cleanup(): void {
+    const now = Date.now();
+    for (const [identifier, hits] of this.windows) {
+      const active = hits.filter(t => now - t < this.windowMs);
+      if (active.length === 0) {
+        this.windows.delete(identifier);
+      } else if (active.length !== hits.length) {
+        this.windows.set(identifier, active);
+      }
+    }
+  }
 
   async limit(identifier: string): Promise<{ success: boolean; limit: number; remaining: number; reset: number }> {
     const now = Date.now();
