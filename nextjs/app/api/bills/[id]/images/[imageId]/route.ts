@@ -12,6 +12,7 @@ import {
   getUploadedFile,
   UPLOADS_DIR,
 } from '@/lib/upload';
+import { verifyAdminRole } from '@/lib/auth-guard';
 
 // Sync legacy bills.filename with first image
 async function syncLegacyImageColumns(billId: string) {
@@ -64,13 +65,22 @@ export async function PUT(
 
     // Check permissions - only submitter, project admin/owner, or superadmin can replace images
     const isOwner = bill.submittedByEmail.toLowerCase() === session.user.email.toLowerCase();
-    const isAdmin =
+    const sessionClaimsAdmin =
       session.user.role === 'admin' ||
       session.user.role === 'owner' ||
       session.user.role === 'superadmin';
 
-    if (!isOwner && !isAdmin) {
+    if (!isOwner && !sessionClaimsAdmin) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    // SEC-02: non-owners are relying on admin authority — re-verify against
+    // the DB rather than trusting the (possibly stale) JWT claim.
+    if (!isOwner) {
+      const guard = await verifyAdminRole(session.user.email, projectId);
+      if (!guard.authorized) {
+        return guard.response!;
+      }
     }
 
     // Get image
@@ -155,13 +165,22 @@ export async function DELETE(
 
     // Check permissions - only submitter, project admin/owner, or superadmin can delete images
     const isOwnerDel = bill.submittedByEmail.toLowerCase() === session.user.email.toLowerCase();
-    const isAdminDel =
+    const sessionClaimsAdminDel =
       session.user.role === 'admin' ||
       session.user.role === 'owner' ||
       session.user.role === 'superadmin';
 
-    if (!isOwnerDel && !isAdminDel) {
+    if (!isOwnerDel && !sessionClaimsAdminDel) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    // SEC-02: non-owners are relying on admin authority — re-verify against
+    // the DB rather than trusting the (possibly stale) JWT claim.
+    if (!isOwnerDel) {
+      const guard = await verifyAdminRole(session.user.email, projectId);
+      if (!guard.authorized) {
+        return guard.response!;
+      }
     }
 
     // Get image

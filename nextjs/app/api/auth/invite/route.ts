@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/db';
 import { sendInvitationEmail } from '@/lib/email';
+import { inviteLimiter } from '@/lib/ratelimit';
 
 const schema = z.object({
   email: z.string().email(),
@@ -48,6 +49,16 @@ export async function POST(req: Request) {
     );
   }
 
+  // Rate limit: 20 invites per hour per (example) project
+  const rl = await inviteLimiter.limit(exampleProject.id);
+  if (!rl.success) {
+    return NextResponse.json({ error: 'Too many invite requests. Please try again later.' }, { status: 429 });
+  }
+
+  // Always return the same generic response whether or not the invitee
+  // already has an account — prevents user enumeration via this endpoint.
+  const genericMessage = `Invitation sent to ${email}.`;
+
   // Check if already a member of the example project
   const existingMember = await prisma.projectMember.findUnique({
     where: {
@@ -59,10 +70,7 @@ export async function POST(req: Request) {
   });
 
   if (existingMember) {
-    return NextResponse.json(
-      { error: 'This user already has an account.' },
-      { status: 400 }
-    );
+    return NextResponse.json({ message: genericMessage });
   }
 
   // Delete any existing invitation tokens for this email + example project
@@ -113,5 +121,5 @@ export async function POST(req: Request) {
     // Token is created — the invite still works if user has the link
   }
 
-  return NextResponse.json({ message: `Invitation sent to ${email}.` });
+  return NextResponse.json({ message: genericMessage });
 }

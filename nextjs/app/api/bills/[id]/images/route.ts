@@ -12,8 +12,10 @@ import {
   getUploadedFiles,
   ensureUploadDir,
   generateFilename,
+  validateFile,
   UPLOADS_DIR,
 } from '@/lib/upload';
+import { verifyAdminRole } from '@/lib/auth-guard';
 
 // Sync legacy bills.filename with first image
 async function syncLegacyImageColumns(billId: string) {
@@ -66,13 +68,22 @@ export async function POST(
 
     // Check permissions - only submitter, project admin/owner, or superadmin can add images
     const isOwner = bill.submittedByEmail.toLowerCase() === session.user.email.toLowerCase();
-    const isAdmin =
+    const sessionClaimsAdmin =
       session.user.role === 'admin' ||
       session.user.role === 'owner' ||
       session.user.role === 'superadmin';
 
-    if (!isOwner && !isAdmin) {
+    if (!isOwner && !sessionClaimsAdmin) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    // SEC-02: non-owners are relying on admin authority — re-verify against
+    // the DB rather than trusting the (possibly stale) JWT claim.
+    if (!isOwner) {
+      const guard = await verifyAdminRole(session.user.email, projectId);
+      if (!guard.authorized) {
+        return guard.response!;
+      }
     }
 
     // Parse multipart form
@@ -85,12 +96,33 @@ export async function POST(
       return NextResponse.json({ error: 'No files' }, { status: 400 });
     }
 
+    // Validate file content (magic bytes) before proceeding. On
+    // failure, unlink every temp file from this request and return 400.
+    for (const f of uploadedFiles) {
+      const result = validateFile(f);
+      if (!result.valid) {
+        for (const other of uploadedFiles) {
+          if (other.filepath && fs.existsSync(other.filepath)) {
+            try { fs.unlinkSync(other.filepath); } catch { /* best-effort cleanup */ }
+          }
+        }
+        return NextResponse.json({ error: result.error || 'Invalid file' }, { status: 400 });
+      }
+    }
+
     // Check current image count
     const currentCount = await prisma.billImage.count({
       where: { billId: id },
     });
 
     if (currentCount + uploadedFiles.length > 10) {
+      // Temp files were already written to disk by parseForm — clean them up
+      // before returning, otherwise they leak.
+      for (const f of uploadedFiles) {
+        if (f.filepath && fs.existsSync(f.filepath)) {
+          try { fs.unlinkSync(f.filepath); } catch { /* best-effort cleanup */ }
+        }
+      }
       return NextResponse.json(
         { error: 'Maximum 10 images per bill' },
         { status: 400 }
@@ -99,57 +131,86 @@ export async function POST(
 
     const userFolder = ensureUploadDir(bill.submittedByEmail);
     const dateStr = new Date().toISOString().split('T')[0];
-    const newImages = [];
+    const newImages: { id: string; filename: string | undefined; file: string; sortOrder: number }[] = [];
 
-    for (let i = 0; i < uploadedFiles.length; i++) {
-      const f = uploadedFiles[i];
-      const ext = path.extname(f.originalFilename || '') || '.jpg';
-      const sortOrder = currentCount + i;
-      const savedFilename = generateFilename(
-        userFolder,
-        bill.billNumber || id,
-        dateStr,
-        `_${sortOrder}`,
-        f.originalFilename || ''
-      );
-      const relPath = `${userFolder}/${savedFilename}`;
-      const savedFilePath = path.join(UPLOADS_DIR, relPath);
+    // Track moved files/created rows so a mid-loop failure can be
+    // compensated for (mirrors the pattern in app/api/bills/route.ts POST).
+    const movedFilePaths: string[] = [];
+    const createdImageIds: string[] = [];
 
-      // Move file to final location
-      fs.renameSync(f.filepath, savedFilePath);
+    try {
+      for (let i = 0; i < uploadedFiles.length; i++) {
+        const f = uploadedFiles[i];
+        const sortOrder = currentCount + i;
+        const savedFilename = generateFilename(
+          userFolder,
+          bill.billNumber || id,
+          dateStr,
+          `_${sortOrder}`,
+          f.originalFilename || ''
+        );
+        const relPath = `${userFolder}/${savedFilename}`;
+        const savedFilePath = path.join(UPLOADS_DIR, relPath);
 
-      // Create image record
-      const img = await prisma.billImage.create({
-        data: {
-          billId: id,
-          filename: f.originalFilename || '',
-          filePath: relPath,
+        // Move file to final location
+        fs.renameSync(f.filepath, savedFilePath);
+        movedFilePaths.push(savedFilePath);
+
+        // Create image record
+        const img = await prisma.billImage.create({
+          data: {
+            billId: id,
+            filename: f.originalFilename || '',
+            filePath: relPath,
+            sortOrder,
+          },
+        });
+        createdImageIds.push(img.id);
+
+        newImages.push({
+          id: img.id,
+          filename: f.originalFilename || undefined,
+          file: relPath,
           sortOrder,
+        });
+      }
+
+      // Update legacy columns with first image
+      await syncLegacyImageColumns(id);
+
+      // Log image addition
+      await prisma.editLog.create({
+        data: {
+          projectId,
+          timestamp: new Date(),
+          user: session.user.email,
+          billId: id,
+          changes: { images: `added ${uploadedFiles.length}` },
+          source: 'user',
         },
       });
-
-      newImages.push({
-        id: img.id,
-        filename: f.originalFilename,
-        file: relPath,
-        sortOrder,
-      });
+    } catch (midLoopError) {
+      // Compensation: remove any BillImage rows already created and unlink
+      // any files already moved to their final location.
+      if (createdImageIds.length > 0) {
+        try {
+          await prisma.billImage.deleteMany({ where: { id: { in: createdImageIds } } });
+        } catch (cleanupError) {
+          console.error('Compensation deleteMany failed for images', createdImageIds, cleanupError);
+        }
+      }
+      for (const filePath of movedFilePaths) {
+        try {
+          if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+          }
+        } catch (unlinkError) {
+          console.error('Compensation file cleanup failed:', filePath, unlinkError);
+        }
+      }
+      console.error('Error adding images (rolled back):', midLoopError);
+      return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
-
-    // Update legacy columns with first image
-    await syncLegacyImageColumns(id);
-
-    // Log image addition
-    await prisma.editLog.create({
-      data: {
-        projectId,
-        timestamp: new Date(),
-        user: session.user.email,
-        billId: id,
-        changes: { images: `added ${uploadedFiles.length}` },
-        source: 'user',
-      },
-    });
 
     return NextResponse.json({ ok: true, images: newImages });
   } catch (error) {

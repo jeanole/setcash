@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/db';
 import { exportLimiter } from '@/lib/ratelimit';
+import { verifyAdminRole } from '@/lib/auth-guard';
 import { UPLOADS_DIR } from '@/lib/upload';
 import { roundCents } from '@/lib/spending';
 import fs from 'fs';
@@ -52,6 +53,16 @@ export async function GET(
 
     if (!isAdmin && session.user.email.toLowerCase() !== targetEmail.toLowerCase()) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+    }
+
+    // SEC-02: when accessing another user's report on the strength of an
+    // admin role, re-verify that role against the DB — forces re-auth if the
+    // caller was demoted mid-session but is still carrying a stale JWT.
+    if (isAdmin && session.user.email.toLowerCase() !== targetEmail.toLowerCase()) {
+      const guard = await verifyAdminRole(session.user.email ?? '', projectId);
+      if (!guard.authorized) {
+        return guard.response!;
+      }
     }
 
     // Query bills and vgeld for target user.

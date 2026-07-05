@@ -7,6 +7,7 @@ import { auth } from '@/auth';
 import { db as prisma } from '@/lib/db';
 import { runOcrJob } from '@/lib/ocr';
 import { billAnalyseLimiter } from '@/lib/ratelimit';
+import { verifyAdminRole } from '@/lib/auth-guard';
 
 // POST /api/bills/[id]/analyse - Trigger OCR analysis
 export async function POST(
@@ -31,9 +32,16 @@ export async function POST(
       return NextResponse.json({ error: 'No project selected' }, { status: 400 });
     }
 
-    // Check admin permission
+    // Check admin permission (fast pre-filter based on JWT claims)
     if (session.user.role !== 'admin' && session.user.role !== 'owner' && session.user.role !== 'superadmin') {
       return NextResponse.json({ error: 'Forbidden - admin only' }, { status: 403 });
+    }
+
+    // SEC-02: re-verify admin authority against the DB rather than trusting
+    // the (possibly stale) JWT claim before triggering an admin-only OCR job.
+    const guard = await verifyAdminRole(session.user.email, projectId);
+    if (!guard.authorized) {
+      return guard.response!;
     }
 
     const { id } = params;

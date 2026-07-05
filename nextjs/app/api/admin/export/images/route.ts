@@ -9,6 +9,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/db';
 import { exportLimiter } from '@/lib/ratelimit';
+import { verifyAdminRole } from '@/lib/auth-guard';
 import { UPLOADS_DIR } from '@/lib/upload';
 import fs from 'fs';
 import path from 'path';
@@ -35,6 +36,14 @@ export async function GET() {
 
     if (!isAdmin) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    // SEC-02: re-verify admin authority against the DB before exporting all
+    // bill images — forces re-auth if the caller was demoted mid-session but
+    // is still carrying a stale JWT claiming an elevated role.
+    const guard = await verifyAdminRole(session.user.email ?? '', projectId);
+    if (!guard.authorized) {
+      return guard.response!;
     }
 
     // Rate limit by user email

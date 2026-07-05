@@ -165,12 +165,38 @@ export async function DELETE(
       );
     }
 
+    // Count affected bill allocations before deleting, for the audit log.
+    const affectedAllocations = await prisma.billCategory.count({ where: { categoryId } });
+
     // Delete in a transaction to ensure atomicity
     await prisma.$transaction([
       prisma.billCategory.deleteMany({ where: { categoryId } }),
       prisma.budgetMatrix.deleteMany({ where: { categoryId } }),
       prisma.category.delete({ where: { id: categoryId } }),
     ]);
+
+    // Audit trail: record the deletion and how many bill allocations it
+    // removed. Non-blocking — a logging failure must not fail the request
+    // since the deletion has already committed.
+    try {
+      await prisma.editLog.create({
+        data: {
+          projectId: id,
+          timestamp: new Date(),
+          user: session.user.email,
+          billId: null,
+          changes: {
+            action: 'category_deleted',
+            categoryId,
+            name: existingCategory.name,
+            affectedAllocations,
+          } as never,
+          source: 'user',
+        },
+      });
+    } catch (e) {
+      console.error('Failed to write EditLog for category deletion:', e);
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

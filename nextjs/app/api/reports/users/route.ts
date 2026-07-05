@@ -8,6 +8,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/db';
+import { verifyAdminRole } from '@/lib/auth-guard';
 
 export async function GET() {
   try {
@@ -27,6 +28,14 @@ export async function GET() {
       session.user.currentProjectRole === 'owner';
 
     if (isAdmin) {
+      // SEC-02: re-verify admin authority against the DB before listing every
+      // project member — forces re-auth if the caller was demoted mid-session
+      // but is still carrying a stale JWT claiming an elevated role.
+      const guard = await verifyAdminRole(session.user.email ?? '', projectId);
+      if (!guard.authorized) {
+        return guard.response!;
+      }
+
       // Admins see all project members who have bills — join via bill submitters
       const usersWithBills = await prisma.$queryRaw<{ email: string; role_name: string }[]>`
         SELECT DISTINCT b."submittedByEmail" as email,

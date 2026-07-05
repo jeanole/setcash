@@ -8,6 +8,18 @@ import type { NextRequest } from 'next/server';
 // ---------------------------------------------------------------------------
 const loginAttempts = new Map<string, { count: number; resetAt: number }>();
 
+// Periodically evict expired entries so the map doesn't grow unbounded.
+// unref() so this timer never keeps the Node process alive on its own.
+const loginAttemptsCleanup = setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of loginAttempts) {
+    if (now > entry.resetAt) {
+      loginAttempts.delete(ip);
+    }
+  }
+}, 60_000);
+loginAttemptsCleanup.unref();
+
 function checkRateLimit(ip: string): boolean {
   const now = Date.now();
   const windowMs = 60_000; // 60 seconds

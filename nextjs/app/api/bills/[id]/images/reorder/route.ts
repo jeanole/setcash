@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { db as prisma } from '@/lib/db';
 import { z } from 'zod';
+import { verifyAdminRole } from '@/lib/auth-guard';
 
 const reorderImagesSchema = z.object({
   images: z.array(z.object({
@@ -32,7 +33,7 @@ export async function PUT(
 
     const { id } = params;
 
-    const isAdmin =
+    const sessionClaimsAdmin =
       session.user.role === 'admin' ||
       session.user.role === 'owner' ||
       session.user.role === 'superadmin';
@@ -49,8 +50,17 @@ export async function PUT(
 
     // Only the bill's submitter or an admin/owner/superadmin may reorder images
     const isSubmitter = session.user.email === bill.submittedByEmail;
-    if (!isAdmin && !isSubmitter) {
+    if (!sessionClaimsAdmin && !isSubmitter) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    // SEC-02: non-submitters are relying on admin authority — re-verify
+    // against the DB rather than trusting the (possibly stale) JWT claim.
+    if (!isSubmitter) {
+      const guard = await verifyAdminRole(session.user.email, projectId);
+      if (!guard.authorized) {
+        return guard.response!;
+      }
     }
 
     const body = await req.json();

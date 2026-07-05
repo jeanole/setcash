@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { db as prisma } from '@/lib/db';
+import { verifyAdminRole } from '@/lib/auth-guard';
 
 // PATCH /api/vgeld/[id] - Confirm a V-Geld transfer (admin/owner/superadmin only)
 export async function PATCH(
@@ -50,14 +51,18 @@ export async function PATCH(
       return NextResponse.json({ error: 'Transfer not found' }, { status: 404 });
     }
 
-    if (transfer.confirmedBy) {
-      return NextResponse.json({ error: 'Transfer already confirmed' }, { status: 400 });
-    }
-
-    await prisma.vgeld.update({
-      where: { id },
+    // Atomic conditional update: only succeeds if the transfer is still
+    // unconfirmed at the moment of the write. This closes the race window
+    // where two concurrent PATCH requests could both pass the earlier
+    // read-then-check and both "confirm" the transfer.
+    const { count } = await prisma.vgeld.updateMany({
+      where: { id, projectId, confirmedBy: null },
       data: { confirmedBy: session.user.email },
     });
+
+    if (count === 0) {
+      return NextResponse.json({ error: 'Transfer already confirmed' }, { status: 400 });
+    }
 
     // Fire-and-forget: notify the transfer requester
     if (transfer.createdBy) {
@@ -134,9 +139,43 @@ export async function DELETE(
       return NextResponse.json({ error: 'Transfer not found' }, { status: 404 });
     }
 
+    // Already-confirmed transfers represent a settled financial record, so
+    // deleting one requires a DB-verified admin — not just a stale JWT claim.
+    if (transfer.confirmedBy) {
+      const guard = await verifyAdminRole(session.user.email ?? '', projectId);
+      if (!guard.authorized) {
+        return guard.response!;
+      }
+    }
+
     await prisma.vgeld.delete({
       where: { id },
     });
+
+    // Audit trail: record who deleted the transfer and its key details.
+    // Vgeld has no dedicated audit table, so we reuse EditLog (billId is
+    // nullable) with a clear, self-describing changes payload.
+    try {
+      await prisma.editLog.create({
+        data: {
+          projectId,
+          timestamp: new Date(),
+          user: session.user.email,
+          billId: null,
+          changes: {
+            action: 'vgeld_deleted',
+            vgeldId: transfer.id,
+            amount: Number(transfer.amount),
+            fromUser: transfer.fromUser,
+            toUser: transfer.toUser,
+            wasConfirmed: !!transfer.confirmedBy,
+          } as never,
+          source: 'user',
+        },
+      });
+    } catch (e) {
+      console.error('Failed to write EditLog for vgeld deletion:', e);
+    }
 
     return NextResponse.json({ ok: true });
   } catch (error) {
