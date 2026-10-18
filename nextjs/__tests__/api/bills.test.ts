@@ -147,7 +147,7 @@ describe('bills API', () => {
       const bill = await db.bill.create({
         data: { projectId: ctx.projectId, submittedByEmail: ctx.userEmail, date: new Date(), status: 'confirmed', vendor: 'X', brutto19: 5 },
       });
-      const params = { params: { id: bill.id } };
+      const params = { params: Promise.resolve({ id: bill.id }) };
       const url = `http://localhost/api/bills/${bill.id}/status`;
 
       expect((await statusRoute.PATCH(jsonReq(url, 'PATCH', { status: 'approved' }), params)).status).toBe(200);
@@ -164,7 +164,7 @@ describe('bills API', () => {
       });
       const res = await billRoute.PUT(
         jsonReq(`http://localhost/api/bills/${bill.id}`, 'PUT', { brutto19: 500 }),
-        { params: { id: bill.id } }
+        { params: Promise.resolve({ id: bill.id }) }
       );
 
       expect(res.status).toBeGreaterThanOrEqual(400);
@@ -190,7 +190,7 @@ describe('bills API', () => {
 
       const res = await verifyRoute.PATCH(
         jsonReq(`http://localhost/api/bills/${bill.id}/verify-field`, 'PATCH', { field: 'vendor' }),
-        { params: { id: bill.id } }
+        { params: Promise.resolve({ id: bill.id }) }
       );
 
       expect(res.status).toBe(403);

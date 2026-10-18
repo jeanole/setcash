@@ -1,4 +1,6 @@
 import { execFileSync } from 'child_process';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 const gitCommit = (() => {
   if (process.env.NEXT_PUBLIC_GIT_COMMIT) {
@@ -17,6 +19,9 @@ const nextConfig = {
     NEXT_PUBLIC_GIT_COMMIT: gitCommit,
   },
   output: 'standalone',
+  // Pin the tracing root to this app so a stray lockfile in a parent folder
+  // cannot change the standalone output layout the Dockerfile copies.
+  outputFileTracingRoot: path.dirname(fileURLToPath(import.meta.url)),
   // The app never uses next/image. Disabling the optimizer makes /_next/image
   // return 404, removing the attack surface of the Image Optimization API
   // (several Next.js 14 advisories, incl. RCE/DoS, have no 14.x fix).

@@ -35,10 +35,8 @@ async function fileExists(filePath: string): Promise<boolean> {
   }
 }
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { email: string } }
-) {
+export async function GET(req: NextRequest, props: { params: Promise<{ email: string }> }) {
+  const params = await props.params;
   try {
     const session = await auth();
     if (!session?.user) {

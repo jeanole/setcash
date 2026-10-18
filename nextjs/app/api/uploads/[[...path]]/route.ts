@@ -13,10 +13,8 @@ import { UPLOADS_DIR } from '@/lib/upload';
 import { verifyProjectMember } from '@/lib/auth-guard';
 
 // GET /uploads/[...path] - Serve uploaded file
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { path: string[] } }
-) {
+export async function GET(req: NextRequest, props: { params: Promise<{ path?: string[] }> }) {
+  const params = await props.params;
   try {
     const session = await auth();
     if (!session?.user) {

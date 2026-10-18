@@ -37,8 +37,9 @@ function removeStoredFile(filePath: string) {
 // PUT /api/bills/[id]/images/[imageId] - Replace/crop image
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string; imageId: string } }
+  props: { params: Promise<{ id: string; imageId: string }> }
 ) {
+  const params = await props.params;
   let uploadedFile: File | null = null;
   let newFilePath: string | null = null; // absolute path of the stored replacement
 
@@ -185,8 +186,9 @@ export async function PUT(
 // DELETE /api/bills/[id]/images/[imageId] - Delete single image
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string; imageId: string } }
+  props: { params: Promise<{ id: string; imageId: string }> }
 ) {
+  const params = await props.params;
   try {
     const session = await auth();
     if (!session?.user) {

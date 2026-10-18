@@ -36,10 +36,8 @@ class TooManyImagesError extends Error {
 }
 
 // POST /api/bills/[id]/images - Add images to existing bill
-export async function POST(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   // Temp files written by parseForm and files moved to their final location are
   // tracked so every early return / throw can clean them up.
   let uploadedFiles: File[] = [];

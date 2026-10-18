@@ -26,10 +26,8 @@ const reorderImagesSchema = z.object({
 });
 
 // PUT /api/bills/[id]/images/reorder - Reorder images
-export async function PUT(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function PUT(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const session = await auth();
     if (!session?.user) {

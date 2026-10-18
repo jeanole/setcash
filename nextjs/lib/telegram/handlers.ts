@@ -9,16 +9,17 @@ import fs from 'fs';
 import path from 'path';
 import https from 'https';
 import http from 'http';
-import TelegramBot from 'node-telegram-bot-api';
+import type { Message } from 'node-telegram-bot-api';
 import { prisma } from '../db';
 import { UPLOADS_DIR } from '../upload';
 import { telegramLinkAttemptLimiter } from '../ratelimit';
 import { validateAndConsumeLinkCode } from './codes';
+import type { TelegramClient } from './client';
 
 // Album buffering: bufferKey -> { messages, timer }
 const mediaGroupBuffers = new Map<
   string,
-  { messages: TelegramBot.Message[]; timer: ReturnType<typeof setTimeout> }
+  { messages: Message[]; timer: ReturnType<typeof setTimeout> }
 >();
 
 interface DownloadedPhoto {
@@ -31,7 +32,7 @@ interface DownloadedPhoto {
  * Returns { savedName, origName } for the saved file.
  */
 export async function downloadTelegramFile(
-  bot: TelegramBot,
+  bot: TelegramClient,
   fileId: string
 ): Promise<DownloadedPhoto> {
   const fileInfo = await bot.getFile(fileId);
@@ -40,9 +41,8 @@ export async function downloadTelegramFile(
     throw new Error('File path not available from Telegram');
   }
 
-  // Access the token via the internal options
-  const token = (bot as any).token as string;
-  const url = `https://api.telegram.org/file/bot${token}/${filePath}`;
+  // The client builds the file URL (it holds the token; never log this URL)
+  const url = bot.getFileUrl(filePath);
   const ext = (path.extname(filePath) || '.jpg').toLowerCase();
 
   const ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.pdf'];
@@ -187,7 +187,7 @@ export function formatBillLink(billId: string): string | null {
  * Reads bill.ocrStatus and ocrFields from the DB and formats a result message.
  */
 async function sendOcrFollowUp(
-  bot: TelegramBot,
+  bot: TelegramClient,
   chatId: number,
   billId: string
 ): Promise<void> {
@@ -315,7 +315,7 @@ async function getProjectSettings(projectId: string): Promise<Record<string, unk
 async function maybeRunOcr(
   billId: string,
   projectId: string,
-  bot: TelegramBot,
+  bot: TelegramClient,
   chatId: number
 ): Promise<void> {
   const settings = await getProjectSettings(projectId);
@@ -341,7 +341,7 @@ async function processMediaGroup(
   bufferKey: string,
   projectId: string,
   userEmail: string,
-  bot: TelegramBot
+  bot: TelegramClient
 ): Promise<void> {
   const buf = mediaGroupBuffers.get(bufferKey);
   if (!buf) return;
@@ -386,8 +386,8 @@ async function processMediaGroup(
  * Process a single photo message.
  */
 async function processSinglePhoto(
-  bot: TelegramBot,
-  msg: TelegramBot.Message,
+  bot: TelegramClient,
+  msg: Message,
   projectId: string,
   userEmail: string
 ): Promise<void> {
@@ -428,8 +428,8 @@ async function processSinglePhoto(
  * Used by both /start <payload> and /link <code> handlers.
  */
 async function performLink(
-  bot: TelegramBot,
-  msg: TelegramBot.Message,
+  bot: TelegramClient,
+  msg: Message,
   projectId: string,
   rawCode: string
 ): Promise<void> {
@@ -494,8 +494,8 @@ async function performLink(
  * Main message handler — routes incoming Telegram messages.
  */
 export async function handleMessage(
-  bot: TelegramBot,
-  msg: TelegramBot.Message,
+  bot: TelegramClient,
+  msg: Message,
   projectId: string
 ): Promise<void> {
   // Handle /start [payload]
