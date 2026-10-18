@@ -11,6 +11,8 @@ import { auth } from '@/auth';
 import { verifyAdminRole } from '@/lib/auth-guard';
 import { prisma } from '@/lib/db';
 import { getSheets } from '@/lib/google';
+import { getBudgetMatrixExportRows } from '@/lib/spending';
+import { calculateTotal } from '@/lib/utils';
 
 // Per-project in-memory sync lock (BUG-67).
 // NOTE: This lock is per-process only — multiple Node.js processes (e.g. in a
@@ -147,7 +149,7 @@ export async function POST() {
         const b19 = Number(bill.brutto19);
         const b7 = Number(bill.brutto7);
         const b0 = Number(bill.brutto0);
-        const total = b19 + b7 + b0 || Number(bill.grossAmount);
+        const total = calculateTotal(b19, b7, b0, Number(bill.grossAmount));
         const netto = Number(bill.nettoAmount) || b19 / 1.19 + b7 / 1.07 + b0;
 
         const motiveAllocs = bill.motives.map((a) => ({
@@ -242,98 +244,9 @@ export async function POST() {
       vgeldCursor = batch[batch.length - 1].id;
     }
 
-    const motivesRaw = await prisma.motive.findMany({
-      where: { projectId },
-      select: { id: true, name: true },
-      orderBy: { id: 'asc' },
-    });
-    const motives = motivesRaw.sort((a, b) => {
-      if (a.name === 'Default') return -1;
-      if (b.name === 'Default') return 1;
-      return 0;
-    });
-
-    const categoriesRaw = await prisma.category.findMany({
-      where: { projectId },
-      select: { id: true, name: true },
-      orderBy: { id: 'asc' },
-    });
-    const categories = categoriesRaw.sort((a, b) => {
-      if (a.name === 'Uncategorized') return -1;
-      if (b.name === 'Uncategorized') return 1;
-      return 0;
-    });
-
-    const matrixCells = await prisma.budgetMatrix.findMany({
-      where: { projectId },
-      select: { motiveId: true, categoryId: true, amount: true },
-    });
-    const matrix: Record<string, number> = {};
-    for (const r of matrixCells) {
-      matrix[`${r.categoryId}_${r.motiveId}`] = Number(r.amount);
-    }
-
-    const motiveSpendingRaw = await prisma.$queryRaw<{ motiveId: string; spent: number }[]>`
-      SELECT bm."motiveId", SUM(CAST(b."nettoAmount" AS DOUBLE PRECISION) * CAST(bm.percentage AS DOUBLE PRECISION) / 100) as spent
-      FROM "BillMotive" bm JOIN "Bill" b ON b.id = bm."billId"
-      WHERE b."projectId" = ${projectId} AND b.status = 'confirmed'::"BillStatus"
-      GROUP BY bm."motiveId"
-    `;
-    const categorySpendingRaw = await prisma.$queryRaw<{ categoryId: string; spent: number }[]>`
-      SELECT bc."categoryId", SUM(CAST(b."nettoAmount" AS DOUBLE PRECISION) * CAST(bc.percentage AS DOUBLE PRECISION) / 100) as spent
-      FROM "BillCategory" bc JOIN "Bill" b ON b.id = bc."billId"
-      WHERE b."projectId" = ${projectId} AND b.status = 'confirmed'::"BillStatus"
-      GROUP BY bc."categoryId"
-    `;
-
-    const motiveSpending: Record<string, number> = {};
-    for (const r of motiveSpendingRaw) motiveSpending[r.motiveId] = Number(r.spent) || 0;
-    const categorySpending: Record<string, number> = {};
-    for (const r of categorySpendingRaw) categorySpending[r.categoryId] = Number(r.spent) || 0;
-
-    // Budget Matrix data
-    const bmHeaders = [
-      'Category \\ Motive',
-      ...motives.map((m) => m.name),
-      'Total Budget',
-      'Spent',
-    ];
-    const bmData: (string | number)[][] = [bmHeaders];
-
-    for (const cat of categories) {
-      const rowData: (string | number)[] = [cat.name];
-      let rowTotal = 0;
-      for (const mot of motives) {
-        const val = matrix[`${cat.id}_${mot.id}`] || 0;
-        rowData.push(val);
-        rowTotal += val;
-      }
-      rowData.push(rowTotal);
-      rowData.push(categorySpending[cat.id] || 0);
-      bmData.push(rowData);
-    }
-
-    // Totals row
-    const totalRowData: (string | number)[] = ['Total'];
-    let grandTotal = 0;
-    let grandSpent = 0;
-    for (const mot of motives) {
-      let colTotal = 0;
-      for (const cat of categories) colTotal += matrix[`${cat.id}_${mot.id}`] || 0;
-      totalRowData.push(colTotal);
-      grandTotal += colTotal;
-    }
-    totalRowData.push(grandTotal);
-    for (const cat of categories) grandSpent += categorySpending[cat.id] || 0;
-    totalRowData.push(grandSpent);
-    bmData.push(totalRowData);
-
-    // Spent row
-    const spentRowData: (string | number)[] = ['Spent'];
-    for (const mot of motives) spentRowData.push(motiveSpending[mot.id] || 0);
-    spentRowData.push(grandSpent);
-    spentRowData.push('');
-    bmData.push(spentRowData);
+    // Rows come from lib/spending so "Spent (brutto)" equals /api/spending
+    // (confirmed + approved + paid bills, calculateTotal rule, cent-rounded).
+    const bmData = await getBudgetMatrixExportRows(projectId);
 
     // --- Write to Google Sheet ---
     const requiredTabs = ['Bills', 'V-Geld', 'Budget Matrix'];
@@ -424,7 +337,7 @@ export async function POST() {
           ? billsHeaders.length
           : name === 'V-Geld'
           ? vgeldHeaders.length
-          : bmHeaders.length;
+          : bmData[0].length;
 
       formatRequests.push({
         updateSheetProperties: {

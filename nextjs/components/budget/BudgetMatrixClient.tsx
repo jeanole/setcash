@@ -41,6 +41,8 @@ export default function BudgetMatrixClient({
   motiveSpendingBrutto: initialMotiveSpendingBrutto,
   categorySpendingBrutto: initialCategorySpendingBrutto,
   cellSpendingBrutto: initialCellSpendingBrutto,
+  categorySpendingTotal,
+  categorySpendingBruttoTotal,
   isAdmin,
   projectId,
 }: BudgetMatrixClientProps) {
@@ -57,6 +59,7 @@ export default function BudgetMatrixClient({
   const motiveSpending = amountMode === 'brutto' ? motiveSpendingBrutto : motiveSpendingNetto;
   const categorySpending = amountMode === 'brutto' ? categorySpendingBrutto : categorySpendingNetto;
   const cellSpending = amountMode === 'brutto' ? cellSpendingBrutto : cellSpendingNetto;
+  const grandSpentTotal = amountMode === 'brutto' ? categorySpendingBruttoTotal : categorySpendingTotal;
   const [editingCell, setEditingCell] = useState<string | null>(null);
   const [modifiedCells, setModifiedCells] = useState<Set<string>>(new Set());
   const [isSaving, setIsSaving] = useState(false);
@@ -428,6 +431,7 @@ export default function BudgetMatrixClient({
         motiveSpending={motiveSpending}
         categorySpending={categorySpending}
         cellSpending={cellSpending}
+        grandSpentTotal={grandSpentTotal}
         isAdmin={isAdmin}
         editingCell={editingCell}
         modifiedCells={modifiedCells}

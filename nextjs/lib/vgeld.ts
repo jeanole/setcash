@@ -4,18 +4,16 @@
 // Single source of truth for "received vs. spent" so the dashboard, sidebar
 // balance, analysis table and reports all agree:
 //   received = confirmed V-Geld transfers (confirmedBy IS NOT NULL)
-//   spent    = brutto19 + brutto7 + brutto0 of bills in SPENDING_BILL_STATUSES
-// Sums are computed in the database; only the aggregates are converted to
-// numbers and rounded to cents.
+//   spent    = bill total of bills in SPENDING_BILL_STATUSES, where the bill
+//              total follows calculateTotal(): brutto19 + brutto7 + brutto0, or
+//              grossAmount when that sum is 0 (e.g. OCR without VAT breakdown)
+// Sums are computed in the database (exact NUMERIC); only the final aggregates
+// are rounded to cents.
 // ============================================================================
 
 import { db as prisma } from '@/lib/db';
-import { BillStatus } from '@prisma/client';
-import { SPENDING_BILL_STATUSES, roundCents } from '@/lib/spending';
-
-const SPENDING_STATUS_FILTER = {
-  in: SPENDING_BILL_STATUSES as unknown as BillStatus[],
-};
+import { Prisma } from '@prisma/client';
+import { SPENDING_STATUS_SQL, BILL_TOTAL_SQL, roundCents } from '@/lib/spending';
 
 export interface VgeldUserSummary {
   user: string;
@@ -25,26 +23,30 @@ export interface VgeldUserSummary {
   percentUsed: number;
 }
 
-function sumBrutto(sum: { brutto19: unknown; brutto7: unknown; brutto0: unknown }): number {
-  return Number(sum.brutto19 ?? 0) + Number(sum.brutto7 ?? 0) + Number(sum.brutto0 ?? 0);
+function dec(value: unknown): Prisma.Decimal {
+  if (value === null || value === undefined) return new Prisma.Decimal(0);
+  return new Prisma.Decimal(value as Prisma.Decimal.Value);
 }
 
 /**
  * Current V-Geld balance (received − spent) of one user in one project.
  */
 export async function getVgeldBalance(projectId: string, userEmail: string): Promise<number> {
-  const [received, spent] = await Promise.all([
+  const [received, spentRows] = await Promise.all([
     prisma.vgeld.aggregate({
       where: { projectId, toUser: userEmail, confirmedBy: { not: null } },
       _sum: { amount: true },
     }),
-    prisma.bill.aggregate({
-      where: { projectId, submittedByEmail: userEmail, status: SPENDING_STATUS_FILTER },
-      _sum: { brutto19: true, brutto7: true, brutto0: true },
-    }),
+    prisma.$queryRaw<{ spent: unknown }[]>(Prisma.sql`
+      SELECT COALESCE(SUM(${BILL_TOTAL_SQL}), 0) AS spent
+      FROM "Bill" b
+      WHERE b."projectId" = ${projectId}
+        AND b."submittedByEmail" = ${userEmail}
+        AND b.status IN (${SPENDING_STATUS_SQL})
+    `),
   ]);
 
-  return roundCents(Number(received._sum.amount ?? 0) - sumBrutto(spent._sum));
+  return roundCents(Number(dec(received._sum.amount).minus(dec(spentRows[0]?.spent))));
 }
 
 /**
@@ -57,31 +59,36 @@ export async function getVgeldAnalysis(projectId: string): Promise<VgeldUserSumm
       where: { projectId, confirmedBy: { not: null } },
       _sum: { amount: true },
     }),
-    prisma.bill.groupBy({
-      by: ['submittedByEmail'],
-      where: { projectId, status: SPENDING_STATUS_FILTER },
-      _sum: { brutto19: true, brutto7: true, brutto0: true },
-    }),
+    prisma.$queryRaw<{ email: string; spent: unknown }[]>(Prisma.sql`
+      SELECT b."submittedByEmail" AS email, SUM(${BILL_TOTAL_SQL}) AS spent
+      FROM "Bill" b
+      WHERE b."projectId" = ${projectId}
+        AND b.status IN (${SPENDING_STATUS_SQL})
+      GROUP BY b."submittedByEmail"
+    `),
   ]);
 
-  const receivedMap = new Map<string, number>(
-    vgeldGroups.map((g) => [g.toUser, Number(g._sum.amount ?? 0)])
+  const receivedMap = new Map<string, Prisma.Decimal>(
+    vgeldGroups.map((g) => [g.toUser, dec(g._sum.amount)])
   );
-  const spentMap = new Map<string, number>(
-    billGroups.map((g) => [g.submittedByEmail, sumBrutto(g._sum)])
+  const spentMap = new Map<string, Prisma.Decimal>(
+    billGroups.map((g) => [g.email, dec(g.spent)])
   );
 
   const allUsers = new Set<string>([...receivedMap.keys(), ...spentMap.keys()]);
+  const zero = new Prisma.Decimal(0);
 
   return Array.from(allUsers)
     .map((user) => {
-      const received = roundCents(receivedMap.get(user) ?? 0);
-      const spent = roundCents(spentMap.get(user) ?? 0);
+      const receivedExact = receivedMap.get(user) ?? zero;
+      const spentExact = spentMap.get(user) ?? zero;
+      const received = roundCents(Number(receivedExact));
+      const spent = roundCents(Number(spentExact));
       return {
         user,
         received,
         spent,
-        remaining: roundCents(received - spent),
+        remaining: roundCents(Number(receivedExact.minus(spentExact))),
         percentUsed: received > 0 ? (spent / received) * 100 : 0,
       };
     })

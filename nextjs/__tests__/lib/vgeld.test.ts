@@ -7,6 +7,7 @@
 
 import { db } from '@/lib/db';
 import { getVgeldBalance, getVgeldAnalysis } from '@/lib/vgeld';
+import { getDashboardStats, getRecentBills } from '@/lib/dashboard';
 import { createTestContext, cleanupTestContext, TestContext } from '../helpers';
 
 describe('V-Geld aggregation', () => {
@@ -65,5 +66,59 @@ describe('V-Geld aggregation', () => {
     expect(analysis.find((a) => a.user === ctx.userEmail)).toMatchObject(
       { received: 500.3, spent: 136.55, remaining: 363.75 }
     );
+  });
+});
+
+describe('V-Geld with grossAmount-only bills (BUG-9)', () => {
+  let ctx: TestContext;
+
+  beforeAll(async () => {
+    ctx = await createTestContext();
+    const { projectId, userEmail } = ctx;
+    const date = new Date('2026-01-15');
+
+    await db.vgeld.create({
+      data: { projectId, date, amount: 100, toUser: userEmail, confirmedBy: 'admin@example.com' },
+    });
+
+    await db.bill.createMany({
+      data: [
+        // What OCR writes for a receipt without a VAT breakdown
+        { projectId, date, submittedByEmail: userEmail, status: 'approved', vendor: 'OCR Vendor', grossAmount: 50 },
+        // Brutto sum wins over a stale grossAmount
+        { projectId, date, submittedByEmail: userEmail, status: 'paid', brutto19: 10, grossAmount: 777 },
+        // Not real spending
+        { projectId, date, submittedByEmail: userEmail, status: 'pending', grossAmount: 300 },
+      ],
+    });
+  });
+
+  afterAll(async () => {
+    await cleanupTestContext(ctx);
+  });
+
+  it('should subtract a grossAmount-only bill from the balance', async () => {
+    // 100 - 50 - 10
+    await expect(getVgeldBalance(ctx.projectId, ctx.userEmail)).resolves.toBe(40);
+  });
+
+  it('should count a grossAmount-only bill as spent in the analysis', async () => {
+    const analysis = await getVgeldAnalysis(ctx.projectId);
+
+    expect(analysis).toEqual([
+      { user: ctx.userEmail, received: 100, spent: 60, remaining: 40, percentUsed: 60 },
+    ]);
+  });
+
+  it('should show the same balance on the dashboard', async () => {
+    const stats = await getDashboardStats(ctx.projectId, ctx.userEmail, 'user');
+
+    expect(stats.vgeldBalance).toBe(40);
+  });
+
+  it('should expose the calculateTotal amount of each recent bill', async () => {
+    const bills = await getRecentBills(ctx.projectId, ctx.userEmail, 'admin', 10);
+
+    expect(bills.map((b) => b.total).sort((a, b) => a - b)).toEqual([10, 50, 300]);
   });
 });

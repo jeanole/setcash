@@ -12,6 +12,8 @@ interface BudgetMatrixTableProps {
   motiveSpending: Record<string, number>;
   categorySpending: Record<string, number>;
   cellSpending: Record<string, number>;
+  /** Once-rounded total from the server; avoids summing rounded rows */
+  grandSpentTotal?: number;
   isAdmin: boolean;
   editingCell: string | null;
   modifiedCells?: Set<string>;
@@ -54,6 +56,7 @@ export default function BudgetMatrixTable({
   motiveSpending,
   categorySpending,
   cellSpending,
+  grandSpentTotal: serverGrandSpentTotal,
   isAdmin,
   editingCell,
   modifiedCells = new Set(),
@@ -103,6 +106,7 @@ export default function BudgetMatrixTable({
   };
 
   const calculateGrandSpentTotal = (): number => {
+    if (serverGrandSpentTotal !== undefined) return serverGrandSpentTotal;
     return Object.values(categorySpending).reduce((sum, spent) => sum + spent, 0);
   };
 

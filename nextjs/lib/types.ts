@@ -145,6 +145,10 @@ export interface BudgetMatrixResponse {
   categorySpendingBrutto: Record<string, number>;
   /** Brutto spending per "{categoryId}_{motiveId}" cell */
   cellSpendingBrutto: Record<string, number>;
+  /** Netto spending over all categories, rounded once */
+  categorySpendingTotal?: number;
+  /** Brutto spending over all categories, rounded once */
+  categorySpendingBruttoTotal?: number;
 }
 
 export interface BudgetCellUpdate {

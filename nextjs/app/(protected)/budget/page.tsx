@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/db';
+import { getBudgetMatrixSpending } from '@/lib/spending';
 import BudgetMatrixClient from '@/components/budget/BudgetMatrixClient';
 import SettingsSection from '@/components/settings/SettingsSection';
 import type { BudgetMatrixResponse, Motive, Category } from '@/lib/types';
@@ -52,118 +53,16 @@ async function getBudgetMatrixData(projectId: string): Promise<BudgetMatrixRespo
     grandTotal += amount;
   }
 
-  // Calculate spending using raw SQL queries
-  // Note: PostgreSQL with Prisma uses camelCase column names
-
-  // Netto spending per motive
-  const motiveSpendingRaw = await prisma.$queryRaw<{ motiveId: string; spent: number }[]>`
-    SELECT bm."motiveId", SUM(b."nettoAmount" * bm.percentage / 100) as spent
-    FROM "BillMotive" bm
-    JOIN "Bill" b ON b.id = bm."billId"
-    WHERE b."projectId" = ${projectId}
-      AND b.status NOT IN ('draft'::"BillStatus", 'pending'::"BillStatus", 'rejected'::"BillStatus")
-    GROUP BY bm."motiveId"
-  `;
-
-  // Brutto spending per motive
-  const motiveSpendingBruttoRaw = await prisma.$queryRaw<{ motiveId: string; spent: number }[]>`
-    SELECT bm."motiveId", SUM((b."brutto19" + b."brutto7" + b."brutto0") * bm.percentage / 100) as spent
-    FROM "BillMotive" bm
-    JOIN "Bill" b ON b.id = bm."billId"
-    WHERE b."projectId" = ${projectId}
-      AND b.status NOT IN ('draft'::"BillStatus", 'pending'::"BillStatus", 'rejected'::"BillStatus")
-    GROUP BY bm."motiveId"
-  `;
-
-  // Netto spending per category
-  const categorySpendingRaw = await prisma.$queryRaw<{ categoryId: string; spent: number }[]>`
-    SELECT bc."categoryId", SUM(b."nettoAmount" * bc.percentage / 100) as spent
-    FROM "BillCategory" bc
-    JOIN "Bill" b ON b.id = bc."billId"
-    WHERE b."projectId" = ${projectId}
-      AND b.status NOT IN ('draft'::"BillStatus", 'pending'::"BillStatus", 'rejected'::"BillStatus")
-    GROUP BY bc."categoryId"
-  `;
-
-  // Brutto spending per category
-  const categorySpendingBruttoRaw = await prisma.$queryRaw<{ categoryId: string; spent: number }[]>`
-    SELECT bc."categoryId", SUM((b."brutto19" + b."brutto7" + b."brutto0") * bc.percentage / 100) as spent
-    FROM "BillCategory" bc
-    JOIN "Bill" b ON b.id = bc."billId"
-    WHERE b."projectId" = ${projectId}
-      AND b.status NOT IN ('draft'::"BillStatus", 'pending'::"BillStatus", 'rejected'::"BillStatus")
-    GROUP BY bc."categoryId"
-  `;
-
-  // Netto cell spending (motive + category intersection)
-  const cellSpendingRaw = await prisma.$queryRaw<{ motiveId: string; categoryId: string; spent: number }[]>`
-    SELECT bm."motiveId", bc."categoryId",
-      SUM(b."nettoAmount" * bm.percentage / 100 * bc.percentage / 100) as spent
-    FROM "BillMotive" bm
-    JOIN "BillCategory" bc ON bc."billId" = bm."billId"
-    JOIN "Bill" b ON b.id = bm."billId"
-    WHERE b."projectId" = ${projectId}
-      AND b.status NOT IN ('draft'::"BillStatus", 'pending'::"BillStatus", 'rejected'::"BillStatus")
-    GROUP BY bm."motiveId", bc."categoryId"
-  `;
-
-  // Brutto cell spending
-  const cellSpendingBruttoRaw = await prisma.$queryRaw<{ motiveId: string; categoryId: string; spent: number }[]>`
-    SELECT bm."motiveId", bc."categoryId",
-      SUM((b."brutto19" + b."brutto7" + b."brutto0") * bm.percentage / 100 * bc.percentage / 100) as spent
-    FROM "BillMotive" bm
-    JOIN "BillCategory" bc ON bc."billId" = bm."billId"
-    JOIN "Bill" b ON b.id = bm."billId"
-    WHERE b."projectId" = ${projectId}
-      AND b.status NOT IN ('draft'::"BillStatus", 'pending'::"BillStatus", 'rejected'::"BillStatus")
-    GROUP BY bm."motiveId", bc."categoryId"
-  `;
-
-  const roundToTwo = (value: number): number => Math.round(value * 100) / 100;
-
-  const motiveSpending: Record<string, number> = {};
-  for (const row of motiveSpendingRaw) {
-    motiveSpending[row.motiveId] = roundToTwo(Number(row.spent));
-  }
-
-  const motiveSpendingBrutto: Record<string, number> = {};
-  for (const row of motiveSpendingBruttoRaw) {
-    motiveSpendingBrutto[row.motiveId] = roundToTwo(Number(row.spent));
-  }
-
-  const categorySpending: Record<string, number> = {};
-  for (const row of categorySpendingRaw) {
-    categorySpending[row.categoryId] = roundToTwo(Number(row.spent));
-  }
-
-  const categorySpendingBrutto: Record<string, number> = {};
-  for (const row of categorySpendingBruttoRaw) {
-    categorySpendingBrutto[row.categoryId] = roundToTwo(Number(row.spent));
-  }
-
-  const cellSpending: Record<string, number> = {};
-  for (const row of cellSpendingRaw) {
-    const key = `${row.categoryId}_${row.motiveId}`;
-    cellSpending[key] = roundToTwo(Number(row.spent));
-  }
-
-  const cellSpendingBrutto: Record<string, number> = {};
-  for (const row of cellSpendingBruttoRaw) {
-    const key = `${row.categoryId}_${row.motiveId}`;
-    cellSpendingBrutto[key] = roundToTwo(Number(row.spent));
-  }
+  // Netto + brutto spending for confirmed/approved/paid bills (shared with
+  // GET /api/budget-matrix; brutto follows the calculateTotal rule).
+  const spending = await getBudgetMatrixSpending(projectId);
 
   return {
     motives,
     categories,
     matrix,
     grandTotal,
-    motiveSpending,
-    categorySpending,
-    cellSpending,
-    motiveSpendingBrutto,
-    categorySpendingBrutto,
-    cellSpendingBrutto,
+    ...spending,
   };
 }
 
