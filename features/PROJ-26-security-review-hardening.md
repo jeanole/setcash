@@ -1,6 +1,7 @@
 ## PROJ-26: Security Review & Dependency Hardening (Oct 2026)
 
-**Status:** QA Passed
+**Status:** Deployed
+**Deployed:** 2026-10-18 (production `86fac27`, image `ghcr.io/jeanole/setcash:86fac270e6f9a53c4764616a67cb98130c62bb54`, tag `v1.26.0-PROJ-26`)
 **Branch:** `claude/keen-rubin-b78ded`
 
 ### Summary
