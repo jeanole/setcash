@@ -6,6 +6,7 @@ import { prisma } from '@/lib/db';
 import { verifySuperAdmin } from '@/lib/auth-guard';
 import { sendInvitationEmail } from '@/lib/email';
 import { inviteLimiter } from '@/lib/ratelimit';
+import { insensitiveEquals } from '@/lib/db-match';
 
 const schema = z.object({
   // Trimmed + lowercased so lookups and stored tokens are case-insensitive
@@ -84,7 +85,7 @@ export async function POST(
 
   // Case-insensitive lookup: the account may be stored with mixed case
   const existingUser = await prisma.user.findFirst({
-    where: { email: { equals: email, mode: 'insensitive' } },
+    where: { email: insensitiveEquals(email) },
     orderBy: { createdAt: 'asc' },
     select: { email: true },
   });
@@ -117,7 +118,7 @@ export async function POST(
 
   // Delete any existing invitation tokens for this email + project
   await prisma.invitationToken.deleteMany({
-    where: { email: { equals: email, mode: 'insensitive' }, projectId },
+    where: { email: insensitiveEquals(email), projectId },
   });
 
   // Generate token

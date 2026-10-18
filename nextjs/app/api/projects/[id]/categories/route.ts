@@ -3,6 +3,7 @@ import { auth } from '@/auth';
 import { prisma } from '@/lib/db';
 import { verifySuperAdmin } from '@/lib/auth-guard';
 import { z } from 'zod';
+import { insensitiveEquals } from '@/lib/db-match';
 
 const createSchema = z.object({
   name: z.string().trim().min(1).max(100),
@@ -108,10 +109,7 @@ export async function POST(
     const existing = await prisma.category.findFirst({
       where: {
         projectId: id,
-        name: {
-          equals: validated.name,
-          mode: 'insensitive',
-        },
+        name: insensitiveEquals(validated.name),
       },
     });
 

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import crypto from 'crypto';
 import { forgotPasswordLimiter } from '@/lib/ratelimit';
 import { sendPasswordResetEmail } from '@/lib/email';
+import { insensitiveEquals } from '@/lib/db-match';
 
 const schema = z.object({
   email: z.string().email(),
@@ -34,7 +35,7 @@ export async function POST(req: Request) {
   try {
     // Case-insensitive lookup; tokens and mail use the stored address
     const user = await prisma.user.findFirst({
-      where: { email: { equals: email, mode: 'insensitive' } },
+      where: { email: insensitiveEquals(email) },
     });
 
     // Only proceed if user exists, has a password, and is not a demo account

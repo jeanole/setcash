@@ -4,6 +4,7 @@ import { z } from 'zod';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { passwordSchema } from '@/lib/auth/password';
+import { insensitiveEquals } from '@/lib/db-match';
 
 // GET: Validate token and return invitation details
 export async function GET(req: Request) {
@@ -32,7 +33,7 @@ export async function GET(req: Request) {
   // its password was set by whoever signed up, which may not be the invitee,
   // so the invitee must choose a password (see POST).
   const existingUser = await prisma.user.findFirst({
-    where: { email: { equals: invitation.email, mode: 'insensitive' } },
+    where: { email: insensitiveEquals(invitation.email) },
     select: { emailVerified: true },
   });
 
@@ -82,7 +83,7 @@ export async function POST(req: Request) {
 
   // Case-insensitive: older invitations/accounts may differ in letter case
   const user = await prisma.user.findFirst({
-    where: { email: { equals: invitation.email, mode: 'insensitive' } },
+    where: { email: insensitiveEquals(invitation.email) },
   });
   // The address the account is (or will be) stored under
   const accountEmail = user?.email ?? invitation.email;

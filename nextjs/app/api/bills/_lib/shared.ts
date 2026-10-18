@@ -8,6 +8,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { db as prisma } from '@/lib/db';
+import { insensitiveEquals } from '@/lib/db-match';
 
 // Small float slack for allocation-sum validation
 export const ALLOCATION_SUM_EPSILON = 0.01;
@@ -181,7 +182,7 @@ export async function nextBillNumber(
 
   const existing = await tx.bill.findMany({
     where: {
-      submittedByEmail: { equals: userEmail, mode: 'insensitive' },
+      submittedByEmail: insensitiveEquals(userEmail),
       projectId,
       billNumber: { not: null },
     },

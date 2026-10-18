@@ -8,6 +8,7 @@ import { verifySuperAdmin } from '@/lib/auth-guard';
 import { db as prisma } from '@/lib/db';
 import { z } from 'zod';
 import { ProjectRole } from '@prisma/client';
+import { insensitiveEquals } from '@/lib/db-match';
 
 // Validation schema for adding members
 const MemberSchema = z.object({
@@ -123,10 +124,7 @@ export async function POST(
     // Find user by email (case-insensitive)
     const foundUser = await prisma.user.findFirst({
       where: {
-        email: {
-          equals: email,
-          mode: 'insensitive',
-        },
+        email: insensitiveEquals(email),
       },
     });
 

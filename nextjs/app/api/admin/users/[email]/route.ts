@@ -9,6 +9,7 @@ import { verifySuperAdmin } from '@/lib/auth-guard';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { randomBytes } from 'crypto';
+import { insensitiveEquals } from '@/lib/db-match';
 
 // Validation schema for updating users (password reset, custom password, superadmin flag)
 const UpdateUserSchema = z
@@ -38,10 +39,7 @@ const UpdateUserSchema = z
 async function findUserByEmail(email: string) {
   return prisma.user.findFirst({
     where: {
-      email: {
-        equals: email,
-        mode: 'insensitive',
-      },
+      email: insensitiveEquals(email),
     },
   });
 }

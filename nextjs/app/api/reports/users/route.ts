@@ -9,6 +9,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/db';
 import { verifyAdminRole, verifyProjectMember } from '@/lib/auth-guard';
+import { insensitiveEquals } from '@/lib/db-match';
 
 export async function GET() {
   try {
@@ -63,7 +64,7 @@ export async function GET() {
       const member = await prisma.projectMember.findFirst({
         where: {
           projectId,
-          userEmail: { equals: session.user.email, mode: 'insensitive' },
+          userEmail: insensitiveEquals(session.user.email),
         },
         include: { position: true },
       });

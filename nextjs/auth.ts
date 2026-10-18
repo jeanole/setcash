@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import type { JWT } from '@auth/core/jwt';
+import { insensitiveEquals } from '@/lib/db-match';
 
 // ---------------------------------------------------------------------------
 // NextAuth v5 session/JWT type augmentation
@@ -184,7 +185,7 @@ export async function authorizeCredentials(
   const { email, password } = parsed.data;
 
   const user = await prisma.user.findFirst({
-    where: { email: { equals: email, mode: 'insensitive' } },
+    where: { email: insensitiveEquals(email) },
     orderBy: { createdAt: 'asc' },
     select: { id: true, email: true, passwordHash: true, isActive: true, emailVerified: true },
   });
@@ -304,6 +305,62 @@ export async function syncTokenWithDb(token: JWT, isSignIn: boolean): Promise<JW
 }
 
 // ---------------------------------------------------------------------------
+// Google sign-in — find or create the user (exported for tests)
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve a Google identity to a SetCash user. Mutates `user.email` to the
+ * stored address so the jwt callback (which receives the same object) looks
+ * up the right account. Returns false to refuse the sign-in.
+ */
+export async function resolveGoogleSignIn(user: { email?: string | null }): Promise<boolean> {
+  if (!user.email) return false;
+
+  // Find or create user record for Google sign-in
+  // Case-insensitive: Google reports lowercase addresses, legacy
+  // credential accounts may be stored with mixed case
+  const existing = await prisma.user.findFirst({
+    where: { email: insensitiveEquals(user.email) },
+  });
+
+  // Defense in depth: an OAuth identity may only ever resolve to the
+  // account with exactly this address (case aside), never a near match.
+  if (existing && existing.email.toLowerCase() !== user.email.toLowerCase()) return false;
+
+  if (existing && !existing.isActive) return false;
+
+  // Carry the stored address into the token (Auth.js passes this same
+  // user object on to the jwt callback), so session lookups match it.
+  if (existing) user.email = existing.email;
+
+  if (!existing) {
+    // Auto-create user on first Google sign-in (passwordHash is empty, auto-verified)
+    await prisma.user.create({
+      data: {
+        email: user.email,
+        passwordHash: '',
+        emailVerified: new Date(),
+      },
+    });
+  } else if (!existing.emailVerified) {
+    // Existing UNVERIFIED account: its password was set by whoever signed
+    // up, which Google has not proven to be this user (pre-registration
+    // takeover). Drop that password — the owner can set one via
+    // "Forgot password" — and end any sessions tied to it.
+    await prisma.user.update({
+      where: { id: existing.id },
+      data: {
+        emailVerified: new Date(),
+        passwordHash: '',
+        sessionVersion: { increment: 1 },
+      },
+    });
+  }
+
+  return true;
+}
+
+// ---------------------------------------------------------------------------
 // NextAuth configuration
 // ---------------------------------------------------------------------------
 
@@ -377,46 +434,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     // ------------------------------------------------------------------
     async signIn({ user, account }) {
       if (account?.provider === 'google') {
-        if (!user.email) return false;
-
-        // Find or create user record for Google sign-in
-        // Case-insensitive: Google reports lowercase addresses, legacy
-        // credential accounts may be stored with mixed case
-        const existing = await prisma.user.findFirst({
-          where: { email: { equals: user.email, mode: 'insensitive' } },
-        });
-
-        if (existing && !existing.isActive) return false;
-
-        // Carry the stored address into the token (Auth.js passes this same
-        // user object on to the jwt callback), so session lookups match it.
-        if (existing) user.email = existing.email;
-
-        if (!existing) {
-          // Auto-create user on first Google sign-in (passwordHash is empty, auto-verified)
-          await prisma.user.create({
-            data: {
-              email: user.email,
-              passwordHash: '',
-              emailVerified: new Date(),
-            },
-          });
-        } else if (!existing.emailVerified) {
-          // Existing UNVERIFIED account: its password was set by whoever signed
-          // up, which Google has not proven to be this user (pre-registration
-          // takeover). Drop that password — the owner can set one via
-          // "Forgot password" — and end any sessions tied to it.
-          await prisma.user.update({
-            where: { id: existing.id },
-            data: {
-              emailVerified: new Date(),
-              passwordHash: '',
-              sessionVersion: { increment: 1 },
-            },
-          });
-        }
-
-        return true;
+        return resolveGoogleSignIn(user);
       }
 
       return true;

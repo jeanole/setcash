@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth/session';
 import { z } from 'zod';
+import { insensitiveEquals } from '@/lib/db-match';
 
 // Validation schema for profile updates
 const UpdateProfileSchema = z.object({
@@ -77,10 +78,7 @@ export async function PATCH(req: NextRequest) {
     if (username != null) {
       const existing = await db.user.findFirst({
         where: {
-          username: {
-            equals: username,
-            mode: 'insensitive',
-          },
+          username: insensitiveEquals(username),
           id: {
             not: sessionUser.id,
           },

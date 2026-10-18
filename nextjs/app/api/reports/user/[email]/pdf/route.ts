@@ -19,6 +19,7 @@ import path from 'path';
 import { PassThrough } from 'stream';
 // @ts-ignore
 import PDFDocument from 'pdfkit';
+import { insensitiveEquals } from '@/lib/db-match';
 
 // Upper bounds so a single request cannot build an unbounded PDF.
 const MAX_REPORT_BILLS = 1000;
@@ -93,11 +94,11 @@ export async function GET(req: NextRequest, props: { params: Promise<{ email: st
     // truncation at MAX_REPORT_BILLS.
     const billWhere = {
       projectId,
-      submittedByEmail: { equals: targetEmail, mode: 'insensitive' as const },
+      submittedByEmail: insensitiveEquals(targetEmail),
     };
     const vgeldWhere = {
       projectId,
-      toUser: { equals: targetEmail, mode: 'insensitive' as const },
+      toUser: insensitiveEquals(targetEmail),
       // Only count confirmed V-Geld transfers (confirmedBy not null).
       confirmedBy: { not: null },
     };
@@ -136,7 +137,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ email: st
     const member = await prisma.projectMember.findFirst({
       where: {
         projectId,
-        userEmail: { equals: targetEmail, mode: 'insensitive' },
+        userEmail: insensitiveEquals(targetEmail),
       },
       include: { position: true },
     });
