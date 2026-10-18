@@ -54,7 +54,9 @@ export async function POST(req: Request) {
     );
   }
 
-  // Every file formidable wrote to disk, so early returns can remove them
+  // Every file formidable wrote to disk. Whatever is still at its temp path when
+  // the handler ends (any return or throw) is removed in the `finally` below; a
+  // screenshot that was already moved there has no temp file left to delete.
   let allFiles: { filepath?: string }[] = [];
   const cleanupTempFiles = () => {
     for (const f of allFiles) {
@@ -63,9 +65,19 @@ export async function POST(req: Request) {
       }
     }
   };
+  // Final location of the screenshot, removed again if the report is not created
+  let storedScreenshotPath: string | null = null;
+  const removeStoredScreenshot = () => {
+    if (storedScreenshotPath && fs.existsSync(storedScreenshotPath)) {
+      try { fs.unlinkSync(storedScreenshotPath); } catch { /* best-effort cleanup */ }
+    }
+    storedScreenshotPath = null;
+  };
 
   try {
-    const { fields, files } = await parseForm(req, { maxFiles: 1 });
+    // Only the `screenshot` file field is accepted; parts under any other name
+    // are never written to disk
+    const { fields, files } = await parseForm(req, { maxFiles: 1, fields: ['screenshot'] });
     allFiles = Object.values(files).flat().filter(Boolean) as { filepath?: string }[];
 
     // Extract field values (formidable returns arrays)
@@ -77,7 +89,6 @@ export async function POST(req: Request) {
 
     const parsed = bugReportSchema.safeParse({ title, description, stepsToReproduce });
     if (!parsed.success) {
-      cleanupTempFiles();
       return NextResponse.json(
         { error: 'Invalid input', details: parsed.error.flatten() },
         { status: 400 }
@@ -93,7 +104,6 @@ export async function POST(req: Request) {
       const validation = validateFile(screenshotFile);
       const screenshotExt = path.extname(screenshotFile.originalFilename || '').toLowerCase();
       if (!validation.valid || !SCREENSHOT_EXTENSIONS.includes(screenshotExt)) {
-        cleanupTempFiles();
         return NextResponse.json(
           { error: validation.error || 'Screenshot must be a PNG, JPEG or WebP image' },
           { status: 400 }
@@ -109,6 +119,7 @@ export async function POST(req: Request) {
       const destPath = path.join(bugReportsDir, filename);
 
       fs.renameSync(screenshotFile.filepath, destPath);
+      storedScreenshotPath = destPath;
 
       const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
       screenshotUrl = `${appUrl}/api/bug-reports/screenshots/${filename}`;
@@ -159,6 +170,7 @@ export async function POST(req: Request) {
     if (!ghRes.ok) {
       const ghError = await ghRes.text();
       console.error('GitHub API error:', ghRes.status, ghError);
+      removeStoredScreenshot();
       return NextResponse.json(
         { error: 'Failed to create bug report on GitHub' },
         { status: 502 }
@@ -172,7 +184,7 @@ export async function POST(req: Request) {
       { status: 201 }
     );
   } catch (error) {
-    cleanupTempFiles();
+    removeStoredScreenshot();
     const uploadResponse = uploadErrorResponse(error);
     if (uploadResponse) return uploadResponse;
     console.error('Bug report error:', error);
@@ -180,5 +192,7 @@ export async function POST(req: Request) {
       { error: 'Failed to process bug report' },
       { status: 500 }
     );
+  } finally {
+    cleanupTempFiles();
   }
 }

@@ -34,6 +34,10 @@ const FORM_OVERHEAD_BYTES = 1024 * 1024;
 // Cap for the combined size of all non-file form fields
 const MAX_FIELDS_SIZE = 512 * 1024;
 
+// How long a failed parse waits for half-written files to close before it
+// answers; files still open after that are removed as soon as they close
+const FILE_CLOSE_WAIT_MS = 2000;
+
 /**
  * Error raised by parseForm for malformed or oversized uploads. `status` is the
  * HTTP status the route should answer with; `message` is safe to show clients.
@@ -80,7 +84,10 @@ function toUploadError(err: unknown): UploadError {
  *
  * `options.fields` lists the file field names the caller expects. File parts
  * under any other name are never written to disk. A file part with a disallowed
- * extension fails the request with UploadError(415) and nothing is left behind.
+ * extension fails the request with UploadError(415). Whenever the parse fails
+ * (limits, malformed body, bad extension) every file written so far is removed,
+ * including parts that were still in flight when the failure happened, so a
+ * rejected upload leaves nothing behind.
  */
 export async function parseForm(
   req: Request,
@@ -139,12 +146,12 @@ export async function parseForm(
 
   return new Promise((resolve, reject) => {
     // Every file formidable starts writing is tracked so it can be removed again
-    // on any failure path, whatever state formidable itself is in.
-    const writtenPaths: string[] = [];
-    const removeWritten = () => {
-      for (const p of writtenPaths) {
-        try { fs.unlinkSync(p); } catch { /* already gone */ }
-      }
+    // on any failure path, whatever state formidable itself is in. `closed`
+    // resolves once the file's write stream has closed (nothing writes to it any
+    // more, so it can be unlinked for good).
+    const tracked: { filepath: string; closed: Promise<void> }[] = [];
+    const unlinkTracked = (filepath: string) => {
+      try { fs.unlinkSync(filepath); } catch { /* already gone */ }
     };
     // Set by the filter when a file part must fail the whole request
     let rejection: UploadError | null = null;
@@ -173,22 +180,65 @@ export async function parseForm(
         return true;
       },
     });
+
+    // Emitted right before formidable opens the file for writing. Formidable's
+    // part handling is asynchronous, so parts that were already in flight when it
+    // failed (e.g. files past `maxFiles`) still reach this point after the error.
     form.on('fileBegin', (_name, file) => {
-      writtenPaths.push(file.filepath);
+      const handle = file as unknown as {
+        _writeStream?: fs.WriteStream | null;
+        open: () => void;
+        write: (buffer: Buffer, cb?: () => void) => void;
+        end: (cb?: () => void) => void;
+        destroy: () => void;
+      };
+      if ((form as unknown as { error?: unknown }).error) {
+        // The request has already failed: never create this file
+        handle.open = () => { /* skipped */ };
+        handle.write = (_buffer, cb) => { cb?.(); };
+        handle.end = (cb) => { cb?.(); };
+        handle.destroy = () => { /* nothing was opened */ };
+        return;
+      }
+      let markClosed: () => void = () => { /* replaced below */ };
+      const closed = new Promise<void>((res) => { markClosed = res; });
+      tracked.push({ filepath: file.filepath, closed });
+      // formidable calls file.open() synchronously after this event, so the
+      // write stream exists by the next microtask
+      queueMicrotask(() => {
+        const stream = handle._writeStream;
+        if (!stream || stream.closed) markClosed();
+        else stream.once('close', markClosed);
+      });
     });
+
+    // Stop reading the body, wait (bounded) for the open write streams to close,
+    // then remove every file written so far. A file that is still open after the
+    // wait is removed as soon as it closes.
+    const fail = (err: UploadError) => {
+      limiter.destroy();
+      for (const t of tracked) {
+        void t.closed.then(() => unlinkTracked(t.filepath));
+      }
+      let timer: NodeJS.Timeout | undefined;
+      const timeout = new Promise<void>((res) => {
+        timer = setTimeout(res, FILE_CLOSE_WAIT_MS);
+      });
+      void Promise.race([Promise.all(tracked.map((t) => t.closed)), timeout]).then(() => {
+        clearTimeout(timer);
+        for (const t of tracked) unlinkTracked(t.filepath);
+        reject(err);
+      });
+    };
 
     form.parse(limiter as unknown as IncomingMessage, (err, fields, files) => {
       if (err) {
-        // Stop reading the rest of the body
-        limiter.destroy();
-        removeWritten();
         // The limiter's own 413 beats whatever formidable reports for the aborted stream
-        reject(limitError ?? toUploadError(err));
+        fail(limitError ?? toUploadError(err));
         return;
       }
       if (rejection) {
-        removeWritten();
-        reject(rejection);
+        fail(rejection);
         return;
       }
       if (expectedFields) {
@@ -196,7 +246,7 @@ export async function parseForm(
         for (const [name, entry] of Object.entries(files)) {
           if (expectedFields.includes(name)) continue;
           for (const f of Array.isArray(entry) ? entry : entry ? [entry] : []) {
-            try { fs.unlinkSync(f.filepath); } catch { /* already gone */ }
+            unlinkTracked(f.filepath);
           }
           delete (files as Record<string, unknown>)[name];
         }

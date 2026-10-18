@@ -531,6 +531,26 @@ describe('bills API', () => {
       expect(listUploads()).toEqual(before);
     }, 120000);
 
+    it.each([11, 12, 15])('should answer 413 and leave no file behind for %i files (past maxFiles)', async (count) => {
+      const member = await createMember();
+      mockAuth.mockResolvedValue(member.session as never);
+      const before = listUploads();
+      const billsBefore = await db.bill.count({ where: { projectId: ctx.projectId } });
+
+      const res = await billsRoute.POST(
+        await multipartWithFiles(
+          validBill,
+          Array.from({ length: count }, (_, i) => ({ field: 'photos', filename: `r${i}.jpg`, data: Buffer.alloc(200_000, 1) }))
+        )
+      );
+
+      expect(res.status).toBe(413);
+      expect(await db.bill.count({ where: { projectId: ctx.projectId } })).toBe(billsBefore);
+      // files past the limit may still be opened after the error: give them time to settle
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      expect(listUploads()).toEqual(before);
+    });
+
     it.each(['x.svg', 'x.gif', 'x.exe'])('should reject %s with 415, create no bill and keep no file', async (filename) => {
       const member = await createMember();
       mockAuth.mockResolvedValue(member.session as never);
