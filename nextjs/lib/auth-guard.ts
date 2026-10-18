@@ -65,3 +65,46 @@ export async function verifyAdminRole(email: string, projectId: string): Promise
 
   return { authorized: false, response: await forceReauthResponse() };
 }
+
+/**
+ * Verify that `email` is currently a superadmin, reading from the database
+ * rather than trusting the JWT `role` claim. Returns a 403 response otherwise.
+ */
+export async function verifySuperAdmin(email: string): Promise<AdminRoleCheck> {
+  const user = await db.user.findUnique({
+    where: { email },
+    select: { isSuperAdmin: true, isActive: true },
+  });
+
+  if (user?.isSuperAdmin && user.isActive) {
+    return { authorized: true };
+  }
+
+  return {
+    authorized: false,
+    response: NextResponse.json({ error: 'Forbidden' }, { status: 403 }),
+  };
+}
+
+/**
+ * Verify that `email` is currently a member of `projectId` (or a superadmin),
+ * reading from the database. Returns a 403 response otherwise.
+ */
+export async function verifyProjectMember(email: string, projectId: string): Promise<AdminRoleCheck> {
+  const [user, membership] = await Promise.all([
+    db.user.findUnique({ where: { email }, select: { isSuperAdmin: true } }),
+    db.projectMember.findUnique({
+      where: { projectId_userEmail: { projectId, userEmail: email } },
+      select: { role: true },
+    }),
+  ]);
+
+  if (user?.isSuperAdmin || membership) {
+    return { authorized: true };
+  }
+
+  return {
+    authorized: false,
+    response: NextResponse.json({ error: 'Forbidden' }, { status: 403 }),
+  };
+}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import BillDetailHeader from '@/components/bills/BillDetailHeader';
@@ -15,7 +15,7 @@ import { BillImage } from '@/lib/types';
 import { formatCurrency, calculateTotal, cn } from '@/lib/utils';
 
 interface BillDetailPageProps {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 interface FormData {
@@ -31,7 +31,8 @@ interface FormData {
   categoryAllocations: { id: string; name: string; percentage: number }[];
 }
 
-export default function BillDetailPage({ params }: BillDetailPageProps) {
+export default function BillDetailPage(props: BillDetailPageProps) {
+  const params = use(props.params);
   const { id } = params;
   const router = useRouter();
   const {
@@ -98,26 +99,38 @@ export default function BillDetailPage({ params }: BillDetailPageProps) {
 
   const handleSave = async () => {
     if (!formData) return;
+    // Only send the date when the day was edited: the form holds just the day
+    // (YYYY-MM-DD), so resending it would drop the time of day of bills that
+    // carry one (e.g. Telegram uploads).
+    const dateChanged = !bill || formData.date !== bill.date.split('T')[0];
+    if (dateChanged && Number.isNaN(Date.parse(formData.date))) {
+      setResult({ type: 'error', message: 'Please enter a valid date' });
+      return;
+    }
     setIsSaving(true);
-    const ok = await updateBill({
-      date: new Date(formData.date).toISOString(),
-      type: formData.type,
-      vendor: formData.vendor,
-      item: formData.item,
-      comment: formData.comment,
-      brutto19: formData.brutto19,
-      brutto7: formData.brutto7,
-      brutto0: formData.brutto0,
-      motiveAllocations: formData.motiveAllocations.map((a) => ({
-        motiveId: a.id,
-        percentage: a.percentage,
-      })),
-      categoryAllocations: formData.categoryAllocations.map((a) => ({
-        categoryId: a.id,
-        percentage: a.percentage,
-      })),
-    });
-    setIsSaving(false);
+    let ok = false;
+    try {
+      ok = await updateBill({
+        date: dateChanged ? new Date(formData.date).toISOString() : undefined,
+        type: formData.type,
+        vendor: formData.vendor,
+        item: formData.item,
+        comment: formData.comment,
+        brutto19: formData.brutto19,
+        brutto7: formData.brutto7,
+        brutto0: formData.brutto0,
+        motiveAllocations: formData.motiveAllocations.map((a) => ({
+          motiveId: a.id,
+          percentage: a.percentage,
+        })),
+        categoryAllocations: formData.categoryAllocations.map((a) => ({
+          categoryId: a.id,
+          percentage: a.percentage,
+        })),
+      });
+    } finally {
+      setIsSaving(false);
+    }
     if (ok) {
       setFormData(null); // reset so useEffect re-initializes from updated bill
       setResult({ type: 'success', message: 'Bill saved' });
@@ -198,7 +211,6 @@ export default function BillDetailPage({ params }: BillDetailPageProps) {
   const isAdmin = session?.user?.currentProjectRole === 'admin' || session?.user?.currentProjectRole === 'owner' || session?.user?.role === 'superadmin';
   const isAuthor = session?.user?.email === bill?.email;
   const canDelete = isAdmin || isAuthor;
-  const canSelfApprove = isAuthor && !isAdmin && bill?.status === 'confirmed';
   const [hasOcrEnabled, setHasOcrEnabled] = useState(false);
 
   // Fetch OCR enabled flag from project settings (admins only)
@@ -299,7 +311,7 @@ export default function BillDetailPage({ params }: BillDetailPageProps) {
         onRevertDraft={handleRevertDraft}
         isAdmin={isAdmin}
         canDelete={canDelete}
-        canSelfApprove={canSelfApprove}
+        isAuthor={isAuthor}
         hasOcrEnabled={hasOcrEnabled}
         isAnalysing={isAnalysing || bill.ocrStatus === 'pending'}
       />

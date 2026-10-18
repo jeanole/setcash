@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/db';
 import { z } from 'zod';
+import { insensitiveEquals } from '@/lib/db-match';
 
 const updateSchema = z.object({
   name: z.string().min(1).max(50),
@@ -66,10 +67,7 @@ export async function PUT(
     const existing = await prisma.projectPosition.findFirst({
       where: {
         projectId: id,
-        name: {
-          equals: validated.name,
-          mode: 'insensitive',
-        },
+        name: insensitiveEquals(validated.name),
         id: { not: posId },
       },
     });

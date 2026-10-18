@@ -8,10 +8,8 @@ import { db as prisma } from '@/lib/db';
 import { verifyAdminRole } from '@/lib/auth-guard';
 
 // PATCH /api/vgeld/[id] - Confirm a V-Geld transfer (admin/owner/superadmin only)
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function PATCH(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const session = await auth();
     if (!session?.user) {
@@ -96,10 +94,8 @@ export async function PATCH(
 }
 
 // DELETE /api/vgeld/[id] - Delete a V-Geld transfer
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const session = await auth();
     if (!session?.user) {

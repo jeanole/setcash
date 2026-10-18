@@ -10,12 +10,15 @@ import { db as prisma, withDbRetry } from '@/lib/db';
 import fs from 'fs';
 import path from 'path';
 import { UPLOADS_DIR } from '@/lib/upload';
+import { verifyProjectMember } from '@/lib/auth-guard';
+
+// ASCII control characters (incl. NUL) and DEL
+// eslint-disable-next-line no-control-regex
+const CONTROL_CHARS = /[\u0000-\u001f\u007f]/;
 
 // GET /uploads/[...path] - Serve uploaded file
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { path: string[] } }
-) {
+export async function GET(req: NextRequest, props: { params: Promise<{ path?: string[] }> }) {
+  const params = await props.params;
   try {
     const session = await auth();
     if (!session?.user) {
@@ -25,6 +28,12 @@ export async function GET(
     const pathSegments = params.path;
     if (!pathSegments || pathSegments.length === 0) {
       return new NextResponse('Not found', { status: 404 });
+    }
+
+    // NUL bytes and other control characters can never be part of a stored path
+    // (and Postgres rejects NUL in a query parameter) -- refuse them up front.
+    if (pathSegments.some((segment) => CONTROL_CHARS.test(segment))) {
+      return new NextResponse('Bad request', { status: 400 });
     }
 
     const relPath = pathSegments.join('/');
@@ -46,10 +55,13 @@ export async function GET(
     if (image) {
       targetProjectId = image.bill.projectId;
     } else {
-      // Fallback to legacy bill lookup
+      // Fallback to legacy bill lookup (rows imported before bill_images existed).
+      // Only bills WITHOUT image rows qualify: for everything else bill.filename
+      // is just a mirror of the first image, and older rows may hold a
+      // client-supplied name that must never grant access to someone else's file.
       const bill = await withDbRetry(() =>
         prisma.bill.findFirst({
-          where: { filename: relPath },
+          where: { filename: relPath, images: { none: {} } },
           select: { projectId: true },
         })
       );
@@ -62,9 +74,20 @@ export async function GET(
       return new NextResponse('Not found', { status: 404 });
     }
 
-    // Check access - super admins can access any project
+    // Check access - users view images of their current project only (super
+    // admins may open any project)...
     const isSuperAdmin = session.user.role === 'superadmin';
     if (!isSuperAdmin && session.user.currentProjectId !== targetProjectId) {
+      return new NextResponse('Forbidden', { status: 403 });
+    }
+
+    // ...and must be a member of that project according to the DB, not just
+    // according to the (possibly stale) JWT claims. Superadmin status is
+    // re-read from the DB here too.
+    const memberCheck = await withDbRetry(() =>
+      verifyProjectMember(session.user.email, targetProjectId as string)
+    );
+    if (!memberCheck.authorized) {
       return new NextResponse('Forbidden', { status: 403 });
     }
 
@@ -108,6 +131,7 @@ export async function GET(
       headers: {
         'Content-Type': contentType,
         'Cache-Control': 'no-cache, must-revalidate',
+        'X-Content-Type-Options': 'nosniff',
       },
     });
   } catch (error) {

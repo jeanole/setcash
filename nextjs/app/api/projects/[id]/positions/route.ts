@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/db';
 import { z } from 'zod';
+import { insensitiveEquals } from '@/lib/db-match';
 
 const createSchema = z.object({
   name: z.string().min(1).max(50),
@@ -37,7 +38,7 @@ export async function GET(
     const positions = await prisma.projectPosition.findMany({
       where: { projectId: id },
       include: {
-        members: true,
+        _count: { select: { members: true } },
       },
     });
 
@@ -45,7 +46,7 @@ export async function GET(
       positions.map((p) => ({
         id: p.id,
         name: p.name,
-        memberCount: p.members.length,
+        memberCount: p._count.members,
       }))
     );
   } catch (error) {
@@ -96,10 +97,7 @@ export async function POST(
     const existing = await prisma.projectPosition.findFirst({
       where: {
         projectId: id,
-        name: {
-          equals: validated.name,
-          mode: 'insensitive',
-        },
+        name: insensitiveEquals(validated.name),
       },
     });
 

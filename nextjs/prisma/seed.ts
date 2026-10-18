@@ -11,7 +11,7 @@ async function main() {
   }
 
   // 1. Upsert admin user
-  const passwordHash = await bcrypt.hash(adminPassword, 10);
+  const passwordHash = await bcrypt.hash(adminPassword, 12);
   const adminUser = await prisma.user.upsert({
     where: { email: adminEmail },
     update: { isSuperAdmin: true, passwordHash, emailVerified: new Date() },
@@ -108,7 +108,7 @@ async function main() {
     console.log('Seed complete.');
     return;
   }
-  const demoPasswordHash = await bcrypt.hash(demoPassword, 10);
+  const demoPasswordHash = await bcrypt.hash(demoPassword, 12);
 
   // Find the example project
   const exampleProject = await prisma.project.findFirst({

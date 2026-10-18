@@ -1,6 +1,6 @@
 # SetCash — Project Index
 
-**Next Available IDs:** PROJ-26 · BUG-85 · CR-33
+**Next Available IDs:** PROJ-27 · BUG-85 · CR-33
 
 
 | ID | Type | Title | Status | Priority | Feature | Date |
@@ -145,3 +145,4 @@
 | [PROJ-25](PROJ-25-s3-file-storage.md) | Feature | S3-Compatible File Storage for Bill Images | In Progress | Medium | PROJ-7 | 2026-03-16 |
 | CR-32 | CR | Enhanced Visitor Insights — Browser, OS, Device, Screen, Language, Sessions | Deployed | Medium | PROJ-23 | 2026-03-19 |
 | [BUG-84](BUG-84-config-upload-limit-string-not-number.md) | Bug | Superadmin Config Tab Sends Upload Limit as String — Zod Validation Fails | Resolved | High | PROJ-17 | 2026-03-19 |
+| [PROJ-26](PROJ-26-security-review-hardening.md) | Feature | Security Review & Dependency Hardening (Next.js 15 upgrade) | In Review | High | PROJ-2 | 2026-10-18 |

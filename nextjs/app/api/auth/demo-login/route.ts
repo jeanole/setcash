@@ -24,6 +24,8 @@ const schema = z.object({
   turnstileToken: z.string().min(1, 'Missing verification token.'),
 });
 
+const DEMO_TOKEN_COOKIE = 'demo_login_token';
+
 // ---------------------------------------------------------------------------
 // POST — Turnstile verification → short-lived exchange token
 // ---------------------------------------------------------------------------
@@ -93,7 +95,17 @@ export async function POST(req: NextRequest) {
   });
 
   // Return only the opaque exchange token — no email, no password.
-  return NextResponse.json({ token: rawToken });
+  // The same token is also set as an httpOnly cookie; GET requires both to
+  // match, so a token link sent to someone else cannot log them in (login CSRF).
+  const response = NextResponse.json({ token: rawToken });
+  response.cookies.set(DEMO_TOKEN_COOKIE, rawToken, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    path: '/api/auth/demo-login',
+    maxAge: 60,
+  });
+  return response;
 }
 
 // ---------------------------------------------------------------------------
@@ -103,7 +115,13 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const rawToken = searchParams.get('token');
 
-  if (!rawToken) {
+  const cookieToken = req.cookies.get(DEMO_TOKEN_COOKIE)?.value;
+  if (
+    !rawToken ||
+    !cookieToken ||
+    cookieToken.length !== rawToken.length ||
+    !crypto.timingSafeEqual(Buffer.from(cookieToken), Buffer.from(rawToken))
+  ) {
     return NextResponse.redirect(new URL('/login?error=demo', req.url));
   }
 
@@ -126,8 +144,11 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(new URL('/login?error=demo', req.url));
   }
 
-  // Delete before use to prevent replay attacks
-  await prisma.passwordResetToken.delete({ where: { id: storedToken.id } });
+  // Delete before use to prevent replay attacks (count 0 = already consumed)
+  const { count } = await prisma.passwordResetToken.deleteMany({ where: { id: storedToken.id } });
+  if (count === 0) {
+    return NextResponse.redirect(new URL('/login?error=demo', req.url));
+  }
 
   // Perform the sign-in server-side — NextAuth v5 signIn() sets the session
   // cookie and throws NEXT_REDIRECT, which Next.js converts to a 302 response.

@@ -5,15 +5,13 @@ import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { signUpLimiter } from '@/lib/ratelimit';
 import { sendVerificationEmail } from '@/lib/email';
+import { getClientIp } from '@/lib/client-ip';
+import { passwordSchema } from '@/lib/auth/password';
+import { insensitiveEquals } from '@/lib/db-match';
 
 const schema = z.object({
-  email: z.string().email(),
-  password: z
-    .string()
-    .min(8, 'Password must be at least 8 characters.')
-    .regex(/[a-z]/, 'Password must contain a lowercase letter.')
-    .regex(/[A-Z]/, 'Password must contain an uppercase letter.')
-    .regex(/[0-9]/, 'Password must contain a digit.'),
+  email: z.string().trim().toLowerCase().pipe(z.string().email().max(254)),
+  password: passwordSchema,
 });
 
 export async function POST(req: Request) {
@@ -35,15 +33,8 @@ export async function POST(req: Request) {
 
   const { email, password } = parsed.data;
 
-  // Rate limit by IP — prefer the trusted Cloudflare header (cannot be spoofed
-  // by clients when the app is behind Cloudflare), then the reverse-proxy header,
-  // and fall back to x-forwarded-for which is least trustworthy.
-  const ip =
-    req.headers.get('cf-connecting-ip')?.trim() ||
-    req.headers.get('x-real-ip')?.trim() ||
-    req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-    'unknown';
-  const { success } = await signUpLimiter.limit(ip);
+  // Rate limit by client IP (see lib/client-ip — spoofable headers ignored)
+  const { success } = await signUpLimiter.limit(getClientIp(req));
   if (!success) {
     return NextResponse.json(
       { error: 'Too many sign-up attempts. Please try again later.' },
@@ -55,7 +46,11 @@ export async function POST(req: Request) {
   const genericMessage = 'If this email is not already registered, a verification link has been sent.';
 
   try {
-    const existing = await prisma.user.findUnique({ where: { email } });
+    // Case-insensitive: legacy rows may have mixed-case emails
+    const existing = await prisma.user.findFirst({
+      where: { email: insensitiveEquals(email) },
+      select: { id: true },
+    });
 
     if (existing) {
       // Don't reveal that the account exists

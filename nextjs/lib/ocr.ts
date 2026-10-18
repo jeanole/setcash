@@ -6,10 +6,11 @@
 
 import crypto from 'crypto';
 import path from 'path';
-import fs from 'fs';
-import { Prisma } from '@prisma/client';
+import { Prisma, BillStatus } from '@prisma/client';
 import { db as prisma } from './db';
+import { calculateNetto, calculateTotal } from './utils';
 import { UPLOADS_DIR, readFileForOCR } from './upload';
+import { safeFetch, isPrivateUrl } from './safe-fetch';
 
 // ── Encryption helpers for API key at rest ──────────────────────────────────
 // Uses AES-256-GCM. Key is derived from SESSION_SECRET via SHA-256.
@@ -90,37 +91,8 @@ export function maskApiKey(stored: string): string | null {
 }
 
 // ── SSRF protection ──────────────────────────────────────────────────────────
-function isPrivateIp(ip: string): boolean {
-  if (ip === 'localhost' || ip === '::1' || ip === '0.0.0.0' || ip === '[::]') return true;
-  if (/^127\./.test(ip)) return true;
-  if (/^169\.254\./.test(ip)) return true;
-  if (/^10\./.test(ip)) return true;
-  if (/^192\.168\./.test(ip)) return true;
-  if (/^172\.(1[6-9]|2\d|3[01])\./.test(ip)) return true;
-  return false;
-}
-
-async function isPrivateUrl(urlString: string): Promise<boolean> {
-  let parsed: URL;
-  try {
-    parsed = new URL(urlString);
-  } catch {
-    return true;
-  }
-  const hostname = parsed.hostname.toLowerCase();
-  if (hostname.endsWith('.local')) return true;
-  if (isPrivateIp(hostname)) return true;
-  // Resolve DNS to catch rebinding attacks (e.g. evil.example.com → 169.254.169.254)
-  try {
-    const dns = await import('dns/promises');
-    const { address } = await dns.lookup(hostname);
-    if (isPrivateIp(address)) return true;
-  } catch {
-    // DNS resolution failed — block the request
-    return true;
-  }
-  return false;
-}
+// The range checks, isPrivateUrl() pre-check and the connect-time enforcement
+// (safeFetch) live in ./safe-fetch so both share one implementation.
 
 // ── OCR Prompt ───────────────────────────────────────────────────────────────
 const OCR_PROMPT = `You are a receipt parser. Look at this receipt image and extract the following fields.
@@ -166,6 +138,29 @@ const PROVIDER_DEFAULTS: Record<string, { url: string; model: string }> = {
 
 const OCR_FETCH_TIMEOUT_MS = 60_000;
 
+// POST to an AI provider with a timeout. Redirects are never followed: a
+// provider (or a user-supplied base URL) could otherwise 3xx the request to an
+// internal address and bypass the isPrivateUrl() check. The request goes through
+// safeFetch, which re-validates the resolved address at connect time so a
+// DNS-rebinding host cannot pass the pre-check and then reach an internal IP.
+async function fetchProvider(url: string, init: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), OCR_FETCH_TIMEOUT_MS);
+  let resp: Response;
+  try {
+    resp = await safeFetch(url, { ...init, redirect: 'manual', signal: controller.signal });
+  } catch (e) {
+    if ((e as Error).name === 'AbortError') throw new Error('Request timed out after 60s');
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+  if (resp.status >= 300 && resp.status < 400) {
+    throw new Error('Provider responded with a redirect, which is not allowed');
+  }
+  return resp;
+}
+
 // ── Provider: call AI vision API ─────────────────────────────────────────────
 interface OcrResult {
   date: string | null;
@@ -203,38 +198,28 @@ async function analyseImage(
       provider === 'custom'
         ? 'gpt-4o'
         : (PROVIDER_DEFAULTS[provider]?.model || 'gpt-4o');
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), OCR_FETCH_TIMEOUT_MS);
-    let resp: Response;
-    try {
-      resp = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model,
-          messages: [
-            { role: 'system', content: OCR_SYSTEM_PROMPT },
-            {
-              role: 'user',
-              content: [
-                { type: 'text', text: OCR_PROMPT },
-                { type: 'image_url', image_url: { url: dataUrl } },
-              ],
-            },
-          ],
-          max_tokens: 512,
-        }),
-        signal: controller.signal,
-      });
-    } catch (e) {
-      if ((e as Error).name === 'AbortError') throw new Error('Request timed out after 60s');
-      throw e;
-    } finally {
-      clearTimeout(timer);
-    }
+    const mediaPart =
+      mimeType === 'application/pdf'
+        ? { type: 'file', file: { filename: 'receipt.pdf', file_data: dataUrl } }
+        : { type: 'image_url', image_url: { url: dataUrl } };
+    const resp = await fetchProvider(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: OCR_SYSTEM_PROMPT },
+          {
+            role: 'user',
+            content: [{ type: 'text', text: OCR_PROMPT }, mediaPart],
+          },
+        ],
+        max_tokens: 512,
+      }),
+    });
     if (!resp.ok) {
       const rawBody = await resp.text().catch(() => '');
       const truncated = rawBody.slice(0, 500);
@@ -256,32 +241,21 @@ async function analyseImage(
   if (provider === 'gemini') {
     const url =
       'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), OCR_FETCH_TIMEOUT_MS);
-    let resp: Response;
-    try {
-      resp = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: OCR_SYSTEM_PROMPT }] },
-          contents: [
-            {
-              parts: [
-                { text: OCR_PROMPT },
-                { inline_data: { mime_type: mimeType, data: base64 } },
-              ],
-            },
-          ],
-        }),
-        signal: controller.signal,
-      });
-    } catch (e) {
-      if ((e as Error).name === 'AbortError') throw new Error('Request timed out after 60s');
-      throw e;
-    } finally {
-      clearTimeout(timer);
-    }
+    const resp = await fetchProvider(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: OCR_SYSTEM_PROMPT }] },
+        contents: [
+          {
+            parts: [
+              { text: OCR_PROMPT },
+              { inline_data: { mime_type: mimeType, data: base64 } },
+            ],
+          },
+        ],
+      }),
+    });
     if (!resp.ok) {
       const rawBody = await resp.text().catch(() => '');
       const truncated = rawBody.slice(0, 500);
@@ -301,42 +275,29 @@ async function analyseImage(
   }
 
   if (provider === 'claude') {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), OCR_FETCH_TIMEOUT_MS);
-    let resp: Response;
-    try {
-      resp = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-        },
-        body: JSON.stringify({
-          model: 'claude-3-5-haiku-20241022',
-          max_tokens: 512,
-          system: OCR_SYSTEM_PROMPT,
-          messages: [
-            {
-              role: 'user',
-              content: [
-                {
-                  type: 'image',
-                  source: { type: 'base64', media_type: mimeType, data: base64 },
-                },
-                { type: 'text', text: OCR_PROMPT },
-              ],
-            },
-          ],
-        }),
-        signal: controller.signal,
-      });
-    } catch (e) {
-      if ((e as Error).name === 'AbortError') throw new Error('Request timed out after 60s');
-      throw e;
-    } finally {
-      clearTimeout(timer);
-    }
+    const mediaBlock =
+      mimeType === 'application/pdf'
+        ? { type: 'document', source: { type: 'base64', media_type: mimeType, data: base64 } }
+        : { type: 'image', source: { type: 'base64', media_type: mimeType, data: base64 } };
+    const resp = await fetchProvider('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-3-5-haiku-20241022',
+        max_tokens: 512,
+        system: OCR_SYSTEM_PROMPT,
+        messages: [
+          {
+            role: 'user',
+            content: [mediaBlock, { type: 'text', text: OCR_PROMPT }],
+          },
+        ],
+      }),
+    });
     if (!resp.ok) {
       const rawBody = await resp.text().catch(() => '');
       const truncated = rawBody.slice(0, 500);
@@ -363,6 +324,15 @@ function sanitizeOcrString(val: unknown, maxLen = 255): string | null {
   return String(val).replace(/[\x00-\x1F\x7F]/g, '').slice(0, maxLen) || null;
 }
 
+// Accept only finite, non-negative, sane monetary amounts (rounded to cents)
+const MAX_OCR_AMOUNT = 9_999_999.99;
+function sanitizeOcrAmount(val: unknown): number | null {
+  if (val == null) return null;
+  const n = typeof val === 'number' ? val : parseFloat(String(val));
+  if (!Number.isFinite(n) || n < 0 || n > MAX_OCR_AMOUNT) return null;
+  return Math.round(n * 100) / 100;
+}
+
 const VALID_OCR_TYPES = ['Kassenbon', 'Rechnung', 'Quittung'] as const;
 
 function parseOcrResponse(text: string): OcrResult {
@@ -384,15 +354,96 @@ function parseOcrResponse(text: string): OcrResult {
     vendor: sanitizeOcrString(obj.vendor),
     item: sanitizeOcrString(obj.item),
     type: validatedType,
-    brutto19: obj.brutto19 != null ? parseFloat(obj.brutto19) : null,
-    brutto7: obj.brutto7 != null ? parseFloat(obj.brutto7) : null,
-    brutto0: obj.brutto0 != null ? parseFloat(obj.brutto0) : null,
-    amount: obj.amount != null ? parseFloat(obj.amount) : null,
+    brutto19: sanitizeOcrAmount(obj.brutto19),
+    brutto7: sanitizeOcrAmount(obj.brutto7),
+    brutto0: sanitizeOcrAmount(obj.brutto0),
+    amount: sanitizeOcrAmount(obj.amount),
   };
 }
 
+// ── Job claiming ──────────────────────────────────────────────────────────────
+// Bills in these states are financially locked: OCR must never touch them.
+const LOCKED_BILL_STATUSES: BillStatus[] = ['approved', 'paid'];
+
+// Jobs running in THIS process. A bill whose ocrStatus is 'pending' in the DB but
+// that has no entry here was orphaned by a crash/restart and may be re-claimed.
+const activeOcrJobs = new Set<string>();
+
+export type OcrClaim =
+  | { ok: true; isReanalysis: boolean }
+  | { ok: false; reason: 'not_found' | 'in_progress' | 'locked' };
+
+/**
+ * Atomically claim the OCR job for a bill (compare-and-swap on ocrStatus).
+ * Only one caller can win; approved/paid bills cannot be claimed.
+ */
+export async function claimOcrJob(billId: string, projectId: string): Promise<OcrClaim> {
+  // Synchronous check+set closes the same-process race
+  if (activeOcrJobs.has(billId)) return { ok: false, reason: 'in_progress' };
+  activeOcrJobs.add(billId);
+
+  try {
+    const prior = await prisma.bill.findFirst({
+      where: { id: billId, projectId },
+      select: { ocrStatus: true, status: true },
+    });
+    if (!prior) {
+      activeOcrJobs.delete(billId);
+      return { ok: false, reason: 'not_found' };
+    }
+    if (LOCKED_BILL_STATUSES.includes(prior.status)) {
+      activeOcrJobs.delete(billId);
+      return { ok: false, reason: 'locked' };
+    }
+
+    // 'pending' here (no live job in this process) means a stale/orphaned claim
+    const claimed = await prisma.bill.updateMany({
+      where: {
+        id: billId,
+        projectId,
+        status: { notIn: LOCKED_BILL_STATUSES },
+        ocrStatus: prior.ocrStatus,
+      },
+      data: { ocrStatus: 'pending' },
+    });
+    if (claimed.count === 0) {
+      activeOcrJobs.delete(billId);
+      return { ok: false, reason: 'in_progress' };
+    }
+    return { ok: true, isReanalysis: prior.ocrStatus === 'done' };
+  } catch (e) {
+    activeOcrJobs.delete(billId);
+    throw e;
+  }
+}
+
 // ── Background job ────────────────────────────────────────────────────────────
-export async function runOcrJob(billId: string, projectId: string): Promise<void> {
+// `claim` is passed by callers that already ran claimOcrJob (the analyse route);
+// otherwise the job claims itself and exits quietly if it loses.
+export async function runOcrJob(
+  billId: string,
+  projectId: string,
+  claim?: OcrClaim
+): Promise<void> {
+  const jobClaim = claim ?? (await claimOcrJob(billId, projectId));
+  if (!jobClaim.ok) {
+    console.warn(`[OCR] Bill ${billId}: analysis not started (${jobClaim.reason})`);
+    return;
+  }
+  const isReanalysis = jobClaim.isReanalysis;
+
+  try {
+    await executeOcrJob(billId, projectId, isReanalysis);
+  } finally {
+    activeOcrJobs.delete(billId);
+  }
+}
+
+async function executeOcrJob(
+  billId: string,
+  projectId: string,
+  isReanalysis: boolean
+): Promise<void> {
   const jobStart = Date.now();
   let resolvedProvider: string | null = null;
 
@@ -425,18 +476,7 @@ export async function runOcrJob(billId: string, projectId: string): Promise<void
     }
   };
 
-  // Detect re-analysis
-  const priorBill = await prisma.bill.findUnique({
-    where: { id: billId },
-    select: { ocrStatus: true },
-  });
-  const isReanalysis = priorBill?.ocrStatus === 'done';
-
-  // 1. Mark pending
-  await prisma.bill.update({
-    where: { id: billId },
-    data: { ocrStatus: 'pending' },
-  });
+  // (Job already marked 'pending' by claimOcrJob)
 
   const fail = async (reason: string, errorType?: string) => {
     await prisma.bill.update({
@@ -554,7 +594,9 @@ export async function runOcrJob(billId: string, projectId: string): Promise<void
           ? 'image/gif'
           : ext === '.webp'
             ? 'image/webp'
-            : 'image/jpeg';
+            : ext === '.pdf'
+              ? 'application/pdf'
+              : 'image/jpeg';
 
     // 6. Call AI provider
     const { parsed: extracted, rawText } = await analyseImage(
@@ -569,6 +611,11 @@ export async function runOcrJob(billId: string, projectId: string): Promise<void
     const bill = await prisma.bill.findUnique({ where: { id: billId } });
     if (!bill) {
       return fail('Bill not found', 'DBError');
+    }
+
+    // Approved/paid bills are financially locked — never write OCR results
+    if (LOCKED_BILL_STATUSES.includes(bill.status)) {
+      return discardResult(bill.status);
     }
 
     // Fields eligible for OCR writing
@@ -604,6 +651,7 @@ export async function runOcrJob(billId: string, projectId: string): Promise<void
     const updates: Record<string, unknown> = {};
 
     for (const [field, check] of Object.entries(fieldChecks)) {
+      if (field === 'amount') continue; // handled below, once the brutto fields are known
       if (check()) {
         if (field === 'date' && extracted.date) {
           const d = new Date(extracted.date + 'T00:00:00.000Z');
@@ -611,10 +659,6 @@ export async function runOcrJob(billId: string, projectId: string): Promise<void
             updates['date'] = d;
             writtenFields.push(field);
           }
-        } else if (field === 'amount') {
-          // 'amount' from OCR maps to grossAmount in Prisma (no VAT breakdown available)
-          updates['grossAmount'] = extracted.amount;
-          writtenFields.push(field);
         } else {
           updates[field] = extracted[field as keyof OcrResult];
           writtenFields.push(field);
@@ -624,41 +668,45 @@ export async function runOcrJob(billId: string, projectId: string): Promise<void
       }
     }
 
-    // 8. Write fields and recalculate totals if amounts changed
-    if (writtenFields.length > 0) {
-      const amountFields = ['brutto19', 'brutto7', 'brutto0'];
-      const anyAmountWritten = writtenFields.some((f) => amountFields.includes(f));
-      if (anyAmountWritten && (isReanalysis || Number(bill.grossAmount) === 0)) {
-        const newB19 = writtenFields.includes('brutto19')
-          ? extracted.brutto19
-          : Number(bill.brutto19) || 0;
-        const newB7 = writtenFields.includes('brutto7')
-          ? extracted.brutto7
-          : Number(bill.brutto7) || 0;
-        const newB0 = writtenFields.includes('brutto0')
-          ? extracted.brutto0
-          : Number(bill.brutto0) || 0;
-        const recalcAmount = (newB19 || 0) + (newB7 || 0) + (newB0 || 0);
-        updates.grossAmount = recalcAmount;
-        updates.nettoAmount = (newB19 || 0) / 1.19 + (newB7 || 0) / 1.07 + (newB0 || 0);
+    // 8. Keep totals consistent with the brutto fields (calculateTotal semantics:
+    // the brutto sum wins; a bare gross amount is only used when the sum is 0).
+    const amountFields = ['brutto19', 'brutto7', 'brutto0'];
+    const anyAmountWritten = writtenFields.some((f) => amountFields.includes(f));
+    const newB19 = writtenFields.includes('brutto19') ? extracted.brutto19 || 0 : Number(bill.brutto19) || 0;
+    const newB7 = writtenFields.includes('brutto7') ? extracted.brutto7 || 0 : Number(bill.brutto7) || 0;
+    const newB0 = writtenFields.includes('brutto0') ? extracted.brutto0 || 0 : Number(bill.brutto0) || 0;
+    const bruttoSum = newB19 + newB7 + newB0;
+
+    if (anyAmountWritten) {
+      updates.grossAmount = calculateTotal(newB19, newB7, newB0);
+      updates.nettoAmount = calculateNetto(newB19, newB7, newB0);
+      writtenFields.push('amount');
+    } else if (fieldChecks.amount()) {
+      if (bruttoSum > 0) {
+        // Bill already has a brutto breakdown — a bare gross amount would disagree with it
+        skippedFields.push('amount');
+      } else {
+        updates.grossAmount = calculateTotal(0, 0, 0, extracted.amount ?? 0);
         writtenFields.push('amount');
       }
-
-      await prisma.bill.update({
-        where: { id: billId },
-        data: updates,
-      });
+    } else if (extracted.amount != null) {
+      skippedFields.push('amount');
     }
 
-    // 9. Set ocr_status and ocr_fields
+    // 9. Write fields + ocr_status + ocr_fields in ONE conditional update, so a
+    // concurrent approval can't be overwritten between the check and the write.
     const finalFields = writtenFields.length > 0 ? writtenFields : null;
-    await prisma.bill.update({
-      where: { id: billId },
+    const written = await prisma.bill.updateMany({
+      where: { id: billId, status: { notIn: LOCKED_BILL_STATUSES } },
       data: {
+        ...(updates as Prisma.BillUpdateManyMutationInput),
         ocrStatus: 'done',
         ocrFields: finalFields && finalFields.length > 0 ? finalFields : Prisma.DbNull,
       },
     });
+    if (written.count === 0) {
+      return discardResult('approved/paid');
+    }
 
     // 10. Write success log
     await writeLog('done', {
@@ -699,6 +747,18 @@ export async function runOcrJob(billId: string, projectId: string): Promise<void
   } catch (e) {
     const errorType = (e as Error).name || 'Error';
     await fail((e as Error).message || 'Unknown error', errorType);
+  }
+
+  // The bill was approved/paid while the provider call was in flight: drop the
+  // results, restore the pre-job ocrStatus and record why.
+  async function discardResult(status: string): Promise<void> {
+    await prisma.bill.update({
+      where: { id: billId },
+      data: { ocrStatus: isReanalysis ? 'done' : null },
+    });
+    const reason = `Bill is ${status}; OCR results were discarded`;
+    console.warn(`[OCR] Bill ${billId}: ${reason}`);
+    await writeLog('failed', { errorDetail: reason });
   }
 }
 

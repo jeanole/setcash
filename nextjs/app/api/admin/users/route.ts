@@ -4,9 +4,11 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
+import { verifySuperAdmin } from '@/lib/auth-guard';
 import { db as prisma } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
+import { insensitiveEquals } from '@/lib/db-match';
 
 // Validation schema for creating users
 const CreateUserSchema = z.object({
@@ -33,6 +35,8 @@ export async function GET() {
     if (session.user.role !== 'superadmin') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+    const guard = await verifySuperAdmin(session.user.email);
+    if (!guard.authorized) return guard.response!;
 
     const users = await prisma.user.findMany({
       orderBy: { email: 'asc' },
@@ -77,6 +81,8 @@ export async function POST(req: NextRequest) {
     if (session.user.role !== 'superadmin') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+    const guard = await verifySuperAdmin(session.user.email);
+    if (!guard.authorized) return guard.response!;
 
     const body = await req.json();
 
@@ -94,10 +100,7 @@ export async function POST(req: NextRequest) {
     // Check if user already exists (case-insensitive)
     const existingUser = await prisma.user.findFirst({
       where: {
-        email: {
-          equals: email,
-          mode: 'insensitive',
-        },
+        email: insensitiveEquals(email),
       },
     });
 
@@ -117,6 +120,9 @@ export async function POST(req: NextRequest) {
         email: email.toLowerCase(),
         passwordHash,
         isSuperAdmin: isSuperAdmin ?? false,
+        // The superadmin vouches for the address; without this the account
+        // could never sign in (EmailNotVerified) and no mail is ever sent.
+        emailVerified: new Date(),
       },
     });
 

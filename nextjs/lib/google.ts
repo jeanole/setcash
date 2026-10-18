@@ -8,11 +8,27 @@ import fs from 'fs';
 import path from 'path';
 import { google } from 'googleapis';
 
-const DATA_DIR = path.join(process.cwd(), '..', 'data');
+// Legacy location (cwd/../data) — read-only fallback for existing dev setups.
+// In Docker this resolves to /data, which is neither writable nor persistent.
+const LEGACY_DATA_DIR = path.join(process.cwd(), '..', 'data');
+
+// Where service-account credentials are stored. Resolution order:
+//   1. GOOGLE_CREDENTIALS_DIR (explicit; should point at a persistent volume)
+//   2. <UPLOADS_DIR>/.google-credentials — UPLOADS_DIR is the persistent volume
+//      in the Docker image, so credentials survive container restarts
+//   3. the legacy cwd/../data directory
+const DATA_DIR = process.env.GOOGLE_CREDENTIALS_DIR
+  ? path.resolve(process.env.GOOGLE_CREDENTIALS_DIR)
+  : process.env.UPLOADS_DIR
+  ? path.join(path.resolve(process.env.UPLOADS_DIR), '.google-credentials')
+  : LEGACY_DATA_DIR;
 
 export function getCredentialsPath(projectId: string): string | null {
-  const dataPath = path.join(DATA_DIR, `google-credentials-${projectId}.json`);
+  const filename = path.basename(`google-credentials-${projectId}.json`);
+  const dataPath = path.join(DATA_DIR, filename);
   if (fs.existsSync(dataPath)) return dataPath;
+  const legacyPath = path.join(LEGACY_DATA_DIR, filename);
+  if (fs.existsSync(legacyPath)) return legacyPath;
   return null;
 }
 
@@ -41,7 +57,8 @@ export function saveCredentials(jsonContent: string, projectId: string): void {
   if (resolvedCred !== resolvedData && !resolvedCred.startsWith(resolvedData + path.sep)) {
     throw new Error('Invalid projectId: path escapes DATA_DIR');
   }
-  fs.writeFileSync(credPath, jsonContent, 'utf-8');
+  fs.mkdirSync(DATA_DIR, { recursive: true, mode: 0o700 });
+  fs.writeFileSync(credPath, jsonContent, { encoding: 'utf-8', mode: 0o600 });
 }
 
 export function validateCredentialsJson(jsonContent: string): { valid: boolean; error?: string } {

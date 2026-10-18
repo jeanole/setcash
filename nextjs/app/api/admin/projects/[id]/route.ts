@@ -4,6 +4,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
+import { verifySuperAdmin } from '@/lib/auth-guard';
 import { db as prisma } from '@/lib/db';
 import { z } from 'zod';
 import fs from 'fs';
@@ -28,6 +29,8 @@ export async function PATCH(
     if (session.user.role !== 'superadmin') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+    const guard = await verifySuperAdmin(session.user.email);
+    if (!guard.authorized) return guard.response!;
 
     const { id } = await params;
 
@@ -69,6 +72,8 @@ export async function DELETE(
     if (session.user.role !== 'superadmin') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+    const guard = await verifySuperAdmin(session.user.email);
+    if (!guard.authorized) return guard.response!;
 
     const { id } = await params;
 
@@ -84,7 +89,7 @@ export async function DELETE(
     // Collect all bill image file paths BEFORE the DB rows are deleted, so we
     // can remove the corresponding files from disk once the transaction has
     // committed. The Bill.filename column is only ever a copy of the first
-    // BillImage's filename (not a standalone path), so BillImage.filePath is
+    // BillImage's filePath (not a standalone file), so BillImage.filePath is
     // the sole source of truth for on-disk locations.
     const imagesToDelete = await prisma.billImage.findMany({
       where: { bill: { projectId: id } },

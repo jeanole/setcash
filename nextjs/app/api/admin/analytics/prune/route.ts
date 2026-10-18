@@ -4,6 +4,7 @@
 
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
+import { verifySuperAdmin } from '@/lib/auth-guard';
 import { db as prisma } from '@/lib/db';
 
 const DEFAULT_RETENTION_DAYS = 90;
@@ -25,6 +26,8 @@ export async function DELETE() {
     if (session.user.role !== 'superadmin') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+    const guard = await verifySuperAdmin(session.user.email);
+    if (!guard.authorized) return guard.response!;
 
     const retentionDays = getRetentionDays();
     const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);

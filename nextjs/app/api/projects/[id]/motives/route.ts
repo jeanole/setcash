@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/db';
+import { verifySuperAdmin } from '@/lib/auth-guard';
 import { z } from 'zod';
+import { insensitiveEquals } from '@/lib/db-match';
 
 const createSchema = z.object({
   name: z.string().trim().min(1).max(100),
@@ -38,7 +40,7 @@ export async function GET(
     const motives = await prisma.motive.findMany({
       where: { projectId: id },
       include: {
-        billMotives: true,
+        _count: { select: { billMotives: true } },
       },
       orderBy: {
         name: 'asc',
@@ -50,7 +52,7 @@ export async function GET(
         id: m.id,
         name: m.name,
         budget: Number(m.budget),
-        billCount: m.billMotives.length,
+        billCount: m._count.billMotives,
       }))
     );
   } catch (error) {
@@ -82,7 +84,10 @@ export async function POST(
       },
     });
 
-    const isSuperAdmin = session.user.role === 'superadmin';
+    // JWT claim alone is not trusted — confirm superadmin status in the DB
+    const isSuperAdmin =
+      session.user.role === 'superadmin' &&
+      (await verifySuperAdmin(session.user.email)).authorized;
     const isAdminOrOwner = membership?.role === 'admin' || membership?.role === 'owner';
 
     if (!isSuperAdmin && !isAdminOrOwner) {
@@ -104,10 +109,7 @@ export async function POST(
     const existing = await prisma.motive.findFirst({
       where: {
         projectId: id,
-        name: {
-          equals: validated.name,
-          mode: 'insensitive',
-        },
+        name: insensitiveEquals(validated.name),
       },
     });
 

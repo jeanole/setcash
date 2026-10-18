@@ -4,6 +4,7 @@ import { z } from 'zod';
 import crypto from 'crypto';
 import { resendVerificationLimiter } from '@/lib/ratelimit';
 import { sendVerificationEmail } from '@/lib/email';
+import { insensitiveEquals } from '@/lib/db-match';
 
 const schema = z.object({
   email: z.string().email(),
@@ -32,12 +33,15 @@ export async function POST(req: Request) {
   const genericMessage = 'If an unverified account exists with that email, a new verification link has been sent.';
 
   try {
-    const user = await prisma.user.findUnique({ where: { email } });
+    // Case-insensitive lookup; tokens and mail use the stored address
+    const user = await prisma.user.findFirst({
+      where: { email: insensitiveEquals(email) },
+    });
 
     // Only send if user exists, has a password, and is not yet verified
     if (user && user.passwordHash && !user.emailVerified) {
       // Delete existing tokens
-      await prisma.emailVerificationToken.deleteMany({ where: { email } });
+      await prisma.emailVerificationToken.deleteMany({ where: { email: user.email } });
 
       // Generate new token
       const rawToken = crypto.randomBytes(32).toString('hex');
@@ -45,7 +49,7 @@ export async function POST(req: Request) {
 
       await prisma.emailVerificationToken.create({
         data: {
-          email,
+          email: user.email,
           tokenHash,
           expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
         },
@@ -54,7 +58,7 @@ export async function POST(req: Request) {
       const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
       const verifyUrl = `${appUrl}/verify-email?token=${rawToken}`;
 
-      sendVerificationEmail(email, verifyUrl).catch((err) => {
+      sendVerificationEmail(user.email, verifyUrl).catch((err) => {
         console.error('[ResendVerification] Failed to send email:', err);
       });
     }

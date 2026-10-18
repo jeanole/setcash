@@ -7,10 +7,8 @@ import { auth } from '@/auth';
 import { db as prisma } from '@/lib/db';
 
 // GET /api/bills/[id]/ocr-status - Get OCR status
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const session = await auth();
     if (!session?.user) {

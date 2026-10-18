@@ -8,14 +8,18 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const notifications = await prisma.notification.findMany({
-    where: { userEmail: session.user.email },
-    orderBy: { createdAt: 'desc' },
-    take: 50,
-    include: { project: { select: { name: true } } },
-  });
-
-  const unreadCount = notifications.filter((n) => !n.isRead).length;
+  const [notifications, unreadCount] = await Promise.all([
+    prisma.notification.findMany({
+      where: { userEmail: session.user.email },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      include: { project: { select: { name: true } } },
+    }),
+    // Count across all notifications, not just the 50 returned above
+    prisma.notification.count({
+      where: { userEmail: session.user.email, isRead: false },
+    }),
+  ]);
 
   return NextResponse.json({
     notifications: notifications.map((n) => ({

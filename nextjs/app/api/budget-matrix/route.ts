@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/db';
+import { getBudgetMatrixSpending } from '@/lib/spending';
 
 // GET /api/budget-matrix - Get budget matrix data with spending calculations
 export async function GET(req: NextRequest) {
@@ -69,6 +70,8 @@ export async function GET(req: NextRequest) {
         return a.name.localeCompare(b.name);
       });
 
+    const roundToTwo = (value: number): number => Math.round(value * 100) / 100;
+
     // Build matrix lookup map: "{categoryId}_{motiveId}" -> amount
     const matrix: Record<string, number> = {};
     let grandTotal = 0;
@@ -79,67 +82,17 @@ export async function GET(req: NextRequest) {
       grandTotal += amount;
     }
 
-    // Calculate spending using raw SQL queries
-    // Note: PostgreSQL with Prisma uses camelCase column names
-    // Motive spending
-    const motiveSpendingRaw = await prisma.$queryRaw<{ motiveId: string; spent: number }[]>`
-      SELECT bm."motiveId", SUM(b."nettoAmount" * bm.percentage / 100) as spent
-      FROM "BillMotive" bm 
-      JOIN "Bill" b ON b.id = bm."billId"
-      WHERE b."projectId" = ${projectId}
-        AND b.status NOT IN ('draft'::"BillStatus", 'pending'::"BillStatus", 'rejected'::"BillStatus")
-      GROUP BY bm."motiveId"
-    `;
-
-    // Category spending
-    const categorySpendingRaw = await prisma.$queryRaw<{ categoryId: string; spent: number }[]>`
-      SELECT bc."categoryId", SUM(b."nettoAmount" * bc.percentage / 100) as spent
-      FROM "BillCategory" bc 
-      JOIN "Bill" b ON b.id = bc."billId"
-      WHERE b."projectId" = ${projectId}
-        AND b.status NOT IN ('draft'::"BillStatus", 'pending'::"BillStatus", 'rejected'::"BillStatus")
-      GROUP BY bc."categoryId"
-    `;
-
-    // Cell spending (motive + category intersection)
-    const cellSpendingRaw = await prisma.$queryRaw<{ motiveId: string; categoryId: string; spent: number }[]>`
-      SELECT bm."motiveId", bc."categoryId",
-        SUM(b."nettoAmount" * bm.percentage / 100 * bc.percentage / 100) as spent
-      FROM "BillMotive" bm
-      JOIN "BillCategory" bc ON bc."billId" = bm."billId"
-      JOIN "Bill" b ON b.id = bm."billId"
-      WHERE b."projectId" = ${projectId}
-        AND b.status NOT IN ('draft'::"BillStatus", 'pending'::"BillStatus", 'rejected'::"BillStatus")
-      GROUP BY bm."motiveId", bc."categoryId"
-    `;
-
-    // Convert spending results to lookup maps with 2-decimal precision
-    const roundToTwo = (value: number): number => Math.round(value * 100) / 100;
-
-    const motiveSpending: Record<string, number> = {};
-    for (const row of motiveSpendingRaw) {
-      motiveSpending[row.motiveId] = roundToTwo(Number(row.spent));
-    }
-
-    const categorySpending: Record<string, number> = {};
-    for (const row of categorySpendingRaw) {
-      categorySpending[row.categoryId] = roundToTwo(Number(row.spent));
-    }
-
-    const cellSpending: Record<string, number> = {};
-    for (const row of cellSpendingRaw) {
-      const key = `${row.categoryId}_${row.motiveId}`;
-      cellSpending[key] = roundToTwo(Number(row.spent));
-    }
+    // Spending (netto + brutto) for confirmed/approved/paid bills; brutto uses
+    // the calculateTotal rule (grossAmount when the brutto sum is 0). Same
+    // helper as the budget page and /api/spending.
+    const spending = await getBudgetMatrixSpending(projectId);
 
     return NextResponse.json({
       motives,
       categories,
       matrix,
-      grandTotal,
-      motiveSpending,
-      categorySpending,
-      cellSpending,
+      grandTotal: roundToTwo(grandTotal),
+      ...spending,
     });
   } catch (error) {
     console.error('Error fetching budget matrix:', error);

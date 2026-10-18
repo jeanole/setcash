@@ -8,7 +8,8 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/db';
-import { verifyAdminRole } from '@/lib/auth-guard';
+import { verifyAdminRole, verifyProjectMember } from '@/lib/auth-guard';
+import { insensitiveEquals } from '@/lib/db-match';
 
 export async function GET() {
   try {
@@ -53,11 +54,17 @@ export async function GET() {
         usersWithBills.map((u) => ({ email: u.email, roleName: u.role_name }))
       );
     } else {
+      // Defense in depth: JWT claims may be stale (e.g. removed member)
+      const memberCheck = await verifyProjectMember(session.user.email, projectId);
+      if (!memberCheck.authorized) {
+        return memberCheck.response!;
+      }
+
       // Regular users see only themselves with their position name
       const member = await prisma.projectMember.findFirst({
         where: {
           projectId,
-          userEmail: { equals: session.user.email, mode: 'insensitive' },
+          userEmail: insensitiveEquals(session.user.email),
         },
         include: { position: true },
       });

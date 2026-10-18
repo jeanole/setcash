@@ -11,8 +11,55 @@ import { auth } from '@/auth';
 import { prisma } from '@/lib/db';
 import { exportLimiter } from '@/lib/ratelimit';
 import { verifyAdminRole } from '@/lib/auth-guard';
-import { PassThrough } from 'stream';
+import { getBudgetMatrixExportRows, getGrossOnlySummary, grossOnlyNote } from '@/lib/spending';
+import { calculateTotal } from '@/lib/utils';
+import { PassThrough, Readable } from 'stream';
 import ExcelJS from 'exceljs';
+
+// Rows are read from the DB in cursor-paginated batches so no single query
+// loads the whole project, and allocations come with each batch (no
+// project-wide allocation scans).
+const DB_BATCH_SIZE = 1000;
+
+async function* iterateBills(projectId: string) {
+  let cursor: string | undefined;
+  while (true) {
+    const batch = await prisma.bill.findMany({
+      where: { projectId },
+      orderBy: { id: 'asc' },
+      take: DB_BATCH_SIZE,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      include: {
+        motives: {
+          include: { motive: { select: { name: true } } },
+          orderBy: { id: 'asc' },
+        },
+        categories: {
+          include: { category: { select: { name: true } } },
+          orderBy: { id: 'asc' },
+        },
+      },
+    });
+    for (const bill of batch) yield bill;
+    if (batch.length < DB_BATCH_SIZE) return;
+    cursor = batch[batch.length - 1].id;
+  }
+}
+
+async function* iterateVgeld(projectId: string) {
+  let cursor: string | undefined;
+  while (true) {
+    const batch = await prisma.vgeld.findMany({
+      where: { projectId },
+      orderBy: { id: 'asc' },
+      take: DB_BATCH_SIZE,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    });
+    for (const v of batch) yield v;
+    if (batch.length < DB_BATCH_SIZE) return;
+    cursor = batch[batch.length - 1].id;
+  }
+}
 
 export async function GET() {
   try {
@@ -63,33 +110,6 @@ export async function GET() {
     // --- Bills sheet ---
     const billsSheet = workbook.addWorksheet('Bills');
 
-    const bills = await prisma.bill.findMany({
-      where: { projectId },
-      orderBy: { id: 'asc' },
-    });
-
-    const allMotiveAllocs = await prisma.billMotive.findMany({
-      where: { bill: { projectId } },
-      include: { motive: { select: { name: true } } },
-      orderBy: [{ billId: 'asc' }, { id: 'asc' }],
-    });
-    const allCategoryAllocs = await prisma.billCategory.findMany({
-      where: { bill: { projectId } },
-      include: { category: { select: { name: true } } },
-      orderBy: [{ billId: 'asc' }, { id: 'asc' }],
-    });
-
-    const motivesByBill: Record<string, { name: string; percentage: number }[]> = {};
-    for (const a of allMotiveAllocs) {
-      if (!motivesByBill[a.billId]) motivesByBill[a.billId] = [];
-      motivesByBill[a.billId].push({ name: a.motive.name, percentage: Number(a.percentage) });
-    }
-    const categoriesByBill: Record<string, { name: string; percentage: number }[]> = {};
-    for (const a of allCategoryAllocs) {
-      if (!categoriesByBill[a.billId]) categoriesByBill[a.billId] = [];
-      categoriesByBill[a.billId].push({ name: a.category.name, percentage: Number(a.percentage) });
-    }
-
     billsSheet.columns = [
       { header: 'ID', key: 'id', width: 6 },
       { header: 'Nr.', key: 'bill_number', width: 10 },
@@ -115,14 +135,17 @@ export async function GET() {
     };
     billsSheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
 
-    for (const bill of bills) {
+    for await (const bill of iterateBills(projectId)) {
       const b19 = Number(bill.brutto19);
       const b7 = Number(bill.brutto7);
       const b0 = Number(bill.brutto0);
-      const total = b19 + b7 + b0 || Number(bill.grossAmount);
+      const total = calculateTotal(b19, b7, b0, Number(bill.grossAmount));
       const netto = Number(bill.nettoAmount) || b19 / 1.19 + b7 / 1.07 + b0;
 
-      const motiveAllocs = motivesByBill[bill.id] || [];
+      const motiveAllocs = bill.motives.map((a) => ({
+        name: a.motive.name,
+        percentage: Number(a.percentage),
+      }));
       const motiveStr =
         motiveAllocs
           .map((a) =>
@@ -134,7 +157,10 @@ export async function GET() {
         bill.motiveLegacy ||
         '';
 
-      const categoryAllocs = categoriesByBill[bill.id] || [];
+      const categoryAllocs = bill.categories.map((a) => ({
+        name: a.category.name,
+        percentage: Number(a.percentage),
+      }));
       const categoryStr = categoryAllocs
         .map((a) =>
           categoryAllocs.length === 1 && a.percentage === 100
@@ -167,13 +193,17 @@ export async function GET() {
     });
     billsSheet.getColumn('date').numFmt = 'DD.MM.YYYY HH:MM';
 
+    // Bills with only a gross amount have Netto 0: say so below the data
+    // (spending-status bills, same helper as the budget and spending pages).
+    const grossOnlyText = grossOnlyNote(await getGrossOnlySummary(projectId));
+    if (grossOnlyText) {
+      billsSheet.addRow({}); // blank separator row
+      const noteRow = billsSheet.addRow({ id: grossOnlyText });
+      noteRow.font = { italic: true, color: { argb: 'FF92400E' } };
+    }
+
     // --- V-Geld sheet ---
     const vgeldSheet = workbook.addWorksheet('V-Geld');
-    const vgeld = await prisma.vgeld.findMany({
-      where: { projectId },
-      orderBy: { id: 'asc' },
-    });
-
     vgeldSheet.columns = [
       { header: 'ID', key: 'id', width: 6 },
       { header: 'Date', key: 'date', width: 18 },
@@ -190,7 +220,7 @@ export async function GET() {
     };
     vgeldSheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
 
-    for (const v of vgeld) {
+    for await (const v of iterateVgeld(projectId)) {
       vgeldSheet.addRow({
         id: v.id,
         date: v.date ? new Date(v.date) : '',
@@ -206,63 +236,11 @@ export async function GET() {
     // --- Budget Matrix sheet ---
     const bmSheet = workbook.addWorksheet('Budget Matrix');
 
-    const motivesRaw = await prisma.motive.findMany({
-      where: { projectId },
-      select: { id: true, name: true },
-      orderBy: { id: 'asc' },
-    });
-    const motives = motivesRaw.sort((a, b) => {
-      if (a.name === 'Default') return -1;
-      if (b.name === 'Default') return 1;
-      return 0;
-    });
+    // Rows come from lib/spending so "Spent (brutto)" equals /api/spending
+    // (confirmed + approved + paid bills, calculateTotal rule, cent-rounded).
+    const bmRows = await getBudgetMatrixExportRows(projectId);
+    bmRows.forEach((row) => bmSheet.addRow(row));
 
-    const categoriesRaw = await prisma.category.findMany({
-      where: { projectId },
-      select: { id: true, name: true },
-      orderBy: { id: 'asc' },
-    });
-    const categories = categoriesRaw.sort((a, b) => {
-      if (a.name === 'Uncategorized') return -1;
-      if (b.name === 'Uncategorized') return 1;
-      return 0;
-    });
-
-    const matrixCells = await prisma.budgetMatrix.findMany({
-      where: { projectId },
-      select: { motiveId: true, categoryId: true, amount: true },
-    });
-    const matrix: Record<string, number> = {};
-    for (const r of matrixCells) {
-      matrix[`${r.categoryId}_${r.motiveId}`] = Number(r.amount);
-    }
-
-    // Spending data
-    const motiveSpendingRaw = await prisma.$queryRaw<{ motiveId: string; spent: number }[]>`
-      SELECT bm."motiveId", SUM(CAST(b."nettoAmount" AS DOUBLE PRECISION) * CAST(bm.percentage AS DOUBLE PRECISION) / 100) as spent
-      FROM "BillMotive" bm JOIN "Bill" b ON b.id = bm."billId"
-      WHERE b."projectId" = ${projectId} AND b.status = 'confirmed'::"BillStatus"
-      GROUP BY bm."motiveId"
-    `;
-    const categorySpendingRaw = await prisma.$queryRaw<{ categoryId: string; spent: number }[]>`
-      SELECT bc."categoryId", SUM(CAST(b."nettoAmount" AS DOUBLE PRECISION) * CAST(bc.percentage AS DOUBLE PRECISION) / 100) as spent
-      FROM "BillCategory" bc JOIN "Bill" b ON b.id = bc."billId"
-      WHERE b."projectId" = ${projectId} AND b.status = 'confirmed'::"BillStatus"
-      GROUP BY bc."categoryId"
-    `;
-
-    const motiveSpending: Record<string, number> = {};
-    for (const r of motiveSpendingRaw) motiveSpending[r.motiveId] = Number(r.spent) || 0;
-    const categorySpending: Record<string, number> = {};
-    for (const r of categorySpendingRaw) categorySpending[r.categoryId] = Number(r.spent) || 0;
-
-    const bmHeaders = [
-      'Category \\ Motive',
-      ...motives.map((m) => m.name),
-      'Total Budget',
-      'Spent',
-    ];
-    bmSheet.addRow(bmHeaders);
     const bmHeaderRow = bmSheet.getRow(1);
     bmHeaderRow.fill = {
       type: 'pattern',
@@ -271,52 +249,15 @@ export async function GET() {
     };
     bmHeaderRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
 
-    for (const cat of categories) {
-      const rowData: (string | number)[] = [cat.name];
-      let rowTotal = 0;
-      for (const mot of motives) {
-        const val = matrix[`${cat.id}_${mot.id}`] || 0;
-        rowData.push(val);
-        rowTotal += val;
-      }
-      rowData.push(rowTotal);
-      rowData.push(categorySpending[cat.id] || 0);
-      bmSheet.addRow(rowData);
-    }
-
-    // Totals row
-    const totalRowData: (string | number)[] = ['Total'];
-    let grandTotal = 0;
-    let grandSpent = 0;
-    for (const mot of motives) {
-      let colTotal = 0;
-      for (const cat of categories) {
-        colTotal += matrix[`${cat.id}_${mot.id}`] || 0;
-      }
-      totalRowData.push(colTotal);
-      grandTotal += colTotal;
-    }
-    totalRowData.push(grandTotal);
-    for (const cat of categories) grandSpent += categorySpending[cat.id] || 0;
-    totalRowData.push(grandSpent);
-    bmSheet.addRow(totalRowData);
-
-    // Spent row (per motive)
-    const spentRowData: (string | number)[] = ['Spent'];
-    for (const mot of motives) spentRowData.push(motiveSpending[mot.id] || 0);
-    spentRowData.push(grandSpent);
-    spentRowData.push('');
-    bmSheet.addRow(spentRowData);
-
-    // Style totals and spent rows
-    const totalRow = bmSheet.getRow(categories.length + 2);
+    // Style totals and spent rows (the last two rows)
+    const totalRow = bmSheet.getRow(bmRows.length - 1);
     totalRow.font = { bold: true };
     totalRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFECF0F1' } };
-    const spentRow = bmSheet.getRow(categories.length + 3);
+    const spentRow = bmSheet.getRow(bmRows.length);
     spentRow.font = { bold: true };
 
     // Format number columns as currency
-    for (let c = 2; c <= motives.length + 3; c++) {
+    for (let c = 2; c <= bmRows[0].length; c++) {
       bmSheet.getColumn(c).numFmt = '#,##0.00 €';
       bmSheet.getColumn(c).width = 14;
     }
@@ -327,18 +268,15 @@ export async function GET() {
     const dateStr = new Date().toISOString().split('T')[0];
     const filename = `${projectName.replace(/[^a-zA-Z0-9_-]/g, '_')}_export_${dateStr}.xlsx`;
 
-    const streamPromise = workbook.xlsx.write(pass);
+    // Readable.toWeb applies backpressure and propagates stream errors/cancellation.
+    const readableStream = Readable.toWeb(pass) as unknown as ReadableStream;
 
-    const readableStream = new ReadableStream({
-      start(controller) {
-        pass.on('data', (chunk: Buffer) => controller.enqueue(chunk));
-        pass.on('end', () => controller.close());
-        pass.on('error', (err: Error) => controller.error(err));
-      },
+    // Trigger writing (don't await — it writes to the pass stream). On failure,
+    // destroy the stream with the error so the download aborts instead of hanging.
+    workbook.xlsx.write(pass).catch((err) => {
+      console.error('Excel write error:', err);
+      pass.destroy(err instanceof Error ? err : new Error(String(err)));
     });
-
-    // Trigger writing (don't await — it writes to pass stream)
-    streamPromise.catch((err) => console.error('Excel write error:', err));
 
     return new Response(readableStream, {
       headers: {

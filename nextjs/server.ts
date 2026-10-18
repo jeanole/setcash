@@ -1,12 +1,32 @@
 import { createServer, Server } from 'http';
+import fs from 'fs';
+import path from 'path';
 import next from 'next';
 import { initAllBots, stopProjectBot } from './lib/telegram/bot';
 import { assertOcrEncryptionConfigured } from './lib/ocr';
 import { db } from './lib/db';
+import { PEER_IP_HEADER } from './lib/client-ip';
 
 const dev = process.env.NODE_ENV !== 'production';
 const port = parseInt(process.env.PORT || '3001', 10);
-const app = next({ dev, port });
+// The production image ships the build output but not next.config.mjs, so
+// load the build-time config Next serialised next to the build (the same way
+// Next's own standalone server.js does). Without it, runtime options such as
+// `images.unoptimized` silently fall back to defaults.
+function loadBuildConfig(): Record<string, unknown> | undefined {
+  if (dev) return undefined;
+  try {
+    const manifest = path.join(process.cwd(), '.next', 'required-server-files.json');
+    const { config } = JSON.parse(fs.readFileSync(manifest, 'utf8'));
+    process.env.__NEXT_PRIVATE_STANDALONE_CONFIG = JSON.stringify(config);
+    return config;
+  } catch {
+    return undefined;
+  }
+}
+
+const buildConfig = loadBuildConfig();
+const app = next({ dev, port, ...(buildConfig ? { conf: buildConfig } : {}) });
 const handle = app.getRequestHandler();
 
 // Validate TELEGRAM_ENCRYPTION_KEY at startup when Telegram is in use.
@@ -44,6 +64,8 @@ app
     initAllBots().catch(console.error);
 
     httpServer = createServer((req, res) => {
+      // Overwrite (never trust) any client-sent value — see lib/client-ip.ts.
+      req.headers[PEER_IP_HEADER] = req.socket.remoteAddress ?? '';
       handle(req, res);
     }).listen(port, () => {
       console.log(`> Ready on http://localhost:${port}`);

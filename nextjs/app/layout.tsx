@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { headers } from 'next/headers';
 import { Inter, DM_Mono, Bricolage_Grotesque, Space_Grotesk, JetBrains_Mono, Kanit } from 'next/font/google';
 import './globals.css';
 import ThemeProvider from '@/components/layout/ThemeProvider';
@@ -48,15 +49,20 @@ export const metadata: Metadata = {
   description: 'Multi-tenant expense tracking and budget management',
   icons: {
     icon: '/icon.svg',
-    shortcut: '/favicon.ico',
+    shortcut: '/icon.svg',
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // Reading request headers renders every page per request, which the
+  // nonce-based CSP needs (middleware.ts / lib/csp.ts): a prerendered page
+  // would ship scripts without the request's nonce and be blocked.
+  await headers();
+
   return (
     <html
       lang="de"

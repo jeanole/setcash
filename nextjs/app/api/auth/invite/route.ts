@@ -4,10 +4,11 @@ import crypto from 'crypto';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/db';
 import { sendInvitationEmail } from '@/lib/email';
-import { inviteLimiter } from '@/lib/ratelimit';
+import { inviteLimiter, inviteUserLimiter } from '@/lib/ratelimit';
+import { insensitiveEquals } from '@/lib/db-match';
 
 const schema = z.object({
-  email: z.string().email(),
+  email: z.string().trim().toLowerCase().pipe(z.string().email().max(254)),
   message: z.string().max(500).optional(),
 });
 
@@ -49,8 +50,10 @@ export async function POST(req: Request) {
     );
   }
 
-  // Rate limit: 20 invites per hour per (example) project
-  const rl = await inviteLimiter.limit(exampleProject.id);
+  // Rate limit per inviting user first (so one user cannot exhaust the shared
+  // budget), then a global cap of 20 invites per hour on the example project.
+  const userRl = await inviteUserLimiter.limit(session.user.email.toLowerCase());
+  const rl = userRl.success ? await inviteLimiter.limit(exampleProject.id) : userRl;
   if (!rl.success) {
     return NextResponse.json({ error: 'Too many invite requests. Please try again later.' }, { status: 429 });
   }
@@ -101,11 +104,14 @@ export async function POST(req: Request) {
   const inviteUrl = `${appUrl}/accept-invite?token=${rawToken}`;
 
   // If the invited email belongs to an existing user, create an in-app notification
-  const existingUser = await prisma.user.findUnique({ where: { email }, select: { email: true } });
+  const existingUser = await prisma.user.findFirst({
+    where: { email: insensitiveEquals(email) },
+    select: { email: true },
+  });
   if (existingUser) {
     await prisma.notification.create({
       data: {
-        userEmail: email,
+        userEmail: existingUser.email,
         type: 'pending_invite',
         message: `${session.user.email} invited you to join SetCash. Check your email for the invite link.`,
         projectId: exampleProject.id,

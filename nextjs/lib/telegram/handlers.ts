@@ -9,15 +9,18 @@ import fs from 'fs';
 import path from 'path';
 import https from 'https';
 import http from 'http';
-import TelegramBot from 'node-telegram-bot-api';
+import type { Message } from 'node-telegram-bot-api';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../db';
 import { UPLOADS_DIR } from '../upload';
+import { telegramLinkAttemptLimiter } from '../ratelimit';
 import { validateAndConsumeLinkCode } from './codes';
+import type { TelegramClient } from './client';
 
 // Album buffering: bufferKey -> { messages, timer }
 const mediaGroupBuffers = new Map<
   string,
-  { messages: TelegramBot.Message[]; timer: ReturnType<typeof setTimeout> }
+  { messages: Message[]; timer: ReturnType<typeof setTimeout> }
 >();
 
 interface DownloadedPhoto {
@@ -30,7 +33,7 @@ interface DownloadedPhoto {
  * Returns { savedName, origName } for the saved file.
  */
 export async function downloadTelegramFile(
-  bot: TelegramBot,
+  bot: TelegramClient,
   fileId: string
 ): Promise<DownloadedPhoto> {
   const fileInfo = await bot.getFile(fileId);
@@ -39,9 +42,8 @@ export async function downloadTelegramFile(
     throw new Error('File path not available from Telegram');
   }
 
-  // Access the token via the internal options
-  const token = (bot as any).token as string;
-  const url = `https://api.telegram.org/file/bot${token}/${filePath}`;
+  // The client builds the file URL (it holds the token; never log this URL)
+  const url = bot.getFileUrl(filePath);
   const ext = (path.extname(filePath) || '.jpg').toLowerCase();
 
   const ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.pdf'];
@@ -60,24 +62,77 @@ export async function downloadTelegramFile(
   return new Promise((resolve, reject) => {
     const proto = url.startsWith('https') ? https : http;
     const file = fs.createWriteStream(destPath);
-    proto
-      .get(url, (res) => {
-        res.pipe(file);
-        file.on('finish', () => {
-          file.close();
-          resolve({ savedName, origName: path.basename(filePath) });
-        });
-      })
-      .on('error', (err) => {
-        fs.unlink(destPath, () => {});
-        reject(err);
+    let settled = false;
+
+    // Single failure path: stop writing, remove any partial file, reject once.
+    const fail = (err: Error) => {
+      if (settled) return;
+      settled = true;
+      file.destroy();
+      fs.unlink(destPath, () => {});
+      reject(err);
+    };
+
+    file.on('error', fail);
+    file.on('finish', () => {
+      if (settled) return;
+      settled = true;
+      resolve({ savedName, origName: path.basename(filePath) });
+    });
+
+    const req = proto.get(url, (res) => {
+      if (res.statusCode !== 200) {
+        res.resume(); // drain so the socket is released
+        fail(new Error(`Telegram file download failed with status ${res.statusCode}`));
+        return;
+      }
+      res.on('error', fail);
+      // Connection dropped mid-transfer: the pipe would otherwise never finish
+      res.on('close', () => {
+        if (!res.complete) fail(new Error('Telegram file download interrupted'));
       });
+      res.pipe(file);
+    });
+    req.on('error', fail);
+    req.setTimeout(30_000, () => req.destroy(new Error('Telegram file download timed out')));
   });
+}
+
+// Thrown inside the create transaction when the project's bill quota is used up
+export class UploadLimitError extends Error {
+  constructor() {
+    super('Upload limit reached for this project');
+    this.name = 'UploadLimitError';
+  }
+}
+
+const UPLOAD_LIMIT_MESSAGE =
+  'Das Upload-Limit dieses Projekts ist erreicht. Bitte wende dich an einen Administrator.';
+const DEACTIVATED_MESSAGE =
+  'Dein SetCash-Account ist deaktiviert. Bitte wende dich an einen Administrator.';
+
+/** True when the account exists and has not been deactivated by an admin. */
+async function isUserActive(email: string): Promise<boolean> {
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: { isActive: true },
+  });
+  return !!user?.isActive;
+}
+
+/** Remove downloaded files that never made it into a bill. */
+function discardDownloads(photos: DownloadedPhoto[]): void {
+  for (const photo of photos) {
+    fs.unlink(path.join(UPLOADS_DIR, photo.savedName), () => {});
+  }
 }
 
 /**
  * Create a draft bill from Telegram photos using Prisma.
  * Assigns default motive and uncategorized category (100% each).
+ * Enforces the project's upload quota (throws UploadLimitError) like the web
+ * route; the count and the create share one serializable transaction so
+ * concurrent uploads cannot overshoot the limit.
  */
 export async function createDraftBill(
   projectId: string,
@@ -85,66 +140,109 @@ export async function createDraftBill(
   photos: DownloadedPhoto[],
   caption: string | null
 ): Promise<string> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await createDraftBillOnce(projectId, userEmail, photos, caption);
+    } catch (error) {
+      const isSerializationFailure =
+        error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034';
+      if (!isSerializationFailure || attempt >= 3) throw error;
+    }
+  }
+}
+
+async function createDraftBillOnce(
+  projectId: string,
+  userEmail: string,
+  photos: DownloadedPhoto[],
+  caption: string | null
+): Promise<string> {
   const billNumber = `TG-${Date.now()}`;
 
-  const bill = await prisma.bill.create({
-    data: {
-      projectId,
-      submittedByEmail: userEmail,
-      billNumber,
-      type: 'Kauf',
-      vendor: '',
-      item: '',
-      comment: caption || '',
-      status: 'draft',
-      date: new Date(),
-      telegramCaption: caption || null,
-    },
-  });
+  // Bill, default allocations and images are written atomically — a failure
+  // part-way must not leave a bill without its motive/category/images.
+  return prisma.$transaction(async (tx) => {
+    const project = await tx.project.findUnique({
+      where: { id: projectId },
+      select: { uploadLimit: true },
+    });
+    if (project?.uploadLimit != null) {
+      const billCount = await tx.bill.count({ where: { projectId } });
+      if (billCount >= project.uploadLimit) {
+        throw new UploadLimitError();
+      }
+    }
 
-  const billId = bill.id;
-
-  // Assign default motive
-  const defaultMotive = await prisma.motive.findFirst({
-    where: { projectId, name: 'Default' },
-  });
-  if (defaultMotive) {
-    await prisma.billMotive.create({
+    const bill = await tx.bill.create({
       data: {
-        billId,
-        motiveId: defaultMotive.id,
-        percentage: 100,
+        projectId,
+        submittedByEmail: userEmail,
+        billNumber,
+        type: 'Kauf',
+        vendor: '',
+        item: '',
+        comment: caption || '',
+        status: 'draft',
+        date: new Date(),
+        telegramCaption: caption || null,
       },
     });
-  }
 
-  // Assign uncategorized category
-  const defaultCategory = await prisma.category.findFirst({
-    where: { projectId, name: 'Uncategorized' },
-  });
-  if (defaultCategory) {
-    await prisma.billCategory.create({
+    const billId = bill.id;
+
+    // Assign default motive
+    const defaultMotive = await tx.motive.findFirst({
+      where: { projectId, name: 'Default' },
+    });
+    if (defaultMotive) {
+      await tx.billMotive.create({
+        data: {
+          billId,
+          motiveId: defaultMotive.id,
+          percentage: 100,
+        },
+      });
+    }
+
+    // Assign uncategorized category
+    const defaultCategory = await tx.category.findFirst({
+      where: { projectId, name: 'Uncategorized' },
+    });
+    if (defaultCategory) {
+      await tx.billCategory.create({
+        data: {
+          billId,
+          categoryId: defaultCategory.id,
+          percentage: 100,
+        },
+      });
+    }
+
+    // Attach images
+    if (photos.length > 0) {
+      await tx.billImage.createMany({
+        data: photos.map((photo, i) => ({
+          billId,
+          filename: photo.origName,
+          filePath: photo.savedName,
+          sortOrder: i,
+        })),
+      });
+    }
+
+    await tx.editLog.create({
       data: {
+        projectId,
+        timestamp: new Date(),
+        user: userEmail,
         billId,
-        categoryId: defaultCategory.id,
-        percentage: 100,
+        changes: { _event: 'created' },
+        source: 'telegram',
       },
     });
-  }
 
-  // Attach images
-  for (let i = 0; i < photos.length; i++) {
-    await prisma.billImage.create({
-      data: {
-        billId,
-        filename: photos[i].origName,
-        filePath: photos[i].savedName,
-        sortOrder: i,
-      },
-    });
-  }
-
-  return billId;
+    return billId;
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 
 /**
@@ -161,7 +259,7 @@ export function formatBillLink(billId: string): string | null {
  * Reads bill.ocrStatus and ocrFields from the DB and formats a result message.
  */
 async function sendOcrFollowUp(
-  bot: TelegramBot,
+  bot: TelegramClient,
   chatId: number,
   billId: string
 ): Promise<void> {
@@ -289,7 +387,7 @@ async function getProjectSettings(projectId: string): Promise<Record<string, unk
 async function maybeRunOcr(
   billId: string,
   projectId: string,
-  bot: TelegramBot,
+  bot: TelegramClient,
   chatId: number
 ): Promise<void> {
   const settings = await getProjectSettings(projectId);
@@ -315,7 +413,7 @@ async function processMediaGroup(
   bufferKey: string,
   projectId: string,
   userEmail: string,
-  bot: TelegramBot
+  bot: TelegramClient
 ): Promise<void> {
   const buf = mediaGroupBuffers.get(bufferKey);
   if (!buf) return;
@@ -335,13 +433,23 @@ async function processMediaGroup(
   if (photos.length === 0) return;
 
   const caption = buf.messages[0].caption || null;
-  const billId = await createDraftBill(projectId, userEmail, photos, caption);
+  const chatId = buf.messages[0].chat.id;
+  let billId: string;
+  try {
+    billId = await createDraftBill(projectId, userEmail, photos, caption);
+  } catch (e) {
+    discardDownloads(photos);
+    if (e instanceof UploadLimitError) {
+      bot.sendMessage(chatId, UPLOAD_LIMIT_MESSAGE).catch(() => {});
+      return;
+    }
+    throw e;
+  }
   console.log(
     `[TG ${projectId}] Created draft bill #${billId} with ${photos.length} image(s) for ${userEmail}`
   );
 
   const settings = await getProjectSettings(projectId);
-  const chatId = buf.messages[0].chat.id;
 
   await maybeRunOcr(billId, projectId, bot, chatId);
 
@@ -360,8 +468,8 @@ async function processMediaGroup(
  * Process a single photo message.
  */
 async function processSinglePhoto(
-  bot: TelegramBot,
-  msg: TelegramBot.Message,
+  bot: TelegramClient,
+  msg: Message,
   projectId: string,
   userEmail: string
 ): Promise<void> {
@@ -379,7 +487,17 @@ async function processSinglePhoto(
   }
 
   const caption = msg.caption || null;
-  const billId = await createDraftBill(projectId, userEmail, [downloaded], caption);
+  let billId: string;
+  try {
+    billId = await createDraftBill(projectId, userEmail, [downloaded], caption);
+  } catch (e) {
+    discardDownloads([downloaded]);
+    if (e instanceof UploadLimitError) {
+      bot.sendMessage(msg.chat.id, UPLOAD_LIMIT_MESSAGE).catch(() => {});
+      return;
+    }
+    throw e;
+  }
   console.log(`[TG ${projectId}] Created draft bill #${billId} for ${userEmail}`);
 
   const settings = await getProjectSettings(projectId);
@@ -402,19 +520,53 @@ async function processSinglePhoto(
  * Used by both /start <payload> and /link <code> handlers.
  */
 async function performLink(
-  bot: TelegramBot,
-  msg: TelegramBot.Message,
+  bot: TelegramClient,
+  msg: Message,
   projectId: string,
-  code: string
+  rawCode: string
 ): Promise<void> {
+  if (!msg.from) return;
+  const telegramUserId = String(msg.from.id);
+
+  // Normalise identically for /start and /link
+  const code = rawCode.trim().toUpperCase();
+
+  // Throttle link-code guessing per Telegram user. Every attempt counts (so an
+  // exhausted user is rejected before any code lookup), which also bounds
+  // brute-forcing of the 6-character code space.
+  const attempt = await telegramLinkAttemptLimiter.limit(`${projectId}:${telegramUserId}`);
+  if (!attempt.success) {
+    bot
+      .sendMessage(msg.chat.id, 'Zu viele Versuche. Bitte warte einige Minuten und versuche es erneut.')
+      .catch(() => {});
+    return;
+  }
+
   const result = await validateAndConsumeLinkCode(code, projectId);
   if (!result) {
     bot.sendMessage(msg.chat.id, 'Ungültiger oder abgelaufener Code.').catch(() => {});
     return;
   }
 
-  const telegramUserId = String(msg.from!.id);
   try {
+    // The code was issued to a member, but they may have been removed since
+    const membership = await prisma.projectMember.findUnique({
+      where: { projectId_userEmail: { projectId, userEmail: result.userEmail } },
+      select: { id: true },
+    });
+    if (!membership) {
+      bot
+        .sendMessage(msg.chat.id, 'Dieser Account ist kein Mitglied des Projekts mehr.')
+        .catch(() => {});
+      return;
+    }
+
+    // A deactivated account must not gain a Telegram channel
+    if (!(await isUserActive(result.userEmail))) {
+      bot.sendMessage(msg.chat.id, DEACTIVATED_MESSAGE).catch(() => {});
+      return;
+    }
+
     await prisma.telegramLink.upsert({
       where: {
         projectId_telegramUserId: { projectId, telegramUserId },
@@ -440,8 +592,8 @@ async function performLink(
  * Main message handler — routes incoming Telegram messages.
  */
 export async function handleMessage(
-  bot: TelegramBot,
-  msg: TelegramBot.Message,
+  bot: TelegramClient,
+  msg: Message,
   projectId: string
 ): Promise<void> {
   // Handle /start [payload]
@@ -449,7 +601,7 @@ export async function handleMessage(
     const payload = msg.text.trim().split(/\s+/)[1];
     if (payload) {
       // Deep link invite: /start CODE — same upsert logic as /link
-      await performLink(bot, msg, projectId, payload.toUpperCase());
+      await performLink(bot, msg, projectId, payload);
     } else {
       // Plain /start — show welcome message
       bot
@@ -476,7 +628,8 @@ export async function handleMessage(
 
   // Handle photos
   if (msg.photo) {
-    const telegramUserId = String(msg.from!.id);
+    if (!msg.from) return;
+    const telegramUserId = String(msg.from.id);
     const link = await prisma.telegramLink.findFirst({
       where: { projectId, telegramUserId },
       select: { userEmail: true },
@@ -489,6 +642,30 @@ export async function handleMessage(
           'Dein Telegram-Account ist noch nicht verknüpft.\nSende /link <Code> – den Code findest du in SetCash.'
         )
         .catch(() => {});
+      return;
+    }
+
+    // A link outlives membership unless cleaned up — never create bills for
+    // someone who has since been removed from the project.
+    const membership = await prisma.projectMember.findUnique({
+      where: { projectId_userEmail: { projectId, userEmail: link.userEmail } },
+      select: { id: true },
+    });
+    if (!membership) {
+      await prisma.telegramLink.deleteMany({ where: { projectId, telegramUserId } });
+      bot
+        .sendMessage(
+          msg.chat.id,
+          'Dein Telegram-Account ist nicht mehr verknüpft, da du kein Mitglied dieses Projekts mehr bist.'
+        )
+        .catch(() => {});
+      return;
+    }
+
+    // Deactivated users keep their link (re-activation restores it) but can
+    // not create bills in the meantime.
+    if (!(await isUserActive(link.userEmail))) {
+      bot.sendMessage(msg.chat.id, DEACTIVATED_MESSAGE).catch(() => {});
       return;
     }
 

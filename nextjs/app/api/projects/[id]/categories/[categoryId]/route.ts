@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/db';
+import { verifySuperAdmin } from '@/lib/auth-guard';
 import { z } from 'zod';
+import { insensitiveEquals } from '@/lib/db-match';
 
 const updateSchema = z.object({
   name: z.string().trim().min(1).max(100).optional(),
@@ -10,7 +12,11 @@ const updateSchema = z.object({
 
 // Helper to check admin access
 async function checkAdminAccess(session: any, projectId: string) {
-  if (session?.user?.role === 'superadmin') {
+  // JWT claim alone is not trusted — confirm superadmin status in the DB
+  if (
+    session?.user?.role === 'superadmin' &&
+    (await verifySuperAdmin(session.user.email)).authorized
+  ) {
     return true;
   }
 
@@ -81,10 +87,7 @@ export async function PUT(
       const duplicate = await prisma.category.findFirst({
         where: {
           projectId: id,
-          name: {
-            equals: validated.name,
-            mode: 'insensitive',
-          },
+          name: insensitiveEquals(validated.name),
           id: { not: categoryId },
         },
       });
@@ -105,7 +108,7 @@ export async function PUT(
       where: { id: categoryId },
       data: updateData,
       include: {
-        billCategories: true,
+        _count: { select: { billCategories: true } },
       },
     });
 
@@ -113,7 +116,7 @@ export async function PUT(
       id: category.id,
       name: category.name,
       budget: Number(category.budget),
-      billCount: category.billCategories.length,
+      billCount: category._count.billCategories,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {

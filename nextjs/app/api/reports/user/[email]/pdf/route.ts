@@ -10,19 +10,33 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/db';
 import { exportLimiter } from '@/lib/ratelimit';
-import { verifyAdminRole } from '@/lib/auth-guard';
+import { verifyAdminRole, verifyProjectMember } from '@/lib/auth-guard';
 import { UPLOADS_DIR } from '@/lib/upload';
-import { roundCents } from '@/lib/spending';
+import { getGrossOnlySummary, getUserSpendingSummary, roundCents } from '@/lib/spending';
+import { calculateTotal } from '@/lib/utils';
 import fs from 'fs';
 import path from 'path';
 import { PassThrough } from 'stream';
 // @ts-ignore
 import PDFDocument from 'pdfkit';
+import { insensitiveEquals } from '@/lib/db-match';
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { email: string } }
-) {
+// Upper bounds so a single request cannot build an unbounded PDF.
+const MAX_REPORT_BILLS = 1000;
+const MAX_REPORT_VGELD = 1000;
+const MAX_IMAGES_PER_BILL = 10;
+
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await fs.promises.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function GET(req: NextRequest, props: { params: Promise<{ email: string }> }) {
+  const params = await props.params;
   try {
     const session = await auth();
     if (!session?.user) {
@@ -43,7 +57,9 @@ export async function GET(
       );
     }
 
-    const targetEmail = decodeURIComponent(params.email);
+    // Next.js has already decoded the route param; decoding again would break
+    // addresses containing `%` (URIError) or turn `%40` into a different address.
+    const targetEmail = params.email;
 
     // Auth: self OR admin/owner/superadmin
     const isAdmin =
@@ -63,29 +79,59 @@ export async function GET(
       if (!guard.authorized) {
         return guard.response!;
       }
+    } else {
+      // Self path: the JWT's currentProjectId may be stale (e.g. removed
+      // member), so confirm current membership against the DB.
+      const memberCheck = await verifyProjectMember(session.user.email, projectId);
+      if (!memberCheck.authorized) {
+        return memberCheck.response!;
+      }
     }
 
     // Query bills and vgeld for target user.
     // This per-user report is a complete record of the user's submissions, so
-    // ALL statuses (including drafts) are listed here — unlike the spending
-    // aggregates, which count only {confirmed, approved, paid}.
-    const userBills = await prisma.bill.findMany({
-      where: {
-        projectId,
-        submittedByEmail: { equals: targetEmail, mode: 'insensitive' },
-      },
-      orderBy: { date: 'asc' },
-    });
+    // ALL statuses (including drafts) are listed here — but the summary and
+    // Saldo count only {confirmed, approved, paid} bills, matching the spending
+    // aggregates and getVgeldBalance. One extra row is fetched to detect
+    // truncation at MAX_REPORT_BILLS.
+    const billWhere = {
+      projectId,
+      submittedByEmail: insensitiveEquals(targetEmail),
+    };
+    const vgeldWhere = {
+      projectId,
+      toUser: insensitiveEquals(targetEmail),
+      // Only count confirmed V-Geld transfers (confirmedBy not null).
+      confirmedBy: { not: null },
+    };
 
-    // Only count confirmed V-Geld transfers (confirmedBy not null).
-    const userVGeld = await prisma.vgeld.findMany({
-      where: {
-        projectId,
-        toUser: { equals: targetEmail, mode: 'insensitive' },
-        confirmedBy: { not: null },
-      },
-      orderBy: { date: 'asc' },
-    });
+    const [fetchedBills, fetchedVGeld, spendingSummary, grossOnly, vgeldAgg] = await Promise.all([
+      prisma.bill.findMany({
+        where: billWhere,
+        orderBy: { date: 'asc' },
+        take: MAX_REPORT_BILLS + 1,
+      }),
+      prisma.vgeld.findMany({
+        where: vgeldWhere,
+        orderBy: { date: 'asc' },
+        take: MAX_REPORT_VGELD + 1,
+      }),
+      // Totals come from the database so they stay correct when the listed
+      // rows are truncated. Per-bill totals follow calculateTotal (grossAmount
+      // when a bill has no brutto breakdown).
+      getUserSpendingSummary(projectId, targetEmail),
+      // Counted bills with only a gross amount: netto 0, so missing from the netto totals
+      getGrossOnlySummary(projectId, targetEmail),
+      prisma.vgeld.aggregate({
+        where: vgeldWhere,
+        _sum: { amount: true },
+      }),
+    ]);
+
+    const billsTruncated = fetchedBills.length > MAX_REPORT_BILLS;
+    const vgeldTruncated = fetchedVGeld.length > MAX_REPORT_VGELD;
+    const userBills = fetchedBills.slice(0, MAX_REPORT_BILLS);
+    const userVGeld = fetchedVGeld.slice(0, MAX_REPORT_VGELD);
 
     if (userBills.length === 0 && userVGeld.length === 0) {
       return NextResponse.json({ error: 'No data found for this user' }, { status: 404 });
@@ -95,7 +141,7 @@ export async function GET(
     const member = await prisma.projectMember.findFirst({
       where: {
         projectId,
-        userEmail: { equals: targetEmail, mode: 'insensitive' },
+        userEmail: insensitiveEquals(targetEmail),
       },
       include: { position: true },
     });
@@ -135,6 +181,21 @@ export async function GET(
       }
     }
 
+    // Bulk-fetch images for all listed bills (one query instead of one per bill)
+    const imagesByBillId = new Map<string, { filePath: string }[]>();
+    if (billIds.length > 0) {
+      const allImages = await prisma.billImage.findMany({
+        where: { billId: { in: billIds } },
+        orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+        select: { billId: true, filePath: true },
+      });
+      for (const img of allImages) {
+        const list = imagesByBillId.get(img.billId);
+        if (list) list.push(img);
+        else imagesByBillId.set(img.billId, [img]);
+      }
+    }
+
     // Generate PDF
     const doc = new PDFDocument({ margin: 50, size: 'A4' });
     const pass = new PassThrough();
@@ -151,7 +212,7 @@ export async function GET(
     doc.moveDown(1);
 
     // V-Geld section
-    const totalVGeld = roundCents(userVGeld.reduce((sum, v) => sum + Number(v.amount), 0));
+    const totalVGeld = roundCents(Number(vgeldAgg._sum.amount ?? 0));
     doc.fontSize(12).font('Helvetica-Bold').text('V-Geld Zahlungen');
     doc.fontSize(10).font('Helvetica');
 
@@ -162,6 +223,12 @@ export async function GET(
         doc.text(
           `${new Date(v.date).toLocaleDateString('de-DE')} - ${Number(v.amount).toFixed(2)} EUR von ${v.fromUser || 'Extern'}`
         );
+      }
+      if (vgeldTruncated) {
+        doc
+          .fillColor('gray')
+          .text(`Hinweis: Es werden nur die ersten ${MAX_REPORT_VGELD} Zahlungen aufgelistet.`);
+        doc.fillColor('black');
       }
       doc.moveDown(0.3);
       doc.font('Helvetica-Bold').text(`V-Geld Gesamt: ${totalVGeld.toFixed(2)} EUR`);
@@ -208,7 +275,9 @@ export async function GET(
         const b0 = Number(bill.brutto0);
         const n19 = b19 / 1.19;
         const n7 = b7 / 1.07;
-        const netto = n19 + n7 + b0;
+        const total = calculateTotal(b19, b7, b0, Number(bill.grossAmount));
+        // Bills without a VAT breakdown have no per-rate netto; use the stored one
+        const netto = b19 + b7 + b0 > 0 ? n19 + n7 + b0 : Number(bill.nettoAmount);
 
         doc.text(bill.billNumber || String(i + 1), colX[0], rowY, { width: 23 });
         doc.text(new Date(bill.date).toLocaleDateString('de-DE'), colX[1], rowY, { width: 48 });
@@ -217,7 +286,7 @@ export async function GET(
         doc.text(b19.toFixed(2), colX[4], rowY, { width: 43 });
         doc.text(b7.toFixed(2), colX[5], rowY, { width: 43 });
         doc.text(b0.toFixed(2), colX[6], rowY, { width: 43 });
-        doc.font('Helvetica-Bold').text((b19 + b7 + b0).toFixed(2), colX[7], rowY, { width: 43 });
+        doc.font('Helvetica-Bold').text(total.toFixed(2), colX[7], rowY, { width: 43 });
         doc.font('Helvetica').text(n19.toFixed(2), colX[8], rowY, { width: 43 });
         doc.text(n7.toFixed(2), colX[9], rowY, { width: 38 });
         doc.font('Helvetica-Bold').text(netto.toFixed(2), colX[10], rowY, { width: 38 });
@@ -225,6 +294,13 @@ export async function GET(
         rowY += 11;
       }
       doc.y = rowY;
+      if (billsTruncated) {
+        doc
+          .fontSize(8)
+          .fillColor('gray')
+          .text(`Hinweis: Es werden nur die ersten ${MAX_REPORT_BILLS} Belege aufgelistet.`, 50);
+        doc.fillColor('black');
+      }
       doc.moveDown(1);
     }
 
@@ -233,13 +309,20 @@ export async function GET(
     doc.moveDown(1);
 
     // Summary
-    const totalAmount = roundCents(userBills.reduce((sum, b) => sum + Number(b.grossAmount), 0));
-    const total19 = roundCents(userBills.reduce((sum, b) => sum + Number(b.brutto19), 0));
-    const total7 = roundCents(userBills.reduce((sum, b) => sum + Number(b.brutto7), 0));
-    const total0 = roundCents(userBills.reduce((sum, b) => sum + Number(b.brutto0), 0));
+    // Only confirmed/approved/paid bills count (draft/pending/rejected are
+    // listed above but excluded here), using the same per-bill total formula
+    // as the table rows.
+    const countedBills = spendingSummary.count;
+    const total19 = spendingSummary.brutto19;
+    const total7 = spendingSummary.brutto7;
+    const total0 = spendingSummary.brutto0;
+    // Bills that only carry a gross amount (no VAT breakdown) are part of the
+    // total but of none of the per-rate rows above.
+    const totalUnsplit = spendingSummary.unsplit;
+    const totalAmount = spendingSummary.total;
     const totalNetto19 = total19 / 1.19;
     const totalNetto7 = total7 / 1.07;
-    const totalNetto = totalNetto19 + totalNetto7 + total0;
+    const totalNetto = roundCents(totalNetto19 + totalNetto7 + total0 + spendingSummary.unsplitNetto);
 
     const summaryX = 50;
     const bruttoX = 200;
@@ -252,12 +335,13 @@ export async function GET(
     doc.fontSize(9).font('Helvetica-Bold');
     doc.text('', summaryX, summaryY);
     doc.text('Brutto', bruttoX, summaryY);
-    doc.text('Netto', nettoX, summaryY);
+    // "Netto*" points to the footnote below when bills are missing from it
+    doc.text(grossOnly.count > 0 ? 'Netto*' : 'Netto', nettoX, summaryY);
     summaryY += 14;
 
     doc.fontSize(10).font('Helvetica');
     doc.text('Anzahl Belege:', summaryX, summaryY);
-    doc.text(String(userBills.length), bruttoX, summaryY);
+    doc.text(String(countedBills), bruttoX, summaryY);
     summaryY += 14;
 
     doc.text('Gesamt 19%:', summaryX, summaryY);
@@ -275,6 +359,13 @@ export async function GET(
     doc.text(`${total0.toFixed(2)} EUR`, nettoX, summaryY);
     summaryY += 14;
 
+    if (totalUnsplit !== 0) {
+      doc.text('Ohne MwSt.-Aufteilung:', summaryX, summaryY);
+      doc.text(`${totalUnsplit.toFixed(2)} EUR`, bruttoX, summaryY);
+      doc.text(`${spendingSummary.unsplitNetto.toFixed(2)} EUR`, nettoX, summaryY);
+      summaryY += 14;
+    }
+
     doc.moveTo(summaryX, summaryY).lineTo(420, summaryY).stroke();
     summaryY += 6;
 
@@ -288,11 +379,43 @@ export async function GET(
     doc.text(`${totalVGeld.toFixed(2)} EUR`, bruttoX, summaryY);
     summaryY += 14;
 
-    const balance = totalVGeld - totalAmount;
+    const balance = roundCents(totalVGeld - totalAmount);
     doc.fillColor(balance >= 0 ? 'green' : 'red');
     doc.text('Saldo (brutto):', summaryX, summaryY);
     doc.text(`${balance.toFixed(2)} EUR`, bruttoX, summaryY);
     doc.fillColor('black');
+    summaryY += 16;
+
+    if (grossOnly.count > 0) {
+      const belege = grossOnly.count === 1 ? '1 Beleg' : `${grossOnly.count} Belege`;
+      doc
+        .fontSize(8)
+        .font('Helvetica')
+        .fillColor('gray')
+        .text(
+          `* Netto-Summen enthalten nicht ${belege} ohne MwSt.-Aufteilung ` +
+            `(${grossOnly.grossSum.toFixed(2)} EUR brutto, Netto = 0.00).`,
+          summaryX,
+          summaryY,
+          { width: 495 }
+        );
+      doc.fillColor('black');
+      summaryY = doc.y + 4;
+    }
+
+    if (countedBills !== userBills.length || billsTruncated) {
+      doc
+        .fontSize(8)
+        .font('Helvetica')
+        .fillColor('gray')
+        .text(
+          'Hinweis: Summen und Saldo enthalten nur Belege mit Status bestatigt, genehmigt oder bezahlt.',
+          summaryX,
+          summaryY
+        );
+      doc.fillColor('black');
+      summaryY += 12;
+    }
 
     doc.y = summaryY + 20;
 
@@ -341,7 +464,8 @@ export async function GET(
       const b0 = Number(bill.brutto0);
       const n19 = b19 / 1.19;
       const n7 = b7 / 1.07;
-      const billNetto = n19 + n7 + b0;
+      const billTotal = calculateTotal(b19, b7, b0, Number(bill.grossAmount));
+      const billNetto = b19 + b7 + b0 > 0 ? n19 + n7 + b0 : Number(bill.nettoAmount);
 
       const bruttoAmounts: string[] = [];
       if (b19) bruttoAmounts.push(`19%: ${b19.toFixed(2)}`);
@@ -349,7 +473,7 @@ export async function GET(
       if (b0) bruttoAmounts.push(`0%: ${b0.toFixed(2)}`);
 
       doc.text(
-        `Brutto: ${bruttoAmounts.join(' | ') || '-'} | Gesamt: ${(b19 + b7 + b0).toFixed(2)} EUR`
+        `Brutto: ${bruttoAmounts.join(' | ') || '-'} | Gesamt: ${billTotal.toFixed(2)} EUR`
       );
 
       const nettoAmounts: string[] = [];
@@ -367,10 +491,8 @@ export async function GET(
       doc.moveDown(0.5);
 
       // Images
-      const billImages = await prisma.billImage.findMany({
-        where: { billId: bill.id },
-        orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
-      });
+      const allBillImages = imagesByBillId.get(bill.id) ?? [];
+      const billImages = allBillImages.slice(0, MAX_IMAGES_PER_BILL);
 
       if (billImages.length > 0) {
         for (let imgIdx = 0; imgIdx < billImages.length; imgIdx++) {
@@ -382,7 +504,7 @@ export async function GET(
           const subDir = path.dirname(img.filePath).replace(/\.\./g, '');
           const imagePath = path.join(UPLOADS_DIR, subDir, safeName);
 
-          if (fs.existsSync(imagePath)) {
+          if (await fileExists(imagePath)) {
             try {
               const ext = path.extname(imagePath).toLowerCase();
               if (['.jpg', '.jpeg', '.png'].includes(ext)) {
@@ -421,6 +543,16 @@ export async function GET(
             doc.fillColor('black');
           }
         }
+      }
+
+      if (allBillImages.length > MAX_IMAGES_PER_BILL) {
+        doc
+          .fontSize(9)
+          .fillColor('gray')
+          .text(
+            `[Hinweis: Es werden nur die ersten ${MAX_IMAGES_PER_BILL} von ${allBillImages.length} Bildern angezeigt]`
+          );
+        doc.fillColor('black');
       }
 
       // New page after each bill (except the last)

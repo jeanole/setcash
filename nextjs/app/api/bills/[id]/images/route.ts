@@ -3,51 +3,70 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
 import { auth } from '@/auth';
 import { db as prisma } from '@/lib/db';
 import path from 'path';
 import fs from 'fs';
+import type { File } from 'formidable';
 import {
   parseForm,
   getUploadedFiles,
   ensureUploadDir,
   generateFilename,
   validateFile,
+  uploadErrorResponse,
   UPLOADS_DIR,
 } from '@/lib/upload';
 import { verifyAdminRole } from '@/lib/auth-guard';
+import { billImageUploadLimiter } from '@/lib/ratelimit';
+import {
+  MAX_IMAGES_PER_BILL,
+  imageEditLockResponse,
+  runSerializable,
+  syncLegacyImageColumns,
+} from '@/app/api/bills/_lib/shared';
 
-// Sync legacy bills.filename with first image
-async function syncLegacyImageColumns(billId: string) {
-  const firstImage = await prisma.billImage.findFirst({
-    where: { billId },
-    orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
-  });
-
-  if (firstImage) {
-    await prisma.bill.update({
-      where: { id: billId },
-      data: {
-        filename: firstImage.filename,
-      },
-    });
-  } else {
-    await prisma.bill.update({
-      where: { id: billId },
-      data: { filename: '' },
-    });
+// Thrown inside the transaction when the per-bill image cap would be exceeded
+class TooManyImagesError extends Error {
+  constructor() {
+    super(`Maximum ${MAX_IMAGES_PER_BILL} images per bill`);
+    this.name = 'TooManyImagesError';
   }
 }
 
 // POST /api/bills/[id]/images - Add images to existing bill
-export async function POST(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  // Temp files written by parseForm and files moved to their final location are
+  // tracked so every early return / throw can clean them up.
+  let uploadedFiles: File[] = [];
+  const movedFilePaths: string[] = [];
+
+  const cleanupFiles = () => {
+    for (const f of uploadedFiles) {
+      if (f.filepath && fs.existsSync(f.filepath)) {
+        try { fs.unlinkSync(f.filepath); } catch { /* best-effort cleanup */ }
+      }
+    }
+    for (const filePath of movedFilePaths) {
+      try {
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      } catch (unlinkError) {
+        console.error('File cleanup failed:', filePath, unlinkError);
+      }
+    }
+  };
+
   try {
     const session = await auth();
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { success } = await billImageUploadLimiter.limit(session.user.id || session.user.email);
+    if (!success) {
+      return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 });
     }
 
     const projectId = session.user.currentProjectId;
@@ -86,138 +105,117 @@ export async function POST(
       }
     }
 
-    // Parse multipart form
-    const { fields, files } = await parseForm(req);
+    // Approved/paid bills: images are frozen unless the caller is a DB-verified admin
+    const lockResponse = await imageEditLockResponse(bill.status, session.user.email, projectId);
+    if (lockResponse) return lockResponse;
+
+    // Parse multipart form (size-capped; throws UploadError for bad/oversized bodies)
+    const { files } = await parseForm(req, { fields: ['photos'] });
 
     // Get uploaded files
-    const uploadedFiles = getUploadedFiles(files, 'photos');
+    uploadedFiles = getUploadedFiles(files, 'photos');
 
     if (uploadedFiles.length === 0) {
       return NextResponse.json({ error: 'No files' }, { status: 400 });
     }
 
-    // Validate file content (magic bytes) before proceeding. On
-    // failure, unlink every temp file from this request and return 400.
+    // Validate file content (magic bytes) before proceeding
     for (const f of uploadedFiles) {
       const result = validateFile(f);
       if (!result.valid) {
-        for (const other of uploadedFiles) {
-          if (other.filepath && fs.existsSync(other.filepath)) {
-            try { fs.unlinkSync(other.filepath); } catch { /* best-effort cleanup */ }
-          }
-        }
+        cleanupFiles();
         return NextResponse.json({ error: result.error || 'Invalid file' }, { status: 400 });
       }
     }
 
-    // Check current image count
-    const currentCount = await prisma.billImage.count({
-      where: { billId: id },
-    });
-
-    if (currentCount + uploadedFiles.length > 10) {
-      // Temp files were already written to disk by parseForm — clean them up
-      // before returning, otherwise they leak.
-      for (const f of uploadedFiles) {
-        if (f.filepath && fs.existsSync(f.filepath)) {
-          try { fs.unlinkSync(f.filepath); } catch { /* best-effort cleanup */ }
-        }
-      }
+    if (uploadedFiles.length > MAX_IMAGES_PER_BILL) {
+      cleanupFiles();
       return NextResponse.json(
-        { error: 'Maximum 10 images per bill' },
+        { error: `Maximum ${MAX_IMAGES_PER_BILL} images per bill` },
         { status: 400 }
       );
     }
 
+    // Move uploads to their final, collision-free location (random name
+    // component) before the DB write; cleaned up again if the write fails.
     const userFolder = ensureUploadDir(bill.submittedByEmail);
     const dateStr = new Date().toISOString().split('T')[0];
-    const newImages: { id: string; filename: string | undefined; file: string; sortOrder: number }[] = [];
+    const stored: { id: string; filename: string; filePath: string }[] = [];
 
-    // Track moved files/created rows so a mid-loop failure can be
-    // compensated for (mirrors the pattern in app/api/bills/route.ts POST).
-    const movedFilePaths: string[] = [];
-    const createdImageIds: string[] = [];
+    for (let i = 0; i < uploadedFiles.length; i++) {
+      const f = uploadedFiles[i];
+      const savedFilename = generateFilename(
+        userFolder,
+        bill.billNumber || id,
+        dateStr,
+        `_${i}`,
+        f.originalFilename || ''
+      );
+      const relPath = `${userFolder}/${savedFilename}`;
+      const savedFilePath = path.join(UPLOADS_DIR, relPath);
 
-    try {
-      for (let i = 0; i < uploadedFiles.length; i++) {
-        const f = uploadedFiles[i];
-        const sortOrder = currentCount + i;
-        const savedFilename = generateFilename(
-          userFolder,
-          bill.billNumber || id,
-          dateStr,
-          `_${sortOrder}`,
-          f.originalFilename || ''
-        );
-        const relPath = `${userFolder}/${savedFilename}`;
-        const savedFilePath = path.join(UPLOADS_DIR, relPath);
+      fs.renameSync(f.filepath, savedFilePath);
+      movedFilePaths.push(savedFilePath);
+      stored.push({ id: crypto.randomUUID(), filename: f.originalFilename || '', filePath: relPath });
+    }
 
-        // Move file to final location
-        fs.renameSync(f.filepath, savedFilePath);
-        movedFilePaths.push(savedFilePath);
-
-        // Create image record
-        const img = await prisma.billImage.create({
-          data: {
-            billId: id,
-            filename: f.originalFilename || '',
-            filePath: relPath,
-            sortOrder,
-          },
-        });
-        createdImageIds.push(img.id);
-
-        newImages.push({
-          id: img.id,
-          filename: f.originalFilename || undefined,
-          file: relPath,
-          sortOrder,
-        });
+    // Count check + insert in one serializable transaction so concurrent
+    // uploads can't push the bill past the image cap. New images are appended
+    // after the current highest sortOrder.
+    const newImages = await runSerializable(async (tx) => {
+      const existing = await tx.billImage.aggregate({
+        where: { billId: id },
+        _count: { _all: true },
+        _max: { sortOrder: true },
+      });
+      if (existing._count._all + stored.length > MAX_IMAGES_PER_BILL) {
+        throw new TooManyImagesError();
       }
 
+      const firstSortOrder = (existing._max.sortOrder ?? -1) + 1;
+      const rows = stored.map((img, i) => ({
+        id: img.id,
+        billId: id,
+        filename: img.filename,
+        filePath: img.filePath,
+        sortOrder: firstSortOrder + i,
+      }));
+      await tx.billImage.createMany({ data: rows });
+
       // Update legacy columns with first image
-      await syncLegacyImageColumns(id);
+      await syncLegacyImageColumns(tx, id);
 
       // Log image addition
-      await prisma.editLog.create({
+      await tx.editLog.create({
         data: {
           projectId,
           timestamp: new Date(),
           user: session.user.email,
           billId: id,
-          changes: { images: `added ${uploadedFiles.length}` },
+          changes: { images: `added ${rows.length}` },
           source: 'user',
         },
       });
-    } catch (midLoopError) {
-      // Compensation: remove any BillImage rows already created and unlink
-      // any files already moved to their final location.
-      if (createdImageIds.length > 0) {
-        try {
-          await prisma.billImage.deleteMany({ where: { id: { in: createdImageIds } } });
-        } catch (cleanupError) {
-          console.error('Compensation deleteMany failed for images', createdImageIds, cleanupError);
-        }
-      }
-      for (const filePath of movedFilePaths) {
-        try {
-          if (fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath);
-          }
-        } catch (unlinkError) {
-          console.error('Compensation file cleanup failed:', filePath, unlinkError);
-        }
-      }
-      console.error('Error adding images (rolled back):', midLoopError);
-      return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
-    }
+
+      return rows.map((r) => ({
+        id: r.id,
+        filename: r.filename || undefined,
+        file: r.filePath,
+        sortOrder: r.sortOrder,
+      }));
+    });
 
     return NextResponse.json({ ok: true, images: newImages });
   } catch (error) {
+    cleanupFiles();
+
+    const uploadResponse = uploadErrorResponse(error);
+    if (uploadResponse) return uploadResponse;
+
+    if (error instanceof TooManyImagesError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     console.error('Error adding images:', error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

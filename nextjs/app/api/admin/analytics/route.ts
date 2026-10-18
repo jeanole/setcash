@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { auth } from '@/auth';
+import { verifySuperAdmin } from '@/lib/auth-guard';
 import { db as prisma } from '@/lib/db';
 
 const querySchema = z.object({
@@ -30,6 +31,8 @@ export async function GET(req: NextRequest) {
     if (session.user.role !== 'superadmin') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+    const guard = await verifySuperAdmin(session.user.email);
+    if (!guard.authorized) return guard.response!;
 
     // Parse + validate query params
     const { searchParams } = req.nextUrl;

@@ -217,9 +217,11 @@ export function useBill(id: string | null) {
   const cropImage = async (imageId: string, croppedBlob: Blob) => {
     if (!id) return false;
     try {
-      // Convert blob to file with original filename
+      // Convert blob to file. The cropper always emits JPEG, and the server
+      // checks the extension against the file content, so use a .jpg name.
       const image = bill?.images.find((img) => img.id === imageId);
-      const filename = image?.filename || 'cropped.jpg';
+      const baseName = (image?.filename || 'cropped').replace(/\.[^./\\]+$/, '');
+      const filename = `${baseName}.jpg`;
       const file = new File([croppedBlob], filename, { type: croppedBlob.type });
       
       await api.replaceImage(id, imageId, file);

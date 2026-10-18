@@ -4,14 +4,75 @@
 // Manages per-project bot instances. Uses globalThis to survive Next.js HMR.
 // ============================================================================
 
-import TelegramBot from 'node-telegram-bot-api';
+import { Bot, TelegramApiError } from 'node-telegram-bot-api';
 import { prisma } from '../db';
 import { decrypt } from './encryption';
 import { handleMessage } from './handlers';
+import { createTelegramClient } from './client';
+
+// Long-poll wait (seconds) passed to getUpdates
+const POLL_TIMEOUT_SECONDS = 30;
+// Client-side timeout (ms) for ordinary API calls (sendMessage, getFile)
+const API_TIMEOUT_MS = 30_000;
+// Delay (ms) before resuming polling after an unexpected non-transient failure
+const POLL_RESTART_DELAY_MS = 5000;
+
+interface ActiveBot {
+  bot: Bot;
+  stopped: boolean;
+  nextOffset?: number;
+}
 
 // Use globalThis to survive Next.js HMR in development
-const activeBots: Map<string, TelegramBot> = (globalThis as any).__activeBots ??
-  ((globalThis as any).__activeBots = new Map<string, TelegramBot>());
+const activeBots: Map<string, ActiveBot> = (globalThis as any).__activeTelegramBots ??
+  ((globalThis as any).__activeTelegramBots = new Map<string, ActiveBot>());
+
+/**
+ * Error text that is safe to log (never includes the request URL / token).
+ */
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+/**
+ * Run the long-poll loop for one bot until it is stopped.
+ * v2 retries transient errors itself (reported via onError); startPolling only
+ * rejects on fatal errors, which are mapped here to the v1 polling_error rules:
+ * 409/401/404 stop the bot, anything else is logged and polling is resumed.
+ */
+async function runPolling(projectId: string, entry: ActiveBot): Promise<void> {
+  while (!entry.stopped) {
+    try {
+      await entry.bot.startPolling(undefined, {
+        timeout: POLL_TIMEOUT_SECONDS,
+        offset: entry.nextOffset,
+        allowedUpdates: ['message'],
+        onError: (err) => {
+          console.error(`[TG ${projectId}] Polling error:`, errorMessage(err));
+        },
+      });
+      return; // Resolved: polling was stopped via stop()
+    } catch (err) {
+      if (entry.stopped) return;
+
+      const code = err instanceof TelegramApiError ? err.errorCode : undefined;
+      if (code === 409) {
+        console.error(`[TG ${projectId}] Bot already running elsewhere (409). Stopping.`);
+        stopBot(projectId, entry);
+        return;
+      }
+      if (code === 401 || code === 404) {
+        // Invalid or deleted token — stop immediately to avoid spam
+        console.error(`[TG ${projectId}] Invalid bot token (${code}). Stopping.`);
+        stopBot(projectId, entry);
+        return;
+      }
+
+      console.error(`[TG ${projectId}] Polling error:`, errorMessage(err));
+      await new Promise((resolve) => setTimeout(resolve, POLL_RESTART_DELAY_MS));
+    }
+  }
+}
 
 /**
  * Start a Telegram bot for a specific project.
@@ -48,57 +109,72 @@ export async function startProjectBot(projectId: string): Promise<void> {
     return;
   }
 
-  let bot: TelegramBot;
+  let bot: Bot;
   try {
-    bot = new TelegramBot(token, {
-      polling: { interval: 2000, autoStart: false },
-    });
+    bot = new Bot(token, { timeoutMs: API_TIMEOUT_MS });
   } catch (e) {
-    console.error(`[TG ${projectId}] Failed to create bot:`, (e as Error).message);
+    console.error(`[TG ${projectId}] Failed to create bot:`, errorMessage(e));
     return;
   }
 
-  bot.on('message', async (msg) => {
-    try {
-      await handleMessage(bot, msg, projectId);
-    } catch (e) {
-      console.error(`[TG ${projectId}] Unhandled message error:`, (e as Error).message);
-    }
+  const client = createTelegramClient(bot.api, token);
+  const entry: ActiveBot = { bot, stopped: false };
+
+  // Remember the last seen update so a resumed poll does not redeliver it
+  bot.use(async (ctx, next) => {
+    entry.nextOffset = ctx.update.update_id + 1;
+    await next();
   });
 
-  bot.on('polling_error', (err) => {
-    const msg = err.message ?? '';
-    if (msg.includes('409')) {
-      console.error(`[TG ${projectId}] Bot already running elsewhere (409). Stopping.`);
-      stopProjectBot(projectId);
-    } else if (msg.includes('401') || msg.includes('404')) {
-      // Invalid or deleted token — stop immediately to avoid spam
-      console.error(`[TG ${projectId}] Invalid bot token (${msg.includes('401') ? '401' : '404'}). Stopping.`);
-      stopProjectBot(projectId);
-    } else {
-      console.error(`[TG ${projectId}] Polling error:`, msg);
+  // Handlers run concurrently and are not awaited, so a slow photo download
+  // never blocks polling (same as the v1 event emitter behaviour).
+  bot.on('message', (ctx, next) => {
+    const msg = ctx.message;
+    if (msg) {
+      handleMessage(client, msg, projectId).catch((e) => {
+        console.error(`[TG ${projectId}] Unhandled message error:`, errorMessage(e));
+      });
     }
+    return next();
   });
 
-  bot.startPolling();
-  activeBots.set(projectId, bot);
+  // Last-resort boundary; log the message only (never the request URL / token)
+  bot.catch((err) => {
+    console.error(`[TG ${projectId}] Update handling error:`, errorMessage(err));
+  });
+
+  activeBots.set(projectId, entry);
+  runPolling(projectId, entry).catch((e) => {
+    console.error(`[TG ${projectId}] Polling loop crashed:`, errorMessage(e));
+    stopBot(projectId, entry);
+  });
   console.log(`[TG ${projectId}] Bot started`);
+}
+
+/**
+ * Stop a bot instance and remove it from the map.
+ * When `only` is given, it is stopped only if it is still the active instance
+ * (so a stale polling loop cannot stop a newer bot for the same project).
+ */
+function stopBot(projectId: string, only?: ActiveBot): void {
+  const entry = activeBots.get(projectId);
+  if (!entry || (only && entry !== only)) return;
+
+  entry.stopped = true;
+  try {
+    entry.bot.stop();
+  } catch {
+    // Ignore errors during stop
+  }
+  activeBots.delete(projectId);
+  console.log(`[TG ${projectId}] Bot stopped`);
 }
 
 /**
  * Stop a running bot and remove it from the map.
  */
 export async function stopProjectBot(projectId: string): Promise<void> {
-  const bot = activeBots.get(projectId);
-  if (bot) {
-    try {
-      await bot.stopPolling();
-    } catch {
-      // Ignore errors during stop
-    }
-    activeBots.delete(projectId);
-    console.log(`[TG ${projectId}] Bot stopped`);
-  }
+  stopBot(projectId);
 }
 
 /**
@@ -116,7 +192,7 @@ export async function initAllBots(): Promise<void> {
     try {
       await startProjectBot(project.id);
     } catch (e) {
-      console.error(`[TG ${project.id}] Failed to start bot:`, (e as Error).message);
+      console.error(`[TG ${project.id}] Failed to start bot:`, errorMessage(e));
     }
   }
 

@@ -4,6 +4,7 @@
 
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
+import { verifySuperAdmin } from '@/lib/auth-guard';
 import { db as prisma } from '@/lib/db';
 
 // GET /api/admin/projects - List all projects with member counts
@@ -18,6 +19,8 @@ export async function GET() {
     if (session.user.role !== 'superadmin') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+    const guard = await verifySuperAdmin(session.user.email);
+    if (!guard.authorized) return guard.response!;
 
     const projects = await prisma.project.findMany({
       orderBy: { createdAt: 'asc' },

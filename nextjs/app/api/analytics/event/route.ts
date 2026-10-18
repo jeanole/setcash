@@ -6,8 +6,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { db as prisma } from '@/lib/db';
-import { visitLogLimiter } from '@/lib/ratelimit';
-import { classifyUA, getCountryCode, getClientIp } from '@/lib/analytics';
+import { analyticsEventLimiter } from '@/lib/ratelimit';
+import { getClientIp } from '@/lib/client-ip';
+import { allowAnalyticsWrite, classifyUA, getCountryCode } from '@/lib/analytics';
 
 const EVENT_TYPES = ['cta_click', 'scroll_depth', 'time_on_page', 'page_view'] as const;
 
@@ -22,8 +23,8 @@ const eventSchema = z.object({
 export async function POST(req: NextRequest) {
   try {
     const ip = getClientIp(req);
-    const rl = await visitLogLimiter.limit(`event:${ip}`);
-    if (!rl.success) {
+    const rl = await analyticsEventLimiter.limit(ip);
+    if (!rl.success || !allowAnalyticsWrite()) {
       return new NextResponse(null, { status: 429 });
     }
 

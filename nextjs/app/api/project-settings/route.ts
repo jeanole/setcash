@@ -3,13 +3,16 @@
 // ============================================================================
 // Manages project-level OCR configuration settings (ocrEnabled, ocrProvider,
 // ocrApiKey, ocrBaseUrl). API key is encrypted at rest; masked on GET.
-// Access restricted to project admin, owner, and superadmin.
+// Access restricted to project admin, owner, and superadmin (verified in the DB,
+// not from JWT claims — the settings drive where the decrypted API key is sent).
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { db as prisma } from '@/lib/db';
 import { z } from 'zod';
+import type { Prisma } from '@prisma/client';
+import { verifyAdminRole } from '@/lib/auth-guard';
 import { encryptApiKey, maskApiKey } from '@/lib/ocr';
 
 // ── Validation schema ─────────────────────────────────────────────────────────
@@ -71,24 +74,13 @@ export async function GET(_req: NextRequest) {
       return NextResponse.json({ error: 'No project selected' }, { status: 400 });
     }
 
-    // Only admin, owner, or superadmin may read project settings
-    const role = session.user.role;
-    if (role !== 'admin' && role !== 'superadmin') {
-      // Check if the user is an owner via project membership
-      const membership = await prisma.projectMember.findUnique({
-        where: {
-          projectId_userEmail: {
-            projectId,
-            userEmail: session.user.email,
-          },
-        },
-        select: { role: true },
-      });
-
-      if (!membership || membership.role !== 'owner') {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
+    // Only admin, owner, or superadmin may read project settings. Fast JWT
+    // pre-filter first (a plain 403 for regular members), then DB-verified.
+    if (session.user.role !== 'admin' && session.user.role !== 'owner' && session.user.role !== 'superadmin') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+    const guard = await verifyAdminRole(session.user.email, projectId);
+    if (!guard.authorized) return guard.response!;
 
     const settings = await readProjectSettings(projectId);
     return NextResponse.json(settings);
@@ -117,24 +109,13 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: 'Demo accounts cannot modify project settings.' }, { status: 403 });
     }
 
-    // Only admin, owner, or superadmin may write project settings
-    const role = session.user.role;
-    if (role !== 'admin' && role !== 'superadmin') {
-      // Check if the user is an owner via project membership
-      const membership = await prisma.projectMember.findUnique({
-        where: {
-          projectId_userEmail: {
-            projectId,
-            userEmail: session.user.email,
-          },
-        },
-        select: { role: true },
-      });
-
-      if (!membership || membership.role !== 'owner') {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
+    // Only admin, owner, or superadmin may write project settings. Fast JWT
+    // pre-filter first (a plain 403 for regular members), then DB-verified.
+    if (session.user.role !== 'admin' && session.user.role !== 'owner' && session.user.role !== 'superadmin') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+    const guard = await verifyAdminRole(session.user.email, projectId);
+    if (!guard.authorized) return guard.response!;
 
     // Parse and validate request body
     let body: unknown;
@@ -154,11 +135,44 @@ export async function PUT(req: NextRequest) {
 
     const data = parseResult.data;
 
-    // Upsert each provided setting individually
-    const upsertPromises: Promise<unknown>[] = [];
+    // A new API key is only "provided" if it is non-empty and not the masked
+    // value echoed back by the frontend.
+    const newKeyProvided =
+      data.ocrApiKey !== undefined && data.ocrApiKey !== '' && !data.ocrApiKey.startsWith('...');
+    const clearingKey = data.ocrApiKey === '';
+
+    // Never let a stored key follow a changed destination: if the provider or the
+    // (non-null) base URL changes, the caller must supply a fresh key in the same
+    // request (or explicitly clear it). Otherwise an admin could redirect the
+    // existing key to a host they control.
+    if (!newKeyProvided && !clearingKey) {
+      const current = await prisma.projectSettings.findMany({
+        where: { projectId, key: { in: ['ocrProvider', 'ocrBaseUrl', 'ocrApiKey'] } },
+        select: { key: true, value: true },
+      });
+      const stored = Object.fromEntries(current.map((r) => [r.key, r.value]));
+
+      if (stored.ocrApiKey) {
+        // An unset provider means the OCR default ('openai', see lib/ocr.ts)
+        const providerChanged =
+          data.ocrProvider !== undefined && data.ocrProvider !== (stored.ocrProvider || 'openai');
+        const baseUrlChanged =
+          typeof data.ocrBaseUrl === 'string' && data.ocrBaseUrl !== (stored.ocrBaseUrl ?? null);
+
+        if (providerChanged || baseUrlChanged) {
+          return NextResponse.json(
+            { error: 'Changing the AI provider or base URL requires entering the API key again.' },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
+    // Collect every write and apply them atomically
+    const operations: Prisma.PrismaPromise<unknown>[] = [];
 
     if (data.ocrEnabled !== undefined) {
-      upsertPromises.push(
+      operations.push(
         prisma.projectSettings.upsert({
           where: { projectId_key: { projectId, key: 'ocrEnabled' } },
           create: { projectId, key: 'ocrEnabled', value: JSON.stringify(data.ocrEnabled) },
@@ -168,7 +182,7 @@ export async function PUT(req: NextRequest) {
     }
 
     if (data.ocrProvider !== undefined) {
-      upsertPromises.push(
+      operations.push(
         prisma.projectSettings.upsert({
           where: { projectId_key: { projectId, key: 'ocrProvider' } },
           create: { projectId, key: 'ocrProvider', value: data.ocrProvider },
@@ -178,17 +192,17 @@ export async function PUT(req: NextRequest) {
     }
 
     if (data.ocrApiKey !== undefined) {
-      if (data.ocrApiKey === '') {
+      if (clearingKey) {
         // Empty string means the user is clearing the API key — delete the setting
-        upsertPromises.push(
+        operations.push(
           prisma.projectSettings.deleteMany({
             where: { projectId, key: 'ocrApiKey' },
           })
         );
-      } else if (!data.ocrApiKey.startsWith('...')) {
+      } else if (newKeyProvided) {
         // Not already masked — encrypt before storing
         const encrypted = encryptApiKey(data.ocrApiKey);
-        upsertPromises.push(
+        operations.push(
           prisma.projectSettings.upsert({
             where: { projectId_key: { projectId, key: 'ocrApiKey' } },
             create: { projectId, key: 'ocrApiKey', value: encrypted },
@@ -203,13 +217,13 @@ export async function PUT(req: NextRequest) {
     if (data.ocrBaseUrl !== undefined) {
       if (data.ocrBaseUrl === null) {
         // Null means remove the base URL setting
-        upsertPromises.push(
+        operations.push(
           prisma.projectSettings.deleteMany({
             where: { projectId, key: 'ocrBaseUrl' },
           })
         );
       } else {
-        upsertPromises.push(
+        operations.push(
           prisma.projectSettings.upsert({
             where: { projectId_key: { projectId, key: 'ocrBaseUrl' } },
             create: { projectId, key: 'ocrBaseUrl', value: data.ocrBaseUrl },
@@ -219,7 +233,9 @@ export async function PUT(req: NextRequest) {
       }
     }
 
-    await Promise.all(upsertPromises);
+    if (operations.length > 0) {
+      await prisma.$transaction(operations);
+    }
 
     // Return updated settings with masked API key
     const updated = await readProjectSettings(projectId);

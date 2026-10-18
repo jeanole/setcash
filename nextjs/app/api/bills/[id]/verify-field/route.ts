@@ -7,6 +7,7 @@ import { auth } from '@/auth';
 import { db as prisma } from '@/lib/db';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
+import { isDbVerifiedAdmin } from '@/app/api/bills/_lib/shared';
 
 const ALLOWED_OCR_FIELDS = ['date', 'vendor', 'item', 'type', 'brutto19', 'brutto7', 'brutto0', 'amount', 'comment'];
 
@@ -15,10 +16,8 @@ const verifyFieldSchema = z.object({
 });
 
 // PATCH /api/bills/[id]/verify-field - Verify/reject OCR field
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function PATCH(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const session = await auth();
     if (!session?.user) {
@@ -35,11 +34,17 @@ export async function PATCH(
     // Verify bill belongs to this project
     const bill = await prisma.bill.findFirst({
       where: { id, projectId },
-      select: { id: true, ocrFields: true, ocrStatus: true },
+      select: { id: true, ocrFields: true, ocrStatus: true, submittedByEmail: true },
     });
 
     if (!bill) {
       return NextResponse.json({ error: 'Bill not found' }, { status: 404 });
+    }
+
+    // Only the bill's submitter or a DB-verified admin may clear OCR flags
+    const isSubmitter = bill.submittedByEmail.toLowerCase() === session.user.email.toLowerCase();
+    if (!isSubmitter && !(await isDbVerifiedAdmin(session.user.email, projectId))) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const body = await req.json();

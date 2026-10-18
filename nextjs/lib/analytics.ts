@@ -77,26 +77,26 @@ export function getCountryCode(req: NextRequest): string | null {
   return code.toUpperCase();
 }
 
+// Global write cap for the public analytics endpoints. Per-IP limits alone
+// let an attacker with many source addresses insert unbounded rows, so every
+// accepted request also counts against this single process-wide window.
+const ANALYTICS_GLOBAL_MAX_PER_MINUTE = 600;
+const ANALYTICS_GLOBAL_WINDOW_MS = 60_000;
+let analyticsWindowStart = 0;
+let analyticsWindowCount = 0;
+
 /**
- * Extract the client IP address for rate limiting purposes.
- * In production behind Cloudflare, cf-connecting-ip is authoritative and
- * cannot be spoofed. Falls back to x-real-ip (set by reverse proxies) and
- * finally x-forwarded-for (least trustworthy — can be spoofed by clients).
+ * Fixed-window global cap shared by /api/analytics/visit and /event.
+ * Returns false when the cap for the current minute is exhausted.
+ * Per-process (not shared across instances), which still bounds inserts.
  */
-export function getClientIp(req: NextRequest): string {
-  // Cloudflare sets this to the true client IP — most trustworthy
-  const cfIp = req.headers.get('cf-connecting-ip');
-  if (cfIp) return cfIp.trim();
-
-  // Set by reverse proxies (nginx, etc.) — moderately trustworthy
-  const realIp = req.headers.get('x-real-ip');
-  if (realIp) return realIp.trim();
-
-  // Least trustworthy — client can prepend arbitrary values
-  const forwarded = req.headers.get('x-forwarded-for');
-  if (forwarded) {
-    return forwarded.split(',')[0].trim();
+export function allowAnalyticsWrite(): boolean {
+  const now = Date.now();
+  if (now - analyticsWindowStart >= ANALYTICS_GLOBAL_WINDOW_MS) {
+    analyticsWindowStart = now;
+    analyticsWindowCount = 0;
   }
-
-  return 'unknown';
+  if (analyticsWindowCount >= ANALYTICS_GLOBAL_MAX_PER_MINUTE) return false;
+  analyticsWindowCount += 1;
+  return true;
 }

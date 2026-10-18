@@ -4,6 +4,7 @@ import { z } from 'zod';
 import crypto from 'crypto';
 import { forgotPasswordLimiter } from '@/lib/ratelimit';
 import { sendPasswordResetEmail } from '@/lib/email';
+import { insensitiveEquals } from '@/lib/db-match';
 
 const schema = z.object({
   email: z.string().email(),
@@ -32,12 +33,15 @@ export async function POST(req: Request) {
   const genericMessage = 'If an account exists with that email, a reset link has been sent.';
 
   try {
-    const user = await prisma.user.findUnique({ where: { email } });
+    // Case-insensitive lookup; tokens and mail use the stored address
+    const user = await prisma.user.findFirst({
+      where: { email: insensitiveEquals(email) },
+    });
 
     // Only proceed if user exists, has a password, and is not a demo account
     if (user && user.passwordHash && !user.isDemoAccount) {
       // Delete any existing tokens for this email
-      await prisma.passwordResetToken.deleteMany({ where: { email } });
+      await prisma.passwordResetToken.deleteMany({ where: { email: user.email } });
 
       // Generate token
       const rawToken = crypto.randomBytes(32).toString('hex');
@@ -46,7 +50,7 @@ export async function POST(req: Request) {
       // Store hashed token with 1-hour expiry
       await prisma.passwordResetToken.create({
         data: {
-          email,
+          email: user.email,
           tokenHash,
           expiresAt: new Date(Date.now() + 60 * 60 * 1000),
         },
@@ -57,7 +61,7 @@ export async function POST(req: Request) {
       const resetUrl = `${appUrl}/reset-password?token=${rawToken}`;
 
       // Send email (fire-and-forget — don't block the response on email errors)
-      sendPasswordResetEmail(email, resetUrl).catch((err) => {
+      sendPasswordResetEmail(user.email, resetUrl).catch((err) => {
         console.error('[ForgotPassword] Failed to send email:', err);
       });
     }

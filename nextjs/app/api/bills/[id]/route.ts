@@ -10,221 +10,52 @@ import path from 'path';
 import fs from 'fs';
 import { UPLOADS_DIR } from '@/lib/upload';
 import { verifyAdminRole } from '@/lib/auth-guard';
+import {
+  InvalidAllocationError,
+  billTextSchemas,
+  bruttoAmountSchema,
+  categoryAllocationsSchema,
+  isDbVerifiedAdmin,
+  motiveAllocationsSchema,
+  readAllocationSnapshot,
+  saveAllocations,
+} from '@/app/api/bills/_lib/shared';
 
-// Small float slack for allocation-sum validation
-const ALLOCATION_SUM_EPSILON = 0.01;
+// Validation schemas -- the field limits are shared with POST /api/bills
+const updateBillSchema = z.object({
+  date: z.string().datetime().optional(),
+  type: billTextSchemas.type.optional(),
+  vendor: billTextSchemas.vendor.optional(),
+  item: billTextSchemas.item.optional(),
+  comment: billTextSchemas.comment.optional(),
+  brutto19: bruttoAmountSchema.optional(),
+  brutto7: bruttoAmountSchema.optional(),
+  brutto0: bruttoAmountSchema.optional(),
+  motiveAllocations: motiveAllocationsSchema.optional(),
+  categoryAllocations: categoryAllocationsSchema.optional(),
+});
 
-// Validation schemas
-const updateBillSchema = z
-  .object({
-    date: z.string().datetime().optional(),
-    type: z.string().optional(),
-    vendor: z.string().optional(),
-    item: z.string().optional(),
-    comment: z.string().optional(),
-    brutto19: z.number().min(0).optional(),
-    brutto7: z.number().min(0).optional(),
-    brutto0: z.number().min(0).optional(),
-    motiveAllocations: z.array(z.object({
-      motiveId: z.string(),
-      percentage: z.number().min(0).max(100),
-    })).optional(),
-    categoryAllocations: z.array(z.object({
-      categoryId: z.string(),
-      percentage: z.number().min(0).max(100),
-    })).optional(),
-  })
-  .superRefine((data, ctx) => {
-    if (data.motiveAllocations) {
-      const sum = data.motiveAllocations.reduce((acc, a) => acc + a.percentage, 0);
-      if (sum > 100 + ALLOCATION_SUM_EPSILON) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'Motive allocations sum to more than 100%',
-          path: ['motiveAllocations'],
-        });
-      }
-    }
-    if (data.categoryAllocations) {
-      const sum = data.categoryAllocations.reduce((acc, a) => acc + a.percentage, 0);
-      if (sum > 100 + ALLOCATION_SUM_EPSILON) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'Category allocations sum to more than 100%',
-          path: ['categoryAllocations'],
-        });
-      }
-    }
-  });
-
-// Save allocations for a bill.
-// Rejects with a thrown Error (caller must return 400) if any supplied
-// motiveId/categoryId does not belong to the given project — this indicates
-// tampering or a client bug and must not be silently dropped.
-async function saveAllocations(
-  billId: string,
-  motiveAllocations: { motiveId: string; percentage: number }[],
-  categoryAllocations: { categoryId: string; percentage: number }[],
-  projectId: string,
-  client: typeof prisma = prisma
-) {
-  // --- Cross-project injection guard (Task 1) ---
-  // Batch-fetch valid IDs scoped to this project, mirroring the pattern in
-  // budget-matrix/bulk-update/route.ts.
-  const distinctMotiveIds = [...new Set(motiveAllocations.map((a) => a.motiveId))];
-  const distinctCategoryIds = [...new Set(categoryAllocations.map((a) => a.categoryId))];
-
-  if (distinctMotiveIds.length > 0) {
-    const validMotives = await client.motive.findMany({
-      where: { id: { in: distinctMotiveIds }, projectId },
-      select: { id: true },
-    });
-    const validMotiveSet = new Set(validMotives.map((m) => m.id));
-    if (validMotives.length !== distinctMotiveIds.length) {
-      const invalid = distinctMotiveIds.filter((id) => !validMotiveSet.has(id));
-      throw new Error(`Invalid motive/category for this project (motiveIds: ${invalid.join(', ')})`);
-    }
-  }
-
-  if (distinctCategoryIds.length > 0) {
-    const validCategories = await client.category.findMany({
-      where: { id: { in: distinctCategoryIds }, projectId },
-      select: { id: true },
-    });
-    const validCategorySet = new Set(validCategories.map((c) => c.id));
-    if (validCategories.length !== distinctCategoryIds.length) {
-      const invalid = distinctCategoryIds.filter((id) => !validCategorySet.has(id));
-      throw new Error(`Invalid motive/category for this project (categoryIds: ${invalid.join(', ')})`);
-    }
-  }
-  // --- End cross-project guard ---
-
-  // Delete existing allocations
-  await client.billMotive.deleteMany({ where: { billId } });
-  await client.billCategory.deleteMany({ where: { billId } });
-
-  // Get default IDs
-  const uncatMotive = await client.motive.findFirst({
-    where: { name: 'Default', projectId },
-  });
-  const uncatCategory = await client.category.findFirst({
-    where: { name: 'Uncategorized', projectId },
-  });
-
-  // Save motive allocations
-  if (motiveAllocations.length > 0) {
-    let totalPct = 0;
-    for (const a of motiveAllocations) {
-      if (a.percentage > 0) {
-        await client.billMotive.create({
-          data: {
-            billId,
-            motiveId: a.motiveId,
-            percentage: a.percentage,
-          },
-        });
-        totalPct += a.percentage;
-      }
-    }
-    // Fill remaining with default
-    if (totalPct < 100 && uncatMotive) {
-      await client.billMotive.create({
-        data: {
-          billId,
-          motiveId: uncatMotive.id,
-          percentage: 100 - totalPct,
-        },
-      });
-    }
-  } else if (uncatMotive) {
-    // No allocations, 100% to default
-    await client.billMotive.create({
-      data: {
-        billId,
-        motiveId: uncatMotive.id,
-        percentage: 100,
-      },
-    });
-  }
-
-  // Save category allocations
-  if (categoryAllocations.length > 0) {
-    let totalPct = 0;
-    for (const a of categoryAllocations) {
-      if (a.percentage > 0) {
-        await client.billCategory.create({
-          data: {
-            billId,
-            categoryId: a.categoryId,
-            percentage: a.percentage,
-          },
-        });
-        totalPct += a.percentage;
-      }
-    }
-    // Fill remaining with uncategorized
-    if (totalPct < 100 && uncatCategory) {
-      await client.billCategory.create({
-        data: {
-          billId,
-          categoryId: uncatCategory.id,
-          percentage: 100 - totalPct,
-        },
-      });
-    }
-  } else if (uncatCategory) {
-    // No allocations, 100% to uncategorized
-    await client.billCategory.create({
-      data: {
-        billId,
-        categoryId: uncatCategory.id,
-        percentage: 100,
-      },
-    });
+// Thrown inside the update transaction when the bill's status changed between
+// the permission check and the write (another request got there first).
+class BillConflictError extends Error {
+  constructor() {
+    super('Bill was modified by another request');
+    this.name = 'BillConflictError';
   }
 }
 
-// Helper to build motive display string
-async function getMotiveDisplayString(billId: string): Promise<string> {
-  const allocs = await prisma.billMotive.findMany({
-    where: { billId },
-    include: { motive: { select: { name: true } } },
-  });
-
-  if (allocs.length === 0) return '';
-  if (allocs.length === 1 && Number(allocs[0].percentage) === 100) {
-    return allocs[0].motive.name;
-  }
-  return allocs.map((a) => `${a.motive.name} (${Number(a.percentage)}%)`).join(', ');
-}
-
-// Sync legacy bills.filename with first image
-async function syncLegacyImageColumns(billId: string) {
-  const firstImage = await prisma.billImage.findFirst({
-    where: { billId },
-    orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
-  });
-
-  if (firstImage) {
-    await prisma.bill.update({
-      where: { id: billId },
-      data: {
-        filename: firstImage.filename,
-      },
-    });
-  } else {
-    await prisma.bill.update({
-      where: { id: billId },
-      data: { filename: '' },
-    });
+// Thrown inside the update transaction when a non-admin tries to change the
+// allocations of a paid bill (rolls back everything written so far).
+class PaidBillLockedError extends Error {
+  constructor() {
+    super('Only an admin can modify a paid bill');
+    this.name = 'PaidBillLockedError';
   }
 }
 
 // GET /api/bills/[id] - Get single bill
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const session = await auth();
     if (!session?.user) {
@@ -327,10 +158,8 @@ export async function GET(
 }
 
 // PUT /api/bills/[id] - Update bill
-export async function PUT(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function PUT(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const session = await auth();
     if (!session?.user) {
@@ -389,23 +218,35 @@ export async function PUT(
     const updates: Record<string, unknown> = {};
 
     // Track field changes
-    if (data.date !== undefined && data.date !== bill.date.toISOString()) {
-      changes.date = data.date;
-      updates.date = new Date(data.date);
+    // The edit form only knows the calendar day (YYYY-MM-DD, shown as the UTC
+    // day of the stored timestamp) and always sends it back as midnight UTC.
+    // A date on the same UTC day as the stored one is therefore UNCHANGED: keep
+    // the stored timestamp (e.g. a Telegram bill's time of day) and do not count
+    // it as an edit (no status reset, no EditLog entry). Only a real day change
+    // counts.
+    if (data.date !== undefined) {
+      const newDate = new Date(data.date);
+      const sameDay = newDate.toISOString().slice(0, 10) === bill.date.toISOString().slice(0, 10);
+      if (!sameDay) {
+        changes.date = data.date;
+        updates.date = newDate;
+      }
     }
+    // Stored NULL text fields equal the empty string the edit form sends for
+    // them (Telegram bills may have no vendor/item/comment yet).
     if (data.type !== undefined && data.type !== bill.type) {
       changes.type = data.type;
       updates.type = data.type;
     }
-    if (data.vendor !== undefined && data.vendor !== bill.vendor) {
+    if (data.vendor !== undefined && data.vendor !== (bill.vendor ?? '')) {
       changes.vendor = data.vendor;
       updates.vendor = data.vendor;
     }
-    if (data.item !== undefined && data.item !== bill.item) {
+    if (data.item !== undefined && data.item !== (bill.item ?? '')) {
       changes.item = data.item;
       updates.item = data.item;
     }
-    if (data.comment !== undefined && data.comment !== bill.comment) {
+    if (data.comment !== undefined && data.comment !== (bill.comment ?? '')) {
       changes.comment = data.comment;
       updates.comment = data.comment;
     }
@@ -427,6 +268,16 @@ export async function PUT(
       Object.prototype.hasOwnProperty.call(changes, f)
     );
 
+    // Approved/paid bills are financially locked. Anyone who is not a
+    // DB-verified admin (typically the submitter) is restricted for EVERY
+    // editable field, not just the amounts: re-allocating or changing the date,
+    // vendor, item, type or comment moves spending just as much.
+    const isLockedStatus = bill.status === 'approved' || bill.status === 'paid';
+    const isRestricted = isLockedStatus && !(await isDbVerifiedAdmin(session.user.email, projectId));
+    const otherFieldsChanged = ['date', 'type', 'vendor', 'item', 'comment'].some((f) =>
+      Object.prototype.hasOwnProperty.call(changes, f)
+    );
+
     if (bill.status === 'paid' && bruttoFieldsChanged) {
       return NextResponse.json(
         { error: 'Cannot change amounts of a paid bill' },
@@ -434,11 +285,18 @@ export async function PUT(
       );
     }
 
-    if (bill.status === 'approved' && bruttoFieldsChanged) {
-      // Amount changed on an already-approved bill — allow it (caller already
-      // passed the owner/admin permission check above), but reset status to
-      // 'pending' so the bill requires re-approval. Recorded in the EditLog
-      // below via `changes.status`.
+    if (bill.status === 'paid' && isRestricted && otherFieldsChanged) {
+      return NextResponse.json(
+        { error: 'Only an admin can modify a paid bill' },
+        { status: 403 }
+      );
+    }
+
+    if (bill.status === 'approved' && (bruttoFieldsChanged || (isRestricted && otherFieldsChanged))) {
+      // Amount (or, for a non-admin, any other field) changed on an
+      // already-approved bill — allow it (caller already passed the owner/admin
+      // permission check above), but reset status to 'pending' so the bill
+      // requires re-approval. Recorded in the EditLog below via `changes.status`.
       changes.status = 'pending';
       updates.status = 'pending';
     }
@@ -486,69 +344,87 @@ export async function PUT(
       }
     }
 
-    // Save allocations if provided.
-    // Wrap the delete+recreate rewrite in a transaction so a partial
-    // failure mid-way can't leave the bill with no allocations at all.
-    if (data.motiveAllocations !== undefined || data.categoryAllocations !== undefined) {
-      await prisma.$transaction(async (tx) => {
-        await saveAllocations(
+    // Apply everything in one transaction. The bill row is updated first with
+    // `status: bill.status` in the WHERE clause (compare-and-swap): if another
+    // request changed the status after we read it (e.g. the bill was just paid),
+    // nothing is written and we answer 409 instead of editing a locked bill.
+    const allocationsProvided =
+      data.motiveAllocations !== undefined || data.categoryAllocations !== undefined;
+
+    await prisma.$transaction(async (tx) => {
+      const claimed = await tx.bill.updateMany({
+        where: { id, projectId, status: bill.status },
+        // With no field changes, re-write the unchanged status so the row is still locked + checked
+        data: Object.keys(updates).length > 0 ? updates : { status: bill.status },
+      });
+      if (claimed.count === 0) {
+        throw new BillConflictError();
+      }
+
+      // Replace allocations (delete + recreate); also refreshes the legacy motive column
+      if (allocationsProvided) {
+        const before = isRestricted ? await readAllocationSnapshot(tx, id) : '';
+        const motiveStr = await saveAllocations(
+          tx,
           id,
           data.motiveAllocations || [],
           data.categoryAllocations || [],
-          projectId,
-          tx as typeof prisma
+          projectId
         );
-      });
 
-      // Update legacy motive column
-      const motiveStr = await getMotiveDisplayString(id);
-      if (motiveStr !== bill.motiveLegacy) {
-        changes.motive = motiveStr;
-        updates.motiveLegacy = motiveStr;
+        // A restricted caller who actually changed the allocations of a locked bill
+        if (isRestricted && before !== (await readAllocationSnapshot(tx, id))) {
+          if (bill.status === 'paid') throw new PaidBillLockedError();
+          if (updates.status !== 'pending') {
+            await tx.bill.update({ where: { id }, data: { status: 'pending' } });
+            changes.status = 'pending';
+          }
+        }
+
+        if (motiveStr !== bill.motiveLegacy) {
+          changes.motive = motiveStr;
+          await tx.bill.update({ where: { id }, data: { motiveLegacy: motiveStr } });
+        }
       }
-    }
 
-    // Apply updates if there are changes
-    if (Object.keys(updates).length > 0) {
-      await prisma.bill.update({
-        where: { id },
-        data: updates,
-      });
-    }
-
-    // Log the edit if there are field changes or allocation changes
-    if (Object.keys(changes).length > 0 || data.motiveAllocations !== undefined || data.categoryAllocations !== undefined) {
-      await prisma.editLog.create({
-        data: {
-          projectId,
-          timestamp: new Date(),
-          user: session.user.email,
-          billId: id,
-          changes: (Object.keys(changes).length > 0 ? changes : { allocations: 'updated' }) as never,
-          source: 'user',
-        },
-      });
-    }
+      // Log the edit if there are field changes or allocation changes
+      if (Object.keys(changes).length > 0 || allocationsProvided) {
+        await tx.editLog.create({
+          data: {
+            projectId,
+            timestamp: new Date(),
+            user: session.user.email,
+            billId: id,
+            changes: (Object.keys(changes).length > 0 ? changes : { allocations: 'updated' }) as never,
+            source: 'user',
+          },
+        });
+      }
+    });
 
     return NextResponse.json({ ok: true });
   } catch (error) {
-    // Cross-project allocation injection: saveAllocations throws with this prefix
-    if (error instanceof Error && error.message.startsWith('Invalid motive/category for this project')) {
+    // Cross-project allocation injection
+    if (error instanceof InvalidAllocationError) {
       return NextResponse.json({ error: 'Invalid motive/category for this project' }, { status: 400 });
     }
+    if (error instanceof PaidBillLockedError) {
+      return NextResponse.json({ error: error.message }, { status: 403 });
+    }
+    if (error instanceof BillConflictError) {
+      return NextResponse.json(
+        { error: 'Bill was modified by another request. Reload and try again.' },
+        { status: 409 }
+      );
+    }
     console.error('Error updating bill:', error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
 // DELETE /api/bills/[id] - Delete bill
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const session = await auth();
     if (!session?.user) {
@@ -595,15 +471,13 @@ export async function DELETE(
     // Bills that have reached 'approved' or 'paid' status may only be
     // deleted by a DB-verified admin, even by the bill's own submitter.
     if (bill.status === 'approved' || bill.status === 'paid') {
-      if (!isVerifiedAdmin) {
-        const guard = await verifyAdminRole(session.user.email, projectId);
-        if (!guard.authorized) {
-          return NextResponse.json(
-            { error: `Only an admin can delete a bill with status '${bill.status}'` },
-            { status: 403 }
-          );
-        }
-        isVerifiedAdmin = true;
+      // Side-effect-free check: verifyAdminRole would clear a plain
+      // submitter's session cookie, which is the wrong outcome here.
+      if (!isVerifiedAdmin && !(await isDbVerifiedAdmin(session.user.email, projectId))) {
+        return NextResponse.json(
+          { error: `Only an admin can delete a bill with status '${bill.status}'` },
+          { status: 403 }
+        );
       }
     }
 
@@ -651,9 +525,6 @@ export async function DELETE(
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error('Error deleting bill:', error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { db as prisma } from '@/lib/db';
+import { verifySuperAdmin } from '@/lib/auth-guard';
 
 // GET /api/projects/[id]/quota - Get upload quota info for a project
 export async function GET(
@@ -20,7 +21,11 @@ export async function GET(
     const { id } = await params;
 
     // Must be a member of the project OR superadmin
-    if (session.user.role !== 'superadmin') {
+    // (superadmin status is confirmed in the DB, not taken from the JWT)
+    const isSuperAdmin =
+      session.user.role === 'superadmin' &&
+      (await verifySuperAdmin(session.user.email)).authorized;
+    if (!isSuperAdmin) {
       const membership = await prisma.projectMember.findUnique({
         where: {
           projectId_userEmail: {

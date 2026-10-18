@@ -7,6 +7,7 @@
 
 import crypto from 'crypto';
 
+const AUTH_TAG_LENGTH = 16;
 const ENCRYPTION_KEY_HEX = process.env.TELEGRAM_ENCRYPTION_KEY;
 
 function getKey(): Buffer | null {
@@ -32,7 +33,9 @@ export function encrypt(plaintext: string): string {
   }
 
   const iv = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv, {
+    authTagLength: AUTH_TAG_LENGTH,
+  });
   const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
   const authTag = cipher.getAuthTag();
   return `${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted.toString('hex')}`;
@@ -64,7 +67,13 @@ export function decrypt(stored: string): string | null {
     const iv = Buffer.from(ivHex, 'hex');
     const authTag = Buffer.from(authTagHex, 'hex');
     const ciphertext = Buffer.from(ciphertextHex, 'hex');
-    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+    // Reject truncated tags: GCM accepts shortened tags, which weakens authentication
+    if (authTag.length !== AUTH_TAG_LENGTH) {
+      throw new Error('Invalid auth tag length');
+    }
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv, {
+      authTagLength: AUTH_TAG_LENGTH,
+    });
     decipher.setAuthTag(authTag);
     return decipher.update(ciphertext).toString('utf8') + decipher.final('utf8');
   } catch (e) {

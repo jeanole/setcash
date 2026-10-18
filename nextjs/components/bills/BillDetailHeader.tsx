@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { Bill } from '@/lib/types';
 import { formatDate, formatCurrency, calculateTotal, cn } from '@/lib/utils';
 import BillStatusBadge from './BillStatusBadge';
+import { getBillStatusActions } from './billActions';
 
 interface BillDetailHeaderProps {
   bill: Bill;
@@ -14,7 +15,8 @@ interface BillDetailHeaderProps {
   onRevertDraft: () => void;
   isAdmin: boolean;
   canDelete: boolean;
-  canSelfApprove?: boolean;
+  /** The viewer submitted this bill (authors may only revert their confirmed bill to draft) */
+  isAuthor: boolean;
   hasOcrEnabled: boolean;
   isAnalysing: boolean;
 }
@@ -43,7 +45,7 @@ export default function BillDetailHeader({
   onRevertDraft,
   isAdmin,
   canDelete,
-  canSelfApprove,
+  isAuthor,
   hasOcrEnabled,
   isAnalysing,
 }: BillDetailHeaderProps) {
@@ -51,6 +53,7 @@ export default function BillDetailHeader({
   const total = calculateTotal(bill.brutto19, bill.brutto7, bill.brutto0, bill.amount);
   const isDraft = bill.status === 'draft' || !bill.vendor || total === 0;
   const hasImages = bill.images && bill.images.length > 0;
+  const actions = getBillStatusActions(bill.status, { isAdmin, isAuthor });
   const canAnalyse = hasOcrEnabled && hasImages && bill.ocrStatus !== 'pending';
 
   const statusKey = isDraft ? 'draft' : bill.status;
@@ -171,7 +174,7 @@ export default function BillDetailHeader({
 
           {isAdmin && (
             <>
-              {bill.status !== 'approved' && bill.status !== 'paid' && (
+              {actions.approve && (
                 <button
                   onClick={onApprove}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-semibold hover:bg-emerald-100 transition-colors"
@@ -182,7 +185,7 @@ export default function BillDetailHeader({
                   Approve
                 </button>
               )}
-              {bill.status !== 'rejected' && (
+              {actions.reject && (
                 <button
                   onClick={onReject}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 text-rose-600 border border-rose-200 rounded-lg text-xs font-semibold hover:bg-rose-100 transition-colors"
@@ -196,27 +199,16 @@ export default function BillDetailHeader({
             </>
           )}
 
-          {canSelfApprove && (
-            <>
-              <button
-                onClick={onApprove}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-semibold hover:bg-emerald-100 transition-colors"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                Approve
-              </button>
-              <button
-                onClick={onRevertDraft}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-600 border border-slate-200 rounded-lg text-xs font-semibold hover:bg-slate-200 transition-colors"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                </svg>
-                Revert to Draft
-              </button>
-            </>
+          {actions.revertToDraft && (
+            <button
+              onClick={onRevertDraft}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-600 border border-slate-200 rounded-lg text-xs font-semibold hover:bg-slate-200 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+              </svg>
+              Revert to Draft
+            </button>
           )}
 
           {/* Spacer */}
