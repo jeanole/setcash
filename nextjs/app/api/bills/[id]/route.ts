@@ -218,23 +218,35 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
     const updates: Record<string, unknown> = {};
 
     // Track field changes
-    if (data.date !== undefined && data.date !== bill.date.toISOString()) {
-      changes.date = data.date;
-      updates.date = new Date(data.date);
+    // The edit form only knows the calendar day (YYYY-MM-DD, shown as the UTC
+    // day of the stored timestamp) and always sends it back as midnight UTC.
+    // A date on the same UTC day as the stored one is therefore UNCHANGED: keep
+    // the stored timestamp (e.g. a Telegram bill's time of day) and do not count
+    // it as an edit (no status reset, no EditLog entry). Only a real day change
+    // counts.
+    if (data.date !== undefined) {
+      const newDate = new Date(data.date);
+      const sameDay = newDate.toISOString().slice(0, 10) === bill.date.toISOString().slice(0, 10);
+      if (!sameDay) {
+        changes.date = data.date;
+        updates.date = newDate;
+      }
     }
+    // Stored NULL text fields equal the empty string the edit form sends for
+    // them (Telegram bills may have no vendor/item/comment yet).
     if (data.type !== undefined && data.type !== bill.type) {
       changes.type = data.type;
       updates.type = data.type;
     }
-    if (data.vendor !== undefined && data.vendor !== bill.vendor) {
+    if (data.vendor !== undefined && data.vendor !== (bill.vendor ?? '')) {
       changes.vendor = data.vendor;
       updates.vendor = data.vendor;
     }
-    if (data.item !== undefined && data.item !== bill.item) {
+    if (data.item !== undefined && data.item !== (bill.item ?? '')) {
       changes.item = data.item;
       updates.item = data.item;
     }
-    if (data.comment !== undefined && data.comment !== bill.comment) {
+    if (data.comment !== undefined && data.comment !== (bill.comment ?? '')) {
       changes.comment = data.comment;
       updates.comment = data.comment;
     }

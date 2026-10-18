@@ -13,6 +13,8 @@ import {
   getSpendingTotals,
   getUserSpendingSummary,
   getBudgetMatrixSpending,
+  getGrossOnlySummary,
+  grossOnlyNote,
   roundCents,
 } from '@/lib/spending';
 import { createTestContext, cleanupTestContext, TestContext } from '../helpers';
@@ -174,6 +176,57 @@ describe('spending: bills that only carry grossAmount (BUG-9)', () => {
       total: 72.5,
       unsplit: 57.5,
       unsplitNetto: 0,
+    });
+  });
+
+  // BUG-29: these bills have netto 0, so netto figures must say they are missing
+  describe('getGrossOnlySummary (BUG-29)', () => {
+    it('should count spending bills with only a grossAmount and sum their brutto', async () => {
+      // 50 (approved) + 7.5 (paid); pending 400 and the normal bill are excluded
+      await expect(getGrossOnlySummary(ctx.projectId)).resolves.toEqual({ count: 2, grossSum: 57.5 });
+    });
+
+    it('should restrict the summary to one user, matched case-insensitively', async () => {
+      await expect(getGrossOnlySummary(ctx.projectId, ctx.userEmail.toUpperCase())).resolves.toEqual({
+        count: 2,
+        grossSum: 57.5,
+      });
+      await expect(getGrossOnlySummary(ctx.projectId, 'someone-else@example.com')).resolves.toEqual({
+        count: 0,
+        grossSum: 0,
+      });
+    });
+
+    it('should return zero for a project without such bills', async () => {
+      const other = await createTestContext();
+      try {
+        await db.bill.create({
+          data: {
+            projectId: other.projectId, date: new Date('2026-02-01'), submittedByEmail: other.userEmail,
+            status: 'approved', brutto19: 10, grossAmount: 10, nettoAmount: 8.4,
+          },
+        });
+        await expect(getGrossOnlySummary(other.projectId)).resolves.toEqual({ count: 0, grossSum: 0 });
+      } finally {
+        await cleanupTestContext(other);
+      }
+    });
+
+    it('should leave netto untouched (0) for these bills in the matrix spending', async () => {
+      const spending = await getBudgetMatrixSpending(ctx.projectId);
+
+      expect(spending.grossOnly).toEqual({ count: 2, grossSum: 57.5 });
+      // Only the 50.00 bill is allocated to a category: it adds 50.00 brutto but 0.00 netto
+      expect(spending.categorySpendingBruttoTotal).toBe(50);
+      expect(spending.categorySpendingTotal).toBe(0);
+    });
+
+    it('should describe the gross-only bills in an export note, and not at all when there are none', async () => {
+      const note = grossOnlyNote({ count: 2, grossSum: 57.5 });
+
+      expect(note).toContain('2 counted bills');
+      expect(note).toContain('57.50 EUR brutto');
+      expect(grossOnlyNote({ count: 0, grossSum: 0 })).toBeNull();
     });
   });
 });

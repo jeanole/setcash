@@ -12,7 +12,7 @@ import { prisma } from '@/lib/db';
 import { exportLimiter } from '@/lib/ratelimit';
 import { verifyAdminRole, verifyProjectMember } from '@/lib/auth-guard';
 import { UPLOADS_DIR } from '@/lib/upload';
-import { getUserSpendingSummary, roundCents } from '@/lib/spending';
+import { getGrossOnlySummary, getUserSpendingSummary, roundCents } from '@/lib/spending';
 import { calculateTotal } from '@/lib/utils';
 import fs from 'fs';
 import path from 'path';
@@ -103,7 +103,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ email: st
       confirmedBy: { not: null },
     };
 
-    const [fetchedBills, fetchedVGeld, spendingSummary, vgeldAgg] = await Promise.all([
+    const [fetchedBills, fetchedVGeld, spendingSummary, grossOnly, vgeldAgg] = await Promise.all([
       prisma.bill.findMany({
         where: billWhere,
         orderBy: { date: 'asc' },
@@ -118,6 +118,8 @@ export async function GET(req: NextRequest, props: { params: Promise<{ email: st
       // rows are truncated. Per-bill totals follow calculateTotal (grossAmount
       // when a bill has no brutto breakdown).
       getUserSpendingSummary(projectId, targetEmail),
+      // Counted bills with only a gross amount: netto 0, so missing from the netto totals
+      getGrossOnlySummary(projectId, targetEmail),
       prisma.vgeld.aggregate({
         where: vgeldWhere,
         _sum: { amount: true },
@@ -331,7 +333,8 @@ export async function GET(req: NextRequest, props: { params: Promise<{ email: st
     doc.fontSize(9).font('Helvetica-Bold');
     doc.text('', summaryX, summaryY);
     doc.text('Brutto', bruttoX, summaryY);
-    doc.text('Netto', nettoX, summaryY);
+    // "Netto*" points to the footnote below when bills are missing from it
+    doc.text(grossOnly.count > 0 ? 'Netto*' : 'Netto', nettoX, summaryY);
     summaryY += 14;
 
     doc.fontSize(10).font('Helvetica');
@@ -380,6 +383,23 @@ export async function GET(req: NextRequest, props: { params: Promise<{ email: st
     doc.text(`${balance.toFixed(2)} EUR`, bruttoX, summaryY);
     doc.fillColor('black');
     summaryY += 16;
+
+    if (grossOnly.count > 0) {
+      const belege = grossOnly.count === 1 ? '1 Beleg' : `${grossOnly.count} Belege`;
+      doc
+        .fontSize(8)
+        .font('Helvetica')
+        .fillColor('gray')
+        .text(
+          `* Netto-Summen enthalten nicht ${belege} ohne MwSt.-Aufteilung ` +
+            `(${grossOnly.grossSum.toFixed(2)} EUR brutto, Netto = 0.00).`,
+          summaryX,
+          summaryY,
+          { width: 495 }
+        );
+      doc.fillColor('black');
+      summaryY = doc.y + 4;
+    }
 
     if (countedBills !== userBills.length || billsTruncated) {
       doc

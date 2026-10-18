@@ -11,7 +11,7 @@ import { auth } from '@/auth';
 import { prisma } from '@/lib/db';
 import { exportLimiter } from '@/lib/ratelimit';
 import { verifyAdminRole } from '@/lib/auth-guard';
-import { getBudgetMatrixExportRows } from '@/lib/spending';
+import { getBudgetMatrixExportRows, getGrossOnlySummary, grossOnlyNote } from '@/lib/spending';
 import { calculateTotal } from '@/lib/utils';
 import { PassThrough, Readable } from 'stream';
 import ExcelJS from 'exceljs';
@@ -192,6 +192,15 @@ export async function GET() {
       billsSheet.getColumn(key).numFmt = '#,##0.00 €';
     });
     billsSheet.getColumn('date').numFmt = 'DD.MM.YYYY HH:MM';
+
+    // Bills with only a gross amount have Netto 0: say so below the data
+    // (spending-status bills, same helper as the budget and spending pages).
+    const grossOnlyText = grossOnlyNote(await getGrossOnlySummary(projectId));
+    if (grossOnlyText) {
+      billsSheet.addRow({}); // blank separator row
+      const noteRow = billsSheet.addRow({ id: grossOnlyText });
+      noteRow.font = { italic: true, color: { argb: 'FF92400E' } };
+    }
 
     // --- V-Geld sheet ---
     const vgeldSheet = workbook.addWorksheet('V-Geld');

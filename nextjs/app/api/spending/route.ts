@@ -11,6 +11,7 @@ import {
   getSpendingByMotive,
   getSpendingByCategory,
   getSpendingTotals,
+  getGrossOnlySummary,
 } from '@/lib/spending';
 
 const TabSchema = z.enum(['motive', 'category']).default('motive');
@@ -39,16 +40,23 @@ export async function GET(req: NextRequest) {
     }
     const tab = tabParsed.data;
 
+    // Gross-only bills (no VAT breakdown) are missing from the netto figures
     if (tab === 'category') {
-      const items = await getSpendingByCategory(projectId);
+      const [items, grossOnly] = await Promise.all([
+        getSpendingByCategory(projectId),
+        getGrossOnlySummary(projectId),
+      ]);
       const totals = getSpendingTotals(items);
-      return NextResponse.json({ items, totals });
+      return NextResponse.json({ items, totals, grossOnly });
     }
 
     // Default: motive
-    const items = await getSpendingByMotive(projectId);
+    const [items, grossOnly] = await Promise.all([
+      getSpendingByMotive(projectId),
+      getGrossOnlySummary(projectId),
+    ]);
     const totals = getSpendingTotals(items);
-    return NextResponse.json({ items, totals });
+    return NextResponse.json({ items, totals, grossOnly });
   } catch (error) {
     console.error('Error fetching spending data:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

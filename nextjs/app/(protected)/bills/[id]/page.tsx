@@ -100,8 +100,12 @@ export default function BillDetailPage(props: BillDetailPageProps) {
   const handleSave = async () => {
     if (!formData) return;
     setIsSaving(true);
+    // Only send the date when the day was edited: the form holds just the day
+    // (YYYY-MM-DD), so resending it would drop the time of day of bills that
+    // carry one (e.g. Telegram uploads).
+    const dateChanged = !bill || formData.date !== bill.date.split('T')[0];
     const ok = await updateBill({
-      date: new Date(formData.date).toISOString(),
+      date: dateChanged ? new Date(formData.date).toISOString() : undefined,
       type: formData.type,
       vendor: formData.vendor,
       item: formData.item,

@@ -128,6 +128,17 @@ export * from './types/settings';
 // Budget Matrix Type Definitions
 // ============================================================================
 
+/**
+ * Spending bills that only have `grossAmount` (all brutto fields 0, no VAT
+ * breakdown). Their netto amount is 0, so they are missing from netto figures.
+ */
+export interface GrossOnlySummary {
+  /** Number of such spending bills */
+  count: number;
+  /** Their summed grossAmount (brutto), rounded to cents */
+  grossSum: number;
+}
+
 export interface BudgetMatrixResponse {
   motives: Motive[];
   categories: Category[];
@@ -149,6 +160,8 @@ export interface BudgetMatrixResponse {
   categorySpendingTotal?: number;
   /** Brutto spending over all categories, rounded once */
   categorySpendingBruttoTotal?: number;
+  /** Bills missing from the netto figures (gross-only, no VAT breakdown) */
+  grossOnly?: GrossOnlySummary;
 }
 
 export interface BudgetCellUpdate {

@@ -10,6 +10,7 @@ import {
   getSpendingByMotive,
   getSpendingByCategory,
   getSpendingTotals,
+  getGrossOnlySummary,
 } from '@/lib/spending';
 import SpendingPageClient from '@/components/spending/SpendingPageClient';
 import { SpendingTableSkeleton } from '@/components/spending/SpendingTable';
@@ -38,19 +39,22 @@ async function SpendingContent() {
   }
 
   // Fetch both tabs in parallel for fast initial render
-  const [motiveItems, categoryItems] = await Promise.all([
+  const [motiveItems, categoryItems, grossOnly] = await Promise.all([
     getSpendingByMotive(projectId),
     getSpendingByCategory(projectId),
+    getGrossOnlySummary(projectId),
   ]);
 
   const motiveData = {
     items: motiveItems,
     totals: getSpendingTotals(motiveItems),
+    grossOnly,
   };
 
   const categoryData = {
     items: categoryItems,
     totals: getSpendingTotals(categoryItems),
+    grossOnly,
   };
 
   return (

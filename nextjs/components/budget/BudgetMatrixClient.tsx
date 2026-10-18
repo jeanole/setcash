@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import BudgetMatrixTable from './BudgetMatrixTable';
+import GrossOnlyNotice from './GrossOnlyNotice';
 import ConfirmationDialog from '@/components/ui/ConfirmationDialog';
 import type { BudgetMatrixResponse, BudgetCellUpdate } from '@/lib/types';
 import { useRouter } from 'next/navigation';
@@ -43,6 +44,7 @@ export default function BudgetMatrixClient({
   cellSpendingBrutto: initialCellSpendingBrutto,
   categorySpendingTotal,
   categorySpendingBruttoTotal,
+  grossOnly,
   isAdmin,
   projectId,
 }: BudgetMatrixClientProps) {
@@ -422,6 +424,9 @@ export default function BudgetMatrixClient({
           </button>
         </div>
       </div>
+
+      {/* Gross-only bills have no netto value: say so when netto is shown */}
+      {amountMode === 'netto' && <GrossOnlyNotice grossOnly={grossOnly} />}
 
       {/* Matrix table */}
       <BudgetMatrixTable

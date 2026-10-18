@@ -9,6 +9,7 @@
 
 import { db as prisma } from '@/lib/db';
 import { BillStatus, Prisma } from '@prisma/client';
+import type { GrossOnlySummary } from '@/lib/types';
 
 type Dec = Prisma.Decimal;
 
@@ -122,6 +123,51 @@ export const BILL_TOTAL_SQL = Prisma.raw(
   `CASE WHEN b.brutto19 + b.brutto7 + b.brutto0 > 0 ` +
     `THEN b.brutto19 + b.brutto7 + b.brutto0 ELSE b."grossAmount" END`
 );
+
+/**
+ * Spending bills that only carry `grossAmount` (all brutto fields 0, e.g. OCR
+ * receipts without a VAT breakdown). Their `nettoAmount` is 0, so they add
+ * nothing to any netto figure. We do NOT invent a netto value; screens and
+ * exports that show netto figures use this to say how many bills (and how much
+ * brutto) are not included.
+ *
+ * Counts bills with a spending status (see SPENDING_BILL_STATUSES) whose
+ * brutto19 + brutto7 + brutto0 = 0 and grossAmount > 0. `grossSum` is the exact
+ * sum of their grossAmount, rounded once to cents. With `userEmail` only that
+ * user's bills are counted (matched case-insensitively, like
+ * getUserSpendingSummary).
+ */
+export async function getGrossOnlySummary(
+  projectId: string,
+  userEmail?: string
+): Promise<GrossOnlySummary> {
+  const rows = await prisma.$queryRaw<{ count: unknown; gross_sum: unknown }[]>(Prisma.sql`
+    SELECT COUNT(*) AS count, COALESCE(SUM(b."grossAmount"), 0) AS gross_sum
+    FROM "Bill" b
+    WHERE b."projectId" = ${projectId}
+      AND b.status IN (${SPENDING_STATUS_SQL})
+      AND b.brutto19 + b.brutto7 + b.brutto0 = 0
+      AND b."grossAmount" > 0
+      ${userEmail !== undefined ? Prisma.sql`AND LOWER(b."submittedByEmail") = LOWER(${userEmail})` : Prisma.empty}
+  `);
+  return {
+    count: toNumber(rows[0]?.count),
+    grossSum: roundDec(toDec(rows[0]?.gross_sum)),
+  };
+}
+
+/**
+ * One-line note for exports that show netto figures, or null when no such
+ * bills exist. Plain text (no leading formula characters).
+ */
+export function grossOnlyNote(summary: GrossOnlySummary): string | null {
+  if (summary.count <= 0) return null;
+  const bills = summary.count === 1 ? '1 counted bill has' : `${summary.count} counted bills have`;
+  return (
+    `Note: ${bills} no VAT breakdown (only a gross amount, ${summary.grossSum.toFixed(2)} EUR brutto). ` +
+    'Netto is 0 for these bills, so they are not included in the netto figures.'
+  );
+}
 
 interface AllocationSums {
   brutto: Dec;
@@ -392,12 +438,14 @@ export interface BudgetMatrixSpending {
   /** Sum over all categories, rounded once (no per-row rounding drift) */
   categorySpendingTotal: number;
   categorySpendingBruttoTotal: number;
+  /** Bills that are missing from every netto figure (gross-only, no VAT breakdown) */
+  grossOnly: GrossOnlySummary;
 }
 
 export async function getBudgetMatrixSpending(projectId: string): Promise<BudgetMatrixSpending> {
   type Row = { motiveId?: string; categoryId?: string; netto: unknown; brutto: unknown };
 
-  const [motiveRows, categoryRows, cellRows] = await Promise.all([
+  const [motiveRows, categoryRows, cellRows, grossOnly] = await Promise.all([
     prisma.$queryRaw<Row[]>(Prisma.sql`
       SELECT a."motiveId",
         SUM(b."nettoAmount" * a.percentage / 100) AS netto,
@@ -429,6 +477,7 @@ export async function getBudgetMatrixSpending(projectId: string): Promise<Budget
         AND b.status IN (${SPENDING_STATUS_SQL})
       GROUP BY bm."motiveId", bc."categoryId"
     `),
+    getGrossOnlySummary(projectId),
   ]);
 
   const result: BudgetMatrixSpending = {
@@ -440,6 +489,7 @@ export async function getBudgetMatrixSpending(projectId: string): Promise<Budget
     cellSpendingBrutto: {},
     categorySpendingTotal: 0,
     categorySpendingBruttoTotal: 0,
+    grossOnly,
   };
   for (const r of motiveRows) {
     result.motiveSpending[r.motiveId!] = roundDec(toDec(r.netto));

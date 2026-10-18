@@ -11,7 +11,7 @@ import { auth } from '@/auth';
 import { verifyAdminRole } from '@/lib/auth-guard';
 import { prisma } from '@/lib/db';
 import { getSheets } from '@/lib/google';
-import { getBudgetMatrixExportRows } from '@/lib/spending';
+import { getBudgetMatrixExportRows, getGrossOnlySummary, grossOnlyNote } from '@/lib/spending';
 import { calculateTotal } from '@/lib/utils';
 
 // Per-project in-memory sync lock (BUG-67).
@@ -285,6 +285,15 @@ export async function POST() {
       }
     };
     queueRows('Bills', billsData);
+    // Bills with only a gross amount have Netto 0: add a note below the data
+    // (skipped for a truncated export, where the rows below are not ours).
+    const grossOnlyText = billsTruncated ? null : grossOnlyNote(await getGrossOnlySummary(projectId));
+    if (grossOnlyText) {
+      writeJobs.push({
+        range: `Bills!A${billsData.length + 1}`,
+        values: [[''], [grossOnlyText]].map((row) => row.map(sanitizeCell)),
+      });
+    }
     queueRows('V-Geld', vgeldData);
     queueRows('Budget Matrix', bmData);
 
@@ -311,7 +320,8 @@ export async function POST() {
     // export was truncated is never tail-cleared (rows past the cap are not
     // ours to erase). A failure here never leaves a tab empty.
     const tailClearRanges = [
-      ...(billsTruncated ? [] : [`Bills!A${billsData.length + 1}:ZZ`]),
+      // Rows below the data are cleared, except the 2 rows holding the netto note
+      ...(billsTruncated ? [] : [`Bills!A${billsData.length + 1 + (grossOnlyText ? 2 : 0)}:ZZ`]),
       ...(vgeldTruncated ? [] : [`V-Geld!A${vgeldData.length + 1}:ZZ`]),
       `Budget Matrix!A${bmData.length + 1}:ZZ`,
     ];
