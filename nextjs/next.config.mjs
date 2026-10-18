@@ -44,9 +44,9 @@ const nextConfig = {
           { key: 'Referrer-Policy', value: 'origin-when-cross-origin' },
           { key: 'X-DNS-Prefetch-Control', value: 'on' },
           { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
-          // Directives that cannot break inline scripts/styles or third-party
-          // widgets (Turnstile, Google OAuth); a full script-src policy would
-          // need nonces wired through the App Router.
+          // Baseline for responses the middleware does not see (static files);
+          // pages and API responses get the full nonce-based policy from
+          // middleware.ts (lib/csp.ts).
           {
             key: 'Content-Security-Policy',
             value: "frame-ancestors 'none'; base-uri 'self'; object-src 'none'",

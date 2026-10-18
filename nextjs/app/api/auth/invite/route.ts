@@ -103,11 +103,14 @@ export async function POST(req: Request) {
   const inviteUrl = `${appUrl}/accept-invite?token=${rawToken}`;
 
   // If the invited email belongs to an existing user, create an in-app notification
-  const existingUser = await prisma.user.findUnique({ where: { email }, select: { email: true } });
+  const existingUser = await prisma.user.findFirst({
+    where: { email: { equals: email, mode: 'insensitive' } },
+    select: { email: true },
+  });
   if (existingUser) {
     await prisma.notification.create({
       data: {
-        userEmail: email,
+        userEmail: existingUser.email,
         type: 'pending_invite',
         message: `${session.user.email} invited you to join SetCash. Check your email for the invite link.`,
         projectId: exampleProject.id,

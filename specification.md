@@ -34,8 +34,8 @@ SetCash is a multi-tenant, web-based expense tracking and budget management syst
 
 | Technology | Purpose |
 |---|---|
-| Next.js 14.2 (App Router) | Full-stack React framework (SSR + CSR) |
-| React 18.3 | UI library |
+| Next.js 15.5 (App Router) | Full-stack React framework (SSR + CSR); route `params` are Promises |
+| React 19 | UI library |
 | TypeScript 5.6 | Type safety |
 | Tailwind CSS 4.0 | Utility-first styling with custom CSS variables |
 | Lucide React | Icon library |
@@ -57,7 +57,8 @@ SetCash is a multi-tenant, web-based expense tracking and budget management syst
 | PDFKit | PDF generation |
 | ExcelJS | Excel export |
 | Archiver | ZIP creation |
-| node-telegram-bot-api | Telegram bot polling |
+| node-telegram-bot-api 2.x | Telegram bot polling (v2 API, wrapped by `lib/telegram/client.ts`) |
+| undici | SSRF-safe fetch for OCR providers (`lib/safe-fetch.ts`) |
 | OpenAI / Google Gemini / Anthropic APIs | OCR / AI bill analysis |
 
 ### Infrastructure
@@ -112,6 +113,8 @@ SetCash is a multi-tenant, web-based expense tracking and budget management syst
 ### 3.4 Middleware
 
 Edge-compatible middleware (`middleware.ts`) protects all routes except public ones. Unauthenticated requests are redirected to `/` with a callback URL parameter.
+
+It also issues a per-request CSP nonce (`lib/csp.ts`): scripts must carry the nonce (`'strict-dynamic'` lets them load Next.js chunks and the Turnstile loader). The root layout reads request headers so every page renders per request with the nonce.
 
 ---
 
@@ -342,6 +345,8 @@ JWT-based (stateless). Session payload:
 }
 ```
 
+The JWT is re-validated against the database on every request (`syncTokenWithDb` in `auth.ts`): role, superadmin flag, project membership and `isActive` are re-read, so demotions and removals apply immediately. The session ends when the user is deleted or deactivated, or when `User.sessionVersion` no longer matches the token (bumped on password change/reset). Client `update()` payloads are ignored; `/api/projects/switch` persists `defaultProjectId` first.
+
 ### 7.3 Email-Based Auth Flows
 
 | Flow | Endpoint | Details |
@@ -355,7 +360,7 @@ JWT-based (stateless). Session payload:
 
 ### 7.4 Password Rules
 
-- Minimum 8 characters
+- Minimum 8 characters (maximum 128)
 - At least one uppercase letter
 - At least one lowercase letter
 - At least one digit
@@ -406,10 +411,12 @@ Straightforward subtraction model for per-user cash flow tracking:
 Current Balance = Total Advances Received − Total Expenses Submitted
 ```
 
-- Every confirmed bill is subtracted from the submitter's advance pool
-- Users see their own balance
-- Admins/Owners see all user balances and can create transfers
-- Draft and rejected bills excluded from balance calculations
+- Received = confirmed transfers only (`confirmedBy` set); unconfirmed requests do not count
+- Spent = brutto19 + brutto7 + brutto0 of the user's bills with status confirmed, approved or paid
+- One implementation (`lib/vgeld.ts`) feeds the dashboard, sidebar, analysis and user PDF
+- Users see their own balance and only transfers to or created by them
+- Admins/Owners see all user balances (`/api/vgeld/analysis` is admin-only) and can create transfers
+- Draft, pending and rejected bills excluded from balance calculations
 
 ### 8.4 Brutto/Netto Toggle
 
@@ -488,7 +495,7 @@ Interactive 2D grid:
 
 | Feature | Details |
 |---|---|
-| Transfer list | All V-Geld transfers for current project |
+| Transfer list | Admins: all transfers of the project; members: transfers to or created by them |
 | Balance view | Per-user balance (advances − expenses) |
 | Analysis | Who owes whom |
 | Create transfer | Admin only — select user, amount, description |
@@ -560,7 +567,9 @@ Configurable OCR provider with encrypted API key storage (AES-256-GCM):
 
 **Security:**
 - API keys encrypted at rest with AES-256-GCM
-- SSRF protection prevents private IP access in AI calls
+- Changing the provider or base URL requires re-entering the API key (a stored key is never sent to a new host)
+- SSRF protection: redirects refused, every resolved address checked, and the connection itself refuses private/reserved addresses (`lib/safe-fetch.ts`, defeats DNS rebinding)
+- Re-analysis never overwrites approved or paid bills
 
 ### 10.7 Telegram
 
@@ -810,6 +819,7 @@ Each project may configure one bot.
 | `POST` | `/api/admin/telegram/restart` | Restart bot |
 | `GET` | `/api/admin/telegram/settings` | Get Telegram settings |
 | `PUT` | `/api/admin/telegram/settings` | Update Telegram settings |
+| `POST` | `/api/admin/telegram/invite` | Send a link invite to a member's notifications (returns `{ sent, expires }`; the code is never returned to the admin) |
 
 ### 15.10 Utility
 
@@ -834,6 +844,13 @@ Powered by Upstash Redis (with mock fallback for local dev).
 | Sign up | 3 per 10 minutes per IP |
 | Resend verification | 1 per 2 minutes per email |
 | Bug reports | 3 per 10 minutes per user |
+| Login | 5 per minute per IP and 10 per 15 minutes per email |
+| Invites (platform) | 10 per hour per inviter, 20 per hour overall |
+| Bill image uploads | 30 per minute per user |
+| Telegram link attempts | 5 per 10 minutes per Telegram user |
+| Public analytics | per IP plus a global per-minute cap |
+
+Client IPs come from `lib/client-ip.ts`: the header named in `TRUSTED_IP_HEADER` (default `cf-connecting-ip`) or the TCP peer address stamped by `server.ts`; `X-Forwarded-For` is never trusted.
 
 ---
 
@@ -842,8 +859,10 @@ Powered by Upstash Redis (with mock fallback for local dev).
 ### 17.1 Authentication & Sessions
 
 - bcrypt password hashing (8+ chars, uppercase + lowercase + digit)
-- JWT-based sessions (stateless, edge-verifiable)
+- JWT-based sessions, re-validated against the DB on every request; revoked on deactivation, deletion and password change
 - Rate limiting on all auth endpoints
+- Google sign-in or invite acceptance on an unverified account discards the existing password (pre-registration takeover)
+- Emails unique case-insensitively (`LOWER(email)` index)
 - Email verification for new signups
 - Token-based password reset (expiring)
 
@@ -852,7 +871,7 @@ Powered by Upstash Redis (with mock fallback for local dev).
 - Edge middleware blocks unauthenticated access to protected routes
 - Every API route verifies session + project membership
 - Super-admin bypass only at global level
-- Role-based middleware: `getCurrentUser()` checks project role from JWT
+- Admin/superadmin operations re-check the role in the DB (`verifyAdminRole`, `verifySuperAdmin`, `verifyProjectMember` in `lib/auth-guard.ts`)
 
 ### 17.3 Data Protection
 
@@ -868,6 +887,9 @@ Powered by Upstash Redis (with mock fallback for local dev).
 - `X-Frame-Options: DENY`
 - `Referrer-Policy: origin-when-cross-origin`
 - `Strict-Transport-Security` with `includeSubDomains`
+- `Content-Security-Policy` with per-request nonce, `'strict-dynamic'`, `frame-ancestors 'none'`, `object-src 'none'`
+- `Permissions-Policy: camera=(self), microphone=(), geolocation=(), payment=()`
+- Next.js image optimizer disabled (`images.unoptimized`; `next/image` is not used)
 
 ---
 
@@ -933,6 +955,8 @@ Film-industry inspired UI polish:
 | `EXTERNAL_REGISTRATION` | No | Enable self-service signup (`true`/`false`) |
 | `NEXT_PUBLIC_APP_URL` | No | Public-facing app URL |
 | `GITHUB_TOKEN` | No | GitHub API token (bug reports) |
+| `TRUSTED_IP_HEADER` | No | Header with the real client IP for rate limiting (default `cf-connecting-ip`; `none` = TCP peer) |
+| `GOOGLE_CREDENTIALS_DIR` | No | Where Google service-account credentials are stored (default: under the uploads volume) |
 
 ---
 

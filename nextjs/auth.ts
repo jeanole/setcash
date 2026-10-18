@@ -327,11 +327,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (!user.email) return false;
 
         // Find or create user record for Google sign-in
-        const existing = await prisma.user.findUnique({
-          where: { email: user.email },
+        // Case-insensitive: Google reports lowercase addresses, legacy
+        // credential accounts may be stored with mixed case
+        const existing = await prisma.user.findFirst({
+          where: { email: { equals: user.email, mode: 'insensitive' } },
         });
 
         if (existing && !existing.isActive) return false;
+
+        // Carry the stored address into the token (Auth.js passes this same
+        // user object on to the jwt callback), so session lookups match it.
+        if (existing) user.email = existing.email;
 
         if (!existing) {
           // Auto-create user on first Google sign-in (passwordHash is empty, auto-verified)
@@ -348,7 +354,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           // takeover). Drop that password — the owner can set one via
           // "Forgot password" — and end any sessions tied to it.
           await prisma.user.update({
-            where: { email: user.email },
+            where: { id: existing.id },
             data: {
               emailVerified: new Date(),
               passwordHash: '',

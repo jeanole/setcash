@@ -31,8 +31,8 @@ export async function GET(req: Request) {
   // Check if user already exists. An unverified account is treated as new:
   // its password was set by whoever signed up, which may not be the invitee,
   // so the invitee must choose a password (see POST).
-  const existingUser = await prisma.user.findUnique({
-    where: { email: invitation.email },
+  const existingUser = await prisma.user.findFirst({
+    where: { email: { equals: invitation.email, mode: 'insensitive' } },
     select: { emailVerified: true },
   });
 
@@ -80,9 +80,12 @@ export async function POST(req: Request) {
     );
   }
 
-  const user = await prisma.user.findUnique({
-    where: { email: invitation.email },
+  // Case-insensitive: older invitations/accounts may differ in letter case
+  const user = await prisma.user.findFirst({
+    where: { email: { equals: invitation.email, mode: 'insensitive' } },
   });
+  // The address the account is (or will be) stored under
+  const accountEmail = user?.email ?? invitation.email;
 
   // Never re-activate an account an admin has disabled
   if (user && !user.isActive) {
@@ -122,7 +125,7 @@ export async function POST(req: Request) {
       });
     } else if (!user.emailVerified) {
       await tx.user.update({
-        where: { email: invitation.email },
+        where: { email: accountEmail },
         data: {
           passwordHash: passwordHash!,
           emailVerified: new Date(),
@@ -132,7 +135,7 @@ export async function POST(req: Request) {
       });
     } else if (!user.defaultProjectId) {
       await tx.user.update({
-        where: { email: invitation.email },
+        where: { email: accountEmail },
         data: { defaultProjectId: invitation.projectId },
       });
     }
@@ -152,7 +155,7 @@ export async function POST(req: Request) {
       where: {
         projectId_userEmail: {
           projectId: invitation.projectId,
-          userEmail: invitation.email,
+          userEmail: accountEmail,
         },
       },
     });
@@ -161,7 +164,7 @@ export async function POST(req: Request) {
       await prisma.projectMember.create({
         data: {
           projectId: invitation.projectId,
-          userEmail: invitation.email,
+          userEmail: accountEmail,
           role: invitation.role,
         },
       });
@@ -170,7 +173,7 @@ export async function POST(req: Request) {
     // Create notification
     await prisma.notification.create({
       data: {
-        userEmail: invitation.email,
+        userEmail: accountEmail,
         type: 'project_invite',
         message: `You have been added to project "${invitation.project.name}" by ${invitation.invitedBy}.`,
         projectId: invitation.projectId,
@@ -182,7 +185,7 @@ export async function POST(req: Request) {
       data: {
         userEmail: invitation.invitedBy,
         type: 'project_invite',
-        message: `${invitation.email} accepted your invitation to "${invitation.project.name}". Add them to the project to give access.`,
+        message: `${accountEmail} accepted your invitation to "${invitation.project.name}". Add them to the project to give access.`,
         projectId: invitation.projectId,
       },
     });
