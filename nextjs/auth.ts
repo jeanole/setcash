@@ -121,6 +121,32 @@ async function getSuperAdminProjectDetails(projectId: string | null): Promise<{
 // is unknown so failed logins take the same time either way.
 const DUMMY_PASSWORD_HASH = '$2b$12$yWJXt6CAxPPWdp65uiKx8eHWqsSC3Q1x2LmYYIy523jWSEihPytma';
 
+// Every password check should cost about as much as a cost-12 compare.
+const TARGET_BCRYPT_COST = 12;
+
+/** Parse the work factor out of a bcrypt hash (`$2a$10$...`), or null. */
+export function bcryptCost(hash: string): number | null {
+  const match = /^\$2[abxy]\$(\d{2})\$/.exec(hash);
+  return match ? parseInt(match[1], 10) : null;
+}
+
+/**
+ * A wrong password against a hash cheaper than the target cost would answer
+ * faster than the unknown-email path (which compares at cost 12), revealing
+ * that the account exists. Top the elapsed work up to ~2^12 rounds with
+ * compares against dummy hashes of the missing cost levels.
+ */
+async function padToTargetCost(password: string, cost: number | null): Promise<void> {
+  if (cost === null || cost >= TARGET_BCRYPT_COST) return;
+  const missing = (1 << TARGET_BCRYPT_COST) - (1 << cost);
+  const dummyTail = DUMMY_PASSWORD_HASH.slice(7);
+  for (let bit = 4; bit < TARGET_BCRYPT_COST; bit++) {
+    if (missing & (1 << bit)) {
+      await bcrypt.compare(password, `$2b$${String(bit).padStart(2, '0')}$${dummyTail}`);
+    }
+  }
+}
+
 class GoogleOnlyAccountError extends CredentialsSignin {
   code = 'GoogleOnlyAccount' as const;
 }
@@ -140,6 +166,66 @@ class EmailNotVerifiedError extends CredentialsSignin {
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 const prisma = globalForPrisma.prisma ?? new PrismaClient();
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+
+// ---------------------------------------------------------------------------
+// Credentials sign-in (exported for tests)
+// ---------------------------------------------------------------------------
+
+export async function authorizeCredentials(
+  credentials: Partial<Record<string, unknown>>
+): Promise<{ id: string; email: string; name: string } | null> {
+  const credentialsSchema = z.object({
+    email: z.string().email(),
+    password: z.string().min(1),
+  });
+
+  const parsed = credentialsSchema.safeParse(credentials);
+  if (!parsed.success) return null;
+  const { email, password } = parsed.data;
+
+  const user = await prisma.user.findFirst({
+    where: { email: { equals: email, mode: 'insensitive' } },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true, email: true, passwordHash: true, isActive: true, emailVerified: true },
+  });
+
+  if (!user) {
+    // Spend the same bcrypt time as a real check so response timing
+    // does not reveal whether the account exists.
+    await bcrypt.compare(password, DUMMY_PASSWORD_HASH);
+    return null;
+  }
+
+  if (!user.passwordHash) throw new GoogleOnlyAccountError();
+
+  const storedCost = bcryptCost(user.passwordHash);
+  const passwordMatch = await bcrypt.compare(password, user.passwordHash);
+  if (!passwordMatch) {
+    await padToTargetCost(password, storedCost);
+    return null;
+  }
+
+  // Transparent upgrade: hashes with a different work factor (seed data,
+  // legacy imports) are re-hashed at cost 12 now that we hold the plaintext,
+  // so their login timing matches every other account. Guarded on the old
+  // hash so a concurrent password change is never overwritten.
+  if (storedCost !== TARGET_BCRYPT_COST) {
+    try {
+      await prisma.user.updateMany({
+        where: { id: user.id, passwordHash: user.passwordHash },
+        data: { passwordHash: await bcrypt.hash(password, TARGET_BCRYPT_COST) },
+      });
+    } catch (error) {
+      console.error('Failed to upgrade password hash cost:', error);
+    }
+  }
+
+  // Account state is only revealed to someone who knows the password.
+  if (!user.isActive) throw new AccountDisabledError();
+  if (!user.emailVerified) throw new EmailNotVerifiedError();
+
+  return { id: user.id, email: user.email, name: user.email };
+}
 
 // ---------------------------------------------------------------------------
 // Token re-validation — called from the jwt callback on every invocation
@@ -242,40 +328,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         email: { label: 'Email', type: 'email' },
         password: { label: 'Password', type: 'password' },
       },
-      async authorize(credentials) {
-        const credentialsSchema = z.object({
-          email: z.string().email(),
-          password: z.string().min(1),
-        });
-
-        const parsed = credentialsSchema.safeParse(credentials);
-        if (!parsed.success) return null;
-        const { email, password } = parsed.data;
-
-        const user = await prisma.user.findFirst({
-          where: { email: { equals: email, mode: 'insensitive' } },
-          orderBy: { createdAt: 'asc' },
-          select: { id: true, email: true, passwordHash: true, isActive: true, emailVerified: true },
-        });
-
-        if (!user) {
-          // Spend the same bcrypt time as a real check so response timing
-          // does not reveal whether the account exists.
-          await bcrypt.compare(password, DUMMY_PASSWORD_HASH);
-          return null;
-        }
-
-        if (!user.passwordHash) throw new GoogleOnlyAccountError();
-
-        const passwordMatch = await bcrypt.compare(password, user.passwordHash);
-        if (!passwordMatch) return null;
-
-        // Account state is only revealed to someone who knows the password.
-        if (!user.isActive) throw new AccountDisabledError();
-        if (!user.emailVerified) throw new EmailNotVerifiedError();
-
-        return { id: user.id, email: user.email, name: user.email };
-      },
+      authorize: (credentials) => authorizeCredentials(credentials),
     }),
 
     // ------------------------------------------------------------------

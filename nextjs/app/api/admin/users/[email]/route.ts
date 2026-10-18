@@ -85,7 +85,11 @@ export async function PUT(
 
     // Handle password reset (generate random password if requested)
     let plainPassword: string | undefined;
-    const updates: { passwordHash?: string; isSuperAdmin?: boolean } = {};
+    const updates: {
+      passwordHash?: string;
+      isSuperAdmin?: boolean;
+      sessionVersion?: { increment: number };
+    } = {};
 
     if (data.resetPassword === true) {
       // Generate random 12-char password (9 bytes → 12 base64url chars, URL-safe alphabet)
@@ -93,6 +97,12 @@ export async function PUT(
       updates.passwordHash = await bcrypt.hash(plainPassword, 12);
     } else if (data.password) {
       updates.passwordHash = await bcrypt.hash(data.password, 12);
+    }
+
+    // A new password ends every existing session (e.g. reset because the
+    // account was compromised), same as the self-service change/reset flows.
+    if (updates.passwordHash !== undefined) {
+      updates.sessionVersion = { increment: 1 };
     }
 
     if (data.isSuperAdmin !== undefined) {

@@ -8,7 +8,8 @@ import { sendInvitationEmail } from '@/lib/email';
 import { inviteLimiter } from '@/lib/ratelimit';
 
 const schema = z.object({
-  email: z.string().email(),
+  // Trimmed + lowercased so lookups and stored tokens are case-insensitive
+  email: z.string().trim().toLowerCase().email(),
   message: z.string().max(500).optional(),
 });
 
@@ -81,15 +82,24 @@ export async function POST(
     return NextResponse.json({ error: 'You cannot invite yourself.' }, { status: 400 });
   }
 
-  // Check if already a member
-  const existingMember = await prisma.projectMember.findUnique({
-    where: {
-      projectId_userEmail: {
-        projectId,
-        userEmail: email,
-      },
-    },
+  // Case-insensitive lookup: the account may be stored with mixed case
+  const existingUser = await prisma.user.findFirst({
+    where: { email: { equals: email, mode: 'insensitive' } },
+    orderBy: { createdAt: 'asc' },
+    select: { email: true },
   });
+
+  // Check if already a member (membership uses the stored address)
+  const existingMember = existingUser
+    ? await prisma.projectMember.findUnique({
+        where: {
+          projectId_userEmail: {
+            projectId,
+            userEmail: existingUser.email,
+          },
+        },
+      })
+    : null;
 
   if (existingMember) {
     return NextResponse.json({ error: 'This user is already a member of the project.' }, { status: 400 });
@@ -107,7 +117,7 @@ export async function POST(
 
   // Delete any existing invitation tokens for this email + project
   await prisma.invitationToken.deleteMany({
-    where: { email, projectId },
+    where: { email: { equals: email, mode: 'insensitive' }, projectId },
   });
 
   // Generate token
@@ -133,11 +143,10 @@ export async function POST(
   const inviteUrl = `${appUrl}/accept-invite?token=${rawToken}`;
 
   // If the invited email belongs to an existing user, create an in-app notification now
-  const existingUser = await prisma.user.findUnique({ where: { email }, select: { email: true } });
   if (existingUser) {
     await prisma.notification.create({
       data: {
-        userEmail: email,
+        userEmail: existingUser.email,
         type: 'pending_invite',
         message: `${session.user.email} invited you to join "${project.name}". Check your email for the invite link.`,
         projectId,

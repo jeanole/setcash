@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { verifyAdminRole } from '@/lib/auth-guard';
 import { db as prisma } from '@/lib/db';
+import { z } from 'zod';
+
+const QuerySchema = z.object({
+  page: z.coerce.number().int().min(1).max(100000).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+});
 
 // GET /api/ocr-log - Returns paginated OcrLog entries for the current project (admin only)
 export async function GET(req: NextRequest) {
@@ -30,8 +36,15 @@ export async function GET(req: NextRequest) {
     if (!roleCheck.authorized) return roleCheck.response!;
 
     const { searchParams } = new URL(req.url);
-    const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10));
-    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') ?? '20', 10)));
+    // Empty/missing params fall back to the defaults; garbage is a 400, never a 500
+    const parsedQuery = QuerySchema.safeParse({
+      page: searchParams.get('page') || undefined,
+      limit: searchParams.get('limit') || undefined,
+    });
+    if (!parsedQuery.success) {
+      return NextResponse.json({ error: 'Invalid page or limit' }, { status: 400 });
+    }
+    const { page, limit } = parsedQuery.data;
     const skip = (page - 1) * limit;
 
     const [logs, total] = await Promise.all([

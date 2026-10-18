@@ -122,6 +122,9 @@ export async function POST(req: NextRequest) {
         email: email.toLowerCase(),
         passwordHash,
         isSuperAdmin: isSuperAdmin ?? false,
+        // The superadmin vouches for the address; without this the account
+        // could never sign in (EmailNotVerified) and no mail is ever sent.
+        emailVerified: new Date(),
       },
     });
 
