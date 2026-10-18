@@ -419,3 +419,152 @@ IDs below are local to this QA run (not yet registered in `features/INDEX.md`; n
 - **Regression:** Deployed features work end to end in Chromium: bills list/new/crop/detail/edit/delete, status workflow, comments with @mentions and notifications, budget matrix edit, spending tabs, V-Geld create/confirm/delete, reports (budget PDF, user PDF, Excel, images ZIP), settings CRUD (members, positions, motives, categories, projects, OCR, Telegram), superadmin modal and APIs, tour, profile edit, bug-report modal, analytics endpoints, demo-login API. Next 15 dynamic routes, `use(params)` pages and middleware `callbackUrl` redirects work. No horizontal overflow at 375/768/1440 px; the mobile drawer works. Regressions found: BUG-10 and BUG-20 (both pre-existing).
 - **Production Ready:** NO
 - **Recommendation:** Fix BUG-1 and BUG-2 (High) first, then the Medium bugs BUG-3 to BUG-9. Re-run QA on AC-2, AC-4, AC-8 and AC-9 afterwards.
+
+### QA Re-test (Round 2)
+
+**Tested:** 2026-10-18
+**App URL:** http://localhost:3101 (fresh DB `qa2_proj26`, `next build` + `NODE_ENV=production tsx server.ts`, Postgres 16 on :5433)
+**Branch / commit:** `claude/keen-rubin-b78ded` @ `e348c17` (fix commits `67cf509`, `af9b231`, `e348c17`; new migration `20261019000000_bill_number_counter`)
+**Method:** Same harness as round 1: scripted HTTP clients with rotating loopback IPs, Playwright Chromium, Prisma/SQL checks, the local Telegram Bot API emulator, Jest, and a Docker image built from a scratch copy of the Dockerfile (mirror base image plus the proxy CA). No third-party service was contacted.
+
+#### Round-1 bugs
+
+| Bug | Status | Evidence |
+|---|---|---|
+| BUG-1 (High) JSON login skips the per-email limit | VERIFIED FIXED | JSON body, 13 attempts with the IP rotated every 4: `302×10, 429×3`. `text/plain`, multipart and `Application/JSON` get 415. Malformed JSON, arrays and a missing email get 400. `email=decoy&email=victim` is limited per victim. The NextAuth client login still works. **But see BUG-24:** the per-email limit can still be bypassed with `_` variants of the address |
+| BUG-2 (High) Excel/Sheets "Spent" ignores approved/paid bills | VERIFIED FIXED | Excel "Budget Matrix" Spent (brutto) row is 41.69 / 33.63 / 33.33 / 50.00, which equals `/api/spending` and `/api/budget-matrix`; grand total 158.64 = spending total. Values are rounded to cents. The Sheets route uses the same `getBudgetMatrixExportRows` |
+| BUG-3 Superadmin password reset leaves sessions alive | VERIFIED FIXED | After `resetPassword` and after `password`, the old session returns `null` and `sessionVersion` is 2. The generated password meets the policy |
+| BUG-4 Submitter edits approved/paid bills | VERIFIED FIXED | Owner edits of vendor, date, type, item, comment, allocations or amount on an approved bill → 200 and the bill goes back to `pending`. On a paid bill: 403 "Only an admin can modify a paid bill", and a refused allocation edit is rolled back. Saving an unchanged web bill keeps `approved`. Admin edits keep `approved` (an amount edit → `pending`), and an admin can edit a paid bill. **Regression: BUG-26** |
+| BUG-5 `PUT /api/bills/[id]` lacks validation | VERIFIED FIXED | Returns 400 for 123456789012, 0.0001, negative, a string amount, 1e400, vendor of 100k chars, type >100, item >500, comment >2000. The vendor is trimmed and exactly 1e6 is accepted |
+| BUG-6 Orphan files under unexpected field names | PARTIALLY FIXED | Bills POST, `POST …/images` and `PUT …/images/[id]` leave no stray file (including a 3 MB `evil` part, on both failure and success). Still open: the bug-report route keeps such files (BUG-28), and files past `maxFiles` are orphaned (BUG-27) |
+| BUG-7 Bill number reused after deleting the latest bill | VERIFIED FIXED | Delete 1.03 → next is 1.04; a mixed-case user also never reuses a number, with one lower-cased counter row. 6 parallel first bills of a new user, 3 rounds: all 200 with 1.01–1.06. Ordinal 21 → 2.01. Migration backfill on a scratch DB: `Ann@X`/`ann@x` with 1.03 and 2.05 → `lastIndex` 25; `TG-…`, NULL and `1.5` are ignored |
+| BUG-8 Deactivated users upload via Telegram | VERIFIED FIXED | Photo → "Dein SetCash-Account ist deaktiviert…" and 0 bills. `/link` by a deactivated user is refused (no link). After re-activation the kept link works again |
+| BUG-9 Gross-only bills counted inconsistently | VERIFIED FIXED | A `grossAmount=50` bill (brutto 0, approved) shows 50.00 in the list, detail, sidebar balance, analysis, dashboard balance, dashboard recent bills, PDF row and Saldo ("Ohne MwSt.-Aufteilung" line), the spending motive/category deltas, the budget-matrix brutto delta and grand total, and the Excel Bills "Brutto Total". Netto side: see BUG-29 |
+| BUG-10 Superadmin-created users cannot sign in | VERIFIED FIXED | `POST /api/admin/users` → the user logs in and reaches `/dashboard` |
+| BUG-11 Login timing differs for cost-10 hashes | VERIFIED FIXED | Medians over 9 samples each: unknown email 354 ms, wrong password on a cost-10 account 354 ms, on a cost-12 account 346 ms. The cost-10 hash is upgraded to `$2b$12$` on login and login still works afterwards. Seed admin and demo users are at cost 12 |
+| BUG-12 Motive-tab total off by one cent | VERIFIED FIXED | Motive and category tabs both give `spent` 158.64 and `nettoSpent` 139.12. The budget page grand total equals the server's once-rounded totals in both modes |
+| BUG-13 Project invite is case-sensitive | VERIFIED FIXED | Invite to `mixed.case@qa.test` creates a `pending_invite` for `Mixed.Case@QA.test`. `USER-A1@QA.TEST` → 400 "already a member" |
+| BUG-14 Telegram bypasses the upload quota | VERIFIED FIXED | A photo at exactly the quota (count = limit−1) is accepted and writes an EditLog entry `{source: telegram, _event: created}`. The next photo and an album → "Upload-Limit … erreicht", no bill, and the downloaded file is removed. The web upload is also 403 |
+| BUG-15 `/api/ocr-log` with bad page/limit → 500 | VERIFIED FIXED | `page=abc&limit=xyz`, `page=0`, `limit=101`, `page=1.5` → 400. Empty params → 200 with the defaults |
+| BUG-16 `/api/uploads/…%00…` → 500 | VERIFIED FIXED | `%00`, `%1f` and `%7f` → 400 "Bad request" |
+| BUG-17 Hex/exponent amounts accepted | VERIFIED FIXED | `0x10`, `1e3`, `-5`, `abc`, `Infinity`, `1.001` → 400 "Must be a plain decimal number with at most 2 decimals" |
+| BUG-18 Over-cap chunked upload → 400 instead of 413 | STILL FAILING | 102 MB multipart with `Transfer-Encoding: chunked` → `400 {"error":"Invalid upload"}` (with Content-Length → 413). Root cause: Next.js 15.5 truncates the body at 10 MB before the route sees it ("Request body exceeded 10MB for /api/bills"), so formidable gets a cut-off stream (`code 1012`) and the limiter never reaches its cap. See BUG-25 |
+| BUG-19 Disallowed types silently dropped | VERIFIED FIXED | `.gif`, `.svg`, `.jpg + .exe`, and no extension → 415 "File type not allowed", no bill, nothing stored (also on `POST …/images`). An empty file input (`filename=""`) is ignored and the bill is created |
+| BUG-20 Member sees an "Approve" button the API refuses | VERIFIED FIXED | Chromium. Author on own confirmed bill: only "Revert to Draft". Author on a paid bill: no status buttons. Admin: approved → "Reject" only; pending → "Approve" and "Reject" |
+| BUG-21 Test compose exposes Postgres | VERIFIED FIXED | `docker-compose.test.yml` binds `127.0.0.1:5433:5432`. The password comes from `POSTGRES_TEST_PASSWORD`, falling back to `vbudget_test` (loopback only). It is documented in `.env.local.example` |
+| BUG-22 HEALTHCHECK hard-codes port 3001 | VERIFIED FIXED | Image built from the current Dockerfile, run with `-e PORT=3201`: migrations (21) + seed + `Ready on :3201`, container `healthy` (first probe during boot failed, then 0), runs as `nextjs`, `/_next/image` 404 |
+| BUG-23 Analytics events share the visit bucket | VERIFIED FIXED | 40 events from one IP: no 429, and visits #1–30 are still allowed (31st → 429). Events have their own 120/min bucket (#121 → 429). Chromium sessions logged no analytics 429s |
+
+**Totals:** 21 verified fixed, 1 partially fixed (BUG-6), 1 still failing (BUG-18). BUG-24 to BUG-29 below are new.
+
+#### Failed criteria re-tested in full
+
+- **AC-2: Password change / reset — PASS.** Policy (5 cases), change → `reauthRequired`. Old cookie in a second context → `null`/307, and the changing context is signed out. New password works and the old one is rejected. Concurrent reset → one 200 and one 400; reset revokes sessions; the token is single-use. Superadmin reset and set-password revoke sessions (BUG-3). 6th attempt → 429. In Chromium the UI shows "Password updated. Please sign in again…" and signs out.
+- **AC-4: Login protections — FAIL (BUG-24).** Passing: per-IP 5/min, with spoofed `X-Forwarded-For`/`cf-connecting-ip`/`x-real-ip`/`x-setcash-peer-ip` all ignored. Per-email 10/15 min for form and JSON bodies across rotating IPs and letter case. Timing is equal (BUG-11). Disabled-account message only after the correct password. Mixed-case login works. Path variants do not reach `authorize`. Failing: after `t-wild@qa.test` hit 429, 15 further guesses with `t_wild@`, `__wild@`, `t-w_ld@`, `_-wild@`, `t_w_ld@` were all processed (`302 CredentialsSignin`). `t_wi_d@qa.test` with the real password logged in as `t-wild@qa.test`.
+- **AC-5: Case-insensitive email uniqueness — FAIL (BUG-24).** Passing: a `MIXED.CASE@qa.test` signup creates no second account. The DB rejects `USER-A1@qa.TEST` (`User_email_lower_key`). forgot-password, resend-verification, project/platform invite and accept-invite resolve the stored mixed-case account. The migration guard aborts on `Dup@`/`dup@` with the documented message and applies after the merge. Failing: the case-insensitive lookups also treat `_` as a wildcard, so `user_b1@qa.test` cannot sign up (silently refused) and resolves to `user-b1@qa.test`.
+- **AC-8: Money correctness — PASS.** Balance, dashboard, analysis and PDF Saldo agree: user-a1 66.67, user-a2 4.99. Spending per motive and category matches the hand computation. Both tabs total 158.64. Excel export matches (BUG-2). Gross-only bills are consistent (BUG-9). Confirm button works and a double confirm → 400. A member sees only own transfers and gets 403 on analysis. The Sheets sanitiser still neutralises `=HYPERLINK`, `+1`, `-1`, `@x`.
+- **AC-9: Bills, images & uploads — FAIL (BUG-18, BUG-25, BUG-27).** Passing: POST validation (22 cases → 400, no bill, no orphan). Unique filenames. Bill numbers are never reused (BUG-7). Concurrent approve vs reject, 4 rounds: one 200 and one 409. `paid` is terminal and its amounts are immutable. Image lock on approved/paid bills for the submitter while an admin can still change images. Magic-byte checks. Uploads: owner, member and superadmin 200; non-member 403; removed member 403; anonymous 401. Traversal variants → 404/400. Over-cap with Content-Length → 413. Chunked upload under 10 MB works.
+- **EC-6: Gross-only bill — PASS** (brutto totals consistent everywhere; netto see BUG-29).
+
+#### Regression
+
+- **Chromium (production build):**
+  - The real NextAuth login form works: urlencoded → 200 → `/dashboard`, and a wrong password shows an error, not a 415.
+  - New bill: file select → crop modal → "Crop & Save" → submit → 200 with 1 image, number 1.09.
+  - Bill detail: "Save Changes" works, adding an image works, and re-cropping an existing image (`PUT …/images/[id]`) works. Saving an approved web bill unchanged keeps `approved`.
+  - Budget page: the Brutto/Netto toggle switches the grand spent total to the server's once-rounded totals.
+  - Dashboard recent bills show 50,00 € for the gross-only bill. The V-Geld page renders for a member, and the admin Confirm button → 200.
+  - `/reports`: the user PDF download opens (`%PDF`, Saldo present). The Excel download opens with exceljs (sheets Bills, V-Geld, Budget Matrix), and its grand Spent equals `/api/spending`.
+  - Zero `securitypolicyviolation` events across 16 admin pages, 7 member pages at 375 px, 5 public pages and all flows above. No horizontal overflow at 375 px. Console errors: 1 recharts `rx` warning on `/bills/new` and the expected 400 on `/verify-email?token=abc`.
+- **Telegram (stub):** the full AC-7 suite passes again (28/28). Extra checks for BUG-8 and BUG-14 are in the table above.
+- **API regression:** projects, motives, categories, positions, members, superadmin, profile, tour, notifications, comments with @mention notifications, image reorder/delete, bulk delete, images ZIP, budget-matrix PDF and Sheets "not configured" handling all pass (40/41; the one failure is a duplicate-user artefact of this run).
+- **Spot checks of passing criteria:**
+  - AC-1: 19/19.
+  - AC-3: 15/15.
+  - AC-6: same result as round 1. Every admin operation is denied; only the member-level reads succeed, by design. Non-admin `GET /api/project-settings` → 403 without logout.
+  - AC-7: 28/28.
+  - AC-10: key re-entry rule; SSRF targets refused with 0 listener hits; re-analysis of approved/paid bills refused; duplicate concurrent analyse → 202 + 409 (3/3 rounds).
+  - AC-11: 21 HTML pages with fresh nonces and all headers; `/_next/image` 404; no open redirect.
+  - AC-12:
+    - `npm audit --omit=dev`: 0 vulnerabilities.
+    - `tsc -p tsconfig.json` and `tsc -p tsconfig.server.json`: exit 0.
+    - `next lint`: 0 errors, 14 warnings.
+    - `next build`: OK.
+    - Jest against `setcash_test`: 21 suites, 214/214 tests pass.
+    - Docker: OK (BUG-22).
+
+#### New bugs (round 2)
+
+#### BUG-24: Case-insensitive email lookups treat `_` as a wildcard — Google sign-in takes over another account (including superadmin)
+- **Severity:** Critical · **Skill:** [Backend]
+- **Where:** Prisma `email: { equals: x, mode: 'insensitive' }` is compiled to `"email" ILIKE $1` without escaping (verified with query logging), so `_` matches any single character. Affected code: `nextjs/auth.ts` (`authorizeCredentials` and the Google `signIn` callback), `app/api/auth/{signup,forgot-password,resend-verification,invite,accept-invite}`, `app/api/projects/[id]/invite`, `app/api/reports/user/[email]/pdf`, `app/api/bills/_lib/shared.ts`, `app/api/admin/users/**`, `app/api/users/me`.
+- **Steps to Reproduce:**
+  1. Call the Google `signIn` callback (unit level against the real DB, as in round 1) with `user.email = 'sup_r@qa.test'`, as for a Google account whose verified address differs from the victim's only by `_`.
+  2. Expected: a separate new account `sup_r@qa.test` (or a refusal).
+  3. Actual: `signIn → true`, `user.email` is rewritten to `super@qa.test`, and the `jwt` callback issues `role: superadmin`. `user_a1@qa.test` likewise becomes `user-a1@qa.test` (project member). Anyone who can hold a Google account at the victim's mail domain with `_` in place of any local-part character (e.g. `john_smith@outlook.com` vs `john.smith@outlook.com`) signs in as the victim, with no password needed.
+  4. Credentials login: once `t-wild@qa.test` is email-limited (429), `t_wild@`, `__wild@`, `t-w_ld@`… each get their own 10 attempts (2^n variants for an n-char local part), and `t_wi_d@qa.test` with the real password logs in as `t-wild@qa.test`.
+  5. forgot-password: `user-a2@` → 200, again → 429, then `user_a2@`, `u_er-a2@`, `us_r-a2@` → 200 each. The 1 per 5 min limit is bypassed and mail goes to the stored address.
+  6. Signup `user_b1@qa.test` → generic 200 and no account. A legitimate `_` address cannot register if a matching address exists.
+  7. User PDF: member `t_x@qa.test` downloads their own report, and it lists the bill "SECRET-OF-T-DASH-X" (77.00) of `t-x@qa.test` (and would list that user's V-Geld transfers). The summary uses an exact `LOWER()=` match, so rows and totals disagree.
+- **Fix hint:** compare `LOWER(email) = LOWER($1)` (matches the unique index), or escape `\ % _` before `mode: 'insensitive'`; never resolve an OAuth identity through a pattern match.
+- **Priority:** Fix before deployment
+
+#### BUG-25: Uploads over 10 MB fail with 400 "Invalid upload" (Next.js 15.5 middleware body limit)
+- **Severity:** High · **Skill:** [Backend] [Architecture]
+- **Where:** `nextjs/middleware.ts` matches `/api/bills/**`. With middleware present, Next.js 15.5 buffers at most `middlewareClientMaxBodySize` (default 10 MB) and passes a truncated body to the route; `next.config.mjs` does not configure it. The UI allows up to 10 files of 10 MB each (`BillImageUpload` "up to 10MB", `lib/upload.ts` cap 10×10 MB). Introduced by the Next 15 upgrade; not found in round 1.
+- **Steps to Reproduce:**
+  1. `POST /api/bills` with 2 JPEGs of 6 MB (body 12 MB), with Content-Length or chunked.
+  2. Expected: 200, bill with 2 images.
+  3. Actual: `400 {"error":"Invalid upload"}`. Server log: "Request body exceeded 10MB for /api/bills. Only the first 10MB will be available…" and formidable `MultipartParser.end(): stream ended unexpectedly` (code 1012). The same happens with 3×5 MB and with `POST /api/bills/[id]/images` 2×6 MB. 1×9.9 MB works.
+  4. In Chromium: selecting two 6 MB receipts on `/bills/new` and submitting shows "Invalid upload". Phone photos and the 4096 px crops (JPEG q 0.92) are often 3–6 MB, so multi-photo bills fail.
+  5. Also the cause of BUG-18.
+- **Priority:** Fix before deployment
+
+#### BUG-26: Saving an approved Telegram bill without changes resets it to `pending` and strips its time of day (regression of the BUG-4 fix)
+- **Severity:** Medium · **Skill:** [Backend] [Frontend]
+- **Where:** `app/(protected)/bills/[id]/page.tsx` always sends `date: new Date(formData.date /* YYYY-MM-DD */).toISOString()`. `app/api/bills/[id]/route.ts` compares it with the stored `bill.date.toISOString()`. Telegram bills (and any bill whose date carries a time) always differ, so `changes.date` is set. Since BUG-4 this counts as a non-admin edit of an approved bill and resets the status.
+- **Steps to Reproduce:**
+  1. A linked user sends a photo via Telegram; the admin fills vendor/amount, confirms and approves (`date` = `2026-10-18T13:54:07.128Z`).
+  2. The owner opens the bill and clicks "Save Changes" without editing (exact UI payload).
+  3. Expected: 200, still `approved`.
+  4. Actual: 200, status `pending`, date stored as `2026-10-18T00:00:00.000Z`. EditLog `{"date":"2026-10-18T00:00:00.000Z","motive":"Default","status":"pending"}`. The bill silently leaves spending/V-Geld until it is re-approved. Web-created bills (midnight UTC) are not affected.
+- **Priority:** Fix before deployment
+
+#### BUG-27: Files beyond `maxFiles` are left as orphans after the 413
+- **Severity:** Medium · **Skill:** [Backend]
+- **Where:** `nextjs/lib/upload.ts` `parseForm`. `removeWritten()` runs once when formidable reports `options.maxFiles (10) exceeded` (code 1015). Parts after the limit are still written, after the cleanup, and never removed.
+- **Steps to Reproduce:**
+  1. `POST /api/bills` with 11, 12 or 15 JPEG parts.
+  2. Expected: 413 and no file left.
+  3. Actual: 413 "Upload too large", but 1, 2 and 5 files respectively remain in `UPLOADS_DIR` root (e.g. `w8c3qkvcj6v1gpx3g1yoj9y15.jpg`). An authenticated user can still fill the disk (bounded only by the 10 MB body truncation and 10 creates/min).
+- **Priority:** Fix in next sprint
+
+#### BUG-28: Bug-report upload keeps files sent under unexpected field names (remainder of BUG-6)
+- **Severity:** Low · **Skill:** [Backend]
+- **Where:** `app/api/bug-reports/route.ts` calls `parseForm(req, { maxFiles: 1 })` without `fields: ['screenshot']` and only cleans up on error paths.
+- **Steps to Reproduce:** route handler run in Jest with `GITHUB_TOKEN` stubbed and `fetch` captured. A report with the file in field `evil` → 201, and `UPLOADS_DIR/ougoy8y7dlqxeggz4ykd3vder.png` (308 B) remains. A PNG screenshot is still stored under `bug-reports/`, and a `.gif` screenshot → 415.
+- **Priority:** Nice to have
+
+#### BUG-29: Gross-only bills count as 0 in every netto figure
+- **Severity:** Low · **Skill:** [Backend]
+- **Where:** `lib/ocr.ts` writes only `grossAmount` on the bare-total path (`nettoAmount` stays 0). The netto figures read `nettoAmount`: budget page Netto mode, `nettoSpent`, Excel "Netto", PDF netto columns.
+- **Evidence:** the 50.00 gross-only bill adds +50.00 to the budget-matrix brutto figures but +0.00 netto, and its PDF/Excel netto is 0.00. Netto spending is understated; it needs a product decision (estimate at 19 %, or flag it as "no VAT breakdown").
+- **Priority:** Nice to have
+
+#### Not tested / limitations (round 2)
+- Firefox and Safari: not installed (Chromium only).
+- Real Google OAuth: BUG-24 was reproduced by calling the `signIn`/`jwt` callbacks against the real DB. Whether a given mail provider allows a matching `_` address was not tested.
+- Real Telegram, Resend, OCR providers, Google Sheets API and Upstash: not available. These ran against the stub, DB tokens, the SSRF harness and the in-memory limiter, as in round 1.
+- Bug-report route end to end: needs a `GITHUB_TOKEN`; tested at handler level with `fetch` stubbed.
+- Concurrency of the Telegram quota (two simultaneous photos at limit−1): not exercised; serialisable-transaction code reviewed only.
+- Docker: built from a scratch copy of the current Dockerfile (mirror base image plus proxy CA). The real `nextjs/Dockerfile` was not modified.
+
+#### Summary (round 2)
+- **Round-1 bugs:** 21/23 verified fixed, 1 partially fixed (BUG-6; remainder BUG-27/28), 1 still failing (BUG-18, root cause BUG-25).
+- **Acceptance Criteria:** AC-2 and AC-8 now pass. AC-4, AC-5 (both BUG-24) and AC-9 (BUG-18/25/27) still fail. Spot checks of AC-1, 3, 6, 7, 10, 11 and 12 pass, so 9/12 pass in total.
+- **Edge Cases:** EC-6 now passes, so 12/12 pass.
+- **New bugs:** 6 (1 critical, 1 high, 2 medium, 2 low): BUG-24, BUG-25, BUG-26, BUG-27, BUG-28, BUG-29.
+- **Open bugs overall:** BUG-24 (Critical), BUG-25 (High), BUG-26 and BUG-27 (Medium), BUG-18, BUG-28 and BUG-29 (Low). BUG-6 is partial and tracked via BUG-27/28.
+- **Security:** Issues found. BUG-24 allows account takeover through Google sign-in (including superadmin) and bypasses the per-email login and forgot-password limits.
+- **Production Ready:** NO
+- **Recommendation:** Fix BUG-24 (exact `LOWER()` comparison, or escape `_`/`%`) and BUG-25 (raise `middlewareClientMaxBodySize` above the upload cap, or exclude the upload routes from the middleware matcher) first. Then fix BUG-26 (keep the stored date when only the day is unchanged, or compare dates by day) and BUG-27. Afterwards re-run AC-4, AC-5 and AC-9.
