@@ -57,7 +57,9 @@ export async function GET(req: NextRequest, props: { params: Promise<{ email: st
       );
     }
 
-    const targetEmail = decodeURIComponent(params.email);
+    // Next.js has already decoded the route param; decoding again would break
+    // addresses containing `%` (URIError) or turn `%40` into a different address.
+    const targetEmail = params.email;
 
     // Auth: self OR admin/owner/superadmin
     const isAdmin =

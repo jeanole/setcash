@@ -99,30 +99,38 @@ export default function BillDetailPage(props: BillDetailPageProps) {
 
   const handleSave = async () => {
     if (!formData) return;
-    setIsSaving(true);
     // Only send the date when the day was edited: the form holds just the day
     // (YYYY-MM-DD), so resending it would drop the time of day of bills that
     // carry one (e.g. Telegram uploads).
     const dateChanged = !bill || formData.date !== bill.date.split('T')[0];
-    const ok = await updateBill({
-      date: dateChanged ? new Date(formData.date).toISOString() : undefined,
-      type: formData.type,
-      vendor: formData.vendor,
-      item: formData.item,
-      comment: formData.comment,
-      brutto19: formData.brutto19,
-      brutto7: formData.brutto7,
-      brutto0: formData.brutto0,
-      motiveAllocations: formData.motiveAllocations.map((a) => ({
-        motiveId: a.id,
-        percentage: a.percentage,
-      })),
-      categoryAllocations: formData.categoryAllocations.map((a) => ({
-        categoryId: a.id,
-        percentage: a.percentage,
-      })),
-    });
-    setIsSaving(false);
+    if (dateChanged && Number.isNaN(Date.parse(formData.date))) {
+      setResult({ type: 'error', message: 'Please enter a valid date' });
+      return;
+    }
+    setIsSaving(true);
+    let ok = false;
+    try {
+      ok = await updateBill({
+        date: dateChanged ? new Date(formData.date).toISOString() : undefined,
+        type: formData.type,
+        vendor: formData.vendor,
+        item: formData.item,
+        comment: formData.comment,
+        brutto19: formData.brutto19,
+        brutto7: formData.brutto7,
+        brutto0: formData.brutto0,
+        motiveAllocations: formData.motiveAllocations.map((a) => ({
+          motiveId: a.id,
+          percentage: a.percentage,
+        })),
+        categoryAllocations: formData.categoryAllocations.map((a) => ({
+          categoryId: a.id,
+          percentage: a.percentage,
+        })),
+      });
+    } finally {
+      setIsSaving(false);
+    }
     if (ok) {
       setFormData(null); // reset so useEffect re-initializes from updated bill
       setResult({ type: 'success', message: 'Bill saved' });

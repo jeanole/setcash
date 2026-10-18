@@ -147,6 +147,7 @@ describe('Budget Matrix exports vs /api/spending', () => {
             return {};
           }),
           batchClear: jest.fn().mockResolvedValue({}),
+          update: jest.fn().mockResolvedValue({}),
         },
       },
     } as never);

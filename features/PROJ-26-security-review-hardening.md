@@ -718,3 +718,13 @@ IDs below are local to this QA run (not yet registered in `features/INDEX.md`; n
 - **Security:** No open security issues. BUG-24 (account takeover and limiter bypass) is closed. Moving the upload endpoints out of middleware did not open an unauthenticated path; they authenticate before reading the body.
 - **Production Ready:** YES
 - **Recommendation:** Deploy. Fix BUG-30 before relying on the Google-Sheets export for gross-only bills (or fix it in the next sprint), and fix BUG-31 and BUG-32 when convenient.
+
+### Post-QA Fixes (after Round 3)
+
+| Bug | Fix | Verification |
+|---|---|---|
+| BUG-30 (Medium) Sheets export leaves stale rows next to the netto note | The Bills tail is cleared from the row after the data again; the note is written afterwards (`values.update`), one blank row below the bills | `__tests__/api/export-gross-only.test.ts` models the Sheets cell grid with a larger previous export: no stale cells remain; the test fails against the previous route |
+| BUG-31 (Low) Clearing the date and saving hangs on "Saving…" | `handleSave` validates the date before sending ("Please enter a valid date") and resets the saving state in `finally` | Chromium against the production build: validation shown, no request sent, button usable; a valid save still succeeds |
+| BUG-32 (Low) User PDF decodes the email twice | The already-decoded route param is used as-is | `__tests__/api/user-pdf.test.ts`: own report for `s%x…@qa.test` → 200 PDF (500 before) |
+
+Full suite after these fixes: 275/275 Jest tests, both `tsc` configs and lint clean, `next build` OK.

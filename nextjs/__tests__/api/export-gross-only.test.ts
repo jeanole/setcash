@@ -35,9 +35,22 @@ async function billsSheetText(): Promise<string[]> {
   return texts;
 }
 
+// Minimal model of the Sheets cell grid: writes set individual cells, clears
+// empty whole row ranges. The Bills tab starts pre-filled with a larger
+// previous export (12 rows x 15 columns) to catch stale cells (BUG-30).
 async function sheetsBillsRows(): Promise<unknown[][]> {
-  const written: Record<string, unknown[][]> = {};
-  const clearedRanges: string[] = [];
+  const grid: Record<string, unknown[][]> = {
+    Bills: Array.from({ length: 12 }, (_, r) => Array.from({ length: 15 }, (__, c) => `old-${r}-${c}`)),
+  };
+  const writeCells = (range: string, values: unknown[][]) => {
+    const [tab, cell] = range.split('!');
+    const startRow = Number(cell.replace(/\D/g, ''));
+    const rows = (grid[tab] ??= []);
+    values.forEach((v, i) => {
+      const row = (rows[startRow - 1 + i] ??= []);
+      v.forEach((value, c) => { row[c] = value; });
+    });
+  };
   mockGetSheets.mockResolvedValue({
     spreadsheets: {
       get: jest.fn().mockResolvedValue({
@@ -50,16 +63,19 @@ async function sheetsBillsRows(): Promise<unknown[][]> {
       batchUpdate: jest.fn().mockResolvedValue({}),
       values: {
         batchUpdate: jest.fn().mockImplementation(async ({ requestBody }) => {
-          for (const job of requestBody.data) {
-            const [tab, cell] = String(job.range).split('!');
-            const startRow = Number(cell.replace(/\D/g, ''));
-            const rows = (written[tab] ??= []);
-            job.values.forEach((v: unknown[], i: number) => { rows[startRow - 1 + i] = v; });
-          }
+          for (const job of requestBody.data) writeCells(String(job.range), job.values);
+          return {};
+        }),
+        update: jest.fn().mockImplementation(async ({ range, requestBody }) => {
+          writeCells(String(range), requestBody.values);
           return {};
         }),
         batchClear: jest.fn().mockImplementation(async ({ requestBody }) => {
-          clearedRanges.push(...requestBody.ranges);
+          for (const range of requestBody.ranges as string[]) {
+            const [tab, cell] = range.split('!');
+            const startRow = Number(cell.match(/A(\d+)/)![1]);
+            if (grid[tab]) grid[tab] = grid[tab].slice(0, startRow - 1);
+          }
           return {};
         }),
       },
@@ -68,11 +84,10 @@ async function sheetsBillsRows(): Promise<unknown[][]> {
 
   const res = await postSheetExport();
   expect(res.status).toBe(200);
-  const rows = written['Bills'];
-  // The tail clear must not wipe the note rows
-  const clearStart = Number(clearedRanges.find((r) => r.startsWith('Bills!'))!.match(/A(\d+)/)![1]);
-  expect(clearStart).toBeGreaterThan(rows.length);
-  return rows;
+  // Drop trailing empty rows/cells so the assertions read the visible sheet
+  // Array.from turns holes (never-written rows) into undefined entries
+  return Array.from(grid['Bills'], (row) => (row ?? []).filter((v) => v !== undefined && v !== ''))
+    .filter((row, i, all) => row.length > 0 || all.slice(i + 1).some((r) => r.length > 0));
 }
 
 describe('gross-only bills are flagged next to netto figures (BUG-29)', () => {
@@ -126,9 +141,12 @@ describe('gross-only bills are flagged next to netto figures (BUG-29)', () => {
 
     const rows = await sheetsBillsRows();
 
-    // header + 4 bills, a blank row, then the note
+    // header + 4 bills, a blank row, then the note — no stale cells anywhere
     expect(rows).toHaveLength(7);
+    expect(rows[5]).toEqual([]);
+    expect(rows[6]).toHaveLength(1);
     expect(String(rows[6][0])).toContain('2 counted bills');
+    expect(rows.flat().some((v) => String(v).startsWith('old-'))).toBe(false);
   });
 
   it('should not add a note to the Google-Sheets export when no such bills exist', async () => {
@@ -137,6 +155,7 @@ describe('gross-only bills are flagged next to netto figures (BUG-29)', () => {
     const rows = await sheetsBillsRows();
 
     expect(rows).toHaveLength(3); // header + 2 bills
+    expect(rows.flat().some((v) => String(v).startsWith('old-'))).toBe(false);
   });
 
   it('should return the gross-only summary from /api/spending for both tabs', async () => {

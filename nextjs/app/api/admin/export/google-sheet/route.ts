@@ -287,13 +287,9 @@ export async function POST() {
     queueRows('Bills', billsData);
     // Bills with only a gross amount have Netto 0: add a note below the data
     // (skipped for a truncated export, where the rows below are not ours).
+    // The note is written after the tail clear below, so stale cells from a
+    // previous, larger export cannot survive next to it.
     const grossOnlyText = billsTruncated ? null : grossOnlyNote(await getGrossOnlySummary(projectId));
-    if (grossOnlyText) {
-      writeJobs.push({
-        range: `Bills!A${billsData.length + 1}`,
-        values: [[''], [grossOnlyText]].map((row) => row.map(sanitizeCell)),
-      });
-    }
     queueRows('V-Geld', vgeldData);
     queueRows('Budget Matrix', bmData);
 
@@ -320,8 +316,7 @@ export async function POST() {
     // export was truncated is never tail-cleared (rows past the cap are not
     // ours to erase). A failure here never leaves a tab empty.
     const tailClearRanges = [
-      // Rows below the data are cleared, except the 2 rows holding the netto note
-      ...(billsTruncated ? [] : [`Bills!A${billsData.length + 1 + (grossOnlyText ? 2 : 0)}:ZZ`]),
+      ...(billsTruncated ? [] : [`Bills!A${billsData.length + 1}:ZZ`]),
       ...(vgeldTruncated ? [] : [`V-Geld!A${vgeldData.length + 1}:ZZ`]),
       `Budget Matrix!A${bmData.length + 1}:ZZ`,
     ];
@@ -329,6 +324,16 @@ export async function POST() {
       spreadsheetId,
       requestBody: { ranges: tailClearRanges },
     });
+
+    // Netto note one blank row below the bills (rows are freshly cleared)
+    if (grossOnlyText) {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId,
+        range: `Bills!A${billsData.length + 2}`,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values: [[sanitizeCell(grossOnlyText)]] },
+      });
+    }
 
     // Format headers: dark bg, white bold text, frozen first row
     const sheetMeta = await sheets.spreadsheets.get({ spreadsheetId });
