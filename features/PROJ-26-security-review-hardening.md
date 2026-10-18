@@ -1,6 +1,6 @@
 ## PROJ-26: Security Review & Dependency Hardening (Oct 2026)
 
-**Status:** In Review
+**Status:** QA Passed
 **Branch:** `claude/keen-rubin-b78ded`
 
 ### Summary
@@ -568,3 +568,153 @@ IDs below are local to this QA run (not yet registered in `features/INDEX.md`; n
 - **Security:** Issues found. BUG-24 allows account takeover through Google sign-in (including superadmin) and bypasses the per-email login and forgot-password limits.
 - **Production Ready:** NO
 - **Recommendation:** Fix BUG-24 (exact `LOWER()` comparison, or escape `_`/`%`) and BUG-25 (raise `middlewareClientMaxBodySize` above the upload cap, or exclude the upload routes from the middleware matcher) first. Then fix BUG-26 (keep the stored date when only the day is unchanged, or compare dates by day) and BUG-27. Afterwards re-run AC-4, AC-5 and AC-9.
+
+### QA Re-test (Round 3)
+
+**Tested:** 2026-10-18
+**App URL:** http://localhost:3101 (fresh DB `qa3_proj26`, `next build` + `NODE_ENV=production tsx server.ts`, Postgres 16 on :5433)
+**Branch / commit:** `claude/keen-rubin-b78ded` @ `3e460d7` (fix commits `d6d7ccd`, `da98e2a`, `3e460d7`; no new migrations)
+**Method:** Same harness as rounds 1 and 2: scripted HTTP clients with rotating loopback IPs, curl, Playwright Chromium, Prisma/SQL checks, the local Telegram Bot API emulator and Jest (handler-level tests with `fetch`/Google stubbed, run against `qa3_proj26`). The Google sign-in was exercised through the real `signIn` + `jwt` callbacks and `resolveGoogleSignIn` against the real DB.
+
+#### Round-2 bugs
+
+| Bug | Status | Evidence |
+|---|---|---|
+| BUG-24 (Critical) `_` treated as a wildcard in email lookups | VERIFIED FIXED | All 7 steps re-run. **1** Google `signIn` + `jwt`: `sup_r@qa.test` → own new account, role `user`; `user_a1@qa.test` → own account, no project; `s%@`, `%@`, `super%@`, `_____@`, `su\per@` → own accounts; `SUPER@QA.TEST` → `super@qa.test` (superadmin) and `mixed.case@qa.test` → `Mixed.Case@QA.test` (letter case still resolves); `G_EXACT@` → `g_exact@`, not `g-exact@`; deactivated → refused. **4** After `t-wild@` hit 429 (the real password is also 429), 15 guesses with `t_wild@`, `__wild@`, `t-w_ld@`, `_-wild@`, `t_w_ld@` are answered as unknown accounts. The real password via `t_wi_d@`, `t_wild@`, `T_WILD@`, `______@` or `t%@` gives no session. A real `t_x@` account logs in (also as `T_X@QA.TEST`) and only with its own password, separate from `t-x@`. **5** forgot-password: `user-a2@` 200, then 429. `user_a2@`, `u_er-a2@` and `us_r-a2@` → generic 200 with no token; `user%@` → 400. Only the one token for `user-a2@` exists. `T_X@` gets a token for exactly `t_x@`. **6** Signup of `user_b1@qa.test` (next to `user-b1@`) creates its own unverified account; `USER_B1@QA.TEST` creates no second one; resend-verification gives `user_b1@` its token; resend for `user_a1@` sends nothing. **7** The PDF of `t_x@` lists only its own bill (Saldo −11.00) and none of `t-x@`'s 77.00 bill or its 500.00 V-Geld. `t_x@` → `t-x@` report is 403. The admin's `t-x@` report lists only `t-x` (Saldo 423.00). `T_X@QA.TEST` → the `t_x` report |
+| BUG-25 (High) uploads over 10 MB fail | VERIFIED FIXED | Node client, `POST /api/bills`: 1×9.9 MB, 2×6 MB, 3×5 MB (Content-Length and chunked) and 10×9.5 MB (95 MB, at the cap) → 200, every stored file byte-identical (SHA-256). `POST …/images` 2×6 MB (CL and chunked) → 200. `PUT …/images/[id]` 9.5 MB chunked → 200; 10.5 MB → 413. curl: 2×6 MB JPEG, 3×5 MB JPEG, 2×6 MB and 3×5 MB PDF chunked, and `/images` 2×6 MB (plain and chunked) → 200 with all images. Chromium `/bills/new`: 2×6 MB PDF, 3×5 MB PDF, 2×6.1 MB and 3×5.1 MB JPEG (crop skipped) and 2×6.1 MB JPEG via "Crop & Save" → 200 with 2/3/2/3/2 images and no error shown. Bill detail "add images" 2×6 MB → 200 (4 images). Zero CSP violations |
+| BUG-18 (Low) over-cap chunked upload → 400 | VERIFIED FIXED | 102.3 MB multipart chunked → 413 "Upload too large"; with Content-Length → 413; one 102 MB file chunked → 413 (node and curl). No file left in `UPLOADS_DIR` after any of them |
+| BUG-26 (Medium) approved Telegram bill reset on unchanged save | VERIFIED FIXED | A bill created by the bot through the stub (`2026-10-18T14:47:41.026Z`, caption as comment); the admin fills vendor/amount, confirms and approves. Owner `PUT` with the exact new UI payload (no `date`) → 200, still `approved`, timestamp unchanged. The old payload (same day as midnight UTC) and a same-day `23:59:59Z` → unchanged too. An approved bill with NULL vendor/item/comment saved unchanged → stays `approved`. Chromium, "Save Changes" without edits on an approved bill dated `23:47:41Z`, with browser time zones UTC, America/Los_Angeles and Pacific/Kiritimati: the PUT carries no `date`, the bill stays `approved` and keeps its time. The BUG-4 lock still holds: a day change (API, or the date field in the UI → `2026-10-03T00:00Z`) → `pending`; a comment added to a NULL comment → `pending`; on a paid bill an unchanged save → 200 (still `paid`) and a day change → 403. Note: every save still writes an EditLog entry `{"allocations":"updated"}` even when nothing changed (cosmetic, pre-existing) |
+| BUG-27 (Medium) orphan files past `maxFiles` | VERIFIED FIXED | `POST /api/bills` with 11, 12 (chunked) and 15 tiny parts, 11×1 MB, 15×2 MB chunked, 20×0.5 MB and 11×9 MB chunked → 413, 0 files left after 3 s, no bill (fresh user per request). `POST …/images` with 12 parts → 413; `PUT …/images/[id]` with 3 parts → 413; nothing left. Exactly 10 parts → 200 with 10 images |
+| BUG-28 (Low) bug-report keeps stray files | VERIFIED FIXED | Handler level (`fetch` stubbed). File under `evil` → 201, no stray file. `evil` + screenshot → only the screenshot is stored. GitHub answering 500 → 502 and the stored screenshot is removed. Invalid input → 400, nothing left. Two screenshots → 413, nothing left. `.gif` → 415. Live HTTP: same results, nothing left in `UPLOADS_DIR` |
+| BUG-29 (Low) gross-only bills count 0 netto | VERIFIED FIXED (product decision: flag, not estimate). **See BUG-30** | No gross-only bills yet: `grossOnly.count` is 0 in `/api/spending` and `/api/budget-matrix`. No notice on `/budget` or `/spending` in either mode, and no Excel note. After an approved 50.00 and a paid 7.50 gross-only bill (plus a pending 400 and a draft 9, which are not counted): both spending tabs and the budget matrix return `{count: 2, grossSum: 57.5}`. Brutto totals +57.50, netto unchanged. Chromium: in Netto mode `/budget` and `/spending` (also after switching to the category tab) show "2 bills without a VAT breakdown (57,50 € brutto) are not included in the netto figures."; in Brutto mode there is no notice. No overflow at 375 px. Excel Bills sheet: a blank row, then "Note: 2 counted bills have no VAT breakdown (only a gross amount, 57.50 EUR brutto). Netto is 0 for these bills, so they are not included in the netto figures." User PDF (pdftotext): the header reads "Netto\*" with the footnote "\* Netto-Summen enthalten nicht 1 Beleg ohne MwSt.-Aufteilung (50.00 EUR brutto, Netto = 0.00)." The paid 7.50 counts for its submitter while pending/draft do not. Users without such bills get no footnote and a plain "Netto" header. Sheets (stubbed API): the note is written below the data, but stale rows can remain next to it (BUG-30) |
+| BUG-6 (remainder) | VERIFIED FIXED | Closed by BUG-27 and BUG-28 |
+
+**Totals:** all 7 open round-2 bugs (BUG-18, 24, 25, 26, 27, 28, 29) and the BUG-6 remainder are verified fixed. BUG-30 to BUG-32 below are new.
+
+#### Failed criteria re-tested in full
+
+- **AC-4: Login protections — PASS.**
+  - Per-IP 5/min: `302×5, 429×2`. Spoofed `X-Forwarded-For`, `cf-connecting-ip`, `x-real-ip` and `x-setcash-peer-ip` are ignored.
+  - Per-email 10/15 min: form bodies with rotating IPs and alternating letter case → `302×10, 429×2`, and the correct password is then also 429. JSON bodies with the IP rotated every 4 → `302×10, 429×3`.
+  - `_`/`%` variants no longer reach the account (BUG-24).
+  - Timing: medians over 9 samples are 354 ms (unknown email) and 351 ms (wrong password).
+  - Disabled account: a wrong password gives the generic error; `AccountDisabled` only with the correct password.
+  - Mixed-case login works and the session carries `Mixed.Case@QA.test`.
+  - Path variants (`/credentials/`, `%63redentials`, `CREDENTIALS`, `//auth`) do not authenticate.
+- **AC-5: Case-insensitive email uniqueness — PASS.**
+  - A signup with `MIXED.CASE@qa.test` creates no second account.
+  - The DB rejects `USER-A1@qa.TEST` and `user_a1@QA.test` (`User_email_lower_key`).
+  - forgot-password, resend-verification, project invite (lower case → `pending_invite` for the stored account), accept-invite (`userExists: true`, membership for `Mixed.Case@QA.test`, no new user) and platform invite all resolve the stored mixed-case account. `USER-A1@QA.TEST` → 400 "already a member".
+  - Migration guard on a scratch DB: aborts on `Dup@`/`dup@` with the documented message. With `u_x@` and `u-x@` present it applies after the merge (they are not treated as duplicates).
+  - `_` addresses are separate accounts:
+    - Invite and accept for `user_a2@` (new) creates its own account; `user-a2@` keeps its password.
+    - A project invite to `user_a1@` is not "already a member".
+    - A platform invite to `owner_a@` does not notify `owner-a@`.
+- **AC-9: Bills, images & uploads — PASS.** POST validation: 16 cases → 400 with no bill and no orphan file (the last 6 were re-run with a fresh user because the 10/min bill limit also counts rejected attempts). Also passing: unique filenames, uploads ACL and traversal (`ac9b` 8/8, `ac9c` 11/11, `upl` 12/12), bill numbering (5/5, never reused), PUT validation and the BUG-4 lock (`edit` 24/24, including the Telegram-style case that failed in round 2). Uploads over 10 MB: BUG-25. Over-cap: BUG-18. maxFiles: BUG-27. A chunked upload under the cap works.
+
+#### Regression
+
+- **Middleware matcher change:**
+  - Unauthenticated sweep over all 88 route files (122 endpoint-methods):
+    - 96 are redirected by middleware (307 to `/?callbackUrl=…`).
+    - The 6 methods of the 4 excluded upload endpoints (`GET`/`POST /api/bills`, `POST …/images`, `PUT`/`DELETE …/images/[imageId]`, `POST /api/bug-reports`) answer 401 JSON.
+    - 3 methods whose sweep path contains a dot (`[email]` = `user-a1@qa.test`) answer 401 JSON from the route. This exclusion of dotted paths from middleware is pre-existing and unchanged.
+    - Public endpoints are unchanged.
+  - Path variants:
+    - `…/images/%72eorder`, `/api/Bills`, `/api/bills/bulk-delete` and `…/images/y/z` are still redirected.
+    - Trailing slashes → 308 to the canonical path.
+    - `PUT …/images/reorder` is still behind middleware (307 anonymous) and works for the owner.
+  - On the excluded endpoints:
+    - Deactivated user → 401.
+    - Tampered cookie → 401.
+    - Removed member → 400 "No project selected", with no bill or image written.
+    - Anonymous 60 MB uploads (plain or chunked) → 401 within 10 ms; curl had sent under 3 MB of the body and nothing was stored.
+  - `GET /api/bills` still carries XFO, nosniff, HSTS and Referrer-Policy.
+  - All 16 protected pages redirect unauthenticated users to `/?callbackUrl=<page>`.
+  - 21 HTML pages have a fresh nonce, every `<script>` is nonced and all security headers are present. `/_next/image` → 404. No open redirect.
+- **Case-insensitive name checks (categories, motives, positions; create and rename):**
+  - `Travel_X` and `Travel-X` coexist, and `TravelZX`, `Tr%` and `Back\slash` are accepted.
+  - `travel_x`, `travel` (after `Travel`) and `back\SLASH` collide (400 "…already exists").
+  - Renaming to `TRAVEL_X` collides, while renaming to a different name or to the own name in another case works.
+  - Usernames: `qa_name` and `qa-name` coexist, `QA_NAME` → 409, `qa%` is accepted.
+- **Admin users and members:**
+  - `POST /api/admin/users`: `adm_new@` and `adm-new@` are both created; `ADM-NEW@` → "User already exists".
+  - `PUT`/`DELETE` on `adm_new@` touch only that account; `adm%new@` → 404; `DELETE ADM-NEW@QA.TEST` finds `adm-new@`.
+  - Admin add-member with `user_a2@` → "User not found"; `USER-A2@` adds `user-a2@`.
+  - `/api/reports/users` for a `_` member lists only that member.
+  - Bill numbers of `t_x@` and `t-x@` are independent (1.01 each, then 1.02).
+- **Telegram (stub):** AC-7 suite 28/28 and the BUG-8/BUG-14 extras 8/8.
+- **Money:** unchanged from round 2.
+  - Balance, dashboard, analysis and PDF Saldo: user-a1 66.67, user-a2 4.99.
+  - Spending by motive: Default 41.69, M1 33.63, M2 50.00, M3 33.33. By category: C1 50.30, C2 50.00, Uncategorized 58.34.
+  - Both tabs total 158.64 (netto 139.12).
+  - The Excel Budget Matrix "Spent (brutto)" row equals this, and the Sheets sanitiser still neutralises `=HYPERLINK`, `+1`, `-1`, `@x` (money script 21/21).
+- **Chromium (production build):**
+  - Login form (wrong password shows an error; the correct one reaches `/dashboard`).
+  - Bill create with the crop modal (number 1.05), detail edit and save, adding an image, re-cropping (`PUT …/images/[id]` 200), and an unchanged save of an approved web bill (stays approved).
+  - Status buttons (BUG-20); the V-Geld page and the admin Confirm button.
+  - Budget Brutto/Netto totals equal the server's.
+  - `/reports` PDF and Excel downloads; the Excel grand Spent equals `/api/spending`.
+  - The AC-2 password change signs the user out. No overflow at 375 px.
+  - **Zero CSP violations** across all pages and flows of the session (br2 suite 18/19: the re-crop step timed out in the script and passed when run on its own).
+  - Console errors: the known recharts `rx` warning, and BUG-31.
+- **API regression:** 41/41 (projects, motives, categories, positions, members, superadmin, profile, tour, notifications, comments with mentions, image reorder/delete, bulk delete, images ZIP, budget PDF, Sheets "not configured"). IDOR matrix: 36 of 38 checks pass. The 2 flagged are by design: an `updateMany` scoped to the caller returns 200 with no effect, and `/api/reports/users` lists only the caller.
+- **Spot checks:**
+  - AC-1: 19/19.
+  - AC-2: 22/22.
+  - AC-3: 15/15.
+  - AC-6: same result as rounds 1 and 2. All admin operations are denied, member-level reads succeed by design, last-owner and last-superadmin rules hold, and the concurrent owner removal leaves 1 owner.
+  - AC-7: 28/28.
+  - AC-8: 21/21.
+  - AC-10: key re-entry rule. SSRF targets (`127.0.0.1`, `localtest.me`, `[::ffff:127.0.0.1]`, `2130706433`, `0x7f.1`, `169.254.169.254`, `http://`) are refused with 0 listener hits. Re-analysis of approved/paid bills → 409. A duplicate concurrent analyse → 202 + 409 in 3/3 rounds.
+  - AC-11: see above.
+  - AC-12:
+    - `npm audit --omit=dev`: 0 vulnerabilities.
+    - `tsc -p tsconfig.json` and `tsc -p tsconfig.server.json`: exit 0.
+    - `next lint`: 0 errors, 14 warnings.
+    - `next build`: OK.
+    - Jest against `setcash_test`: 27 suites, 274/274 tests pass. `auth-credentials-limit.test.ts` fails (5 tests hit the per-IP 429) if `TRUSTED_IP_HEADER=none` is set in the shell, because the test relies on the default header. This is environment coupling of the test, not an app bug.
+    - Docker: not rebuilt. The Dockerfile, `next.config.mjs`, package files and migrations are unchanged since round 2.
+
+#### New bugs (round 3)
+
+#### BUG-30: Google-Sheets export leaves stale bill rows next to the new netto note (regression of the BUG-29 fix)
+- **Severity:** Medium · **Skill:** [Backend]
+- **Where:** `app/api/admin/export/google-sheet/route.ts`. The note is written as `[[''], [note]]` at `Bills!A{n+1}`. With `values.batchUpdate` this only sets column A of rows n+1 and n+2. The tail clear now starts at `Bills!A{n+3}:ZZ` instead of `A{n+1}`, so columns B–O of the two rows under the data keep whatever the previous export wrote there.
+- **Steps to Reproduce:**
+  1. The project has at least one counted gross-only bill. A previous Sheets export had more bill rows than now (e.g. bills were deleted in between).
+  2. Run "Export to Google Sheets" (handler run in Jest with a stub that applies the Sheets cell semantics, against `qa3_proj26`; the Bills tab was pre-filled with a larger previous export).
+  3. Expected: the bill rows, a blank row, the note, and nothing else.
+  4. Actual: row n+1 still holds a full stale bill row (columns B–O), and row n+2 holds the note in A followed by another stale bill row in B–O. A deleted bill's amounts stay in the sheet, so column sums (Brutto Total, Netto) in the sheet are overstated. Without gross-only bills the tail is cleared from n+1 as before.
+- **Fix hint:** keep clearing from `A{n+1}` and write the note afterwards, or write full-width rows (15 cells) for the blank and note rows.
+- **Priority:** Fix in next sprint
+
+#### BUG-31: Clearing the date on the bill page and saving hangs on "Saving…" (pre-existing)
+- **Severity:** Low · **Skill:** [Frontend]
+- **Where:** `app/(protected)/bills/[id]/page.tsx` `handleSave`. An empty date counts as "changed", and `new Date('').toISOString()` throws `RangeError: Invalid time value` before the request. `setIsSaving(false)` is never reached. The line was touched by the BUG-26 fix, but it threw before the fix as well.
+- **Steps to Reproduce:** open your own confirmed bill, clear the date field, click "Save Changes". Expected: a validation message, or the date left unchanged. Actual: no request is sent, the button stays disabled on "Saving…" until reload, and the console logs a page error "Invalid time value". This breaks the frontend rule "always reset loading state in all code paths".
+- **Priority:** Nice to have
+
+#### BUG-32: User PDF report decodes the address twice — `%` in an email gives a 500 (pre-existing)
+- **Severity:** Low · **Skill:** [Backend]
+- **Where:** `app/api/reports/user/[email]/pdf/route.ts` calls `decodeURIComponent(params.email)`, but Next.js has already decoded the route param.
+- **Steps to Reproduce:** `GET /api/reports/user/t%25x%40qa.test/pdf` (as admin, or as a user whose address contains `%`) → 500, and the log shows "URIError: URI malformed". Expected: 404/empty report, or the report for that exact address. Google sign-in can create accounts with `%` in the local part (verified: `s%@qa.test`), and such a user cannot download their own report. An address containing `%25`/`%40` sequences would be decoded to a different address. The admin users route does not double-decode (`adm%new@` → 404).
+- **Priority:** Nice to have
+
+#### Not tested / limitations (round 3)
+- Firefox and Safari: not installed (Chromium only).
+- Real Google OAuth: BUG-24 was verified through the real `signIn`/`jwt` callbacks and `resolveGoogleSignIn` against the DB. Google Sheets was tested only with a stubbed API that applies cell-write semantics (BUG-30).
+- Real Telegram, Resend, OCR providers and Upstash: not available. These ran against the stub, DB tokens, the SSRF harness and the in-memory limiter, as before.
+- Bug-report → GitHub: tested at handler level with `fetch` stubbed. The QA server inherited a placeholder `GITHUB_TOKEN` from the sandbox shell, so one live bug-report request in this round sent a request to `api.github.com`. It was rejected with 401 "Bad credentials" and no issue was created. That 502 path showed the screenshot cleanup working.
+- Docker image: not rebuilt in this round (deploy files unchanged since round 2, where it passed).
+- Image-lock race and concurrent Telegram quota: not exercised (same as round 2).
+
+#### Summary (round 3)
+- **Round-2 bugs:** 7/7 verified fixed (BUG-18, BUG-24, BUG-25, BUG-26, BUG-27, BUG-28, BUG-29). The BUG-6 remainder is closed.
+- **Acceptance Criteria:** AC-4, AC-5 and AC-9 now pass. Spot checks of AC-1, 2, 3, 6, 7, 8, 10, 11 and 12 pass, so **12/12 pass**.
+- **Edge Cases:** 12/12 (EC-6 re-checked with BUG-29).
+- **New bugs:** 3 (0 critical, 0 high, 1 medium, 2 low): BUG-30 (Medium, regression of the BUG-29 fix), BUG-31 and BUG-32 (Low, both pre-existing).
+- **Open bugs overall:** BUG-30 (Medium), BUG-31 and BUG-32 (Low). No Critical or High bug is open from any round.
+- **Security:** No open security issues. BUG-24 (account takeover and limiter bypass) is closed. Moving the upload endpoints out of middleware did not open an unauthenticated path; they authenticate before reading the body.
+- **Production Ready:** YES
+- **Recommendation:** Deploy. Fix BUG-30 before relying on the Google-Sheets export for gross-only bills (or fix it in the next sprint), and fix BUG-31 and BUG-32 when convenient.
