@@ -110,7 +110,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     if (lockResponse) return lockResponse;
 
     // Parse multipart form (size-capped; throws UploadError for bad/oversized bodies)
-    const { files } = await parseForm(req);
+    const { files } = await parseForm(req, { fields: ['photos'] });
 
     // Get uploaded files
     uploadedFiles = getUploadedFiles(files, 'photos');

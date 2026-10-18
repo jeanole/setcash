@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import type { JWT } from '@auth/core/jwt';
+import { insensitiveEquals } from '@/lib/db-match';
 
 // ---------------------------------------------------------------------------
 // NextAuth v5 session/JWT type augmentation
@@ -121,6 +122,32 @@ async function getSuperAdminProjectDetails(projectId: string | null): Promise<{
 // is unknown so failed logins take the same time either way.
 const DUMMY_PASSWORD_HASH = '$2b$12$yWJXt6CAxPPWdp65uiKx8eHWqsSC3Q1x2LmYYIy523jWSEihPytma';
 
+// Every password check should cost about as much as a cost-12 compare.
+const TARGET_BCRYPT_COST = 12;
+
+/** Parse the work factor out of a bcrypt hash (`$2a$10$...`), or null. */
+export function bcryptCost(hash: string): number | null {
+  const match = /^\$2[abxy]\$(\d{2})\$/.exec(hash);
+  return match ? parseInt(match[1], 10) : null;
+}
+
+/**
+ * A wrong password against a hash cheaper than the target cost would answer
+ * faster than the unknown-email path (which compares at cost 12), revealing
+ * that the account exists. Top the elapsed work up to ~2^12 rounds with
+ * compares against dummy hashes of the missing cost levels.
+ */
+async function padToTargetCost(password: string, cost: number | null): Promise<void> {
+  if (cost === null || cost >= TARGET_BCRYPT_COST) return;
+  const missing = (1 << TARGET_BCRYPT_COST) - (1 << cost);
+  const dummyTail = DUMMY_PASSWORD_HASH.slice(7);
+  for (let bit = 4; bit < TARGET_BCRYPT_COST; bit++) {
+    if (missing & (1 << bit)) {
+      await bcrypt.compare(password, `$2b$${String(bit).padStart(2, '0')}$${dummyTail}`);
+    }
+  }
+}
+
 class GoogleOnlyAccountError extends CredentialsSignin {
   code = 'GoogleOnlyAccount' as const;
 }
@@ -140,6 +167,66 @@ class EmailNotVerifiedError extends CredentialsSignin {
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 const prisma = globalForPrisma.prisma ?? new PrismaClient();
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+
+// ---------------------------------------------------------------------------
+// Credentials sign-in (exported for tests)
+// ---------------------------------------------------------------------------
+
+export async function authorizeCredentials(
+  credentials: Partial<Record<string, unknown>>
+): Promise<{ id: string; email: string; name: string } | null> {
+  const credentialsSchema = z.object({
+    email: z.string().email(),
+    password: z.string().min(1),
+  });
+
+  const parsed = credentialsSchema.safeParse(credentials);
+  if (!parsed.success) return null;
+  const { email, password } = parsed.data;
+
+  const user = await prisma.user.findFirst({
+    where: { email: insensitiveEquals(email) },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true, email: true, passwordHash: true, isActive: true, emailVerified: true },
+  });
+
+  if (!user) {
+    // Spend the same bcrypt time as a real check so response timing
+    // does not reveal whether the account exists.
+    await bcrypt.compare(password, DUMMY_PASSWORD_HASH);
+    return null;
+  }
+
+  if (!user.passwordHash) throw new GoogleOnlyAccountError();
+
+  const storedCost = bcryptCost(user.passwordHash);
+  const passwordMatch = await bcrypt.compare(password, user.passwordHash);
+  if (!passwordMatch) {
+    await padToTargetCost(password, storedCost);
+    return null;
+  }
+
+  // Transparent upgrade: hashes with a different work factor (seed data,
+  // legacy imports) are re-hashed at cost 12 now that we hold the plaintext,
+  // so their login timing matches every other account. Guarded on the old
+  // hash so a concurrent password change is never overwritten.
+  if (storedCost !== TARGET_BCRYPT_COST) {
+    try {
+      await prisma.user.updateMany({
+        where: { id: user.id, passwordHash: user.passwordHash },
+        data: { passwordHash: await bcrypt.hash(password, TARGET_BCRYPT_COST) },
+      });
+    } catch (error) {
+      console.error('Failed to upgrade password hash cost:', error);
+    }
+  }
+
+  // Account state is only revealed to someone who knows the password.
+  if (!user.isActive) throw new AccountDisabledError();
+  if (!user.emailVerified) throw new EmailNotVerifiedError();
+
+  return { id: user.id, email: user.email, name: user.email };
+}
 
 // ---------------------------------------------------------------------------
 // Token re-validation — called from the jwt callback on every invocation
@@ -218,6 +305,62 @@ export async function syncTokenWithDb(token: JWT, isSignIn: boolean): Promise<JW
 }
 
 // ---------------------------------------------------------------------------
+// Google sign-in — find or create the user (exported for tests)
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve a Google identity to a SetCash user. Mutates `user.email` to the
+ * stored address so the jwt callback (which receives the same object) looks
+ * up the right account. Returns false to refuse the sign-in.
+ */
+export async function resolveGoogleSignIn(user: { email?: string | null }): Promise<boolean> {
+  if (!user.email) return false;
+
+  // Find or create user record for Google sign-in
+  // Case-insensitive: Google reports lowercase addresses, legacy
+  // credential accounts may be stored with mixed case
+  const existing = await prisma.user.findFirst({
+    where: { email: insensitiveEquals(user.email) },
+  });
+
+  // Defense in depth: an OAuth identity may only ever resolve to the
+  // account with exactly this address (case aside), never a near match.
+  if (existing && existing.email.toLowerCase() !== user.email.toLowerCase()) return false;
+
+  if (existing && !existing.isActive) return false;
+
+  // Carry the stored address into the token (Auth.js passes this same
+  // user object on to the jwt callback), so session lookups match it.
+  if (existing) user.email = existing.email;
+
+  if (!existing) {
+    // Auto-create user on first Google sign-in (passwordHash is empty, auto-verified)
+    await prisma.user.create({
+      data: {
+        email: user.email,
+        passwordHash: '',
+        emailVerified: new Date(),
+      },
+    });
+  } else if (!existing.emailVerified) {
+    // Existing UNVERIFIED account: its password was set by whoever signed
+    // up, which Google has not proven to be this user (pre-registration
+    // takeover). Drop that password — the owner can set one via
+    // "Forgot password" — and end any sessions tied to it.
+    await prisma.user.update({
+      where: { id: existing.id },
+      data: {
+        emailVerified: new Date(),
+        passwordHash: '',
+        sessionVersion: { increment: 1 },
+      },
+    });
+  }
+
+  return true;
+}
+
+// ---------------------------------------------------------------------------
 // NextAuth configuration
 // ---------------------------------------------------------------------------
 
@@ -242,40 +385,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         email: { label: 'Email', type: 'email' },
         password: { label: 'Password', type: 'password' },
       },
-      async authorize(credentials) {
-        const credentialsSchema = z.object({
-          email: z.string().email(),
-          password: z.string().min(1),
-        });
-
-        const parsed = credentialsSchema.safeParse(credentials);
-        if (!parsed.success) return null;
-        const { email, password } = parsed.data;
-
-        const user = await prisma.user.findFirst({
-          where: { email: { equals: email, mode: 'insensitive' } },
-          orderBy: { createdAt: 'asc' },
-          select: { id: true, email: true, passwordHash: true, isActive: true, emailVerified: true },
-        });
-
-        if (!user) {
-          // Spend the same bcrypt time as a real check so response timing
-          // does not reveal whether the account exists.
-          await bcrypt.compare(password, DUMMY_PASSWORD_HASH);
-          return null;
-        }
-
-        if (!user.passwordHash) throw new GoogleOnlyAccountError();
-
-        const passwordMatch = await bcrypt.compare(password, user.passwordHash);
-        if (!passwordMatch) return null;
-
-        // Account state is only revealed to someone who knows the password.
-        if (!user.isActive) throw new AccountDisabledError();
-        if (!user.emailVerified) throw new EmailNotVerifiedError();
-
-        return { id: user.id, email: user.email, name: user.email };
-      },
+      authorize: (credentials) => authorizeCredentials(credentials),
     }),
 
     // ------------------------------------------------------------------
@@ -324,46 +434,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     // ------------------------------------------------------------------
     async signIn({ user, account }) {
       if (account?.provider === 'google') {
-        if (!user.email) return false;
-
-        // Find or create user record for Google sign-in
-        // Case-insensitive: Google reports lowercase addresses, legacy
-        // credential accounts may be stored with mixed case
-        const existing = await prisma.user.findFirst({
-          where: { email: { equals: user.email, mode: 'insensitive' } },
-        });
-
-        if (existing && !existing.isActive) return false;
-
-        // Carry the stored address into the token (Auth.js passes this same
-        // user object on to the jwt callback), so session lookups match it.
-        if (existing) user.email = existing.email;
-
-        if (!existing) {
-          // Auto-create user on first Google sign-in (passwordHash is empty, auto-verified)
-          await prisma.user.create({
-            data: {
-              email: user.email,
-              passwordHash: '',
-              emailVerified: new Date(),
-            },
-          });
-        } else if (!existing.emailVerified) {
-          // Existing UNVERIFIED account: its password was set by whoever signed
-          // up, which Google has not proven to be this user (pre-registration
-          // takeover). Drop that password — the owner can set one via
-          // "Forgot password" — and end any sessions tied to it.
-          await prisma.user.update({
-            where: { id: existing.id },
-            data: {
-              emailVerified: new Date(),
-              passwordHash: '',
-              sessionVersion: { increment: 1 },
-            },
-          });
-        }
-
-        return true;
+        return resolveGoogleSignIn(user);
       }
 
       return true;

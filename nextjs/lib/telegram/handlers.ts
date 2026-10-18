@@ -10,6 +10,7 @@ import path from 'path';
 import https from 'https';
 import http from 'http';
 import type { Message } from 'node-telegram-bot-api';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../db';
 import { UPLOADS_DIR } from '../upload';
 import { telegramLinkAttemptLimiter } from '../ratelimit';
@@ -97,11 +98,60 @@ export async function downloadTelegramFile(
   });
 }
 
+// Thrown inside the create transaction when the project's bill quota is used up
+export class UploadLimitError extends Error {
+  constructor() {
+    super('Upload limit reached for this project');
+    this.name = 'UploadLimitError';
+  }
+}
+
+const UPLOAD_LIMIT_MESSAGE =
+  'Das Upload-Limit dieses Projekts ist erreicht. Bitte wende dich an einen Administrator.';
+const DEACTIVATED_MESSAGE =
+  'Dein SetCash-Account ist deaktiviert. Bitte wende dich an einen Administrator.';
+
+/** True when the account exists and has not been deactivated by an admin. */
+async function isUserActive(email: string): Promise<boolean> {
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: { isActive: true },
+  });
+  return !!user?.isActive;
+}
+
+/** Remove downloaded files that never made it into a bill. */
+function discardDownloads(photos: DownloadedPhoto[]): void {
+  for (const photo of photos) {
+    fs.unlink(path.join(UPLOADS_DIR, photo.savedName), () => {});
+  }
+}
+
 /**
  * Create a draft bill from Telegram photos using Prisma.
  * Assigns default motive and uncategorized category (100% each).
+ * Enforces the project's upload quota (throws UploadLimitError) like the web
+ * route; the count and the create share one serializable transaction so
+ * concurrent uploads cannot overshoot the limit.
  */
 export async function createDraftBill(
+  projectId: string,
+  userEmail: string,
+  photos: DownloadedPhoto[],
+  caption: string | null
+): Promise<string> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await createDraftBillOnce(projectId, userEmail, photos, caption);
+    } catch (error) {
+      const isSerializationFailure =
+        error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034';
+      if (!isSerializationFailure || attempt >= 3) throw error;
+    }
+  }
+}
+
+async function createDraftBillOnce(
   projectId: string,
   userEmail: string,
   photos: DownloadedPhoto[],
@@ -112,6 +162,17 @@ export async function createDraftBill(
   // Bill, default allocations and images are written atomically — a failure
   // part-way must not leave a bill without its motive/category/images.
   return prisma.$transaction(async (tx) => {
+    const project = await tx.project.findUnique({
+      where: { id: projectId },
+      select: { uploadLimit: true },
+    });
+    if (project?.uploadLimit != null) {
+      const billCount = await tx.bill.count({ where: { projectId } });
+      if (billCount >= project.uploadLimit) {
+        throw new UploadLimitError();
+      }
+    }
+
     const bill = await tx.bill.create({
       data: {
         projectId,
@@ -169,8 +230,19 @@ export async function createDraftBill(
       });
     }
 
+    await tx.editLog.create({
+      data: {
+        projectId,
+        timestamp: new Date(),
+        user: userEmail,
+        billId,
+        changes: { _event: 'created' },
+        source: 'telegram',
+      },
+    });
+
     return billId;
-  });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 
 /**
@@ -361,13 +433,23 @@ async function processMediaGroup(
   if (photos.length === 0) return;
 
   const caption = buf.messages[0].caption || null;
-  const billId = await createDraftBill(projectId, userEmail, photos, caption);
+  const chatId = buf.messages[0].chat.id;
+  let billId: string;
+  try {
+    billId = await createDraftBill(projectId, userEmail, photos, caption);
+  } catch (e) {
+    discardDownloads(photos);
+    if (e instanceof UploadLimitError) {
+      bot.sendMessage(chatId, UPLOAD_LIMIT_MESSAGE).catch(() => {});
+      return;
+    }
+    throw e;
+  }
   console.log(
     `[TG ${projectId}] Created draft bill #${billId} with ${photos.length} image(s) for ${userEmail}`
   );
 
   const settings = await getProjectSettings(projectId);
-  const chatId = buf.messages[0].chat.id;
 
   await maybeRunOcr(billId, projectId, bot, chatId);
 
@@ -405,7 +487,17 @@ async function processSinglePhoto(
   }
 
   const caption = msg.caption || null;
-  const billId = await createDraftBill(projectId, userEmail, [downloaded], caption);
+  let billId: string;
+  try {
+    billId = await createDraftBill(projectId, userEmail, [downloaded], caption);
+  } catch (e) {
+    discardDownloads([downloaded]);
+    if (e instanceof UploadLimitError) {
+      bot.sendMessage(msg.chat.id, UPLOAD_LIMIT_MESSAGE).catch(() => {});
+      return;
+    }
+    throw e;
+  }
   console.log(`[TG ${projectId}] Created draft bill #${billId} for ${userEmail}`);
 
   const settings = await getProjectSettings(projectId);
@@ -466,6 +558,12 @@ async function performLink(
       bot
         .sendMessage(msg.chat.id, 'Dieser Account ist kein Mitglied des Projekts mehr.')
         .catch(() => {});
+      return;
+    }
+
+    // A deactivated account must not gain a Telegram channel
+    if (!(await isUserActive(result.userEmail))) {
+      bot.sendMessage(msg.chat.id, DEACTIVATED_MESSAGE).catch(() => {});
       return;
     }
 
@@ -561,6 +659,13 @@ export async function handleMessage(
           'Dein Telegram-Account ist nicht mehr verknüpft, da du kein Mitglied dieses Projekts mehr bist.'
         )
         .catch(() => {});
+      return;
+    }
+
+    // Deactivated users keep their link (re-activation restores it) but can
+    // not create bills in the meantime.
+    if (!(await isUserActive(link.userEmail))) {
+      bot.sendMessage(msg.chat.id, DEACTIVATED_MESSAGE).catch(() => {});
       return;
     }
 

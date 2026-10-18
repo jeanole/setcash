@@ -7,6 +7,7 @@ import { signUpLimiter } from '@/lib/ratelimit';
 import { sendVerificationEmail } from '@/lib/email';
 import { getClientIp } from '@/lib/client-ip';
 import { passwordSchema } from '@/lib/auth/password';
+import { insensitiveEquals } from '@/lib/db-match';
 
 const schema = z.object({
   email: z.string().trim().toLowerCase().pipe(z.string().email().max(254)),
@@ -47,7 +48,7 @@ export async function POST(req: Request) {
   try {
     // Case-insensitive: legacy rows may have mixed-case emails
     const existing = await prisma.user.findFirst({
-      where: { email: { equals: email, mode: 'insensitive' } },
+      where: { email: insensitiveEquals(email) },
       select: { id: true },
     });
 

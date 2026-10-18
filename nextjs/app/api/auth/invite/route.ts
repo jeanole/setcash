@@ -5,6 +5,7 @@ import { auth } from '@/auth';
 import { prisma } from '@/lib/db';
 import { sendInvitationEmail } from '@/lib/email';
 import { inviteLimiter, inviteUserLimiter } from '@/lib/ratelimit';
+import { insensitiveEquals } from '@/lib/db-match';
 
 const schema = z.object({
   email: z.string().trim().toLowerCase().pipe(z.string().email().max(254)),
@@ -104,7 +105,7 @@ export async function POST(req: Request) {
 
   // If the invited email belongs to an existing user, create an in-app notification
   const existingUser = await prisma.user.findFirst({
-    where: { email: { equals: email, mode: 'insensitive' } },
+    where: { email: insensitiveEquals(email) },
     select: { email: true },
   });
   if (existingUser) {

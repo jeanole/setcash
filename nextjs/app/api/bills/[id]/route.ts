@@ -12,22 +12,25 @@ import { UPLOADS_DIR } from '@/lib/upload';
 import { verifyAdminRole } from '@/lib/auth-guard';
 import {
   InvalidAllocationError,
+  billTextSchemas,
+  bruttoAmountSchema,
   categoryAllocationsSchema,
   isDbVerifiedAdmin,
   motiveAllocationsSchema,
+  readAllocationSnapshot,
   saveAllocations,
 } from '@/app/api/bills/_lib/shared';
 
-// Validation schemas
+// Validation schemas -- the field limits are shared with POST /api/bills
 const updateBillSchema = z.object({
   date: z.string().datetime().optional(),
-  type: z.string().optional(),
-  vendor: z.string().optional(),
-  item: z.string().optional(),
-  comment: z.string().optional(),
-  brutto19: z.number().min(0).optional(),
-  brutto7: z.number().min(0).optional(),
-  brutto0: z.number().min(0).optional(),
+  type: billTextSchemas.type.optional(),
+  vendor: billTextSchemas.vendor.optional(),
+  item: billTextSchemas.item.optional(),
+  comment: billTextSchemas.comment.optional(),
+  brutto19: bruttoAmountSchema.optional(),
+  brutto7: bruttoAmountSchema.optional(),
+  brutto0: bruttoAmountSchema.optional(),
   motiveAllocations: motiveAllocationsSchema.optional(),
   categoryAllocations: categoryAllocationsSchema.optional(),
 });
@@ -38,6 +41,15 @@ class BillConflictError extends Error {
   constructor() {
     super('Bill was modified by another request');
     this.name = 'BillConflictError';
+  }
+}
+
+// Thrown inside the update transaction when a non-admin tries to change the
+// allocations of a paid bill (rolls back everything written so far).
+class PaidBillLockedError extends Error {
+  constructor() {
+    super('Only an admin can modify a paid bill');
+    this.name = 'PaidBillLockedError';
   }
 }
 
@@ -206,23 +218,35 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
     const updates: Record<string, unknown> = {};
 
     // Track field changes
-    if (data.date !== undefined && data.date !== bill.date.toISOString()) {
-      changes.date = data.date;
-      updates.date = new Date(data.date);
+    // The edit form only knows the calendar day (YYYY-MM-DD, shown as the UTC
+    // day of the stored timestamp) and always sends it back as midnight UTC.
+    // A date on the same UTC day as the stored one is therefore UNCHANGED: keep
+    // the stored timestamp (e.g. a Telegram bill's time of day) and do not count
+    // it as an edit (no status reset, no EditLog entry). Only a real day change
+    // counts.
+    if (data.date !== undefined) {
+      const newDate = new Date(data.date);
+      const sameDay = newDate.toISOString().slice(0, 10) === bill.date.toISOString().slice(0, 10);
+      if (!sameDay) {
+        changes.date = data.date;
+        updates.date = newDate;
+      }
     }
+    // Stored NULL text fields equal the empty string the edit form sends for
+    // them (Telegram bills may have no vendor/item/comment yet).
     if (data.type !== undefined && data.type !== bill.type) {
       changes.type = data.type;
       updates.type = data.type;
     }
-    if (data.vendor !== undefined && data.vendor !== bill.vendor) {
+    if (data.vendor !== undefined && data.vendor !== (bill.vendor ?? '')) {
       changes.vendor = data.vendor;
       updates.vendor = data.vendor;
     }
-    if (data.item !== undefined && data.item !== bill.item) {
+    if (data.item !== undefined && data.item !== (bill.item ?? '')) {
       changes.item = data.item;
       updates.item = data.item;
     }
-    if (data.comment !== undefined && data.comment !== bill.comment) {
+    if (data.comment !== undefined && data.comment !== (bill.comment ?? '')) {
       changes.comment = data.comment;
       updates.comment = data.comment;
     }
@@ -244,6 +268,16 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       Object.prototype.hasOwnProperty.call(changes, f)
     );
 
+    // Approved/paid bills are financially locked. Anyone who is not a
+    // DB-verified admin (typically the submitter) is restricted for EVERY
+    // editable field, not just the amounts: re-allocating or changing the date,
+    // vendor, item, type or comment moves spending just as much.
+    const isLockedStatus = bill.status === 'approved' || bill.status === 'paid';
+    const isRestricted = isLockedStatus && !(await isDbVerifiedAdmin(session.user.email, projectId));
+    const otherFieldsChanged = ['date', 'type', 'vendor', 'item', 'comment'].some((f) =>
+      Object.prototype.hasOwnProperty.call(changes, f)
+    );
+
     if (bill.status === 'paid' && bruttoFieldsChanged) {
       return NextResponse.json(
         { error: 'Cannot change amounts of a paid bill' },
@@ -251,11 +285,18 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       );
     }
 
-    if (bill.status === 'approved' && bruttoFieldsChanged) {
-      // Amount changed on an already-approved bill — allow it (caller already
-      // passed the owner/admin permission check above), but reset status to
-      // 'pending' so the bill requires re-approval. Recorded in the EditLog
-      // below via `changes.status`.
+    if (bill.status === 'paid' && isRestricted && otherFieldsChanged) {
+      return NextResponse.json(
+        { error: 'Only an admin can modify a paid bill' },
+        { status: 403 }
+      );
+    }
+
+    if (bill.status === 'approved' && (bruttoFieldsChanged || (isRestricted && otherFieldsChanged))) {
+      // Amount (or, for a non-admin, any other field) changed on an
+      // already-approved bill — allow it (caller already passed the owner/admin
+      // permission check above), but reset status to 'pending' so the bill
+      // requires re-approval. Recorded in the EditLog below via `changes.status`.
       changes.status = 'pending';
       updates.status = 'pending';
     }
@@ -322,6 +363,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
 
       // Replace allocations (delete + recreate); also refreshes the legacy motive column
       if (allocationsProvided) {
+        const before = isRestricted ? await readAllocationSnapshot(tx, id) : '';
         const motiveStr = await saveAllocations(
           tx,
           id,
@@ -329,6 +371,16 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
           data.categoryAllocations || [],
           projectId
         );
+
+        // A restricted caller who actually changed the allocations of a locked bill
+        if (isRestricted && before !== (await readAllocationSnapshot(tx, id))) {
+          if (bill.status === 'paid') throw new PaidBillLockedError();
+          if (updates.status !== 'pending') {
+            await tx.bill.update({ where: { id }, data: { status: 'pending' } });
+            changes.status = 'pending';
+          }
+        }
+
         if (motiveStr !== bill.motiveLegacy) {
           changes.motive = motiveStr;
           await tx.bill.update({ where: { id }, data: { motiveLegacy: motiveStr } });
@@ -355,6 +407,9 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
     // Cross-project allocation injection
     if (error instanceof InvalidAllocationError) {
       return NextResponse.json({ error: 'Invalid motive/category for this project' }, { status: 400 });
+    }
+    if (error instanceof PaidBillLockedError) {
+      return NextResponse.json({ error: error.message }, { status: 403 });
     }
     if (error instanceof BillConflictError) {
       return NextResponse.json(

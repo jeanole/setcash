@@ -113,7 +113,7 @@ export async function PUT(
     }
 
     // Parse multipart form (single file, size-capped)
-    const { files } = await parseForm(req, { maxFiles: 1 });
+    const { files } = await parseForm(req, { maxFiles: 1, fields: ['photo'] });
 
     // Get uploaded file
     uploadedFile = getUploadedFile(files, 'photo');

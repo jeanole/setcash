@@ -12,14 +12,14 @@ import { prisma } from '@/lib/db';
 import { exportLimiter } from '@/lib/ratelimit';
 import { verifyAdminRole, verifyProjectMember } from '@/lib/auth-guard';
 import { UPLOADS_DIR } from '@/lib/upload';
-import { SPENDING_BILL_STATUSES, roundCents } from '@/lib/spending';
+import { getGrossOnlySummary, getUserSpendingSummary, roundCents } from '@/lib/spending';
 import { calculateTotal } from '@/lib/utils';
-import { BillStatus } from '@prisma/client';
 import fs from 'fs';
 import path from 'path';
 import { PassThrough } from 'stream';
 // @ts-ignore
 import PDFDocument from 'pdfkit';
+import { insensitiveEquals } from '@/lib/db-match';
 
 // Upper bounds so a single request cannot build an unbounded PDF.
 const MAX_REPORT_BILLS = 1000;
@@ -57,7 +57,9 @@ export async function GET(req: NextRequest, props: { params: Promise<{ email: st
       );
     }
 
-    const targetEmail = decodeURIComponent(params.email);
+    // Next.js has already decoded the route param; decoding again would break
+    // addresses containing `%` (URIError) or turn `%40` into a different address.
+    const targetEmail = params.email;
 
     // Auth: self OR admin/owner/superadmin
     const isAdmin =
@@ -94,16 +96,16 @@ export async function GET(req: NextRequest, props: { params: Promise<{ email: st
     // truncation at MAX_REPORT_BILLS.
     const billWhere = {
       projectId,
-      submittedByEmail: { equals: targetEmail, mode: 'insensitive' as const },
+      submittedByEmail: insensitiveEquals(targetEmail),
     };
     const vgeldWhere = {
       projectId,
-      toUser: { equals: targetEmail, mode: 'insensitive' as const },
+      toUser: insensitiveEquals(targetEmail),
       // Only count confirmed V-Geld transfers (confirmedBy not null).
       confirmedBy: { not: null },
     };
 
-    const [fetchedBills, fetchedVGeld, spendingAgg, vgeldAgg] = await Promise.all([
+    const [fetchedBills, fetchedVGeld, spendingSummary, grossOnly, vgeldAgg] = await Promise.all([
       prisma.bill.findMany({
         where: billWhere,
         orderBy: { date: 'asc' },
@@ -115,15 +117,11 @@ export async function GET(req: NextRequest, props: { params: Promise<{ email: st
         take: MAX_REPORT_VGELD + 1,
       }),
       // Totals come from the database so they stay correct when the listed
-      // rows are truncated.
-      prisma.bill.aggregate({
-        where: {
-          ...billWhere,
-          status: { in: SPENDING_BILL_STATUSES as unknown as BillStatus[] },
-        },
-        _count: { _all: true },
-        _sum: { brutto19: true, brutto7: true, brutto0: true },
-      }),
+      // rows are truncated. Per-bill totals follow calculateTotal (grossAmount
+      // when a bill has no brutto breakdown).
+      getUserSpendingSummary(projectId, targetEmail),
+      // Counted bills with only a gross amount: netto 0, so missing from the netto totals
+      getGrossOnlySummary(projectId, targetEmail),
       prisma.vgeld.aggregate({
         where: vgeldWhere,
         _sum: { amount: true },
@@ -143,7 +141,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ email: st
     const member = await prisma.projectMember.findFirst({
       where: {
         projectId,
-        userEmail: { equals: targetEmail, mode: 'insensitive' },
+        userEmail: insensitiveEquals(targetEmail),
       },
       include: { position: true },
     });
@@ -277,7 +275,9 @@ export async function GET(req: NextRequest, props: { params: Promise<{ email: st
         const b0 = Number(bill.brutto0);
         const n19 = b19 / 1.19;
         const n7 = b7 / 1.07;
-        const netto = n19 + n7 + b0;
+        const total = calculateTotal(b19, b7, b0, Number(bill.grossAmount));
+        // Bills without a VAT breakdown have no per-rate netto; use the stored one
+        const netto = b19 + b7 + b0 > 0 ? n19 + n7 + b0 : Number(bill.nettoAmount);
 
         doc.text(bill.billNumber || String(i + 1), colX[0], rowY, { width: 23 });
         doc.text(new Date(bill.date).toLocaleDateString('de-DE'), colX[1], rowY, { width: 48 });
@@ -286,7 +286,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ email: st
         doc.text(b19.toFixed(2), colX[4], rowY, { width: 43 });
         doc.text(b7.toFixed(2), colX[5], rowY, { width: 43 });
         doc.text(b0.toFixed(2), colX[6], rowY, { width: 43 });
-        doc.font('Helvetica-Bold').text(calculateTotal(b19, b7, b0).toFixed(2), colX[7], rowY, { width: 43 });
+        doc.font('Helvetica-Bold').text(total.toFixed(2), colX[7], rowY, { width: 43 });
         doc.font('Helvetica').text(n19.toFixed(2), colX[8], rowY, { width: 43 });
         doc.text(n7.toFixed(2), colX[9], rowY, { width: 38 });
         doc.font('Helvetica-Bold').text(netto.toFixed(2), colX[10], rowY, { width: 38 });
@@ -312,14 +312,17 @@ export async function GET(req: NextRequest, props: { params: Promise<{ email: st
     // Only confirmed/approved/paid bills count (draft/pending/rejected are
     // listed above but excluded here), using the same per-bill total formula
     // as the table rows.
-    const countedBills = spendingAgg._count._all;
-    const total19 = roundCents(Number(spendingAgg._sum.brutto19 ?? 0));
-    const total7 = roundCents(Number(spendingAgg._sum.brutto7 ?? 0));
-    const total0 = roundCents(Number(spendingAgg._sum.brutto0 ?? 0));
-    const totalAmount = roundCents(calculateTotal(total19, total7, total0));
+    const countedBills = spendingSummary.count;
+    const total19 = spendingSummary.brutto19;
+    const total7 = spendingSummary.brutto7;
+    const total0 = spendingSummary.brutto0;
+    // Bills that only carry a gross amount (no VAT breakdown) are part of the
+    // total but of none of the per-rate rows above.
+    const totalUnsplit = spendingSummary.unsplit;
+    const totalAmount = spendingSummary.total;
     const totalNetto19 = total19 / 1.19;
     const totalNetto7 = total7 / 1.07;
-    const totalNetto = totalNetto19 + totalNetto7 + total0;
+    const totalNetto = roundCents(totalNetto19 + totalNetto7 + total0 + spendingSummary.unsplitNetto);
 
     const summaryX = 50;
     const bruttoX = 200;
@@ -332,7 +335,8 @@ export async function GET(req: NextRequest, props: { params: Promise<{ email: st
     doc.fontSize(9).font('Helvetica-Bold');
     doc.text('', summaryX, summaryY);
     doc.text('Brutto', bruttoX, summaryY);
-    doc.text('Netto', nettoX, summaryY);
+    // "Netto*" points to the footnote below when bills are missing from it
+    doc.text(grossOnly.count > 0 ? 'Netto*' : 'Netto', nettoX, summaryY);
     summaryY += 14;
 
     doc.fontSize(10).font('Helvetica');
@@ -355,6 +359,13 @@ export async function GET(req: NextRequest, props: { params: Promise<{ email: st
     doc.text(`${total0.toFixed(2)} EUR`, nettoX, summaryY);
     summaryY += 14;
 
+    if (totalUnsplit !== 0) {
+      doc.text('Ohne MwSt.-Aufteilung:', summaryX, summaryY);
+      doc.text(`${totalUnsplit.toFixed(2)} EUR`, bruttoX, summaryY);
+      doc.text(`${spendingSummary.unsplitNetto.toFixed(2)} EUR`, nettoX, summaryY);
+      summaryY += 14;
+    }
+
     doc.moveTo(summaryX, summaryY).lineTo(420, summaryY).stroke();
     summaryY += 6;
 
@@ -374,6 +385,23 @@ export async function GET(req: NextRequest, props: { params: Promise<{ email: st
     doc.text(`${balance.toFixed(2)} EUR`, bruttoX, summaryY);
     doc.fillColor('black');
     summaryY += 16;
+
+    if (grossOnly.count > 0) {
+      const belege = grossOnly.count === 1 ? '1 Beleg' : `${grossOnly.count} Belege`;
+      doc
+        .fontSize(8)
+        .font('Helvetica')
+        .fillColor('gray')
+        .text(
+          `* Netto-Summen enthalten nicht ${belege} ohne MwSt.-Aufteilung ` +
+            `(${grossOnly.grossSum.toFixed(2)} EUR brutto, Netto = 0.00).`,
+          summaryX,
+          summaryY,
+          { width: 495 }
+        );
+      doc.fillColor('black');
+      summaryY = doc.y + 4;
+    }
 
     if (countedBills !== userBills.length || billsTruncated) {
       doc
@@ -436,7 +464,8 @@ export async function GET(req: NextRequest, props: { params: Promise<{ email: st
       const b0 = Number(bill.brutto0);
       const n19 = b19 / 1.19;
       const n7 = b7 / 1.07;
-      const billNetto = n19 + n7 + b0;
+      const billTotal = calculateTotal(b19, b7, b0, Number(bill.grossAmount));
+      const billNetto = b19 + b7 + b0 > 0 ? n19 + n7 + b0 : Number(bill.nettoAmount);
 
       const bruttoAmounts: string[] = [];
       if (b19) bruttoAmounts.push(`19%: ${b19.toFixed(2)}`);
@@ -444,7 +473,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ email: st
       if (b0) bruttoAmounts.push(`0%: ${b0.toFixed(2)}`);
 
       doc.text(
-        `Brutto: ${bruttoAmounts.join(' | ') || '-'} | Gesamt: ${calculateTotal(b19, b7, b0).toFixed(2)} EUR`
+        `Brutto: ${bruttoAmounts.join(' | ') || '-'} | Gesamt: ${billTotal.toFixed(2)} EUR`
       );
 
       const nettoAmounts: string[] = [];

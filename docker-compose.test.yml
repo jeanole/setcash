@@ -25,13 +25,16 @@ services:
 
   postgres-test:
     image: postgres:15-alpine
+    # Bound to localhost only — the test database must not be reachable from
+    # other hosts (the test-runner/app reach it over the compose network).
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"
     volumes:
       - vbudget-pg-test-data:/var/lib/postgresql/data
     environment:
       POSTGRES_USER: vbudget
-      POSTGRES_PASSWORD: vbudget_test
+      # Keep in sync with the password in DATABASE_URL (.env.test)
+      POSTGRES_PASSWORD: ${POSTGRES_TEST_PASSWORD:-vbudget_test}
       POSTGRES_DB: vbudget
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U vbudget"]

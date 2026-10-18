@@ -9,6 +9,7 @@ import { verifySuperAdmin } from '@/lib/auth-guard';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { randomBytes } from 'crypto';
+import { insensitiveEquals } from '@/lib/db-match';
 
 // Validation schema for updating users (password reset, custom password, superadmin flag)
 const UpdateUserSchema = z
@@ -38,10 +39,7 @@ const UpdateUserSchema = z
 async function findUserByEmail(email: string) {
   return prisma.user.findFirst({
     where: {
-      email: {
-        equals: email,
-        mode: 'insensitive',
-      },
+      email: insensitiveEquals(email),
     },
   });
 }
@@ -85,7 +83,11 @@ export async function PUT(
 
     // Handle password reset (generate random password if requested)
     let plainPassword: string | undefined;
-    const updates: { passwordHash?: string; isSuperAdmin?: boolean } = {};
+    const updates: {
+      passwordHash?: string;
+      isSuperAdmin?: boolean;
+      sessionVersion?: { increment: number };
+    } = {};
 
     if (data.resetPassword === true) {
       // Generate random 12-char password (9 bytes → 12 base64url chars, URL-safe alphabet)
@@ -93,6 +95,12 @@ export async function PUT(
       updates.passwordHash = await bcrypt.hash(plainPassword, 12);
     } else if (data.password) {
       updates.passwordHash = await bcrypt.hash(data.password, 12);
+    }
+
+    // A new password ends every existing session (e.g. reset because the
+    // account was compromised), same as the self-service change/reset flows.
+    if (updates.passwordHash !== undefined) {
+      updates.sessionVersion = { increment: 1 };
     }
 
     if (data.isSuperAdmin !== undefined) {

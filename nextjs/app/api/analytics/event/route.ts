@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { db as prisma } from '@/lib/db';
-import { visitLogLimiter } from '@/lib/ratelimit';
+import { analyticsEventLimiter } from '@/lib/ratelimit';
 import { getClientIp } from '@/lib/client-ip';
 import { allowAnalyticsWrite, classifyUA, getCountryCode } from '@/lib/analytics';
 
@@ -23,7 +23,7 @@ const eventSchema = z.object({
 export async function POST(req: NextRequest) {
   try {
     const ip = getClientIp(req);
-    const rl = await visitLogLimiter.limit(`event:${ip}`);
+    const rl = await analyticsEventLimiter.limit(ip);
     if (!rl.success || !allowAnalyticsWrite()) {
       return new NextResponse(null, { status: 429 });
     }

@@ -78,6 +78,7 @@ model Project {
   positions     ProjectPosition[]
   settings      ProjectSettings[]
   bills         Bill[]
+  billNumberCounters BillNumberCounter[]
   motives       Motive[]
   categories    Category[]
   budgetMatrix  BudgetMatrix[]
@@ -130,6 +131,17 @@ model ProjectSettings {
 
   @@id([projectId, key])
   @@index([projectId])
+}
+
+// Highest bill-number ordinal ever issued per (project, user) -- numbers are never reused
+model BillNumberCounter {
+  projectId String
+  userEmail String
+  lastIndex Int    @default(0)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, userEmail])
 }
 
 model Bill {

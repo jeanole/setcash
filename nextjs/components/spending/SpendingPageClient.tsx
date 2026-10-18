@@ -4,7 +4,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import SpendingTable, { SpendingTableSkeleton } from './SpendingTable';
+import GrossOnlyNotice from '@/components/budget/GrossOnlyNotice';
 import type { SpendingItem, SpendingTotals } from '@/lib/spending';
+import type { GrossOnlySummary } from '@/lib/types';
 
 // ============================================================================
 // Types
@@ -16,6 +18,8 @@ type AmountMode = 'brutto' | 'netto';
 interface TabSpendingData {
   items: SpendingItem[];
   totals: SpendingTotals;
+  /** Gross-only bills that are missing from the netto figures */
+  grossOnly?: GrossOnlySummary;
 }
 
 // ============================================================================
@@ -243,6 +247,9 @@ export default function SpendingPageClient({
           By Category
         </TabButton>
       </div>
+
+      {/* Gross-only bills have no netto value: say so when netto is shown */}
+      {!error && amountMode === 'netto' && <GrossOnlyNotice grossOnly={currentData.grossOnly} />}
 
       {/* Error state */}
       {error && <ErrorState message={error} onRetry={refetch} />}

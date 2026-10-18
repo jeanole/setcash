@@ -22,15 +22,15 @@ import { billCreateLimiter } from '@/lib/ratelimit';
 import { calculateNetto } from '@/lib/utils';
 import {
   InvalidAllocationError,
+  PLAIN_AMOUNT_PATTERN,
+  billTextSchemas,
+  bruttoAmountSchema,
   categoryAllocationsSchema,
   motiveAllocationsSchema,
   nextBillNumber,
   runSerializable,
   saveAllocations,
 } from '@/app/api/bills/_lib/shared';
-
-// Sanity cap for a single brutto amount (EUR)
-const MAX_BRUTTO_AMOUNT = 1_000_000;
 
 // Thrown inside the create transaction when the project's bill quota is used up
 class UploadLimitError extends Error {
@@ -41,13 +41,21 @@ class UploadLimitError extends Error {
 }
 
 // Amounts arrive as multipart text fields: blank/missing means 0, anything that
-// is not a plain decimal number is rejected rather than silently coerced.
+// is not a plain decimal number (digits, optional . and 1-2 fraction digits) is
+// rejected rather than silently coerced -- Number() would accept hex, exponents etc.
 const amountField = z
   .string()
   .trim()
   .default('')
-  .transform((v) => (v === '' ? 0 : Number(v)))
-  .pipe(z.number().min(0).max(MAX_BRUTTO_AMOUNT).multipleOf(0.01));
+  .transform((v, ctx) => {
+    if (v === '') return 0;
+    if (!PLAIN_AMOUNT_PATTERN.test(v)) {
+      ctx.addIssue({ code: 'custom', message: 'Must be a plain decimal number with at most 2 decimals' });
+      return z.NEVER;
+    }
+    return Number(v);
+  })
+  .pipe(bruttoAmountSchema);
 
 const dateField = z
   .string()
@@ -79,10 +87,10 @@ function jsonArrayField<T extends z.ZodTypeAny>(schema: T) {
 // Validation schema for the multipart text fields of POST /api/bills
 const createBillSchema = z.object({
   date: dateField,
-  type: z.string().trim().max(100).default('Kauf'),
-  vendor: z.string().trim().max(200).default(''),
-  item: z.string().trim().max(500).default(''),
-  comment: z.string().max(2000).default(''),
+  type: billTextSchemas.type.default('Kauf'),
+  vendor: billTextSchemas.vendor.default(''),
+  item: billTextSchemas.item.default(''),
+  comment: billTextSchemas.comment.default(''),
   brutto19: amountField,
   brutto7: amountField,
   brutto0: amountField,
@@ -328,7 +336,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Parse multipart form (size-capped; throws UploadError for bad/oversized bodies)
-    const { fields, files } = await parseForm(req);
+    const { fields, files } = await parseForm(req, { fields: ['photos'] });
 
     // Get uploaded files and validate their content up front — this
     // runs before the bill row is created so we never create an orphaned bill

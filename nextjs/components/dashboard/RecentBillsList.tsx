@@ -26,7 +26,8 @@ export default function RecentBillsList({ bills }: RecentBillsListProps) {
       ) : (
         <ul className="divide-y divide-slate-100" aria-label="Recent bills">
           {bills.map((bill) => {
-            const total = bill.brutto19 + bill.brutto7 + bill.brutto0;
+            // Brutto sum, or grossAmount for bills without a VAT breakdown
+            const total = bill.total;
             return (
               <li key={bill.id} className="flex items-center justify-between py-2.5 gap-3">
                 <div className="min-w-0">

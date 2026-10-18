@@ -7,6 +7,8 @@
 
 import { db as prisma } from '@/lib/db';
 import { getVgeldBalance } from '@/lib/vgeld';
+import { roundCents } from '@/lib/spending';
+import { calculateTotal } from '@/lib/utils';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -28,6 +30,8 @@ export interface RecentBill {
   brutto19: number;
   brutto7: number;
   brutto0: number;
+  /** Bill total per calculateTotal(): brutto sum, or grossAmount when that sum is 0. */
+  total: number;
   status: string;
 }
 
@@ -105,6 +109,7 @@ export async function getRecentBills(
       brutto19: true,
       brutto7: true,
       brutto0: true,
+      grossAmount: true,
       status: true,
     },
   });
@@ -116,6 +121,9 @@ export async function getRecentBills(
     brutto19: Number(b.brutto19),
     brutto7: Number(b.brutto7),
     brutto0: Number(b.brutto0),
+    total: roundCents(
+      calculateTotal(Number(b.brutto19), Number(b.brutto7), Number(b.brutto0), Number(b.grossAmount))
+    ),
     status: b.status,
   }));
 }

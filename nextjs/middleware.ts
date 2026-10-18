@@ -72,7 +72,16 @@ export const config = {
      * - _next/image (image optimization)
      * - favicon.ico
      * - public files with extensions
+     * - the multipart upload endpoints (POST /api/bills, /api/bills/[id]/images,
+     *   /api/bills/[id]/images/[imageId], /api/bug-reports). When middleware runs,
+     *   Next.js 15 buffers at most `middlewareClientMaxBodySize` (10 MB) of the
+     *   request body and hands the route a truncated stream, which breaks uploads
+     *   larger than that. Raising the limit would buffer every body in memory
+     *   instead, so these routes are kept out of middleware. They authenticate
+     *   themselves (401 JSON) and need no CSP nonce for JSON responses.
+     *   Anchored with `$` so pages such as /bills and /bills/[id] still match;
+     *   `images/reorder` is a JSON endpoint and stays behind middleware.
      */
-    '/((?!api/auth|_next/static|_next/image|favicon.ico|.*\\..*).*)',
+    '/((?!api/auth|_next/static|_next/image|favicon.ico|api/bills/?$|api/bills/[^/]+/images(?:/(?!reorder/?$)[^/]+)?/?$|api/bug-reports/?$|.*\\..*).*)',
   ],
 };
