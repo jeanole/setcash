@@ -17,6 +17,10 @@ const nextConfig = {
     NEXT_PUBLIC_GIT_COMMIT: gitCommit,
   },
   output: 'standalone',
+  // The app never uses next/image. Disabling the optimizer makes /_next/image
+  // return 404, removing the attack surface of the Image Optimization API
+  // (several Next.js 14 advisories, incl. RCE/DoS, have no 14.x fix).
+  images: { unoptimized: true },
   serverExternalPackages: ['pdfkit', 'fontkit'],
   webpack: (config, { isServer }) => {
     if (isServer) {
@@ -35,6 +39,14 @@ const nextConfig = {
           { key: 'Referrer-Policy', value: 'origin-when-cross-origin' },
           { key: 'X-DNS-Prefetch-Control', value: 'on' },
           { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
+          // Directives that cannot break inline scripts/styles or third-party
+          // widgets (Turnstile, Google OAuth); a full script-src policy would
+          // need nonces wired through the App Router.
+          {
+            key: 'Content-Security-Policy',
+            value: "frame-ancestors 'none'; base-uri 'self'; object-src 'none'",
+          },
+          { key: 'Permissions-Policy', value: 'camera=(self), microphone=(), geolocation=(), payment=()' },
         ],
       },
     ];

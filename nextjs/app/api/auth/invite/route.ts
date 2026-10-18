@@ -4,10 +4,10 @@ import crypto from 'crypto';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/db';
 import { sendInvitationEmail } from '@/lib/email';
-import { inviteLimiter } from '@/lib/ratelimit';
+import { inviteLimiter, inviteUserLimiter } from '@/lib/ratelimit';
 
 const schema = z.object({
-  email: z.string().email(),
+  email: z.string().trim().toLowerCase().pipe(z.string().email().max(254)),
   message: z.string().max(500).optional(),
 });
 
@@ -49,8 +49,10 @@ export async function POST(req: Request) {
     );
   }
 
-  // Rate limit: 20 invites per hour per (example) project
-  const rl = await inviteLimiter.limit(exampleProject.id);
+  // Rate limit per inviting user first (so one user cannot exhaust the shared
+  // budget), then a global cap of 20 invites per hour on the example project.
+  const userRl = await inviteUserLimiter.limit(session.user.email.toLowerCase());
+  const rl = userRl.success ? await inviteLimiter.limit(exampleProject.id) : userRl;
   if (!rl.success) {
     return NextResponse.json({ error: 'Too many invite requests. Please try again later.' }, { status: 429 });
   }

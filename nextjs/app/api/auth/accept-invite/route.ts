@@ -3,6 +3,7 @@ import { db as prisma } from '@/lib/db';
 import { z } from 'zod';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
+import { passwordSchema } from '@/lib/auth/password';
 
 // GET: Validate token and return invitation details
 export async function GET(req: Request) {
@@ -27,9 +28,12 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'Invalid or expired invitation link.' }, { status: 400 });
   }
 
-  // Check if user already exists
+  // Check if user already exists. An unverified account is treated as new:
+  // its password was set by whoever signed up, which may not be the invitee,
+  // so the invitee must choose a password (see POST).
   const existingUser = await prisma.user.findUnique({
     where: { email: invitation.email },
+    select: { emailVerified: true },
   });
 
   return NextResponse.json({
@@ -37,18 +41,15 @@ export async function GET(req: Request) {
     projectName: invitation.project.name,
     invitedBy: invitation.invitedBy,
     message: invitation.message,
-    userExists: !!existingUser,
+    userExists: !!existingUser?.emailVerified,
     autoAdd: invitation.autoAdd,
   });
 }
 
 // POST: Accept invitation — create user if needed, add to project
 const acceptSchema = z.object({
-  token: z.string().min(1),
-  password: z
-    .string()
-    .min(8, 'Password must be at least 8 characters.')
-    .optional(),
+  token: z.string().min(1).max(256),
+  password: passwordSchema.optional(),
 });
 
 export async function POST(req: Request) {
@@ -79,42 +80,70 @@ export async function POST(req: Request) {
     );
   }
 
-  let user = await prisma.user.findUnique({
+  const user = await prisma.user.findUnique({
     where: { email: invitation.email },
   });
 
-  if (!user) {
-    // New user — password required
-    if (!password) {
-      return NextResponse.json(
-        { error: 'Password is required to create your account.' },
-        { status: 400 }
-      );
-    }
+  // Never re-activate an account an admin has disabled
+  if (user && !user.isActive) {
+    return NextResponse.json(
+      { error: 'This account has been disabled. Please contact an administrator.' },
+      { status: 403 }
+    );
+  }
 
-    const passwordHash = await bcrypt.hash(password, 12);
-    user = await prisma.user.create({
-      data: {
-        email: invitation.email,
-        passwordHash,
-        emailVerified: new Date(), // Invitation proves email ownership
-        isActive: true,
-        defaultProjectId: invitation.projectId,
-      },
-    });
-  } else {
-    // Existing user — activate if inactive, set default project if none
-    const updates: Record<string, unknown> = {};
-    if (!user.isActive) updates.isActive = true;
-    if (!user.emailVerified) updates.emailVerified = new Date();
-    if (!user.defaultProjectId) updates.defaultProjectId = invitation.projectId;
+  // No account yet, or an unverified one: the invitee proves email ownership
+  // with this link and must set the password. An unverified account's existing
+  // password may have been chosen by someone else (pre-registration takeover),
+  // so it is replaced and any sessions are ended.
+  const needsPassword = !user || !user.emailVerified;
+  if (needsPassword && !password) {
+    return NextResponse.json(
+      { error: 'Password is required to create your account.' },
+      { status: 400 }
+    );
+  }
+  const passwordHash = needsPassword && password ? await bcrypt.hash(password, 12) : null;
 
-    if (Object.keys(updates).length > 0) {
-      await prisma.user.update({
+  // Claim the invitation atomically (single-use) and apply account changes
+  const claimed = await prisma.$transaction(async (tx) => {
+    const { count } = await tx.invitationToken.deleteMany({ where: { id: invitation.id } });
+    if (count === 0) return false;
+
+    if (!user) {
+      await tx.user.create({
+        data: {
+          email: invitation.email,
+          passwordHash: passwordHash!,
+          emailVerified: new Date(), // Invitation proves email ownership
+          isActive: true,
+          defaultProjectId: invitation.projectId,
+        },
+      });
+    } else if (!user.emailVerified) {
+      await tx.user.update({
         where: { email: invitation.email },
-        data: updates,
+        data: {
+          passwordHash: passwordHash!,
+          emailVerified: new Date(),
+          sessionVersion: { increment: 1 },
+          ...(user.defaultProjectId ? {} : { defaultProjectId: invitation.projectId }),
+        },
+      });
+    } else if (!user.defaultProjectId) {
+      await tx.user.update({
+        where: { email: invitation.email },
+        data: { defaultProjectId: invitation.projectId },
       });
     }
+    return true;
+  });
+
+  if (!claimed) {
+    return NextResponse.json(
+      { error: 'Invalid or expired invitation link. Please ask for a new invite.' },
+      { status: 400 }
+    );
   }
 
   // Only auto-add to project if the inviter had admin/owner/superadmin privileges

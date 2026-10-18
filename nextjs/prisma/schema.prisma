@@ -47,6 +47,8 @@ model User {
   isActive      Boolean   @default(true)
   isDemoAccount Boolean   @default(false)
   hasSeenTour   Boolean   @default(false)
+  // Bumped on password change/reset; JWTs carrying an older value are rejected.
+  sessionVersion Int      @default(0)
   createdAt     DateTime  @default(now())
 
   username      String?   @unique
@@ -166,6 +168,7 @@ model Bill {
   @@index([status])
   @@index([projectId, status])
   @@index([projectId, date])
+  @@index([filename])
 }
 
 model BillImage {
@@ -180,6 +183,7 @@ model BillImage {
   bill Bill @relation(fields: [billId], references: [id], onDelete: Cascade)
 
   @@index([billId])
+  @@index([filePath])
 }
 
 model BillMotive {
@@ -275,6 +279,8 @@ model Vgeld {
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId])
+  @@index([projectId, toUser])
+  @@index([projectId, date])
 }
 
 model EditLog {
@@ -327,6 +333,7 @@ model Notification {
   project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
 
   @@index([userEmail])
+  @@index([userEmail, createdAt])
   @@index([projectId])
 }
 

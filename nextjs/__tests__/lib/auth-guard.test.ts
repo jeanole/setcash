@@ -21,7 +21,7 @@ jest.mock('@/lib/db', () => ({
   },
 }));
 
-import { verifyAdminRole } from '@/lib/auth-guard';
+import { verifyAdminRole, verifySuperAdmin, verifyProjectMember } from '@/lib/auth-guard';
 
 describe('verifyAdminRole', () => {
   beforeEach(() => {
@@ -100,5 +100,70 @@ describe('verifyAdminRole', () => {
     // Verify both cookie variants are deleted
     expect(mockDelete).toHaveBeenCalledWith('authjs.session-token');
     expect(mockDelete).toHaveBeenCalledWith('__Secure-authjs.session-token');
+  });
+});
+
+describe('verifySuperAdmin', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('should authorize an active superadmin from the DB', async () => {
+    mockUserFindUnique.mockResolvedValue({ isSuperAdmin: true, isActive: true });
+
+    const result = await verifySuperAdmin('sa@example.com');
+
+    expect(result.authorized).toBe(true);
+  });
+
+  it('should return 403 when the DB no longer marks the user superadmin', async () => {
+    mockUserFindUnique.mockResolvedValue({ isSuperAdmin: false, isActive: true });
+
+    const result = await verifySuperAdmin('demoted@example.com');
+
+    expect(result.authorized).toBe(false);
+    expect(result.response!.status).toBe(403);
+  });
+
+  it('should return 403 for a deactivated superadmin', async () => {
+    mockUserFindUnique.mockResolvedValue({ isSuperAdmin: true, isActive: false });
+
+    const result = await verifySuperAdmin('disabled@example.com');
+
+    expect(result.authorized).toBe(false);
+  });
+});
+
+describe('verifyProjectMember', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('should authorize a current project member', async () => {
+    mockUserFindUnique.mockResolvedValue({ isSuperAdmin: false });
+    mockProjectMemberFindUnique.mockResolvedValue({ role: 'user' });
+
+    const result = await verifyProjectMember('member@example.com', 'project-1');
+
+    expect(result.authorized).toBe(true);
+  });
+
+  it('should return 403 for a removed member', async () => {
+    mockUserFindUnique.mockResolvedValue({ isSuperAdmin: false });
+    mockProjectMemberFindUnique.mockResolvedValue(null);
+
+    const result = await verifyProjectMember('removed@example.com', 'project-1');
+
+    expect(result.authorized).toBe(false);
+    expect(result.response!.status).toBe(403);
+  });
+
+  it('should authorize a superadmin without membership', async () => {
+    mockUserFindUnique.mockResolvedValue({ isSuperAdmin: true });
+    mockProjectMemberFindUnique.mockResolvedValue(null);
+
+    const result = await verifyProjectMember('sa@example.com', 'project-1');
+
+    expect(result.authorized).toBe(true);
   });
 });

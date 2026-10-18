@@ -1,4 +1,5 @@
 import { Resend } from 'resend';
+import { escapeHtml } from '@/lib/utils';
 
 // ---------------------------------------------------------------------------
 // Resend email client — graceful fallback if API key not configured
@@ -250,8 +251,8 @@ export async function sendInvitationEmail(
 
   const messageBlock = message
     ? `<div style="background-color:#f1f5f9;border-radius:8px;padding:16px;margin:0 0 24px 0;">
-         <p style="color:#334155;font-size:14px;font-style:italic;line-height:1.6;margin:0;">&ldquo;${message}&rdquo;</p>
-         <p style="color:#64748b;font-size:13px;margin:8px 0 0 0;">&mdash; ${inviterEmail}</p>
+         <p style="color:#334155;font-size:14px;font-style:italic;line-height:1.6;margin:0;">&ldquo;${escapeHtml(message)}&rdquo;</p>
+         <p style="color:#64748b;font-size:13px;margin:8px 0 0 0;">&mdash; ${escapeHtml(inviterEmail)}</p>
        </div>`
     : '';
 
@@ -301,7 +302,7 @@ export async function sendInvitationEmail(
                   <td style="padding:40px;">
                     <h2 style="color:#0f172a;font-size:20px;font-weight:600;margin:0 0 12px 0;">You&rsquo;re invited!</h2>
                     <p style="color:#475569;font-size:15px;line-height:1.6;margin:0 0 24px 0;">
-                      <strong>${inviterEmail}</strong> has invited you to join the project <strong>&ldquo;${projectName}&rdquo;</strong> on SetCash.
+                      <strong>${escapeHtml(inviterEmail)}</strong> has invited you to join the project <strong>&ldquo;${escapeHtml(projectName)}&rdquo;</strong> on SetCash.
                     </p>
                     ${messageBlock}
                     <div style="text-align:center;margin:32px 0;">
@@ -361,8 +362,8 @@ export async function sendPlatformInviteEmail(
 
   const messageBlock = message
     ? `<div style="background-color:#f1f5f9;border-radius:8px;padding:16px;margin:0 0 24px 0;">
-         <p style="color:#334155;font-size:14px;font-style:italic;line-height:1.6;margin:0;">&ldquo;${message}&rdquo;</p>
-         <p style="color:#64748b;font-size:13px;margin:8px 0 0 0;">&mdash; ${inviterEmail}</p>
+         <p style="color:#334155;font-size:14px;font-style:italic;line-height:1.6;margin:0;">&ldquo;${escapeHtml(message)}&rdquo;</p>
+         <p style="color:#64748b;font-size:13px;margin:8px 0 0 0;">&mdash; ${escapeHtml(inviterEmail)}</p>
        </div>`
     : '';
 
@@ -412,7 +413,7 @@ export async function sendPlatformInviteEmail(
                   <td style="padding:40px;">
                     <h2 style="color:#0f172a;font-size:20px;font-weight:600;margin:0 0 12px 0;">You&rsquo;re invited!</h2>
                     <p style="color:#475569;font-size:15px;line-height:1.6;margin:0 0 24px 0;">
-                      <strong>${inviterEmail}</strong> has invited you to join <strong>SetCash</strong> &mdash; a simple tool for tracking expenses and managing budgets.
+                      <strong>${escapeHtml(inviterEmail)}</strong> has invited you to join <strong>SetCash</strong> &mdash; a simple tool for tracking expenses and managing budgets.
                     </p>
                     ${messageBlock}
                     <div style="text-align:center;margin:32px 0;">

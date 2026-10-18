@@ -3,6 +3,7 @@ import next from 'next';
 import { initAllBots, stopProjectBot } from './lib/telegram/bot';
 import { assertOcrEncryptionConfigured } from './lib/ocr';
 import { db } from './lib/db';
+import { PEER_IP_HEADER } from './lib/client-ip';
 
 const dev = process.env.NODE_ENV !== 'production';
 const port = parseInt(process.env.PORT || '3001', 10);
@@ -44,6 +45,8 @@ app
     initAllBots().catch(console.error);
 
     httpServer = createServer((req, res) => {
+      // Overwrite (never trust) any client-sent value — see lib/client-ip.ts.
+      req.headers[PEER_IP_HEADER] = req.socket.remoteAddress ?? '';
       handle(req, res);
     }).listen(port, () => {
       console.log(`> Ready on http://localhost:${port}`);

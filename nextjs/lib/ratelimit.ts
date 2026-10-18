@@ -32,6 +32,16 @@ export const rateLimits = {
   visitLog: { max: 30, window: '1 m', name: 'visit_log' },
   // Tour completion: 5 requests per minute per user
   tourComplete: { max: 5, window: '1 m', name: 'tour_complete' },
+  // Login: 10 attempts per 15 minutes per email (independent of client IP)
+  loginEmail: { max: 10, window: '15 m', name: 'login_email' },
+  // Login: 5 attempts per minute per client IP
+  loginIp: { max: 5, window: '1 m', name: 'login_ip' },
+  // Invite emails: 10 per hour per inviting user
+  inviteEmailPerUser: { max: 10, window: '1 h', name: 'invite_email_user' },
+  // Telegram link attempts with a wrong code: 5 per 10 minutes per Telegram user
+  telegramLinkAttempt: { max: 5, window: '10 m', name: 'telegram_link_attempt' },
+  // Bill image uploads: 30 requests per minute per user
+  billImageUpload: { max: 30, window: '1 m', name: 'bill_image_upload' },
 } as const;
 
 function parseWindow(window: string): number {
@@ -114,3 +124,8 @@ export const inviteLimiter = createRateLimiter(rateLimits.inviteEmail);
 export const commentCreateLimiter = createRateLimiter(rateLimits.commentCreate);
 export const visitLogLimiter = createRateLimiter(rateLimits.visitLog);
 export const tourCompleteLimiter = createRateLimiter(rateLimits.tourComplete);
+export const loginEmailLimiter = createRateLimiter(rateLimits.loginEmail);
+export const loginIpLimiter = createRateLimiter(rateLimits.loginIp);
+export const inviteUserLimiter = createRateLimiter(rateLimits.inviteEmailPerUser);
+export const telegramLinkAttemptLimiter = createRateLimiter(rateLimits.telegramLinkAttempt);
+export const billImageUploadLimiter = createRateLimiter(rateLimits.billImageUpload);

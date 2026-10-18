@@ -14,7 +14,11 @@ const bulkUpdateSchema = z.object({
     z.object({
       motiveId: z.string(),
       categoryId: z.string(),
-      amount: z.number().min(0),
+      amount: z
+        .number()
+        .min(0)
+        .max(1e12, 'Amount is too large')
+        .multipleOf(0.01, 'Amount must have at most 2 decimal places'),
     })
   ).max(1000),
 });

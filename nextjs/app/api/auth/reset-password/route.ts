@@ -3,15 +3,11 @@ import { db as prisma } from '@/lib/db';
 import { z } from 'zod';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
+import { passwordSchema } from '@/lib/auth/password';
 
 const schema = z.object({
-  token: z.string().min(1),
-  password: z
-    .string()
-    .min(8, 'Password must be at least 8 characters.')
-    .regex(/[a-z]/, 'Password must contain a lowercase letter.')
-    .regex(/[A-Z]/, 'Password must contain an uppercase letter.')
-    .regex(/[0-9]/, 'Password must contain a digit.'),
+  token: z.string().min(1).max(256),
+  password: passwordSchema,
 });
 
 export async function POST(req: Request) {
@@ -65,19 +61,34 @@ export async function POST(req: Request) {
   // Hash new password and update user
   const passwordHash = await bcrypt.hash(password, 12);
 
-  await prisma.user.update({
-    where: { email: resetToken.email },
-    data: {
-      passwordHash,
-      // Using a password reset link proves email ownership — mark as verified
-      emailVerified: user.emailVerified ?? new Date(),
-    },
+  // Claim the token atomically: if a concurrent request already used it,
+  // deleteMany removes nothing and we stop (single-use).
+  const updated = await prisma.$transaction(async (tx) => {
+    const { count } = await tx.passwordResetToken.deleteMany({ where: { id: resetToken.id } });
+    if (count === 0) return false;
+
+    await tx.user.update({
+      where: { email: resetToken.email },
+      data: {
+        passwordHash,
+        // Using a password reset link proves email ownership — mark as verified
+        emailVerified: user.emailVerified ?? new Date(),
+        // End every existing session (e.g. one held by whoever knew the old password)
+        sessionVersion: { increment: 1 },
+      },
+    });
+
+    // Delete ALL remaining tokens for this email (invalidate siblings)
+    await tx.passwordResetToken.deleteMany({ where: { email: resetToken.email } });
+    return true;
   });
 
-  // Delete ALL tokens for this email (single-use + invalidate siblings)
-  await prisma.passwordResetToken.deleteMany({
-    where: { email: resetToken.email },
-  });
+  if (!updated) {
+    return NextResponse.json(
+      { error: 'Invalid or expired reset link. Please request a new one.' },
+      { status: 400 }
+    );
+  }
 
   return NextResponse.json({ message: 'Password has been reset successfully.' });
 }

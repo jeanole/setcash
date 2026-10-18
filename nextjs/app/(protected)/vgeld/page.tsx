@@ -316,7 +316,7 @@ export default function VGeldPage() {
 
   const handleConfirm = async (id: string) => {
     try {
-      const res = await fetch(`/api/vgeld/${id}/confirm`, { method: 'PATCH' });
+      const res = await fetch(`/api/vgeld/${id}`, { method: 'PATCH' });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         alert(data.error ?? 'Failed to confirm transfer');
