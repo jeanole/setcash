@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { auth } from '@/auth';
+import { verifyProjectMember } from '@/lib/auth-guard';
 import {
   getSpendingByMotive,
   getSpendingByCategory,
@@ -24,6 +25,12 @@ export async function GET(req: NextRequest) {
     const projectId = session.user.currentProjectId;
     if (!projectId) {
       return NextResponse.json({ error: 'No project selected' }, { status: 400 });
+    }
+
+    // Defense in depth: JWT claims may be stale (e.g. removed member)
+    const memberCheck = await verifyProjectMember(session.user.email, projectId);
+    if (!memberCheck.authorized) {
+      return memberCheck.response!;
     }
 
     const tabParsed = TabSchema.safeParse(req.nextUrl.searchParams.get('tab') ?? undefined);

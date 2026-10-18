@@ -8,18 +8,12 @@ import { getCurrentUser } from '@/lib/auth/session';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { passwordChangeLimiter } from '@/lib/ratelimit';
+import { passwordSchema } from '@/lib/auth/password';
 
 // Validation schema for password change
 const ChangePasswordSchema = z.object({
   currentPassword: z.string().min(1).max(128),
-  newPassword: z
-    .string()
-    .min(8)
-    .max(128)
-    .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, {
-      message:
-        'Password must contain at least one uppercase letter, one lowercase letter, and one digit',
-    }),
+  newPassword: passwordSchema,
 });
 
 // PATCH /api/users/me/password - Change current user's password
@@ -66,7 +60,13 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    // Verify current password
+    // Verify current password (Google-only accounts have no password to verify)
+    if (!user.passwordHash) {
+      return NextResponse.json(
+        { error: 'This account signs in with Google. Use "Forgot password" to set a password.' },
+        { status: 400 }
+      );
+    }
     const passwordMatch = await bcrypt.compare(currentPassword, user.passwordHash);
     if (!passwordMatch) {
       return NextResponse.json(
@@ -78,13 +78,14 @@ export async function PATCH(req: NextRequest) {
     // Hash new password with 12 rounds to match existing pattern
     const newPasswordHash = await bcrypt.hash(newPassword, 12);
 
-    // Update password hash in DB
+    // Update password hash in DB and end all existing sessions (including this
+    // one — the client signs out and asks the user to sign in again)
     await db.user.update({
       where: { id: sessionUser.id },
-      data: { passwordHash: newPasswordHash },
+      data: { passwordHash: newPasswordHash, sessionVersion: { increment: 1 } },
     });
 
-    return NextResponse.json({ message: 'Password updated successfully' });
+    return NextResponse.json({ message: 'Password updated successfully', reauthRequired: true });
   } catch (error) {
     console.error('Error changing password:', error);
     return NextResponse.json(

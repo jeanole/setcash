@@ -2,6 +2,7 @@ import NextAuth from 'next-auth';
 import { authConfig } from './auth.config';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { buildCsp, createNonce, NONCE_HEADER } from './lib/csp';
 
 // ---------------------------------------------------------------------------
 // NextAuth v5 Edge Middleware
@@ -9,6 +10,22 @@ import type { NextRequest } from 'next/server';
 // ---------------------------------------------------------------------------
 
 const { auth } = NextAuth(authConfig);
+
+// Pass the request on with a fresh CSP nonce. Next.js reads the nonce from the
+// request's Content-Security-Policy header and stamps it on its own scripts;
+// pages can read it via the x-nonce header.
+function nextWithCsp(req: NextRequest): NextResponse {
+  const nonce = createNonce();
+  const csp = buildCsp(nonce, process.env.NODE_ENV === 'development');
+
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.set(NONCE_HEADER, nonce);
+  requestHeaders.set('Content-Security-Policy', csp);
+
+  const response = NextResponse.next({ request: { headers: requestHeaders } });
+  response.headers.set('Content-Security-Policy', csp);
+  return response;
+}
 
 export default auth(function middleware(req) {
   const { nextUrl, auth: session } = req as typeof req & {
@@ -33,7 +50,7 @@ export default auth(function middleware(req) {
     nextUrl.pathname === '/favicon.ico';
 
   if (isPublicRoute) {
-    return NextResponse.next();
+    return nextWithCsp(req);
   }
 
   // Redirect unauthenticated users to /
@@ -43,7 +60,7 @@ export default auth(function middleware(req) {
     return NextResponse.redirect(loginUrl);
   }
 
-  return NextResponse.next();
+  return nextWithCsp(req);
 });
 
 export const config = {

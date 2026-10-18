@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { X, User } from 'lucide-react';
+import { signOut } from 'next-auth/react';
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -186,10 +187,14 @@ export default function ProfileModal({
           return;
         }
 
-        setPasswordSuccess('Password updated successfully.');
+        setPasswordSuccess('Password updated. Please sign in again with your new password.');
         setCurrentPassword('');
         setNewPassword('');
         setConfirmPassword('');
+        // The server ended all sessions for this account, including this one
+        setTimeout(() => {
+          signOut({ callbackUrl: '/login' });
+        }, 1500);
       } catch {
         setPasswordError('An unexpected error occurred. Please try again.');
       } finally {

@@ -6,6 +6,7 @@
 // ============================================================================
 
 import { db as prisma } from '@/lib/db';
+import { getVgeldBalance } from '@/lib/vgeld';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -16,7 +17,7 @@ export interface DashboardStats {
   pendingBillsCount: number;
   /** Bills created this calendar month (role-scoped). */
   monthlyBillsCount: number;
-  /** V-Geld balance: sum received − sum spent (confirmed bills). */
+  /** V-Geld balance: confirmed transfers received − spent (see lib/vgeld.ts). */
   vgeldBalance: number;
 }
 
@@ -44,7 +45,7 @@ export async function getDashboardStats(
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  const [pendingBillsCount, monthlyBillsCount, vgeldReceived, confirmedBills] =
+  const [pendingBillsCount, monthlyBillsCount, vgeldBalance] =
     await Promise.all([
       // Pending count — role-scoped
       prisma.bill.count({
@@ -68,29 +69,14 @@ export async function getDashboardStats(
             },
       }),
 
-      // V-Geld received by this user in this project
-      prisma.vgeld.aggregate({
-        where: { projectId, toUser: userEmail },
-        _sum: { amount: true },
-      }),
-
-      // Confirmed bills submitted by this user (for V-Geld balance)
-      prisma.bill.findMany({
-        where: { projectId, submittedByEmail: userEmail, status: 'confirmed' },
-        select: { brutto19: true, brutto7: true, brutto0: true },
-      }),
+      // Same balance calculation as /api/vgeld/balance
+      getVgeldBalance(projectId, userEmail),
     ]);
-
-  const received = Number(vgeldReceived._sum.amount ?? 0);
-  const spent = confirmedBills.reduce(
-    (sum, b) => sum + Number(b.brutto19) + Number(b.brutto7) + Number(b.brutto0),
-    0
-  );
 
   return {
     pendingBillsCount,
     monthlyBillsCount,
-    vgeldBalance: received - spent,
+    vgeldBalance,
   };
 }
 

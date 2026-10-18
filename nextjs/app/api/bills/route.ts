@@ -8,193 +8,87 @@ import { db as prisma } from '@/lib/db';
 import { z } from 'zod';
 import path from 'path';
 import fs from 'fs';
-import { parseForm, getUploadedFiles, ensureUploadDir, generateFilename, validateFile, UPLOADS_DIR } from '@/lib/upload';
+import type { File } from 'formidable';
+import {
+  parseForm,
+  getUploadedFiles,
+  ensureUploadDir,
+  generateFilename,
+  validateFile,
+  uploadErrorResponse,
+  UPLOADS_DIR,
+} from '@/lib/upload';
 import { billCreateLimiter } from '@/lib/ratelimit';
+import { calculateNetto } from '@/lib/utils';
+import {
+  InvalidAllocationError,
+  categoryAllocationsSchema,
+  motiveAllocationsSchema,
+  nextBillNumber,
+  runSerializable,
+  saveAllocations,
+} from '@/app/api/bills/_lib/shared';
 
-// Small float slack for allocation-sum validation
-const ALLOCATION_SUM_EPSILON = 0.01;
+// Sanity cap for a single brutto amount (EUR)
+const MAX_BRUTTO_AMOUNT = 1_000_000;
 
-// Validation schemas
+// Thrown inside the create transaction when the project's bill quota is used up
+class UploadLimitError extends Error {
+  constructor() {
+    super('Upload limit reached for this project. Contact your administrator.');
+    this.name = 'UploadLimitError';
+  }
+}
+
+// Amounts arrive as multipart text fields: blank/missing means 0, anything that
+// is not a plain decimal number is rejected rather than silently coerced.
+const amountField = z
+  .string()
+  .trim()
+  .default('')
+  .transform((v) => (v === '' ? 0 : Number(v)))
+  .pipe(z.number().min(0).max(MAX_BRUTTO_AMOUNT).multipleOf(0.01));
+
+const dateField = z
+  .string()
+  .trim()
+  .refine((v) => {
+    const t = Date.parse(v);
+    if (isNaN(t)) return false;
+    const year = new Date(t).getUTCFullYear();
+    return year >= 1970 && year <= 2100;
+  }, 'Invalid date');
+
+// Parses a JSON-encoded array field; invalid JSON becomes a validation error
+function jsonArrayField<T extends z.ZodTypeAny>(schema: T) {
+  return z
+    .string()
+    .default('')
+    .transform((v, ctx) => {
+      if (v.trim() === '') return [];
+      try {
+        return JSON.parse(v) as unknown;
+      } catch {
+        ctx.addIssue({ code: 'custom', message: 'Must be valid JSON' });
+        return z.NEVER;
+      }
+    })
+    .pipe(schema);
+}
+
+// Validation schema for the multipart text fields of POST /api/bills
 const createBillSchema = z.object({
-  date: z.string().datetime().optional(),
-  type: z.string().default('Kauf'),
-  vendor: z.string().optional(),
-  item: z.string().optional(),
-  comment: z.string().optional(),
-  brutto19: z.number().min(0).default(0),
-  brutto7: z.number().min(0).default(0),
-  brutto0: z.number().min(0).default(0),
-  motiveAllocations: z.array(z.object({
-    motiveId: z.string(),
-    percentage: z.number().min(0).max(100),
-  })).default([]),
-  categoryAllocations: z.array(z.object({
-    categoryId: z.string(),
-    percentage: z.number().min(0).max(100),
-  })).default([]),
+  date: dateField,
+  type: z.string().trim().max(100).default('Kauf'),
+  vendor: z.string().trim().max(200).default(''),
+  item: z.string().trim().max(500).default(''),
+  comment: z.string().max(2000).default(''),
+  brutto19: amountField,
+  brutto7: amountField,
+  brutto0: amountField,
+  motiveAllocations: jsonArrayField(motiveAllocationsSchema),
+  categoryAllocations: jsonArrayField(categoryAllocationsSchema),
 });
-
-// Calculate bill number for a user within a project (1.01-1.20, 2.01-2.20, etc.)
-async function calculateBillNumber(userEmail: string, projectId: string, client: typeof prisma = prisma): Promise<string> {
-  const count = await client.bill.count({
-    where: {
-      submittedByEmail: { equals: userEmail, mode: 'insensitive' },
-      projectId,
-    },
-  });
-  
-  const group = Math.floor(count / 20) + 1;
-  const position = (count % 20) + 1;
-  return `${group}.${position.toString().padStart(2, '0')}`;
-}
-
-// Sync legacy bills.filename with first image
-async function syncLegacyImageColumns(billId: string) {
-  const firstImage = await prisma.billImage.findFirst({
-    where: { billId },
-    orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
-  });
-
-  if (firstImage) {
-    await prisma.bill.update({
-      where: { id: billId },
-      data: {
-        filename: firstImage.filename,
-      },
-    });
-  } else {
-    await prisma.bill.update({
-      where: { id: billId },
-      data: { filename: '' },
-    });
-  }
-}
-
-// Save allocations for a bill.
-// Rejects with a thrown Error (caller must return 400) if any supplied
-// motiveId/categoryId does not belong to the given project — this indicates
-// tampering or a client bug and must not be silently dropped.
-async function saveAllocations(
-  billId: string,
-  motiveAllocations: { motiveId: string; percentage: number }[],
-  categoryAllocations: { categoryId: string; percentage: number }[],
-  projectId: string
-) {
-  // --- Cross-project injection guard (Task 1) ---
-  // Batch-fetch valid IDs scoped to this project, mirroring the pattern in
-  // budget-matrix/bulk-update/route.ts.
-  const distinctMotiveIds = [...new Set(motiveAllocations.map((a) => a.motiveId))];
-  const distinctCategoryIds = [...new Set(categoryAllocations.map((a) => a.categoryId))];
-
-  if (distinctMotiveIds.length > 0) {
-    const validMotives = await prisma.motive.findMany({
-      where: { id: { in: distinctMotiveIds }, projectId },
-      select: { id: true },
-    });
-    const validMotiveSet = new Set(validMotives.map((m) => m.id));
-    if (validMotives.length !== distinctMotiveIds.length) {
-      const invalid = distinctMotiveIds.filter((id) => !validMotiveSet.has(id));
-      throw new Error(`Invalid motive/category for this project (motiveIds: ${invalid.join(', ')})`);
-    }
-  }
-
-  if (distinctCategoryIds.length > 0) {
-    const validCategories = await prisma.category.findMany({
-      where: { id: { in: distinctCategoryIds }, projectId },
-      select: { id: true },
-    });
-    const validCategorySet = new Set(validCategories.map((c) => c.id));
-    if (validCategories.length !== distinctCategoryIds.length) {
-      const invalid = distinctCategoryIds.filter((id) => !validCategorySet.has(id));
-      throw new Error(`Invalid motive/category for this project (categoryIds: ${invalid.join(', ')})`);
-    }
-  }
-  // --- End cross-project guard ---
-
-  // Delete existing allocations
-  await prisma.billMotive.deleteMany({ where: { billId } });
-  await prisma.billCategory.deleteMany({ where: { billId } });
-
-  // Get default IDs
-  const uncatMotive = await prisma.motive.findFirst({
-    where: { name: 'Default', projectId },
-  });
-  const uncatCategory = await prisma.category.findFirst({
-    where: { name: 'Uncategorized', projectId },
-  });
-
-  // Save motive allocations
-  if (motiveAllocations.length > 0) {
-    let totalPct = 0;
-    for (const a of motiveAllocations) {
-      if (a.percentage > 0) {
-        await prisma.billMotive.create({
-          data: {
-            billId,
-            motiveId: a.motiveId,
-            percentage: a.percentage,
-          },
-        });
-        totalPct += a.percentage;
-      }
-    }
-    // Fill remaining with default
-    if (totalPct < 100 && uncatMotive) {
-      await prisma.billMotive.create({
-        data: {
-          billId,
-          motiveId: uncatMotive.id,
-          percentage: 100 - totalPct,
-        },
-      });
-    }
-  } else if (uncatMotive) {
-    // No allocations, 100% to default
-    await prisma.billMotive.create({
-      data: {
-        billId,
-        motiveId: uncatMotive.id,
-        percentage: 100,
-      },
-    });
-  }
-
-  // Save category allocations
-  if (categoryAllocations.length > 0) {
-    let totalPct = 0;
-    for (const a of categoryAllocations) {
-      if (a.percentage > 0) {
-        await prisma.billCategory.create({
-          data: {
-            billId,
-            categoryId: a.categoryId,
-            percentage: a.percentage,
-          },
-        });
-        totalPct += a.percentage;
-      }
-    }
-    // Fill remaining with uncategorized
-    if (totalPct < 100 && uncatCategory) {
-      await prisma.billCategory.create({
-        data: {
-          billId,
-          categoryId: uncatCategory.id,
-          percentage: 100 - totalPct,
-        },
-      });
-    }
-  } else if (uncatCategory) {
-    // No allocations, 100% to uncategorized
-    await prisma.billCategory.create({
-      data: {
-        billId,
-        categoryId: uncatCategory.id,
-        percentage: 100,
-      },
-    });
-  }
-}
 
 // Pagination query schema for GET /api/bills
 const getBillsQuerySchema = z.object({
@@ -349,6 +243,26 @@ export async function GET(req: NextRequest) {
 
 // POST /api/bills - Create new bill with images
 export async function POST(req: NextRequest) {
+  // Temp files written by parseForm and files moved to their final location are
+  // tracked here so every early return / throw below can clean them up.
+  let uploadedFiles: File[] = [];
+  const movedFilePaths: string[] = [];
+
+  const cleanupFiles = () => {
+    for (const f of uploadedFiles) {
+      if (f.filepath && fs.existsSync(f.filepath)) {
+        try { fs.unlinkSync(f.filepath); } catch { /* best-effort cleanup */ }
+      }
+    }
+    for (const filePath of movedFilePaths) {
+      try {
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      } catch (unlinkError) {
+        console.error('File cleanup failed:', filePath, unlinkError);
+      }
+    }
+  };
+
   try {
     const session = await auth();
     if (!session?.user) {
@@ -383,21 +297,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check project upload quota
-    const projectForQuota = await prisma.project.findUnique({
-      where: { id: projectId },
-      select: { uploadLimit: true },
-    });
-    if (projectForQuota?.uploadLimit != null) {
-      const billCount = await prisma.bill.count({ where: { projectId } });
-      if (billCount >= projectForQuota.uploadLimit) {
-        return NextResponse.json(
-          { error: 'Upload limit reached for this project. Contact your administrator.' },
-          { status: 403 }
-        );
-      }
-    }
-
     // Verify project access
     const membership = await prisma.projectMember.findUnique({
       where: {
@@ -412,95 +311,110 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Parse multipart form
+    // Early quota check so an over-limit project doesn't pay for parsing an
+    // upload. The authoritative check runs inside the create transaction below.
+    const projectForQuota = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { uploadLimit: true },
+    });
+    if (projectForQuota?.uploadLimit != null) {
+      const billCount = await prisma.bill.count({ where: { projectId } });
+      if (billCount >= projectForQuota.uploadLimit) {
+        return NextResponse.json(
+          { error: 'Upload limit reached for this project. Contact your administrator.' },
+          { status: 403 }
+        );
+      }
+    }
+
+    // Parse multipart form (size-capped; throws UploadError for bad/oversized bodies)
     const { fields, files } = await parseForm(req);
 
     // Get uploaded files and validate their content up front — this
     // runs before the bill row is created so we never create an orphaned bill
-    // for a rejected upload. Any temp file cleanup below reuses this helper.
-    const uploadedFiles = getUploadedFiles(files, 'photos');
-
-    const cleanupTempFiles = () => {
-      for (const f of uploadedFiles) {
-        if (f.filepath && fs.existsSync(f.filepath)) {
-          try { fs.unlinkSync(f.filepath); } catch { /* best-effort cleanup */ }
-        }
-      }
-    };
+    // for a rejected upload.
+    uploadedFiles = getUploadedFiles(files, 'photos');
 
     for (const f of uploadedFiles) {
       const result = validateFile(f);
       if (!result.valid) {
-        cleanupTempFiles();
+        cleanupFiles();
         return NextResponse.json({ error: result.error || 'Invalid file' }, { status: 400 });
       }
     }
 
-    // Extract and validate form data
-    const date = fields.date?.[0] || new Date().toISOString();
-    const type = fields.type?.[0] || 'Kauf';
-    const vendor = fields.vendor?.[0] || '';
-    const item = fields.item?.[0] || '';
-    const comment = fields.comment?.[0] || '';
-    const brutto19 = parseFloat(fields.brutto19?.[0] || '0') || 0;
-    const brutto7 = parseFloat(fields.brutto7?.[0] || '0') || 0;
-    const brutto0 = parseFloat(fields.brutto0?.[0] || '0') || 0;
-
-    // Parse allocations
-    let motiveAllocations: { motiveId: string; percentage: number }[] = [];
-    let categoryAllocations: { categoryId: string; percentage: number }[] = [];
-
-    try {
-      if (fields.motiveAllocations?.[0]) {
-        motiveAllocations = JSON.parse(fields.motiveAllocations[0]);
-      }
-    } catch (e) {
-      console.warn('Failed to parse motiveAllocations:', e);
+    // Validate all text fields (amounts, date, lengths, allocations)
+    const field = (name: string) => fields[name]?.[0];
+    const parsed = createBillSchema.safeParse({
+      date: field('date') || new Date().toISOString(),
+      type: field('type'),
+      vendor: field('vendor'),
+      item: field('item'),
+      comment: field('comment'),
+      brutto19: field('brutto19'),
+      brutto7: field('brutto7'),
+      brutto0: field('brutto0'),
+      motiveAllocations: field('motiveAllocations'),
+      categoryAllocations: field('categoryAllocations'),
+    });
+    if (!parsed.success) {
+      cleanupFiles();
+      const issue = parsed.error.issues[0];
+      const where = issue.path.length > 0 ? `${issue.path.join('.')}: ` : '';
+      return NextResponse.json({ error: `Invalid input - ${where}${issue.message}` }, { status: 400 });
     }
 
-    try {
-      if (fields.categoryAllocations?.[0]) {
-        categoryAllocations = JSON.parse(fields.categoryAllocations[0]);
-      }
-    } catch (e) {
-      console.warn('Failed to parse categoryAllocations:', e);
-    }
-
-    // Reject if allocations sum to more than 100% (+ small float slack)
-    const motiveSum = motiveAllocations.reduce((acc, a) => acc + (Number(a?.percentage) || 0), 0);
-    if (motiveSum > 100 + ALLOCATION_SUM_EPSILON) {
-      cleanupTempFiles();
-      return NextResponse.json({ error: 'Motive allocations sum to more than 100%' }, { status: 400 });
-    }
-    const categorySum = categoryAllocations.reduce((acc, a) => acc + (Number(a?.percentage) || 0), 0);
-    if (categorySum > 100 + ALLOCATION_SUM_EPSILON) {
-      cleanupTempFiles();
-      return NextResponse.json({ error: 'Category allocations sum to more than 100%' }, { status: 400 });
-    }
+    const {
+      date, type, vendor, item, comment,
+      brutto19, brutto7, brutto0,
+      motiveAllocations, categoryAllocations,
+    } = parsed.data;
 
     // Determine status based on vendor and amount
     const totalAmount = brutto19 + brutto7 + brutto0;
     const status: 'draft' | 'confirmed' = !vendor || vendor.trim() === '' || totalAmount === 0 ? 'draft' : 'confirmed';
 
     // Calculate netto
-    const nettoAmount = brutto19 / 1.19 + brutto7 / 1.07 + brutto0;
+    const nettoAmount = calculateNetto(brutto19, brutto7, brutto0);
 
-    // Build motive display string.
-    // projectId is included in the where clause (Task 1) so we never leak
-    // names from motives that belong to a different project.
-    let motiveDisplay = '';
-    if (motiveAllocations.length > 0) {
-      const motives = await prisma.motive.findMany({
-        where: { id: { in: motiveAllocations.map((a) => a.motiveId) }, projectId },
-      });
-      motiveDisplay = motives.map((m) => m.name).filter(Boolean).join(', ');
+    // Move uploads to their final, collision-free location BEFORE the DB write;
+    // the bill + images + allocations are then committed atomically. If the
+    // transaction fails, cleanupFiles() in the catch below removes them again.
+    const imageRows: { filename: string; filePath: string; sortOrder: number }[] = [];
+    if (uploadedFiles.length > 0) {
+      const userFolder = ensureUploadDir(session.user.email);
+      const dateStr = new Date().toISOString().split('T')[0];
+
+      for (let i = 0; i < uploadedFiles.length; i++) {
+        const f = uploadedFiles[i];
+        const savedFilename = generateFilename(userFolder, 'bill', dateStr, `_${i}`, f.originalFilename || '');
+        const relPath = `${userFolder}/${savedFilename}`;
+        const savedFilePath = path.join(UPLOADS_DIR, relPath);
+
+        fs.renameSync(f.filepath, savedFilePath);
+        movedFilePaths.push(savedFilePath);
+
+        imageRows.push({
+          filename: f.originalFilename || '',
+          filePath: relPath,
+          sortOrder: i,
+        });
+      }
     }
 
-    // Create bill — calculate bill number inside a serializable transaction to prevent
-    // duplicate bill numbers under concurrent requests (BUG-59)
-    const bill = await prisma.$transaction(async (tx) => {
-      const billNumber = await calculateBillNumber(session.user.email, projectId, tx as typeof prisma);
-      return tx.bill.create({
+    // Create bill, images, allocations and audit log in one serializable
+    // transaction. Bill number and quota are evaluated inside it so concurrent
+    // requests can neither duplicate a number nor overshoot the upload limit.
+    const bill = await runSerializable(async (tx) => {
+      if (projectForQuota?.uploadLimit != null) {
+        const billCount = await tx.bill.count({ where: { projectId } });
+        if (billCount >= projectForQuota.uploadLimit) {
+          throw new UploadLimitError();
+        }
+      }
+
+      const billNumber = await nextBillNumber(tx, session.user.email, projectId);
+      const created = await tx.bill.create({
         data: {
           date: new Date(date),
           submittedByEmail: session.user.email,
@@ -509,7 +423,7 @@ export async function POST(req: NextRequest) {
           vendor,
           item,
           comment,
-          motiveLegacy: motiveDisplay,
+          motiveLegacy: '',
           brutto19,
           brutto7,
           brutto0,
@@ -517,120 +431,52 @@ export async function POST(req: NextRequest) {
           nettoAmount,
           projectId,
           status,
+          filename: imageRows[0]?.filePath ?? '',
+          images: imageRows.length > 0 ? { create: imageRows } : undefined,
         },
       });
-    }, { isolationLevel: 'Serializable' });
 
-    // Handle file uploads — fs.renameSync runs first (after DB commit) so that
-    // the bill row exists before we reference it in BillImage records.
-    // If any post-commit DB write fails, we compensate by deleting the bill row
-    // (which cascades to BillImage/BillMotive/BillCategory) and re-deleting any
-    // files that were already moved to their final location.
-    // `uploadedFiles` was already fetched and content-validated above.
-    const movedFilePaths: string[] = [];
-
-    try {
-      if (uploadedFiles.length > 0) {
-        const userFolder = ensureUploadDir(session.user.email);
-        const dateStr = new Date().toISOString().split('T')[0];
-
-        for (let i = 0; i < uploadedFiles.length; i++) {
-          const f = uploadedFiles[i];
-          const suffix = uploadedFiles.length > 1 ? `_${i + 1}` : '';
-          const savedFilename = generateFilename(userFolder, bill.billNumber ?? bill.id, dateStr, suffix, f.originalFilename || '');
-          const relPath = `${userFolder}/${savedFilename}`;
-          const savedFilePath = path.join(UPLOADS_DIR, relPath);
-
-          // Move file to final location (outside try so bill row exists first)
-          fs.renameSync(f.filepath, savedFilePath);
-          movedFilePaths.push(savedFilePath);
-
-          // Create image record
-          await prisma.billImage.create({
-            data: {
-              billId: bill.id,
-              filename: f.originalFilename || '',
-              filePath: relPath,
-              sortOrder: i,
-            },
-          });
-        }
-
-        // Sync legacy columns with first image
-        await syncLegacyImageColumns(bill.id);
+      // Throws InvalidAllocationError if IDs are cross-project
+      const motiveDisplay = await saveAllocations(
+        tx,
+        created.id,
+        motiveAllocations,
+        categoryAllocations,
+        projectId
+      );
+      if (motiveDisplay !== '') {
+        await tx.bill.update({ where: { id: created.id }, data: { motiveLegacy: motiveDisplay } });
       }
 
-      // Save allocations (throws 400-worthy Error if IDs are cross-project)
-      await saveAllocations(bill.id, motiveAllocations, categoryAllocations, projectId);
-
-      // Update motive display after allocations are saved
-      const updatedMotiveDisplay = await getMotiveDisplayString(bill.id);
-      if (updatedMotiveDisplay !== motiveDisplay) {
-        await prisma.bill.update({
-          where: { id: bill.id },
-          data: { motiveLegacy: updatedMotiveDisplay },
-        });
-      }
-
-      // Log creation
-      await prisma.editLog.create({
+      await tx.editLog.create({
         data: {
           projectId,
           timestamp: new Date(),
           user: session.user.email,
-          billId: bill.id,
+          billId: created.id,
           changes: { _event: 'created' },
           source: 'user',
         },
       });
-    } catch (postCommitError) {
-      // Compensation: delete the bill row (cascades to BillImage, BillMotive,
-      // BillCategory) so we don't leave orphaned DB records.
-      try {
-        await prisma.bill.delete({ where: { id: bill.id } });
-      } catch (deleteError) {
-        console.error('Compensation delete failed for bill', bill.id, deleteError);
-      }
 
-      // Clean up any files that were already moved to their final location.
-      for (const filePath of movedFilePaths) {
-        try {
-          if (fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath);
-          }
-        } catch (unlinkError) {
-          console.error('Compensation file cleanup failed:', filePath, unlinkError);
-        }
-      }
-
-      // Re-throw so the outer catch can return the appropriate HTTP response.
-      throw postCommitError;
-    }
+      return created;
+    });
 
     return NextResponse.json({ ok: true, id: bill.id });
   } catch (error) {
-    // Cross-project allocation injection: saveAllocations throws with this prefix
-    if (error instanceof Error && error.message.startsWith('Invalid motive/category for this project')) {
+    cleanupFiles();
+
+    const uploadResponse = uploadErrorResponse(error);
+    if (uploadResponse) return uploadResponse;
+
+    // Cross-project allocation injection
+    if (error instanceof InvalidAllocationError) {
       return NextResponse.json({ error: 'Invalid motive/category for this project' }, { status: 400 });
     }
+    if (error instanceof UploadLimitError) {
+      return NextResponse.json({ error: error.message }, { status: 403 });
+    }
     console.error('Error creating bill:', error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-}
-
-// Helper to build motive display string
-async function getMotiveDisplayString(billId: string): Promise<string> {
-  const allocs = await prisma.billMotive.findMany({
-    where: { billId },
-    include: { motive: { select: { name: true } } },
-  });
-
-  if (allocs.length === 0) return '';
-  if (allocs.length === 1 && Number(allocs[0].percentage) === 100) {
-    return allocs[0].motive.name;
-  }
-  return allocs.map((a) => `${a.motive.name} (${Number(a.percentage)}%)`).join(', ');
 }

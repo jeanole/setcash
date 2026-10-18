@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import BillDetailHeader from '@/components/bills/BillDetailHeader';
@@ -15,7 +15,7 @@ import { BillImage } from '@/lib/types';
 import { formatCurrency, calculateTotal, cn } from '@/lib/utils';
 
 interface BillDetailPageProps {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 interface FormData {
@@ -31,7 +31,8 @@ interface FormData {
   categoryAllocations: { id: string; name: string; percentage: number }[];
 }
 
-export default function BillDetailPage({ params }: BillDetailPageProps) {
+export default function BillDetailPage(props: BillDetailPageProps) {
+  const params = use(props.params);
   const { id } = params;
   const router = useRouter();
   const {

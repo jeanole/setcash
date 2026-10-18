@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/db';
+import { verifySuperAdmin } from '@/lib/auth-guard';
 import { z } from 'zod';
 
 const createSchema = z.object({
@@ -38,7 +39,7 @@ export async function GET(
     const categories = await prisma.category.findMany({
       where: { projectId: id },
       include: {
-        billCategories: true,
+        _count: { select: { billCategories: true } },
       },
       orderBy: {
         name: 'asc',
@@ -50,7 +51,7 @@ export async function GET(
         id: c.id,
         name: c.name,
         budget: Number(c.budget),
-        billCount: c.billCategories.length,
+        billCount: c._count.billCategories,
       }))
     );
   } catch (error) {
@@ -82,7 +83,10 @@ export async function POST(
       },
     });
 
-    const isSuperAdmin = session.user.role === 'superadmin';
+    // JWT claim alone is not trusted — confirm superadmin status in the DB
+    const isSuperAdmin =
+      session.user.role === 'superadmin' &&
+      (await verifySuperAdmin(session.user.email)).authorized;
     const isAdminOrOwner = membership?.role === 'admin' || membership?.role === 'owner';
 
     if (!isSuperAdmin && !isAdminOrOwner) {

@@ -69,6 +69,8 @@ export async function GET(req: NextRequest) {
         return a.name.localeCompare(b.name);
       });
 
+    const roundToTwo = (value: number): number => Math.round(value * 100) / 100;
+
     // Build matrix lookup map: "{categoryId}_{motiveId}" -> amount
     const matrix: Record<string, number> = {};
     let grandTotal = 0;
@@ -114,8 +116,6 @@ export async function GET(req: NextRequest) {
     `;
 
     // Convert spending results to lookup maps with 2-decimal precision
-    const roundToTwo = (value: number): number => Math.round(value * 100) / 100;
-
     const motiveSpending: Record<string, number> = {};
     for (const row of motiveSpendingRaw) {
       motiveSpending[row.motiveId] = roundToTwo(Number(row.spent));
@@ -136,7 +136,7 @@ export async function GET(req: NextRequest) {
       motives,
       categories,
       matrix,
-      grandTotal,
+      grandTotal: roundToTwo(grandTotal),
       motiveSpending,
       categorySpending,
       cellSpending,

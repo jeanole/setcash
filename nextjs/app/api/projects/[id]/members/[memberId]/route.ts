@@ -3,6 +3,7 @@ import { auth } from '@/auth';
 import { prisma } from '@/lib/db';
 import { z } from 'zod';
 import { ProjectRole } from '@prisma/client';
+import { cleanupAfterMemberRemoval } from '@/lib/telegram/membership-cleanup';
 
 const updateSchema = z.object({
   role: z.enum(['user', 'admin', 'owner']).optional(),
@@ -61,23 +62,6 @@ export async function PUT(
           { status: 403 }
         );
       }
-
-      // Check if trying to remove last owner
-      if (targetMember.role === 'owner' && validated.role !== 'owner') {
-        const ownerCount = await prisma.projectMember.count({
-          where: {
-            projectId: id,
-            role: 'owner',
-          },
-        });
-
-        if (ownerCount <= 1) {
-          return NextResponse.json(
-            { error: 'Cannot remove the last owner' },
-            { status: 400 }
-          );
-        }
-      }
     }
 
     const updateData: { role?: ProjectRole; positionId?: string | null } = {};
@@ -88,15 +72,55 @@ export async function PUT(
       updateData.positionId = validated.positionId;
     }
 
-    const updated = await prisma.projectMember.update({
-      where: { id: memberId },
-      data: updateData,
-    });
+    // The position must belong to this project
+    if (validated.positionId) {
+      const position = await prisma.projectPosition.findFirst({
+        where: { id: validated.positionId, projectId: id },
+        select: { id: true },
+      });
+      if (!position) {
+        return NextResponse.json({ error: 'Invalid position' }, { status: 400 });
+      }
+    }
 
-    return NextResponse.json(updated);
+    // Last-owner check and write share a serializable transaction so two
+    // concurrent demotions cannot both pass the count.
+    const result = await prisma.$transaction(
+      async (tx) => {
+        const current = await tx.projectMember.findUnique({ where: { id: memberId } });
+        if (!current || current.projectId !== id) {
+          return { error: 'Member not found', status: 404 };
+        }
+
+        if (current.role === 'owner' && validated.role && validated.role !== 'owner') {
+          const ownerCount = await tx.projectMember.count({
+            where: { projectId: id, role: 'owner' },
+          });
+          if (ownerCount <= 1) {
+            return { error: 'Cannot remove the last owner', status: 400 };
+          }
+        }
+
+        const updated = await tx.projectMember.update({
+          where: { id: memberId },
+          data: updateData,
+        });
+        return { updated };
+      },
+      { isolationLevel: 'Serializable' }
+    );
+
+    if ('error' in result) {
+      return NextResponse.json({ error: result.error }, { status: result.status });
+    }
+
+    return NextResponse.json(result.updated);
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.issues[0].message }, { status: 400 });
+    }
+    if ((error as { code?: string }).code === 'P2034') {
+      return NextResponse.json({ error: 'Concurrent update detected, please retry' }, { status: 409 });
     }
     console.error('Error updating member:', error);
     return NextResponse.json({ error: 'Failed to update member' }, { status: 500 });
@@ -147,29 +171,39 @@ export async function DELETE(
       );
     }
 
-    // Check if trying to remove last owner
-    if (targetMember.role === 'owner') {
-      const ownerCount = await prisma.projectMember.count({
-        where: {
-          projectId: id,
-          role: 'owner',
-        },
-      });
+    // Last-owner check, delete and side-effects share a serializable transaction
+    const result = await prisma.$transaction(
+      async (tx) => {
+        const current = await tx.projectMember.findUnique({ where: { id: memberId } });
+        if (!current || current.projectId !== id) {
+          return { error: 'Member not found', status: 404 };
+        }
 
-      if (ownerCount <= 1) {
-        return NextResponse.json(
-          { error: 'Cannot remove the last owner' },
-          { status: 400 }
-        );
-      }
+        if (current.role === 'owner') {
+          const ownerCount = await tx.projectMember.count({
+            where: { projectId: id, role: 'owner' },
+          });
+          if (ownerCount <= 1) {
+            return { error: 'Cannot remove the last owner', status: 400 };
+          }
+        }
+
+        await tx.projectMember.delete({ where: { id: memberId } });
+        await cleanupAfterMemberRemoval(tx, id, current.userEmail);
+        return null;
+      },
+      { isolationLevel: 'Serializable' }
+    );
+
+    if (result) {
+      return NextResponse.json({ error: result.error }, { status: result.status });
     }
-
-    await prisma.projectMember.delete({
-      where: { id: memberId },
-    });
 
     return NextResponse.json({ ok: true });
   } catch (error) {
+    if ((error as { code?: string }).code === 'P2034') {
+      return NextResponse.json({ error: 'Concurrent update detected, please retry' }, { status: 409 });
+    }
     console.error('Error removing member:', error);
     return NextResponse.json({ error: 'Failed to remove member' }, { status: 500 });
   }

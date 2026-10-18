@@ -13,7 +13,7 @@ import { verifyAdminRole } from '@/lib/auth-guard';
 import { UPLOADS_DIR } from '@/lib/upload';
 import fs from 'fs';
 import path from 'path';
-import { PassThrough } from 'stream';
+import { PassThrough, Readable } from 'stream';
 // @ts-ignore
 import archiver from 'archiver';
 
@@ -145,13 +145,9 @@ export async function GET() {
 
     archive.finalize();
 
-    const readableStream = new ReadableStream({
-      start(controller) {
-        pass.on('data', (chunk: Buffer) => controller.enqueue(chunk));
-        pass.on('end', () => controller.close());
-        pass.on('error', (err: Error) => controller.error(err));
-      },
-    });
+    // Readable.toWeb applies backpressure (the zip is only produced as fast as the
+    // client consumes it) and propagates stream errors/cancellation.
+    const readableStream = Readable.toWeb(pass) as unknown as ReadableStream;
 
     return new Response(readableStream, {
       headers: {

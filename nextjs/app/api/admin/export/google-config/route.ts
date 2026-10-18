@@ -38,6 +38,12 @@ export async function GET() {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
+    // Re-verify admin authority against the DB (JWT claims may be stale)
+    const guard = await verifyAdminRole(session.user.email, projectId);
+    if (!guard.authorized) {
+      return guard.response!;
+    }
+
     const hasCredentials = getCredentialsPath(projectId) !== null;
 
     const sheetIdSetting = await prisma.projectSettings.findUnique({

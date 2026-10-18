@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/db';
+import { verifySuperAdmin } from '@/lib/auth-guard';
 import { z } from 'zod';
 import { ProjectRole } from '@prisma/client';
 
@@ -33,7 +34,10 @@ export async function GET(
       },
     });
 
-    const isSuperAdmin = session.user.role === 'superadmin';
+    // JWT claim alone is not trusted — confirm superadmin status in the DB
+    const isSuperAdmin =
+      session.user.role === 'superadmin' &&
+      (await verifySuperAdmin(session.user.email)).authorized;
 
     if (!membership && !isSuperAdmin) {
       return NextResponse.json({ error: 'Not a member of this project' }, { status: 403 });
@@ -130,6 +134,17 @@ export async function POST(
         { error: 'Only owners can invite owners' },
         { status: 403 }
       );
+    }
+
+    // The position must belong to this project
+    if (validated.positionId) {
+      const position = await prisma.projectPosition.findFirst({
+        where: { id: validated.positionId, projectId: id },
+        select: { id: true },
+      });
+      if (!position) {
+        return NextResponse.json({ error: 'Invalid position' }, { status: 400 });
+      }
     }
 
     // Create member

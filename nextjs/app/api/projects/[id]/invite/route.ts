@@ -3,6 +3,7 @@ import { z } from 'zod';
 import crypto from 'crypto';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/db';
+import { verifySuperAdmin } from '@/lib/auth-guard';
 import { sendInvitationEmail } from '@/lib/email';
 import { inviteLimiter } from '@/lib/ratelimit';
 
@@ -28,7 +29,10 @@ export async function POST(
   const { id: projectId } = await params;
 
   // Verify the inviter is a member of this project (or superadmin)
-  const isSuperAdmin = session.user.role === 'superadmin';
+  // (superadmin status is confirmed in the DB, not taken from the JWT claim)
+  const isSuperAdmin =
+    session.user.role === 'superadmin' &&
+    (await verifySuperAdmin(session.user.email)).authorized;
   let inviterRole: string | null = null;
 
   if (isSuperAdmin) {

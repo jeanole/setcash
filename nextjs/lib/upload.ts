@@ -6,6 +6,9 @@
 
 import { IncomingForm, Fields, Files, File } from 'formidable';
 import { IncomingMessage } from 'http';
+import { Readable, Transform, pipeline } from 'stream';
+import type { ReadableStream as NodeWebReadableStream } from 'stream/web';
+import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 
@@ -22,45 +25,127 @@ const ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.pdf'];
 // Max file size: 10MB
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
+// Default max files per request
+const DEFAULT_MAX_FILES = 10;
+
+// Allowance on top of the file payload for multipart boundaries and text fields
+const FORM_OVERHEAD_BYTES = 1024 * 1024;
+
+// Cap for the combined size of all non-file form fields
+const MAX_FIELDS_SIZE = 512 * 1024;
+
 /**
- * Parse multipart form data from a Next.js request
+ * Error raised by parseForm for malformed or oversized uploads. `status` is the
+ * HTTP status the route should answer with; `message` is safe to show clients.
  */
-export async function parseForm(req: Request): Promise<ParsedForm> {
-  // Convert Web Request to Node IncomingMessage-like object
+export class UploadError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'UploadError';
+    this.status = status;
+  }
+}
+
+/**
+ * Map an UploadError to a JSON response. Returns null for any other error so
+ * callers can fall through to their generic 500 handling.
+ */
+export function uploadErrorResponse(error: unknown): Response | null {
+  if (error instanceof UploadError) {
+    return Response.json({ error: error.message }, { status: error.status });
+  }
+  return null;
+}
+
+// Translate a formidable (or stream) failure into a client-safe UploadError
+function toUploadError(err: unknown): UploadError {
+  if (err instanceof UploadError) return err;
+  const httpCode = (err as { httpCode?: number } | null)?.httpCode;
+  console.error('Upload parse error:', err);
+  if (httpCode === 413) return new UploadError('Upload too large', 413);
+  if (httpCode === 415) return new UploadError('Unsupported upload type', 415);
+  return new UploadError('Invalid upload', 400);
+}
+
+/**
+ * Parse multipart form data from a Next.js request.
+ *
+ * The body is streamed straight into formidable (no in-memory buffering) and
+ * is capped at `maxFiles * MAX_FILE_SIZE` plus a small overhead. Requests that
+ * declare a larger Content-Length are rejected up front, and the byte cap is
+ * enforced while reading for chunked bodies (no Content-Length, e.g. behind
+ * some proxies) and in case the header lies.
+ */
+export async function parseForm(
+  req: Request,
+  options: { maxFiles?: number } = {}
+): Promise<ParsedForm> {
+  const maxFiles = options.maxFiles ?? DEFAULT_MAX_FILES;
+  const maxBytes = maxFiles * MAX_FILE_SIZE + FORM_OVERHEAD_BYTES;
+
   const contentType = req.headers.get('content-type') || '';
-  
+
   if (!contentType.includes('multipart/form-data')) {
-    throw new Error('Content-Type must be multipart/form-data');
+    throw new UploadError('Content-Type must be multipart/form-data', 415);
   }
 
-  // Create a temporary buffer to hold the request body
-  const arrayBuffer = await req.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
+  const lengthHeader = req.headers.get('content-length');
+  const contentLength = lengthHeader ? Number(lengthHeader) : null;
+  if (contentLength !== null && (!Number.isFinite(contentLength) || contentLength < 0)) {
+    throw new UploadError('Invalid Content-Length header', 400);
+  }
+  if (contentLength !== null && contentLength > maxBytes) {
+    throw new UploadError('Upload too large', 413);
+  }
+  if (!req.body) {
+    throw new UploadError('Empty request body', 400);
+  }
 
-  // Create a mock IncomingMessage
-  const mockReq = new (require('stream').Readable)();
-  mockReq.push(buffer);
-  mockReq.push(null);
-  mockReq.headers = {
-    'content-type': contentType,
-    'content-length': buffer.length.toString(),
-  };
+  if (!fs.existsSync(UPLOADS_DIR)) {
+    fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+  }
+
+  // Count bytes as they arrive and abort once the cap is exceeded
+  let received = 0;
+  const limiter = new Transform({
+    transform(chunk: Buffer, _encoding, callback) {
+      received += chunk.length;
+      if (received > maxBytes) {
+        callback(new UploadError('Upload too large', 413));
+        return;
+      }
+      callback(null, chunk);
+    },
+  }) as Transform & { headers?: Record<string, string> };
+  limiter.headers = contentLength !== null
+    ? { 'content-type': contentType, 'content-length': String(contentLength) }
+    : { 'content-type': contentType, 'transfer-encoding': 'chunked' };
+
+  const source = Readable.fromWeb(req.body as unknown as NodeWebReadableStream);
+  // pipeline tears down both streams on failure and surfaces the error on `limiter`
+  pipeline(source, limiter, () => { /* errors are handled via the form callback */ });
 
   return new Promise((resolve, reject) => {
     const form = new IncomingForm({
       uploadDir: UPLOADS_DIR,
       keepExtensions: true,
       maxFileSize: MAX_FILE_SIZE,
-      maxFiles: 10,
+      maxTotalFileSize: maxFiles * MAX_FILE_SIZE,
+      maxFiles,
+      maxFieldsSize: MAX_FIELDS_SIZE,
       filter: (part) => {
         const ext = path.extname(part.originalFilename || '').toLowerCase();
         return ALLOWED_EXTENSIONS.includes(ext);
       },
     });
 
-    form.parse(mockReq as unknown as IncomingMessage, (err, fields, files) => {
+    form.parse(limiter as unknown as IncomingMessage, (err, fields, files) => {
       if (err) {
-        reject(err);
+        // Stop reading the rest of the body
+        limiter.destroy();
+        reject(toUploadError(err));
         return;
       }
       resolve({ fields, files });
@@ -94,7 +179,13 @@ export function getUploadedFile(files: Files, fieldName: string): File | null {
  */
 function detectMagicType(filepath: string): string | null {
   try {
-    const buf = fs.readFileSync(filepath).slice(0, 12);
+    const buf = Buffer.alloc(12);
+    const fd = fs.openSync(filepath, 'r');
+    try {
+      fs.readSync(fd, buf, 0, 12, 0);
+    } finally {
+      fs.closeSync(fd);
+    }
     // JPEG: FF D8 FF
     if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'jpeg';
     // PNG: 89 50 4E 47 0D 0A 1A 0A
@@ -152,10 +243,15 @@ export function validateFile(file: File): { valid: boolean; error?: string } {
 /**
  * Sanitize the local-part of an email address for use as a filesystem path
  * segment. Takes everything before '@' and replaces any character that is not
- * alphanumeric, '.', '_', or '-' with an underscore.
+ * alphanumeric, '.', '_', or '-' with an underscore. Leading dots are replaced
+ * too so the segment can never be '.' or '..'.
  */
 function sanitizeEmailLocalPart(email: string): string {
-  return email.split('@')[0].replace(/[^A-Za-z0-9._-]/g, '_');
+  return email
+    .split('@')[0]
+    .replace(/[^A-Za-z0-9._-]/g, '_')
+    .replace(/^\./, '_')
+    .slice(0, 64) || '_';
 }
 
 /**
@@ -177,7 +273,12 @@ export function ensureUploadDir(userEmail: string): string {
 }
 
 /**
- * Generate unique filename for bill image
+ * Generate a unique filename for a bill image.
+ *
+ * The human-readable prefix (user folder, label, date, index) is followed by a
+ * random component so two uploads can never resolve to the same storage path
+ * (renameSync would silently overwrite). The extension comes from the upload's
+ * original name but is restricted to the allowed list.
  */
 export function generateFilename(
   userFolder: string,
@@ -186,8 +287,22 @@ export function generateFilename(
   suffix: string = '',
   originalFilename: string = ''
 ): string {
-  const ext = path.extname(originalFilename) || '.jpg';
-  return `${userFolder}_${billNumber}_${dateStr}${suffix}${ext}`;
+  const rawExt = path.extname(originalFilename).toLowerCase();
+  const ext = ALLOWED_EXTENSIONS.includes(rawExt) ? rawExt : '.jpg';
+  const safeLabel = billNumber.replace(/[^A-Za-z0-9._-]/g, '_');
+  const unique = crypto.randomBytes(8).toString('hex');
+  return `${userFolder}_${safeLabel}_${dateStr}${suffix}_${unique}${ext}`;
+}
+
+/**
+ * Resolve a stored relative path inside UPLOADS_DIR, or null if it would
+ * escape the uploads root.
+ */
+function resolveUploadPath(filePath: string): string | null {
+  const root = path.resolve(UPLOADS_DIR);
+  const resolved = path.resolve(root, filePath);
+  if (resolved !== root && !resolved.startsWith(root + path.sep)) return null;
+  return resolved;
 }
 
 /**
@@ -196,7 +311,8 @@ export function generateFilename(
 export function deleteFile(filePath: string): void {
   if (!filePath) return;
   
-  const fullPath = path.join(UPLOADS_DIR, filePath);
+  const fullPath = resolveUploadPath(filePath);
+  if (!fullPath) return;
   
   if (fs.existsSync(fullPath)) {
     try {
@@ -213,7 +329,8 @@ export function deleteFile(filePath: string): void {
 export function readFileForOCR(filePath: string): Buffer | null {
   if (!filePath) return null;
   
-  const fullPath = path.join(UPLOADS_DIR, filePath);
+  const fullPath = resolveUploadPath(filePath);
+  if (!fullPath) return null;
   
   if (!fs.existsSync(fullPath)) {
     return null;

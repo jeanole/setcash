@@ -9,7 +9,7 @@
 ## Tech Stack
 
 - **Runtime:** Node.js (20+ recommended)
-- **Framework:** Next.js 14 (App Router)
+- **Framework:** Next.js 15 (App Router)
 - **Database:** PostgreSQL via Prisma ORM
 - **Frontend:** React + Tailwind CSS
 - **Auth:** NextAuth.js (email/password + Google OAuth 2.0)
@@ -109,13 +109,13 @@ npm run test       # Jest (integration tests with real DB)
 
 **SetCash — Hardening Milestone**
 
-SetCash is a multi-tenant expense tracking and budget management app built with Next.js 14, PostgreSQL/Prisma, and NextAuth. Users submit expense bills with images; admins approve and process them; budgets are managed via a matrix view. Google Sheets sync, Telegram notifications, and PDF/Excel exports round out the feature set.
+SetCash is a multi-tenant expense tracking and budget management app built with Next.js 15, PostgreSQL/Prisma, and NextAuth. Users submit expense bills with images; admins approve and process them; budgets are managed via a matrix view. Google Sheets sync, Telegram notifications, and PDF/Excel exports round out the feature set.
 
 **Core Value:** Every bill submission, approval, and budget calculation must be **correct, secure, and reliable** — financial data tolerates zero silent failures.
 
 ### Constraints
 
-- **Tech stack**: No framework changes — Next.js 14, Prisma, PostgreSQL stay as-is
+- **Tech stack**: No framework changes — Next.js 15, Prisma, PostgreSQL stay as-is (upgraded from 14 to close unpatched security advisories)
 - **Backwards compatibility**: No breaking changes to existing API contracts or data models
 - **Data safety**: Legacy column removal requires migration with verification that no external system reads them
 - **Testing**: Integration tests use real database (per project convention), not mocks
@@ -133,10 +133,10 @@ SetCash is a multi-tenant expense tracking and budget management app built with 
 - Target: ES2017 (`nextjs/tsconfig.json` compilerOptions.target)
 - npm (lockfile: `nextjs/package-lock.json`)
 ## Frameworks
-- Next.js 14.2.35 - App Router, standalone output mode (`nextjs/next.config.mjs`)
-- React 18.3.1 - UI library
-- React DOM 18.3.1
-- NextAuth.js v5 (beta 30) - JWT strategy, Credentials + Google OAuth providers (`nextjs/auth.ts`)
+- Next.js 15.5.28 - App Router (route `params` are Promises — `await props.params`), standalone output mode (`nextjs/next.config.mjs`)
+- React 19 - UI library
+- React DOM 19
+- NextAuth.js v5 (beta 32) - JWT strategy, Credentials + Google OAuth providers (`nextjs/auth.ts`)
 - Edge-compatible auth config for middleware (`nextjs/auth.config.ts`)
 - Prisma 5.22+ - PostgreSQL client with `@prisma/client` (`nextjs/prisma/schema.prisma`)
 - Jest 29.7 - Test runner (`nextjs/jest.config.js`)
@@ -145,14 +145,15 @@ SetCash is a multi-tenant expense tracking and budget management app built with 
 - TypeScript 5.6.3 - Compiler
 - Tailwind CSS v4 with `@tailwindcss/postcss` - PostCSS plugin (`nextjs/postcss.config.mjs`)
 ## Key Dependencies
-- `next` 14.2.35 - Web framework, App Router
+- `next` 15.5.28 - Web framework, App Router
 - `@prisma/client` 5.22+ - Database ORM
-- `next-auth` 5.0.0-beta.30 - Authentication (JWT, Credentials, Google OAuth)
+- `next-auth` 5.0.0-beta.32 - Authentication (JWT, Credentials, Google OAuth)
 - `zod` 4.3.6 - Input validation (all API routes)
 - `bcryptjs` 3.0.3 - Password hashing (`nextjs/auth.ts`)
 - `googleapis` 171.4.0 - Google Sheets API for bill export (`nextjs/lib/google.ts`)
-- `node-telegram-bot-api` 0.67.0 - Telegram bot polling per project (`nextjs/lib/telegram/bot.ts`)
-- `resend` 6.9.3 - Transactional email delivery (`nextjs/lib/email.ts`)
+- `node-telegram-bot-api` 2.1.0 - Telegram bot polling per project (`nextjs/lib/telegram/bot.ts`; v2 API, wrapped by `lib/telegram/client.ts`)
+- `undici` 7 - SSRF-safe fetch with connect-time address checks (`nextjs/lib/safe-fetch.ts`)
+- `resend` 6.34 - Transactional email delivery (`nextjs/lib/email.ts`)
 - `@upstash/ratelimit` 2.0.8 + `@upstash/redis` 1.36.3 - Rate limiting with Redis backend (`nextjs/lib/ratelimit.ts`)
 - `pdfkit` 0.17.2 - PDF report generation (externalized in webpack, `nextjs/next.config.mjs`)
 - `exceljs` 4.4.0 - Excel spreadsheet export

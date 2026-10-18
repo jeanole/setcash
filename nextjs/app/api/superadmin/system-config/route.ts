@@ -4,6 +4,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
+import { verifySuperAdmin } from '@/lib/auth-guard';
 import { db as prisma } from '@/lib/db';
 import { z } from 'zod';
 
@@ -22,6 +23,8 @@ export async function GET() {
     if (session.user.role !== 'superadmin') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+    const guard = await verifySuperAdmin(session.user.email);
+    if (!guard.authorized) return guard.response!;
 
     const rows = await prisma.systemConfig.findMany();
     const configMap = Object.fromEntries(rows.map((r) => [r.key, r.value]));
@@ -50,6 +53,8 @@ export async function PATCH(req: NextRequest) {
     if (session.user.role !== 'superadmin') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+    const guard = await verifySuperAdmin(session.user.email);
+    if (!guard.authorized) return guard.response!;
 
     const body = await req.json();
     const parsed = patchSystemConfigSchema.safeParse(body);

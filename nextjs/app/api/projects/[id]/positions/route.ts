@@ -37,7 +37,7 @@ export async function GET(
     const positions = await prisma.projectPosition.findMany({
       where: { projectId: id },
       include: {
-        members: true,
+        _count: { select: { members: true } },
       },
     });
 
@@ -45,7 +45,7 @@ export async function GET(
       positions.map((p) => ({
         id: p.id,
         name: p.name,
-        memberCount: p.members.length,
+        memberCount: p._count.members,
       }))
     );
   } catch (error) {

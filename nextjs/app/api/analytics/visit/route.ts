@@ -6,7 +6,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { db as prisma } from '@/lib/db';
 import { visitLogLimiter } from '@/lib/ratelimit';
-import { classifyUA, getCountryCode, getClientIp, parseBrowser, parseOS } from '@/lib/analytics';
+import { getClientIp } from '@/lib/client-ip';
+import { allowAnalyticsWrite, classifyUA, getCountryCode, parseBrowser, parseOS } from '@/lib/analytics';
 
 const visitSchema = z.object({
   path:         z.string().max(200).optional().default('/'),
@@ -25,7 +26,7 @@ export async function POST(req: NextRequest) {
     // Rate limit by IP
     const ip = getClientIp(req);
     const rl = await visitLogLimiter.limit(ip);
-    if (!rl.success) {
+    if (!rl.success || !allowAnalyticsWrite()) {
       return new NextResponse(null, { status: 429 });
     }
 

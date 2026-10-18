@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
+import { verifyAdminRole } from '@/lib/auth-guard';
 import { db as prisma } from '@/lib/db';
 
 // GET /api/ocr-log - Returns paginated OcrLog entries for the current project (admin only)
@@ -23,6 +24,10 @@ export async function GET(req: NextRequest) {
     if (!isAdmin) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+
+    // Re-verify admin authority against the DB (JWT claims may be stale)
+    const roleCheck = await verifyAdminRole(session.user.email, projectId);
+    if (!roleCheck.authorized) return roleCheck.response!;
 
     const { searchParams } = new URL(req.url);
     const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10));

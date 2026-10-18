@@ -37,10 +37,8 @@ function isTransitionAllowed(current: AllowedStatus, next: AllowedStatus): boole
 }
 
 // PATCH /api/bills/[id]/status - Update status (approve/reject/paid)
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function PATCH(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const session = await auth();
     if (!session?.user) {
@@ -108,11 +106,36 @@ export async function PATCH(
       return NextResponse.json({ error: 'Invalid status transition' }, { status: 422 });
     }
 
-    // Update bill status
-    await prisma.bill.update({
-      where: { id },
-      data: { status: status as BillStatus },
+    // Update status and write the audit entry atomically. The WHERE clause
+    // includes the status we validated the transition against, so if another
+    // request moved the bill meanwhile (e.g. approved -> paid) nothing is
+    // written and the caller gets a 409 instead of an invalid transition.
+    const updated = await prisma.$transaction(async (tx) => {
+      const result = await tx.bill.updateMany({
+        where: { id, projectId, status: bill.status },
+        data: { status: status as BillStatus },
+      });
+      if (result.count === 0) return false;
+
+      await tx.editLog.create({
+        data: {
+          projectId,
+          timestamp: new Date(),
+          user: session.user.email,
+          billId: id,
+          changes: { status },
+          source: 'user',
+        },
+      });
+      return true;
     });
+
+    if (!updated) {
+      return NextResponse.json(
+        { error: 'Bill status changed in the meantime. Reload and try again.' },
+        { status: 409 }
+      );
+    }
 
     // Fire-and-forget: notify submitter on rejection
     if (status === 'rejected') {
@@ -137,18 +160,6 @@ export async function PATCH(
         }
       });
     }
-
-    // Log the status change
-    await prisma.editLog.create({
-      data: {
-        projectId,
-        timestamp: new Date(),
-        user: session.user.email,
-        billId: id,
-        changes: { status },
-        source: 'user',
-      },
-    });
 
     return NextResponse.json({ ok: true });
   } catch (error) {

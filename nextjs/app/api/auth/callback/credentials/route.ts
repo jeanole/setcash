@@ -1,64 +1,45 @@
 import { handlers } from '../../../../../auth';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-
-// ---------------------------------------------------------------------------
-// In-memory rate limiter — credential login (5 attempts per 60s per IP)
-// Moved from middleware.ts since matcher excludes /api/auth/* routes
-// ---------------------------------------------------------------------------
-const loginAttempts = new Map<string, { count: number; resetAt: number }>();
-
-// Periodically evict expired entries so the map doesn't grow unbounded.
-// unref() so this timer never keeps the Node process alive on its own.
-const loginAttemptsCleanup = setInterval(() => {
-  const now = Date.now();
-  for (const [ip, entry] of loginAttempts) {
-    if (now > entry.resetAt) {
-      loginAttempts.delete(ip);
-    }
-  }
-}, 60_000);
-loginAttemptsCleanup.unref();
-
-function checkRateLimit(ip: string): boolean {
-  const now = Date.now();
-  const windowMs = 60_000; // 60 seconds
-  const maxAttempts = 5;
-
-  const entry = loginAttempts.get(ip);
-
-  if (!entry || now > entry.resetAt) {
-    loginAttempts.set(ip, { count: 1, resetAt: now + windowMs });
-    return true; // allowed
-  }
-
-  if (entry.count >= maxAttempts) {
-    return false; // blocked
-  }
-
-  entry.count++;
-  return true; // allowed
-}
-
-function getClientIp(req: NextRequest): string {
-  return (
-    req.headers.get('x-forwarded-for')?.split(',')[0].trim() ??
-    req.headers.get('x-real-ip') ??
-    '127.0.0.1'
-  );
-}
+import { loginEmailLimiter, loginIpLimiter } from '@/lib/ratelimit';
+import { getClientIp } from '@/lib/client-ip';
 
 // ---------------------------------------------------------------------------
 // Rate-limited wrapper for NextAuth credentials callback
+// (lives here because the middleware matcher excludes /api/auth/*)
+//
+// Two independent limits: per client IP (resolved via lib/client-ip, which
+// ignores spoofable X-Forwarded-For) and per target email, so rotating IPs
+// does not allow unlimited password guessing against one account.
 // ---------------------------------------------------------------------------
-async function handleRequest(req: NextRequest): Promise<Response> {
-  const ip = getClientIp(req);
 
-  if (!checkRateLimit(ip)) {
-    return new NextResponse('Too many login attempts. Please try again later.', {
-      status: 429,
-      headers: { 'Retry-After': '60' },
-    });
+function tooManyAttempts(): Response {
+  return new NextResponse('Too many login attempts. Please try again later.', {
+    status: 429,
+    headers: { 'Retry-After': '60' },
+  });
+}
+
+async function getLoginEmail(req: NextRequest): Promise<string | null> {
+  try {
+    const form = await req.clone().formData();
+    const email = form.get('email');
+    return typeof email === 'string' && email ? email.trim().toLowerCase() : null;
+  } catch {
+    return null;
+  }
+}
+
+async function handleRequest(req: NextRequest): Promise<Response> {
+  if (req.method === 'POST') {
+    const ipResult = await loginIpLimiter.limit(getClientIp(req));
+    if (!ipResult.success) return tooManyAttempts();
+
+    const email = await getLoginEmail(req);
+    if (email) {
+      const emailResult = await loginEmailLimiter.limit(email);
+      if (!emailResult.success) return tooManyAttempts();
+    }
   }
 
   // Call NextAuth handler

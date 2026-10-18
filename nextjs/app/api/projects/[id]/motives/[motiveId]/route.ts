@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/db';
+import { verifySuperAdmin } from '@/lib/auth-guard';
 import { z } from 'zod';
 
 const updateSchema = z.object({
@@ -10,7 +11,11 @@ const updateSchema = z.object({
 
 // Helper to check admin access
 async function checkAdminAccess(session: any, projectId: string) {
-  if (session?.user?.role === 'superadmin') {
+  // JWT claim alone is not trusted — confirm superadmin status in the DB
+  if (
+    session?.user?.role === 'superadmin' &&
+    (await verifySuperAdmin(session.user.email)).authorized
+  ) {
     return true;
   }
 
@@ -105,7 +110,7 @@ export async function PUT(
       where: { id: motiveId },
       data: updateData,
       include: {
-        billMotives: true,
+        _count: { select: { billMotives: true } },
       },
     });
 
@@ -113,7 +118,7 @@ export async function PUT(
       id: motive.id,
       name: motive.name,
       budget: Number(motive.budget),
-      billCount: motive.billMotives.length,
+      billCount: motive._count.billMotives,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {

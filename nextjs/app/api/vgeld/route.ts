@@ -20,7 +20,7 @@ const createVgeldSchema = z.object({
   from: z.string().max(100, 'From must be 100 characters or fewer').optional(),
 });
 
-// GET /api/vgeld - List all V-Geld transfers for current project
+// GET /api/vgeld - List V-Geld transfers for current project (members: own only)
 export async function GET(req: NextRequest) {
   try {
     const session = await auth();
@@ -34,18 +34,29 @@ export async function GET(req: NextRequest) {
     }
 
     // Verify project membership
-    const membership = await prisma.projectMember.findUnique({
-      where: {
-        projectId_userEmail: {
-          projectId,
-          userEmail: session.user.email,
+    const [user, membership] = await Promise.all([
+      prisma.user.findUnique({
+        where: { email: session.user.email },
+        select: { isSuperAdmin: true },
+      }),
+      prisma.projectMember.findUnique({
+        where: {
+          projectId_userEmail: {
+            projectId,
+            userEmail: session.user.email,
+          },
         },
-      },
-    });
+        select: { role: true },
+      }),
+    ]);
 
-    if (!membership && session.user.role !== 'superadmin') {
+    if (!membership && !user?.isSuperAdmin) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+
+    // Admins/owners/superadmins see every transfer; regular members only the
+    // transfers they received or requested.
+    const isAdmin = !!user?.isSuperAdmin || membership?.role === 'admin' || membership?.role === 'owner';
 
     const queryParsed = listVgeldSchema.safeParse({
       limit: req.nextUrl.searchParams.get('limit') ?? undefined,
@@ -53,7 +64,12 @@ export async function GET(req: NextRequest) {
     const limit = queryParsed.success ? queryParsed.data.limit : 200;
 
     const transfers = await prisma.vgeld.findMany({
-      where: { projectId },
+      where: isAdmin
+        ? { projectId }
+        : {
+            projectId,
+            OR: [{ toUser: session.user.email }, { createdBy: session.user.email }],
+          },
       orderBy: { date: 'desc' },
       take: limit,
     });

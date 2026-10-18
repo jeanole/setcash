@@ -22,7 +22,7 @@ export async function GET() {
       include: {
         project: {
           include: {
-            members: true,
+            _count: { select: { members: true } },
           },
         },
       },
@@ -33,7 +33,7 @@ export async function GET() {
       name: membership.project.name,
       subtitle: membership.project.subtitle,
       role: membership.role,
-      memberCount: membership.project.members.length,
+      memberCount: membership.project._count.members,
       isCurrent: membership.projectId === session.user.currentProjectId,
     }));
 

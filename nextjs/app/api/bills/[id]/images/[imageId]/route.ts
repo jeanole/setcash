@@ -7,44 +7,60 @@ import { auth } from '@/auth';
 import { db as prisma } from '@/lib/db';
 import path from 'path';
 import fs from 'fs';
+import type { File } from 'formidable';
 import {
   parseForm,
   getUploadedFile,
+  ensureUploadDir,
+  generateFilename,
+  validateFile,
+  uploadErrorResponse,
   UPLOADS_DIR,
 } from '@/lib/upload';
 import { verifyAdminRole } from '@/lib/auth-guard';
+import { billImageUploadLimiter } from '@/lib/ratelimit';
+import { imageEditLockResponse, syncLegacyImageColumns } from '@/app/api/bills/_lib/shared';
 
-// Sync legacy bills.filename with first image
-async function syncLegacyImageColumns(billId: string) {
-  const firstImage = await prisma.billImage.findFirst({
-    where: { billId },
-    orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
-  });
-
-  if (firstImage) {
-    await prisma.bill.update({
-      where: { id: billId },
-      data: {
-        filename: firstImage.filename,
-      },
-    });
-  } else {
-    await prisma.bill.update({
-      where: { id: billId },
-      data: { filename: '' },
-    });
+// Best-effort removal of a stored upload (path relative to UPLOADS_DIR)
+function removeStoredFile(filePath: string) {
+  if (!filePath) return;
+  const root = path.resolve(UPLOADS_DIR);
+  const resolved = path.resolve(root, filePath);
+  if (!resolved.startsWith(root + path.sep)) return;
+  try {
+    if (fs.existsSync(resolved)) fs.unlinkSync(resolved);
+  } catch (e) {
+    console.error('Failed to delete image file:', e);
   }
 }
 
 // PUT /api/bills/[id]/images/[imageId] - Replace/crop image
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string; imageId: string } }
+  props: { params: Promise<{ id: string; imageId: string }> }
 ) {
+  const params = await props.params;
+  let uploadedFile: File | null = null;
+  let newFilePath: string | null = null; // absolute path of the stored replacement
+
+  const cleanupNewFiles = () => {
+    if (uploadedFile?.filepath && fs.existsSync(uploadedFile.filepath)) {
+      try { fs.unlinkSync(uploadedFile.filepath); } catch { /* best-effort cleanup */ }
+    }
+    if (newFilePath && fs.existsSync(newFilePath)) {
+      try { fs.unlinkSync(newFilePath); } catch { /* best-effort cleanup */ }
+    }
+  };
+
   try {
     const session = await auth();
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { success } = await billImageUploadLimiter.limit(session.user.id || session.user.email);
+    if (!success) {
+      return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 });
     }
 
     const projectId = session.user.currentProjectId;
@@ -83,6 +99,10 @@ export async function PUT(
       }
     }
 
+    // Approved/paid bills: images are frozen unless the caller is a DB-verified admin
+    const lockResponse = await imageEditLockResponse(bill.status, session.user.email, projectId);
+    if (lockResponse) return lockResponse;
+
     // Get image
     const image = await prisma.billImage.findFirst({
       where: { id: imageId, billId: id },
@@ -92,55 +112,83 @@ export async function PUT(
       return NextResponse.json({ error: 'Image not found' }, { status: 404 });
     }
 
-    // Parse multipart form
-    const { files } = await parseForm(req);
+    // Parse multipart form (single file, size-capped)
+    const { files } = await parseForm(req, { maxFiles: 1 });
 
     // Get uploaded file
-    const uploadedFile = getUploadedFile(files, 'photo');
+    uploadedFile = getUploadedFile(files, 'photo');
 
     if (!uploadedFile) {
       return NextResponse.json({ error: 'No file' }, { status: 400 });
     }
 
-    // Overwrite the existing file on disk
-    const imgPath = path.join(UPLOADS_DIR, image.filePath);
-    const dir = path.dirname(imgPath);
-
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
+    // Same extension + magic-byte validation as a fresh upload
+    const validation = validateFile(uploadedFile);
+    if (!validation.valid) {
+      cleanupNewFiles();
+      return NextResponse.json({ error: validation.error || 'Invalid file' }, { status: 400 });
     }
 
+    // Store the replacement under a NEW unique path (never overwrite in place:
+    // the extension may change, and the old file stays intact until the DB
+    // row points at the new one).
+    const userFolder = ensureUploadDir(bill.submittedByEmail);
+    const dateStr = new Date().toISOString().split('T')[0];
+    const savedFilename = generateFilename(
+      userFolder,
+      bill.billNumber || id,
+      dateStr,
+      `_${image.sortOrder}`,
+      uploadedFile.originalFilename || ''
+    );
+    const relPath = `${userFolder}/${savedFilename}`;
+    newFilePath = path.join(UPLOADS_DIR, relPath);
+
     // Use copy+delete instead of rename to handle cross-device moves (EXDEV)
-    fs.copyFileSync(uploadedFile.filepath, imgPath);
+    fs.copyFileSync(uploadedFile.filepath, newFilePath);
     try { fs.unlinkSync(uploadedFile.filepath); } catch { /* temp cleanup, non-fatal */ }
 
-    // Log the crop
-    await prisma.editLog.create({
-      data: {
-        projectId,
-        timestamp: new Date(),
-        user: session.user.email,
-        billId: id,
-        changes: { image: 'cropped' },
-        source: 'user',
-      },
+    await prisma.$transaction(async (tx) => {
+      await tx.billImage.update({
+        where: { id: imageId },
+        data: { filePath: relPath },
+      });
+      await syncLegacyImageColumns(tx, id);
+
+      // Log the crop
+      await tx.editLog.create({
+        data: {
+          projectId,
+          timestamp: new Date(),
+          user: session.user.email,
+          billId: id,
+          changes: { image: 'cropped' },
+          source: 'user',
+        },
+      });
     });
+
+    // The row now points at the new file — drop the old one
+    removeStoredFile(image.filePath);
 
     return NextResponse.json({ ok: true });
   } catch (error) {
+    cleanupNewFiles();
+
+    const uploadResponse = uploadErrorResponse(error);
+    if (uploadResponse) return uploadResponse;
+
     console.error('Error replacing image:', error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
 // DELETE /api/bills/[id]/images/[imageId] - Delete single image
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string; imageId: string } }
+  props: { params: Promise<{ id: string; imageId: string }> }
 ) {
+  const params = await props.params;
   try {
     const session = await auth();
     if (!session?.user) {
@@ -183,6 +231,10 @@ export async function DELETE(
       }
     }
 
+    // Approved/paid bills: images are frozen unless the caller is a DB-verified admin
+    const lockResponse = await imageEditLockResponse(bill.status, session.user.email, projectId);
+    if (lockResponse) return lockResponse;
+
     // Get image
     const image = await prisma.billImage.findFirst({
       where: { id: imageId, billId: id },
@@ -192,44 +244,34 @@ export async function DELETE(
       return NextResponse.json({ error: 'Image not found' }, { status: 404 });
     }
 
-    // Delete file from disk
-    if (image.filePath) {
-      const imgPath = path.join(UPLOADS_DIR, image.filePath);
-      if (fs.existsSync(imgPath)) {
-        try {
-          fs.unlinkSync(imgPath);
-        } catch (e) {
-          console.error('Failed to delete image file:', e);
-        }
-      }
-    }
+    // Delete the record, refresh legacy columns and log in one transaction;
+    // the file is only removed once the DB change has committed.
+    await prisma.$transaction(async (tx) => {
+      await tx.billImage.delete({
+        where: { id: imageId },
+      });
 
-    // Delete image record
-    await prisma.billImage.delete({
-      where: { id: imageId },
+      // Update legacy columns
+      await syncLegacyImageColumns(tx, id);
+
+      // Log the deletion
+      await tx.editLog.create({
+        data: {
+          projectId,
+          timestamp: new Date(),
+          user: session.user.email,
+          billId: id,
+          changes: { image: 'deleted' },
+          source: 'user',
+        },
+      });
     });
 
-    // Update legacy columns
-    await syncLegacyImageColumns(id);
-
-    // Log the deletion
-    await prisma.editLog.create({
-      data: {
-        projectId,
-        timestamp: new Date(),
-        user: session.user.email,
-        billId: id,
-        changes: { image: 'deleted' },
-        source: 'user',
-      },
-    });
+    removeStoredFile(image.filePath);
 
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error('Error deleting image:', error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

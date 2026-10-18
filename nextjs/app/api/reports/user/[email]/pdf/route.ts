@@ -10,19 +10,33 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/db';
 import { exportLimiter } from '@/lib/ratelimit';
-import { verifyAdminRole } from '@/lib/auth-guard';
+import { verifyAdminRole, verifyProjectMember } from '@/lib/auth-guard';
 import { UPLOADS_DIR } from '@/lib/upload';
-import { roundCents } from '@/lib/spending';
+import { SPENDING_BILL_STATUSES, roundCents } from '@/lib/spending';
+import { calculateTotal } from '@/lib/utils';
+import { BillStatus } from '@prisma/client';
 import fs from 'fs';
 import path from 'path';
 import { PassThrough } from 'stream';
 // @ts-ignore
 import PDFDocument from 'pdfkit';
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { email: string } }
-) {
+// Upper bounds so a single request cannot build an unbounded PDF.
+const MAX_REPORT_BILLS = 1000;
+const MAX_REPORT_VGELD = 1000;
+const MAX_IMAGES_PER_BILL = 10;
+
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await fs.promises.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function GET(req: NextRequest, props: { params: Promise<{ email: string }> }) {
+  const params = await props.params;
   try {
     const session = await auth();
     if (!session?.user) {
@@ -63,29 +77,63 @@ export async function GET(
       if (!guard.authorized) {
         return guard.response!;
       }
+    } else {
+      // Self path: the JWT's currentProjectId may be stale (e.g. removed
+      // member), so confirm current membership against the DB.
+      const memberCheck = await verifyProjectMember(session.user.email, projectId);
+      if (!memberCheck.authorized) {
+        return memberCheck.response!;
+      }
     }
 
     // Query bills and vgeld for target user.
     // This per-user report is a complete record of the user's submissions, so
-    // ALL statuses (including drafts) are listed here — unlike the spending
-    // aggregates, which count only {confirmed, approved, paid}.
-    const userBills = await prisma.bill.findMany({
-      where: {
-        projectId,
-        submittedByEmail: { equals: targetEmail, mode: 'insensitive' },
-      },
-      orderBy: { date: 'asc' },
-    });
+    // ALL statuses (including drafts) are listed here — but the summary and
+    // Saldo count only {confirmed, approved, paid} bills, matching the spending
+    // aggregates and getVgeldBalance. One extra row is fetched to detect
+    // truncation at MAX_REPORT_BILLS.
+    const billWhere = {
+      projectId,
+      submittedByEmail: { equals: targetEmail, mode: 'insensitive' as const },
+    };
+    const vgeldWhere = {
+      projectId,
+      toUser: { equals: targetEmail, mode: 'insensitive' as const },
+      // Only count confirmed V-Geld transfers (confirmedBy not null).
+      confirmedBy: { not: null },
+    };
 
-    // Only count confirmed V-Geld transfers (confirmedBy not null).
-    const userVGeld = await prisma.vgeld.findMany({
-      where: {
-        projectId,
-        toUser: { equals: targetEmail, mode: 'insensitive' },
-        confirmedBy: { not: null },
-      },
-      orderBy: { date: 'asc' },
-    });
+    const [fetchedBills, fetchedVGeld, spendingAgg, vgeldAgg] = await Promise.all([
+      prisma.bill.findMany({
+        where: billWhere,
+        orderBy: { date: 'asc' },
+        take: MAX_REPORT_BILLS + 1,
+      }),
+      prisma.vgeld.findMany({
+        where: vgeldWhere,
+        orderBy: { date: 'asc' },
+        take: MAX_REPORT_VGELD + 1,
+      }),
+      // Totals come from the database so they stay correct when the listed
+      // rows are truncated.
+      prisma.bill.aggregate({
+        where: {
+          ...billWhere,
+          status: { in: SPENDING_BILL_STATUSES as unknown as BillStatus[] },
+        },
+        _count: { _all: true },
+        _sum: { brutto19: true, brutto7: true, brutto0: true },
+      }),
+      prisma.vgeld.aggregate({
+        where: vgeldWhere,
+        _sum: { amount: true },
+      }),
+    ]);
+
+    const billsTruncated = fetchedBills.length > MAX_REPORT_BILLS;
+    const vgeldTruncated = fetchedVGeld.length > MAX_REPORT_VGELD;
+    const userBills = fetchedBills.slice(0, MAX_REPORT_BILLS);
+    const userVGeld = fetchedVGeld.slice(0, MAX_REPORT_VGELD);
 
     if (userBills.length === 0 && userVGeld.length === 0) {
       return NextResponse.json({ error: 'No data found for this user' }, { status: 404 });
@@ -135,6 +183,21 @@ export async function GET(
       }
     }
 
+    // Bulk-fetch images for all listed bills (one query instead of one per bill)
+    const imagesByBillId = new Map<string, { filePath: string }[]>();
+    if (billIds.length > 0) {
+      const allImages = await prisma.billImage.findMany({
+        where: { billId: { in: billIds } },
+        orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+        select: { billId: true, filePath: true },
+      });
+      for (const img of allImages) {
+        const list = imagesByBillId.get(img.billId);
+        if (list) list.push(img);
+        else imagesByBillId.set(img.billId, [img]);
+      }
+    }
+
     // Generate PDF
     const doc = new PDFDocument({ margin: 50, size: 'A4' });
     const pass = new PassThrough();
@@ -151,7 +214,7 @@ export async function GET(
     doc.moveDown(1);
 
     // V-Geld section
-    const totalVGeld = roundCents(userVGeld.reduce((sum, v) => sum + Number(v.amount), 0));
+    const totalVGeld = roundCents(Number(vgeldAgg._sum.amount ?? 0));
     doc.fontSize(12).font('Helvetica-Bold').text('V-Geld Zahlungen');
     doc.fontSize(10).font('Helvetica');
 
@@ -162,6 +225,12 @@ export async function GET(
         doc.text(
           `${new Date(v.date).toLocaleDateString('de-DE')} - ${Number(v.amount).toFixed(2)} EUR von ${v.fromUser || 'Extern'}`
         );
+      }
+      if (vgeldTruncated) {
+        doc
+          .fillColor('gray')
+          .text(`Hinweis: Es werden nur die ersten ${MAX_REPORT_VGELD} Zahlungen aufgelistet.`);
+        doc.fillColor('black');
       }
       doc.moveDown(0.3);
       doc.font('Helvetica-Bold').text(`V-Geld Gesamt: ${totalVGeld.toFixed(2)} EUR`);
@@ -217,7 +286,7 @@ export async function GET(
         doc.text(b19.toFixed(2), colX[4], rowY, { width: 43 });
         doc.text(b7.toFixed(2), colX[5], rowY, { width: 43 });
         doc.text(b0.toFixed(2), colX[6], rowY, { width: 43 });
-        doc.font('Helvetica-Bold').text((b19 + b7 + b0).toFixed(2), colX[7], rowY, { width: 43 });
+        doc.font('Helvetica-Bold').text(calculateTotal(b19, b7, b0).toFixed(2), colX[7], rowY, { width: 43 });
         doc.font('Helvetica').text(n19.toFixed(2), colX[8], rowY, { width: 43 });
         doc.text(n7.toFixed(2), colX[9], rowY, { width: 38 });
         doc.font('Helvetica-Bold').text(netto.toFixed(2), colX[10], rowY, { width: 38 });
@@ -225,6 +294,13 @@ export async function GET(
         rowY += 11;
       }
       doc.y = rowY;
+      if (billsTruncated) {
+        doc
+          .fontSize(8)
+          .fillColor('gray')
+          .text(`Hinweis: Es werden nur die ersten ${MAX_REPORT_BILLS} Belege aufgelistet.`, 50);
+        doc.fillColor('black');
+      }
       doc.moveDown(1);
     }
 
@@ -233,10 +309,14 @@ export async function GET(
     doc.moveDown(1);
 
     // Summary
-    const totalAmount = roundCents(userBills.reduce((sum, b) => sum + Number(b.grossAmount), 0));
-    const total19 = roundCents(userBills.reduce((sum, b) => sum + Number(b.brutto19), 0));
-    const total7 = roundCents(userBills.reduce((sum, b) => sum + Number(b.brutto7), 0));
-    const total0 = roundCents(userBills.reduce((sum, b) => sum + Number(b.brutto0), 0));
+    // Only confirmed/approved/paid bills count (draft/pending/rejected are
+    // listed above but excluded here), using the same per-bill total formula
+    // as the table rows.
+    const countedBills = spendingAgg._count._all;
+    const total19 = roundCents(Number(spendingAgg._sum.brutto19 ?? 0));
+    const total7 = roundCents(Number(spendingAgg._sum.brutto7 ?? 0));
+    const total0 = roundCents(Number(spendingAgg._sum.brutto0 ?? 0));
+    const totalAmount = roundCents(calculateTotal(total19, total7, total0));
     const totalNetto19 = total19 / 1.19;
     const totalNetto7 = total7 / 1.07;
     const totalNetto = totalNetto19 + totalNetto7 + total0;
@@ -257,7 +337,7 @@ export async function GET(
 
     doc.fontSize(10).font('Helvetica');
     doc.text('Anzahl Belege:', summaryX, summaryY);
-    doc.text(String(userBills.length), bruttoX, summaryY);
+    doc.text(String(countedBills), bruttoX, summaryY);
     summaryY += 14;
 
     doc.text('Gesamt 19%:', summaryX, summaryY);
@@ -288,11 +368,26 @@ export async function GET(
     doc.text(`${totalVGeld.toFixed(2)} EUR`, bruttoX, summaryY);
     summaryY += 14;
 
-    const balance = totalVGeld - totalAmount;
+    const balance = roundCents(totalVGeld - totalAmount);
     doc.fillColor(balance >= 0 ? 'green' : 'red');
     doc.text('Saldo (brutto):', summaryX, summaryY);
     doc.text(`${balance.toFixed(2)} EUR`, bruttoX, summaryY);
     doc.fillColor('black');
+    summaryY += 16;
+
+    if (countedBills !== userBills.length || billsTruncated) {
+      doc
+        .fontSize(8)
+        .font('Helvetica')
+        .fillColor('gray')
+        .text(
+          'Hinweis: Summen und Saldo enthalten nur Belege mit Status bestatigt, genehmigt oder bezahlt.',
+          summaryX,
+          summaryY
+        );
+      doc.fillColor('black');
+      summaryY += 12;
+    }
 
     doc.y = summaryY + 20;
 
@@ -349,7 +444,7 @@ export async function GET(
       if (b0) bruttoAmounts.push(`0%: ${b0.toFixed(2)}`);
 
       doc.text(
-        `Brutto: ${bruttoAmounts.join(' | ') || '-'} | Gesamt: ${(b19 + b7 + b0).toFixed(2)} EUR`
+        `Brutto: ${bruttoAmounts.join(' | ') || '-'} | Gesamt: ${calculateTotal(b19, b7, b0).toFixed(2)} EUR`
       );
 
       const nettoAmounts: string[] = [];
@@ -367,10 +462,8 @@ export async function GET(
       doc.moveDown(0.5);
 
       // Images
-      const billImages = await prisma.billImage.findMany({
-        where: { billId: bill.id },
-        orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
-      });
+      const allBillImages = imagesByBillId.get(bill.id) ?? [];
+      const billImages = allBillImages.slice(0, MAX_IMAGES_PER_BILL);
 
       if (billImages.length > 0) {
         for (let imgIdx = 0; imgIdx < billImages.length; imgIdx++) {
@@ -382,7 +475,7 @@ export async function GET(
           const subDir = path.dirname(img.filePath).replace(/\.\./g, '');
           const imagePath = path.join(UPLOADS_DIR, subDir, safeName);
 
-          if (fs.existsSync(imagePath)) {
+          if (await fileExists(imagePath)) {
             try {
               const ext = path.extname(imagePath).toLowerCase();
               if (['.jpg', '.jpeg', '.png'].includes(ext)) {
@@ -421,6 +514,16 @@ export async function GET(
             doc.fillColor('black');
           }
         }
+      }
+
+      if (allBillImages.length > MAX_IMAGES_PER_BILL) {
+        doc
+          .fontSize(9)
+          .fillColor('gray')
+          .text(
+            `[Hinweis: Es werden nur die ersten ${MAX_IMAGES_PER_BILL} von ${allBillImages.length} Bildern angezeigt]`
+          );
+        doc.fillColor('black');
       }
 
       // New page after each bill (except the last)

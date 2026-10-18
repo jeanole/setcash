@@ -3,7 +3,9 @@
 // ============================================================================
 // Admin-only endpoint. Generates a Telegram deep link for a project member
 // so they can link their account by clicking the link (bypassing /link CODE).
-// Also creates an in-app notification for the target user.
+// The link is delivered ONLY to the target user via an in-app notification and
+// is never returned to the calling admin — otherwise the admin could bind their
+// own Telegram account to the member and file bills as them.
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -11,6 +13,7 @@ import { auth } from '@/auth';
 import { prisma } from '@/lib/db';
 import { z } from 'zod';
 import { generateLinkCode } from '@/lib/telegram/codes';
+import { verifyAdminRole } from '@/lib/auth-guard';
 
 const bodySchema = z.object({
   userEmail: z.string().email(),
@@ -35,6 +38,9 @@ export async function POST(req: NextRequest) {
   if (!projectId) {
     return NextResponse.json({ error: 'No project selected' }, { status: 400 });
   }
+
+  const roleCheck = await verifyAdminRole(session.user.email, projectId);
+  if (!roleCheck.authorized) return roleCheck.response!;
 
   let body: unknown;
   try {
@@ -96,7 +102,8 @@ export async function POST(req: NextRequest) {
 
   const deepLink = `https://t.me/${botUsername}?start=${code}`;
 
-  // Create in-app notification for the target user — store deepLink in message as JSON
+  // Create in-app notification for the target user — store deepLink in message as JSON.
+  // This is the only place the link/code is exposed.
   await prisma.notification.create({
     data: {
       userEmail,
@@ -109,5 +116,6 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  return NextResponse.json({ deepLink, expires });
+  // Do NOT return the code or deepLink to the caller.
+  return NextResponse.json({ sent: true, expires });
 }

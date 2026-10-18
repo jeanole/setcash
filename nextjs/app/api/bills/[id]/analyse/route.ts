@@ -4,16 +4,13 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { db as prisma } from '@/lib/db';
-import { runOcrJob } from '@/lib/ocr';
+import { claimOcrJob, runOcrJob } from '@/lib/ocr';
 import { billAnalyseLimiter } from '@/lib/ratelimit';
 import { verifyAdminRole } from '@/lib/auth-guard';
 
 // POST /api/bills/[id]/analyse - Trigger OCR analysis
-export async function POST(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const session = await auth();
     if (!session?.user) {
@@ -46,18 +43,19 @@ export async function POST(
 
     const { id } = params;
 
-    // Verify bill belongs to this project
-    const bill = await prisma.bill.findFirst({
-      where: { id, projectId },
-      select: { id: true, ocrStatus: true },
-    });
-
-    if (!bill) {
-      return NextResponse.json({ error: 'Bill not found' }, { status: 404 });
-    }
-
-    // Prevent duplicate concurrent jobs
-    if (bill.ocrStatus === 'pending') {
+    // Atomically claim the job: scoped to this project, refuses approved/paid
+    // bills and bills already being analysed (compare-and-swap on ocrStatus).
+    const claim = await claimOcrJob(id, projectId);
+    if (!claim.ok) {
+      if (claim.reason === 'not_found') {
+        return NextResponse.json({ error: 'Bill not found' }, { status: 404 });
+      }
+      if (claim.reason === 'locked') {
+        return NextResponse.json(
+          { error: 'Approved or paid bills cannot be re-analysed' },
+          { status: 409 }
+        );
+      }
       return NextResponse.json(
         { error: 'Analysis already in progress for this bill' },
         { status: 409 }
@@ -65,7 +63,7 @@ export async function POST(
     }
 
     // Fire and forget - run OCR in background
-    runOcrJob(id, projectId).catch((e) =>
+    runOcrJob(id, projectId, claim).catch((e) =>
       console.error(`[OCR] Unhandled error for bill #${id}:`, e.message)
     );
 
@@ -75,9 +73,6 @@ export async function POST(
     );
   } catch (error) {
     console.error('Error triggering OCR analysis:', error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
