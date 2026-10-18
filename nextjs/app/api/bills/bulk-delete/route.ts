@@ -135,9 +135,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, deleted: validIds.length });
   } catch (error) {
     console.error('Error bulk deleting bills:', error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

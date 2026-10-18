@@ -74,7 +74,11 @@ export async function GET(_req: NextRequest) {
       return NextResponse.json({ error: 'No project selected' }, { status: 400 });
     }
 
-    // Only admin, owner, or superadmin may read project settings (DB-verified)
+    // Only admin, owner, or superadmin may read project settings. Fast JWT
+    // pre-filter first (a plain 403 for regular members), then DB-verified.
+    if (session.user.role !== 'admin' && session.user.role !== 'owner' && session.user.role !== 'superadmin') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
     const guard = await verifyAdminRole(session.user.email, projectId);
     if (!guard.authorized) return guard.response!;
 
@@ -105,7 +109,11 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: 'Demo accounts cannot modify project settings.' }, { status: 403 });
     }
 
-    // Only admin, owner, or superadmin may write project settings (DB-verified)
+    // Only admin, owner, or superadmin may write project settings. Fast JWT
+    // pre-filter first (a plain 403 for regular members), then DB-verified.
+    if (session.user.role !== 'admin' && session.user.role !== 'owner' && session.user.role !== 'superadmin') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
     const guard = await verifyAdminRole(session.user.email, projectId);
     if (!guard.authorized) return guard.response!;
 

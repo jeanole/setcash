@@ -7,12 +7,22 @@ import { auth } from '@/auth';
 import { db as prisma } from '@/lib/db';
 import { z } from 'zod';
 import { verifyAdminRole } from '@/lib/auth-guard';
+import { imageEditLockResponse, syncLegacyImageColumns } from '@/app/api/bills/_lib/shared';
+
+// Upper bound on the list length (bills hold at most 10 images via the UI;
+// the headroom covers older bills that were created with more)
+const MAX_REORDER_ITEMS = 50;
 
 const reorderImagesSchema = z.object({
-  images: z.array(z.object({
-    id: z.string(),
-    sortOrder: z.number(),
-  })),
+  images: z
+    .array(z.object({
+      id: z.string().min(1).max(100),
+      sortOrder: z.number().int().min(0).max(1000),
+    }))
+    .max(MAX_REORDER_ITEMS)
+    .refine((images) => new Set(images.map((i) => i.id)).size === images.length, {
+      message: 'Duplicate image ids',
+    }),
 });
 
 // PUT /api/bills/[id]/images/reorder - Reorder images
@@ -41,7 +51,7 @@ export async function PUT(
     // Verify bill belongs to project
     const bill = await prisma.bill.findFirst({
       where: { id, projectId },
-      select: { id: true, submittedByEmail: true },
+      select: { id: true, submittedByEmail: true, status: true },
     });
 
     if (!bill) {
@@ -63,6 +73,10 @@ export async function PUT(
       }
     }
 
+    // Approved/paid bills: images are frozen unless the caller is a DB-verified admin
+    const lockResponse = await imageEditLockResponse(bill.status, session.user.email, projectId);
+    if (lockResponse) return lockResponse;
+
     const body = await req.json();
     const validation = reorderImagesSchema.safeParse(body);
 
@@ -75,37 +89,39 @@ export async function PUT(
 
     const { images } = validation.data;
 
-    // Update each image's sort order
-    for (const img of images) {
-      await prisma.billImage.updateMany({
-        where: {
-          id: img.id,
-          billId: id,
-        },
+    // Update every image's sort order in one transaction (all or nothing),
+    // then keep the legacy "first image" column in step.
+    await prisma.$transaction(async (tx) => {
+      for (const img of images) {
+        await tx.billImage.updateMany({
+          where: {
+            id: img.id,
+            billId: id,
+          },
+          data: {
+            sortOrder: img.sortOrder,
+          },
+        });
+      }
+
+      await syncLegacyImageColumns(tx, id);
+
+      // Log the reorder
+      await tx.editLog.create({
         data: {
-          sortOrder: img.sortOrder,
+          projectId,
+          timestamp: new Date(),
+          user: session.user.email,
+          billId: id,
+          changes: { images: 'reordered' },
+          source: 'user',
         },
       });
-    }
-
-    // Log the reorder
-    await prisma.editLog.create({
-      data: {
-        projectId,
-        timestamp: new Date(),
-        user: session.user.email,
-        billId: id,
-        changes: { images: 'reordered' },
-        source: 'user',
-      },
     });
 
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error('Error reordering images:', error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

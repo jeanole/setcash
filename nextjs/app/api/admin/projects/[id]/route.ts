@@ -89,7 +89,7 @@ export async function DELETE(
     // Collect all bill image file paths BEFORE the DB rows are deleted, so we
     // can remove the corresponding files from disk once the transaction has
     // committed. The Bill.filename column is only ever a copy of the first
-    // BillImage's filename (not a standalone path), so BillImage.filePath is
+    // BillImage's filePath (not a standalone file), so BillImage.filePath is
     // the sole source of truth for on-disk locations.
     const imagesToDelete = await prisma.billImage.findMany({
       where: { bill: { projectId: id } },
