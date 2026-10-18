@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/db';
+import { cleanupAfterMemberRemoval } from '@/lib/telegram/membership-cleanup';
 
 // POST /api/projects/[id]/resign - Resign from project
 export async function POST(
@@ -37,27 +38,18 @@ export async function POST(
       );
     }
 
-    // Delete membership
-    await prisma.projectMember.delete({
-      where: {
-        projectId_userEmail: {
-          projectId: id,
-          userEmail: session.user.email,
+    // Delete membership, Telegram links and the default-project pointer atomically
+    await prisma.$transaction(async (tx) => {
+      await tx.projectMember.delete({
+        where: {
+          projectId_userEmail: {
+            projectId: id,
+            userEmail: session.user.email,
+          },
         },
-      },
-    });
-
-    // Clear default project if it was this one
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-    });
-
-    if (user?.defaultProjectId === id) {
-      await prisma.user.update({
-        where: { email: session.user.email },
-        data: { defaultProjectId: null },
       });
-    }
+      await cleanupAfterMemberRemoval(tx, id, session.user.email);
+    });
 
     return NextResponse.json({ ok: true });
   } catch (error) {

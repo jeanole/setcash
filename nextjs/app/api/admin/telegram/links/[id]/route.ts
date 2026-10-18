@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
+import { verifyAdminRole } from '@/lib/auth-guard';
 import { prisma } from '@/lib/db';
 
 export async function DELETE(
@@ -31,6 +32,10 @@ export async function DELETE(
     if (!isAdmin) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+
+    // Re-verify admin authority against the DB (JWT claims may be stale)
+    const roleCheck = await verifyAdminRole(session.user.email, projectId);
+    if (!roleCheck.authorized) return roleCheck.response!;
 
     const { id } = params;
 

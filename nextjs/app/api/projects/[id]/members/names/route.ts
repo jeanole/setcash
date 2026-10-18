@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { db as prisma } from '@/lib/db';
+import { verifySuperAdmin } from '@/lib/auth-guard';
 
 // GET /api/projects/[id]/members/names - List member names for @mention autocomplete
 export async function GET(
@@ -31,7 +32,10 @@ export async function GET(
       },
     });
 
-    const isSuperAdmin = session.user.role === 'superadmin';
+    // JWT claim alone is not trusted — confirm superadmin status in the DB
+    const isSuperAdmin =
+      session.user.role === 'superadmin' &&
+      (await verifySuperAdmin(session.user.email)).authorized;
 
     if (!membership && !isSuperAdmin) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });

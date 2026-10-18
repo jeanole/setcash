@@ -11,8 +11,53 @@ import { auth } from '@/auth';
 import { prisma } from '@/lib/db';
 import { exportLimiter } from '@/lib/ratelimit';
 import { verifyAdminRole } from '@/lib/auth-guard';
-import { PassThrough } from 'stream';
+import { PassThrough, Readable } from 'stream';
 import ExcelJS from 'exceljs';
+
+// Rows are read from the DB in cursor-paginated batches so no single query
+// loads the whole project, and allocations come with each batch (no
+// project-wide allocation scans).
+const DB_BATCH_SIZE = 1000;
+
+async function* iterateBills(projectId: string) {
+  let cursor: string | undefined;
+  while (true) {
+    const batch = await prisma.bill.findMany({
+      where: { projectId },
+      orderBy: { id: 'asc' },
+      take: DB_BATCH_SIZE,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      include: {
+        motives: {
+          include: { motive: { select: { name: true } } },
+          orderBy: { id: 'asc' },
+        },
+        categories: {
+          include: { category: { select: { name: true } } },
+          orderBy: { id: 'asc' },
+        },
+      },
+    });
+    for (const bill of batch) yield bill;
+    if (batch.length < DB_BATCH_SIZE) return;
+    cursor = batch[batch.length - 1].id;
+  }
+}
+
+async function* iterateVgeld(projectId: string) {
+  let cursor: string | undefined;
+  while (true) {
+    const batch = await prisma.vgeld.findMany({
+      where: { projectId },
+      orderBy: { id: 'asc' },
+      take: DB_BATCH_SIZE,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    });
+    for (const v of batch) yield v;
+    if (batch.length < DB_BATCH_SIZE) return;
+    cursor = batch[batch.length - 1].id;
+  }
+}
 
 export async function GET() {
   try {
@@ -63,33 +108,6 @@ export async function GET() {
     // --- Bills sheet ---
     const billsSheet = workbook.addWorksheet('Bills');
 
-    const bills = await prisma.bill.findMany({
-      where: { projectId },
-      orderBy: { id: 'asc' },
-    });
-
-    const allMotiveAllocs = await prisma.billMotive.findMany({
-      where: { bill: { projectId } },
-      include: { motive: { select: { name: true } } },
-      orderBy: [{ billId: 'asc' }, { id: 'asc' }],
-    });
-    const allCategoryAllocs = await prisma.billCategory.findMany({
-      where: { bill: { projectId } },
-      include: { category: { select: { name: true } } },
-      orderBy: [{ billId: 'asc' }, { id: 'asc' }],
-    });
-
-    const motivesByBill: Record<string, { name: string; percentage: number }[]> = {};
-    for (const a of allMotiveAllocs) {
-      if (!motivesByBill[a.billId]) motivesByBill[a.billId] = [];
-      motivesByBill[a.billId].push({ name: a.motive.name, percentage: Number(a.percentage) });
-    }
-    const categoriesByBill: Record<string, { name: string; percentage: number }[]> = {};
-    for (const a of allCategoryAllocs) {
-      if (!categoriesByBill[a.billId]) categoriesByBill[a.billId] = [];
-      categoriesByBill[a.billId].push({ name: a.category.name, percentage: Number(a.percentage) });
-    }
-
     billsSheet.columns = [
       { header: 'ID', key: 'id', width: 6 },
       { header: 'Nr.', key: 'bill_number', width: 10 },
@@ -115,14 +133,17 @@ export async function GET() {
     };
     billsSheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
 
-    for (const bill of bills) {
+    for await (const bill of iterateBills(projectId)) {
       const b19 = Number(bill.brutto19);
       const b7 = Number(bill.brutto7);
       const b0 = Number(bill.brutto0);
       const total = b19 + b7 + b0 || Number(bill.grossAmount);
       const netto = Number(bill.nettoAmount) || b19 / 1.19 + b7 / 1.07 + b0;
 
-      const motiveAllocs = motivesByBill[bill.id] || [];
+      const motiveAllocs = bill.motives.map((a) => ({
+        name: a.motive.name,
+        percentage: Number(a.percentage),
+      }));
       const motiveStr =
         motiveAllocs
           .map((a) =>
@@ -134,7 +155,10 @@ export async function GET() {
         bill.motiveLegacy ||
         '';
 
-      const categoryAllocs = categoriesByBill[bill.id] || [];
+      const categoryAllocs = bill.categories.map((a) => ({
+        name: a.category.name,
+        percentage: Number(a.percentage),
+      }));
       const categoryStr = categoryAllocs
         .map((a) =>
           categoryAllocs.length === 1 && a.percentage === 100
@@ -169,11 +193,6 @@ export async function GET() {
 
     // --- V-Geld sheet ---
     const vgeldSheet = workbook.addWorksheet('V-Geld');
-    const vgeld = await prisma.vgeld.findMany({
-      where: { projectId },
-      orderBy: { id: 'asc' },
-    });
-
     vgeldSheet.columns = [
       { header: 'ID', key: 'id', width: 6 },
       { header: 'Date', key: 'date', width: 18 },
@@ -190,7 +209,7 @@ export async function GET() {
     };
     vgeldSheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
 
-    for (const v of vgeld) {
+    for await (const v of iterateVgeld(projectId)) {
       vgeldSheet.addRow({
         id: v.id,
         date: v.date ? new Date(v.date) : '',
@@ -327,18 +346,15 @@ export async function GET() {
     const dateStr = new Date().toISOString().split('T')[0];
     const filename = `${projectName.replace(/[^a-zA-Z0-9_-]/g, '_')}_export_${dateStr}.xlsx`;
 
-    const streamPromise = workbook.xlsx.write(pass);
+    // Readable.toWeb applies backpressure and propagates stream errors/cancellation.
+    const readableStream = Readable.toWeb(pass) as unknown as ReadableStream;
 
-    const readableStream = new ReadableStream({
-      start(controller) {
-        pass.on('data', (chunk: Buffer) => controller.enqueue(chunk));
-        pass.on('end', () => controller.close());
-        pass.on('error', (err: Error) => controller.error(err));
-      },
+    // Trigger writing (don't await — it writes to the pass stream). On failure,
+    // destroy the stream with the error so the download aborts instead of hanging.
+    workbook.xlsx.write(pass).catch((err) => {
+      console.error('Excel write error:', err);
+      pass.destroy(err instanceof Error ? err : new Error(String(err)));
     });
-
-    // Trigger writing (don't await — it writes to pass stream)
-    streamPromise.catch((err) => console.error('Excel write error:', err));
 
     return new Response(readableStream, {
       headers: {

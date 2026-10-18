@@ -4,9 +4,11 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
+import { verifySuperAdmin } from '@/lib/auth-guard';
 import { db as prisma } from '@/lib/db';
 import { z } from 'zod';
 import { ProjectRole } from '@prisma/client';
+import { cleanupAfterMemberRemoval } from '@/lib/telegram/membership-cleanup';
 
 // Validation schema for updating members
 const UpdateMemberSchema = z.object({
@@ -29,6 +31,8 @@ export async function PUT(
     if (session.user.role !== 'superadmin') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+    const guard = await verifySuperAdmin(session.user.email);
+    if (!guard.authorized) return guard.response!;
 
     const { id, memberId } = await params;
     const body = await req.json();
@@ -81,17 +85,50 @@ export async function PUT(
       }
     }
 
-    // Update member
-    await prisma.projectMember.update({
-      where: { id: memberId },
-      data: {
-        ...(projectRole !== undefined && { role: projectRole as ProjectRole }),
-        ...(positionId !== undefined && { positionId: positionId || null }),
+    // Last-owner check and write share a serializable transaction so two
+    // concurrent demotions cannot both pass the count.
+    const result = await prisma.$transaction(
+      async (tx) => {
+        const current = await tx.projectMember.findFirst({
+          where: { id: memberId, projectId: id },
+        });
+        if (!current) {
+          return { error: 'Member not found', status: 404 };
+        }
+
+        if (current.role === 'owner' && projectRole !== undefined && projectRole !== 'owner') {
+          const ownerCount = await tx.projectMember.count({
+            where: { projectId: id, role: 'owner' },
+          });
+          if (ownerCount <= 1) {
+            return { error: 'Cannot remove the last owner', status: 400 };
+          }
+        }
+
+        await tx.projectMember.update({
+          where: { id: memberId },
+          data: {
+            ...(projectRole !== undefined && { role: projectRole as ProjectRole }),
+            ...(positionId !== undefined && { positionId: positionId || null }),
+          },
+        });
+        return null;
       },
-    });
+      { isolationLevel: 'Serializable' }
+    );
+
+    if (result) {
+      return NextResponse.json({ error: result.error }, { status: result.status });
+    }
 
     return NextResponse.json({ ok: true });
   } catch (error) {
+    if ((error as { code?: string }).code === 'P2034') {
+      return NextResponse.json(
+        { error: 'Concurrent update detected, please retry' },
+        { status: 409 }
+      );
+    }
     console.error('Error updating project member:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
@@ -115,6 +152,8 @@ export async function DELETE(
     if (session.user.role !== 'superadmin') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+    const guard = await verifySuperAdmin(session.user.email);
+    if (!guard.authorized) return guard.response!;
 
     const { id, memberId } = await params;
 
@@ -130,13 +169,44 @@ export async function DELETE(
       return NextResponse.json({ error: 'Member not found' }, { status: 404 });
     }
 
-    // Delete member
-    await prisma.projectMember.delete({
-      where: { id: memberId },
-    });
+    // Last-owner check, delete and side-effects share a serializable transaction
+    const result = await prisma.$transaction(
+      async (tx) => {
+        const current = await tx.projectMember.findFirst({
+          where: { id: memberId, projectId: id },
+        });
+        if (!current) {
+          return { error: 'Member not found', status: 404 };
+        }
+
+        if (current.role === 'owner') {
+          const ownerCount = await tx.projectMember.count({
+            where: { projectId: id, role: 'owner' },
+          });
+          if (ownerCount <= 1) {
+            return { error: 'Cannot remove the last owner', status: 400 };
+          }
+        }
+
+        await tx.projectMember.delete({ where: { id: memberId } });
+        await cleanupAfterMemberRemoval(tx, id, current.userEmail);
+        return null;
+      },
+      { isolationLevel: 'Serializable' }
+    );
+
+    if (result) {
+      return NextResponse.json({ error: result.error }, { status: result.status });
+    }
 
     return NextResponse.json({ ok: true });
   } catch (error) {
+    if ((error as { code?: string }).code === 'P2034') {
+      return NextResponse.json(
+        { error: 'Concurrent update detected, please retry' },
+        { status: 409 }
+      );
+    }
     console.error('Error deleting project member:', error);
     return NextResponse.json(
       { error: 'Internal server error' },

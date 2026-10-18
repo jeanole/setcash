@@ -12,6 +12,7 @@ import http from 'http';
 import TelegramBot from 'node-telegram-bot-api';
 import { prisma } from '../db';
 import { UPLOADS_DIR } from '../upload';
+import { telegramLinkAttemptLimiter } from '../ratelimit';
 import { validateAndConsumeLinkCode } from './codes';
 
 // Album buffering: bufferKey -> { messages, timer }
@@ -60,18 +61,39 @@ export async function downloadTelegramFile(
   return new Promise((resolve, reject) => {
     const proto = url.startsWith('https') ? https : http;
     const file = fs.createWriteStream(destPath);
-    proto
-      .get(url, (res) => {
-        res.pipe(file);
-        file.on('finish', () => {
-          file.close();
-          resolve({ savedName, origName: path.basename(filePath) });
-        });
-      })
-      .on('error', (err) => {
-        fs.unlink(destPath, () => {});
-        reject(err);
+    let settled = false;
+
+    // Single failure path: stop writing, remove any partial file, reject once.
+    const fail = (err: Error) => {
+      if (settled) return;
+      settled = true;
+      file.destroy();
+      fs.unlink(destPath, () => {});
+      reject(err);
+    };
+
+    file.on('error', fail);
+    file.on('finish', () => {
+      if (settled) return;
+      settled = true;
+      resolve({ savedName, origName: path.basename(filePath) });
+    });
+
+    const req = proto.get(url, (res) => {
+      if (res.statusCode !== 200) {
+        res.resume(); // drain so the socket is released
+        fail(new Error(`Telegram file download failed with status ${res.statusCode}`));
+        return;
+      }
+      res.on('error', fail);
+      // Connection dropped mid-transfer: the pipe would otherwise never finish
+      res.on('close', () => {
+        if (!res.complete) fail(new Error('Telegram file download interrupted'));
       });
+      res.pipe(file);
+    });
+    req.on('error', fail);
+    req.setTimeout(30_000, () => req.destroy(new Error('Telegram file download timed out')));
   });
 }
 
@@ -87,64 +109,68 @@ export async function createDraftBill(
 ): Promise<string> {
   const billNumber = `TG-${Date.now()}`;
 
-  const bill = await prisma.bill.create({
-    data: {
-      projectId,
-      submittedByEmail: userEmail,
-      billNumber,
-      type: 'Kauf',
-      vendor: '',
-      item: '',
-      comment: caption || '',
-      status: 'draft',
-      date: new Date(),
-      telegramCaption: caption || null,
-    },
-  });
-
-  const billId = bill.id;
-
-  // Assign default motive
-  const defaultMotive = await prisma.motive.findFirst({
-    where: { projectId, name: 'Default' },
-  });
-  if (defaultMotive) {
-    await prisma.billMotive.create({
+  // Bill, default allocations and images are written atomically — a failure
+  // part-way must not leave a bill without its motive/category/images.
+  return prisma.$transaction(async (tx) => {
+    const bill = await tx.bill.create({
       data: {
-        billId,
-        motiveId: defaultMotive.id,
-        percentage: 100,
+        projectId,
+        submittedByEmail: userEmail,
+        billNumber,
+        type: 'Kauf',
+        vendor: '',
+        item: '',
+        comment: caption || '',
+        status: 'draft',
+        date: new Date(),
+        telegramCaption: caption || null,
       },
     });
-  }
 
-  // Assign uncategorized category
-  const defaultCategory = await prisma.category.findFirst({
-    where: { projectId, name: 'Uncategorized' },
+    const billId = bill.id;
+
+    // Assign default motive
+    const defaultMotive = await tx.motive.findFirst({
+      where: { projectId, name: 'Default' },
+    });
+    if (defaultMotive) {
+      await tx.billMotive.create({
+        data: {
+          billId,
+          motiveId: defaultMotive.id,
+          percentage: 100,
+        },
+      });
+    }
+
+    // Assign uncategorized category
+    const defaultCategory = await tx.category.findFirst({
+      where: { projectId, name: 'Uncategorized' },
+    });
+    if (defaultCategory) {
+      await tx.billCategory.create({
+        data: {
+          billId,
+          categoryId: defaultCategory.id,
+          percentage: 100,
+        },
+      });
+    }
+
+    // Attach images
+    if (photos.length > 0) {
+      await tx.billImage.createMany({
+        data: photos.map((photo, i) => ({
+          billId,
+          filename: photo.origName,
+          filePath: photo.savedName,
+          sortOrder: i,
+        })),
+      });
+    }
+
+    return billId;
   });
-  if (defaultCategory) {
-    await prisma.billCategory.create({
-      data: {
-        billId,
-        categoryId: defaultCategory.id,
-        percentage: 100,
-      },
-    });
-  }
-
-  // Attach images
-  for (let i = 0; i < photos.length; i++) {
-    await prisma.billImage.create({
-      data: {
-        billId,
-        filename: photos[i].origName,
-        filePath: photos[i].savedName,
-        sortOrder: i,
-      },
-    });
-  }
-
-  return billId;
 }
 
 /**
@@ -405,16 +431,44 @@ async function performLink(
   bot: TelegramBot,
   msg: TelegramBot.Message,
   projectId: string,
-  code: string
+  rawCode: string
 ): Promise<void> {
+  if (!msg.from) return;
+  const telegramUserId = String(msg.from.id);
+
+  // Normalise identically for /start and /link
+  const code = rawCode.trim().toUpperCase();
+
+  // Throttle link-code guessing per Telegram user. Every attempt counts (so an
+  // exhausted user is rejected before any code lookup), which also bounds
+  // brute-forcing of the 6-character code space.
+  const attempt = await telegramLinkAttemptLimiter.limit(`${projectId}:${telegramUserId}`);
+  if (!attempt.success) {
+    bot
+      .sendMessage(msg.chat.id, 'Zu viele Versuche. Bitte warte einige Minuten und versuche es erneut.')
+      .catch(() => {});
+    return;
+  }
+
   const result = await validateAndConsumeLinkCode(code, projectId);
   if (!result) {
     bot.sendMessage(msg.chat.id, 'Ungültiger oder abgelaufener Code.').catch(() => {});
     return;
   }
 
-  const telegramUserId = String(msg.from!.id);
   try {
+    // The code was issued to a member, but they may have been removed since
+    const membership = await prisma.projectMember.findUnique({
+      where: { projectId_userEmail: { projectId, userEmail: result.userEmail } },
+      select: { id: true },
+    });
+    if (!membership) {
+      bot
+        .sendMessage(msg.chat.id, 'Dieser Account ist kein Mitglied des Projekts mehr.')
+        .catch(() => {});
+      return;
+    }
+
     await prisma.telegramLink.upsert({
       where: {
         projectId_telegramUserId: { projectId, telegramUserId },
@@ -449,7 +503,7 @@ export async function handleMessage(
     const payload = msg.text.trim().split(/\s+/)[1];
     if (payload) {
       // Deep link invite: /start CODE — same upsert logic as /link
-      await performLink(bot, msg, projectId, payload.toUpperCase());
+      await performLink(bot, msg, projectId, payload);
     } else {
       // Plain /start — show welcome message
       bot
@@ -476,7 +530,8 @@ export async function handleMessage(
 
   // Handle photos
   if (msg.photo) {
-    const telegramUserId = String(msg.from!.id);
+    if (!msg.from) return;
+    const telegramUserId = String(msg.from.id);
     const link = await prisma.telegramLink.findFirst({
       where: { projectId, telegramUserId },
       select: { userEmail: true },
@@ -487,6 +542,23 @@ export async function handleMessage(
         .sendMessage(
           msg.chat.id,
           'Dein Telegram-Account ist noch nicht verknüpft.\nSende /link <Code> – den Code findest du in SetCash.'
+        )
+        .catch(() => {});
+      return;
+    }
+
+    // A link outlives membership unless cleaned up — never create bills for
+    // someone who has since been removed from the project.
+    const membership = await prisma.projectMember.findUnique({
+      where: { projectId_userEmail: { projectId, userEmail: link.userEmail } },
+      select: { id: true },
+    });
+    if (!membership) {
+      await prisma.telegramLink.deleteMany({ where: { projectId, telegramUserId } });
+      bot
+        .sendMessage(
+          msg.chat.id,
+          'Dein Telegram-Account ist nicht mehr verknüpft, da du kein Mitglied dieses Projekts mehr bist.'
         )
         .catch(() => {});
       return;

@@ -7,6 +7,7 @@
 
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
+import { verifyAdminRole } from '@/lib/auth-guard';
 import { startProjectBot, isBotRunning } from '@/lib/telegram/bot';
 
 export async function POST() {
@@ -29,6 +30,10 @@ export async function POST() {
     if (!isAdmin) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+
+    // Re-verify admin authority against the DB (JWT claims may be stale)
+    const roleCheck = await verifyAdminRole(session.user.email, projectId);
+    if (!roleCheck.authorized) return roleCheck.response!;
 
     await startProjectBot(projectId);
 

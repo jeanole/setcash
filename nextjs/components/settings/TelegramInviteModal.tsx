@@ -8,12 +8,11 @@ interface TelegramInviteModalProps {
 }
 
 export default function TelegramInviteModal({ userEmail, onClose }: TelegramInviteModalProps) {
-  const [deepLink, setDeepLink] = useState<string | null>(null);
+  const [sent, setSent] = useState(false);
   const [expires, setExpires] = useState<Date | null>(null);
   const [secondsLeft, setSecondsLeft] = useState<number>(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
 
   const generateLink = useCallback(async () => {
     setLoading(true);
@@ -29,7 +28,7 @@ export default function TelegramInviteModal({ userEmail, onClose }: TelegramInvi
         throw new Error(data.error || 'Failed to generate invite link');
       }
       const data = await res.json();
-      setDeepLink(data.deepLink);
+      setSent(Boolean(data.sent));
       setExpires(new Date(data.expires));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate invite link');
@@ -61,13 +60,6 @@ export default function TelegramInviteModal({ userEmail, onClose }: TelegramInvi
     return `${m}:${sec.toString().padStart(2, '0')}`;
   };
 
-  const copyLink = async () => {
-    if (!deepLink) return;
-    await navigator.clipboard.writeText(deepLink);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
@@ -88,27 +80,18 @@ export default function TelegramInviteModal({ userEmail, onClose }: TelegramInvi
           </div>
         )}
 
-        {loading && !deepLink && (
-          <div className="text-center py-8 text-slate-500 text-sm">Generating invite link…</div>
+        {loading && !sent && (
+          <div className="text-center py-8 text-slate-500 text-sm">Sending invite…</div>
         )}
 
-        {deepLink && (
+        {sent && (
           <div className="space-y-4">
             <p className="text-sm text-slate-600">
-              Share this link with{' '}
-              <span className="font-medium text-slate-800">{userEmail}</span> — clicking it opens
+              An invite was sent to{' '}
+              <span className="font-medium text-slate-800">{userEmail}</span> as an in-app
+              notification. For security the link is only visible to them — opening it starts
               Telegram and links their account automatically.
             </p>
-
-            <div className="bg-slate-100 rounded-lg px-4 py-3 flex items-center justify-between gap-3">
-              <code className="text-xs font-mono text-slate-900 break-all">{deepLink}</code>
-              <button
-                onClick={copyLink}
-                className="shrink-0 px-3 py-1.5 text-xs font-medium rounded-md border border-slate-300 text-slate-700 hover:bg-slate-200 transition-colors"
-              >
-                {copied ? 'Copied!' : 'Copy Link'}
-              </button>
-            </div>
 
             <div className="text-sm">
               <span className={secondsLeft < 60 ? 'text-rose-600 font-medium' : 'text-slate-500'}>
@@ -117,7 +100,7 @@ export default function TelegramInviteModal({ userEmail, onClose }: TelegramInvi
             </div>
 
             <p className="text-xs text-slate-400">
-              Generating a new link invalidates any previous link for this user.
+              Sending a new invite invalidates any previous link for this user.
             </p>
           </div>
         )}

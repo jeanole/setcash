@@ -122,7 +122,7 @@ export async function DELETE(
       include: {
         project: {
           include: {
-            members: true,
+            _count: { select: { members: true } },
           },
         },
       },
@@ -133,7 +133,7 @@ export async function DELETE(
     }
 
     // Check if project has other members
-    if (membership.project.members.length > 1) {
+    if (membership.project._count.members > 1) {
       return NextResponse.json(
         { error: 'Remove all other members before deleting the project' },
         { status: 400 }
