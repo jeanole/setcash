@@ -22,6 +22,27 @@ export const LOCKED_BILL_STATUSES = ['approved', 'paid'] as const;
 export const MAX_IMAGES_PER_BILL = 10;
 
 // ---------------------------------------------------------------------------
+// Field validation shared by POST /api/bills and PUT /api/bills/[id]
+// ---------------------------------------------------------------------------
+
+// Sanity cap for a single brutto amount (EUR)
+export const MAX_BRUTTO_AMOUNT = 1_000_000;
+
+// A plain decimal with at most two fraction digits: no sign, hex, exponent or spaces
+export const PLAIN_AMOUNT_PATTERN = /^\d+(\.\d{1,2})?$/;
+
+/** Numeric amount: 0 <= x <= 1e6, whole cents */
+export const bruttoAmountSchema = z.number().min(0).max(MAX_BRUTTO_AMOUNT).multipleOf(0.01);
+
+/** Free-text bill fields with their maximum lengths (trimmed where the POST trims) */
+export const billTextSchemas = {
+  type: z.string().trim().max(100),
+  vendor: z.string().trim().max(200),
+  item: z.string().trim().max(500),
+  comment: z.string().max(2000),
+};
+
+// ---------------------------------------------------------------------------
 // Allocation validation
 // ---------------------------------------------------------------------------
 
@@ -113,7 +134,7 @@ export async function imageEditLockResponse(
  */
 export async function runSerializable<T>(
   fn: (tx: Prisma.TransactionClient) => Promise<T>,
-  attempts = 3
+  attempts = 6
 ): Promise<T> {
   for (let attempt = 1; ; attempt++) {
     try {
@@ -121,9 +142,11 @@ export async function runSerializable<T>(
         isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
       });
     } catch (error) {
-      const isSerializationFailure =
-        error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034';
+      // Matched by code (not instanceof) so it also works across duplicated module instances
+      const isSerializationFailure = (error as { code?: unknown } | null)?.code === 'P2034';
       if (!isSerializationFailure || attempt >= attempts) throw error;
+      // Randomised backoff so competing retries don't collide again in lockstep
+      await new Promise((resolve) => setTimeout(resolve, Math.random() * 25 * attempt));
     }
   }
 }
@@ -132,17 +155,30 @@ export async function runSerializable<T>(
 // Bill numbers
 // ---------------------------------------------------------------------------
 
+/** Ordinal (1-based) of a `G.PP` bill number: 1.01 -> 1, 1.20 -> 20, 2.01 -> 21. Null if not that format. */
+export function billNumberOrdinal(billNumber: string | null | undefined): number | null {
+  const match = /^(\d{1,6})\.(\d{2})$/.exec(billNumber ?? '');
+  if (!match) return null;
+  return (Number(match[1]) - 1) * 20 + Number(match[2]);
+}
+
 /**
  * Next bill number for a user within a project (1.01-1.20, 2.01-2.20, ...).
- * Derived from the highest existing number + 1 rather than a row count, so
- * deleting a bill can never cause an already-used number to be handed out
- * again. Call inside a Serializable transaction to stay unique under concurrency.
+ *
+ * A persistent per-(project, user) counter hands out the numbers, so deleting a
+ * bill — even the one with the highest number — can never free a number that
+ * was already issued (it is referenced by audit logs and exports). As a safety
+ * net the result is also never lower than the highest number still in use
+ * (covers bills created before the counter existed or imported with numbers).
+ * Call inside a Serializable transaction to stay unique under concurrency.
  */
 export async function nextBillNumber(
   tx: Prisma.TransactionClient,
   userEmail: string,
   projectId: string
 ): Promise<string> {
+  const counterEmail = userEmail.toLowerCase();
+
   const existing = await tx.bill.findMany({
     where: {
       submittedByEmail: { equals: userEmail, mode: 'insensitive' },
@@ -152,17 +188,31 @@ export async function nextBillNumber(
     select: { billNumber: true },
   });
 
-  let maxIndex = 0; // 1-based ordinal of the highest number in use
+  let maxInUse = 0;
   for (const { billNumber } of existing) {
-    const match = /^(\d+)\.(\d{2})$/.exec(billNumber ?? '');
-    if (!match) continue;
-    const ordinal = (Number(match[1]) - 1) * 20 + Number(match[2]);
-    if (ordinal > maxIndex) maxIndex = ordinal;
+    const ordinal = billNumberOrdinal(billNumber);
+    if (ordinal !== null && ordinal > maxInUse) maxInUse = ordinal;
   }
 
-  const next = maxIndex; // zero-based index of the new bill
-  const group = Math.floor(next / 20) + 1;
-  const position = (next % 20) + 1;
+  // Atomic increment (creates the counter row on first use)
+  const counter = await tx.billNumberCounter.upsert({
+    where: { projectId_userEmail: { projectId, userEmail: counterEmail } },
+    create: { projectId, userEmail: counterEmail, lastIndex: maxInUse + 1 },
+    update: { lastIndex: { increment: 1 } },
+    select: { lastIndex: true },
+  });
+
+  let ordinal = counter.lastIndex;
+  if (ordinal <= maxInUse) {
+    ordinal = maxInUse + 1;
+    await tx.billNumberCounter.update({
+      where: { projectId_userEmail: { projectId, userEmail: counterEmail } },
+      data: { lastIndex: ordinal },
+    });
+  }
+
+  const group = Math.floor((ordinal - 1) / 20) + 1;
+  const position = ((ordinal - 1) % 20) + 1;
   return `${group}.${position.toString().padStart(2, '0')}`;
 }
 
@@ -281,6 +331,37 @@ export async function saveAllocations(
   if (motiveRows.length === 0) return '';
   if (motiveRows.length === 1 && motiveRows[0].percentage === 100) return motiveRows[0].name;
   return motiveRows.map((r) => `${r.name} (${r.percentage}%)`).join(', ');
+}
+
+/**
+ * Canonical string of a bill's effective allocations, for "did the allocations
+ * really change?" comparisons. The Default motive / Uncategorized category rows
+ * are left out: saveAllocations derives them as the remainder up to 100%, so
+ * they carry no information of their own.
+ */
+export async function readAllocationSnapshot(
+  tx: Prisma.TransactionClient,
+  billId: string
+): Promise<string> {
+  const [motives, categories] = await Promise.all([
+    tx.billMotive.findMany({
+      where: { billId },
+      select: { motiveId: true, percentage: true, motive: { select: { name: true } } },
+    }),
+    tx.billCategory.findMany({
+      where: { billId },
+      select: { categoryId: true, percentage: true, category: { select: { name: true } } },
+    }),
+  ]);
+  const m = motives
+    .filter((r) => r.motive.name !== 'Default')
+    .map((r) => `${r.motiveId}=${Number(r.percentage)}`)
+    .sort();
+  const c = categories
+    .filter((r) => r.category.name !== 'Uncategorized')
+    .map((r) => `${r.categoryId}=${Number(r.percentage)}`)
+    .sort();
+  return JSON.stringify([m, c]);
 }
 
 // ---------------------------------------------------------------------------

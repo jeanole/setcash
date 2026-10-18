@@ -199,7 +199,6 @@ export default function BillDetailPage(props: BillDetailPageProps) {
   const isAdmin = session?.user?.currentProjectRole === 'admin' || session?.user?.currentProjectRole === 'owner' || session?.user?.role === 'superadmin';
   const isAuthor = session?.user?.email === bill?.email;
   const canDelete = isAdmin || isAuthor;
-  const canSelfApprove = isAuthor && !isAdmin && bill?.status === 'confirmed';
   const [hasOcrEnabled, setHasOcrEnabled] = useState(false);
 
   // Fetch OCR enabled flag from project settings (admins only)
@@ -300,7 +299,7 @@ export default function BillDetailPage(props: BillDetailPageProps) {
         onRevertDraft={handleRevertDraft}
         isAdmin={isAdmin}
         canDelete={canDelete}
-        canSelfApprove={canSelfApprove}
+        isAuthor={isAuthor}
         hasOcrEnabled={hasOcrEnabled}
         isAnalysing={isAnalysing || bill.ocrStatus === 'pending'}
       />

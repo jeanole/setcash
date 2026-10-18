@@ -12,6 +12,10 @@ import path from 'path';
 import { UPLOADS_DIR } from '@/lib/upload';
 import { verifyProjectMember } from '@/lib/auth-guard';
 
+// ASCII control characters (incl. NUL) and DEL
+// eslint-disable-next-line no-control-regex
+const CONTROL_CHARS = /[\u0000-\u001f\u007f]/;
+
 // GET /uploads/[...path] - Serve uploaded file
 export async function GET(req: NextRequest, props: { params: Promise<{ path?: string[] }> }) {
   const params = await props.params;
@@ -24,6 +28,12 @@ export async function GET(req: NextRequest, props: { params: Promise<{ path?: st
     const pathSegments = params.path;
     if (!pathSegments || pathSegments.length === 0) {
       return new NextResponse('Not found', { status: 404 });
+    }
+
+    // NUL bytes and other control characters can never be part of a stored path
+    // (and Postgres rejects NUL in a query parameter) -- refuse them up front.
+    if (pathSegments.some((segment) => CONTROL_CHARS.test(segment))) {
+      return new NextResponse('Bad request', { status: 400 });
     }
 
     const relPath = pathSegments.join('/');

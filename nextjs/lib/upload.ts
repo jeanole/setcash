@@ -77,10 +77,14 @@ function toUploadError(err: unknown): UploadError {
  * declare a larger Content-Length are rejected up front, and the byte cap is
  * enforced while reading for chunked bodies (no Content-Length, e.g. behind
  * some proxies) and in case the header lies.
+ *
+ * `options.fields` lists the file field names the caller expects. File parts
+ * under any other name are never written to disk. A file part with a disallowed
+ * extension fails the request with UploadError(415) and nothing is left behind.
  */
 export async function parseForm(
   req: Request,
-  options: { maxFiles?: number } = {}
+  options: { maxFiles?: number; fields?: string[] } = {}
 ): Promise<ParsedForm> {
   const maxFiles = options.maxFiles ?? DEFAULT_MAX_FILES;
   const maxBytes = maxFiles * MAX_FILE_SIZE + FORM_OVERHEAD_BYTES;
@@ -107,13 +111,19 @@ export async function parseForm(
     fs.mkdirSync(UPLOADS_DIR, { recursive: true });
   }
 
+  const expectedFields = options.fields;
+
   // Count bytes as they arrive and abort once the cap is exceeded
   let received = 0;
+  // Remembered separately: formidable may report the aborted stream with its own
+  // (400) error instead of the one the limiter raised
+  let limitError: UploadError | null = null;
   const limiter = new Transform({
     transform(chunk: Buffer, _encoding, callback) {
       received += chunk.length;
       if (received > maxBytes) {
-        callback(new UploadError('Upload too large', 413));
+        limitError = new UploadError('Upload too large', 413);
+        callback(limitError);
         return;
       }
       callback(null, chunk);
@@ -128,6 +138,17 @@ export async function parseForm(
   pipeline(source, limiter, () => { /* errors are handled via the form callback */ });
 
   return new Promise((resolve, reject) => {
+    // Every file formidable starts writing is tracked so it can be removed again
+    // on any failure path, whatever state formidable itself is in.
+    const writtenPaths: string[] = [];
+    const removeWritten = () => {
+      for (const p of writtenPaths) {
+        try { fs.unlinkSync(p); } catch { /* already gone */ }
+      }
+    };
+    // Set by the filter when a file part must fail the whole request
+    let rejection: UploadError | null = null;
+
     const form = new IncomingForm({
       uploadDir: UPLOADS_DIR,
       keepExtensions: true,
@@ -135,18 +156,50 @@ export async function parseForm(
       maxTotalFileSize: maxFiles * MAX_FILE_SIZE,
       maxFiles,
       maxFieldsSize: MAX_FIELDS_SIZE,
+      // Only called for file parts. Returning false means "never write this part".
       filter: (part) => {
-        const ext = path.extname(part.originalFilename || '').toLowerCase();
-        return ALLOWED_EXTENSIONS.includes(ext);
+        // Parts under a field name the caller does not expect are never persisted
+        if (expectedFields && !(part.name && expectedFields.includes(part.name))) return false;
+        // An empty file input (no filename) carries no upload
+        if (!part.originalFilename) return false;
+        const ext = path.extname(part.originalFilename).toLowerCase();
+        if (!ALLOWED_EXTENSIONS.includes(ext)) {
+          rejection ??= new UploadError(
+            `File type not allowed: ${ext || part.originalFilename}`,
+            415
+          );
+          return false;
+        }
+        return true;
       },
+    });
+    form.on('fileBegin', (_name, file) => {
+      writtenPaths.push(file.filepath);
     });
 
     form.parse(limiter as unknown as IncomingMessage, (err, fields, files) => {
       if (err) {
         // Stop reading the rest of the body
         limiter.destroy();
-        reject(toUploadError(err));
+        removeWritten();
+        // The limiter's own 413 beats whatever formidable reports for the aborted stream
+        reject(limitError ?? toUploadError(err));
         return;
+      }
+      if (rejection) {
+        removeWritten();
+        reject(rejection);
+        return;
+      }
+      if (expectedFields) {
+        // Defence in depth: nothing outside the expected fields survives
+        for (const [name, entry] of Object.entries(files)) {
+          if (expectedFields.includes(name)) continue;
+          for (const f of Array.isArray(entry) ? entry : entry ? [entry] : []) {
+            try { fs.unlinkSync(f.filepath); } catch { /* already gone */ }
+          }
+          delete (files as Record<string, unknown>)[name];
+        }
       }
       resolve({ fields, files });
     });
